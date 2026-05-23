@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -98,7 +99,7 @@ func TestSaveChmodVerification(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stat after Save: %v", err)
 	}
-	if got := info.Mode().Perm(); got != 0o600 {
+	if got := info.Mode().Perm(); got != 0o600 && runtime.GOOS != "windows" {
 		t.Errorf("file permissions: got %04o, want 0600", got)
 	}
 }

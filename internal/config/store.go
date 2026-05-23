@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 )
 
@@ -103,7 +104,7 @@ func Save(cfg *Config) error {
 	if err != nil {
 		return fmt.Errorf("stat config: %w", err)
 	}
-	if info.Mode().Perm() != configPerm {
+	if runtime.GOOS != "windows" && info.Mode().Perm() != configPerm {
 		return fmt.Errorf("config file permissions are %04o, expected %04o", info.Mode().Perm(), configPerm)
 	}
 
