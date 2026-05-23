@@ -36,7 +36,7 @@ Capigo exposes a stable Public API, but integrating it today requires implementi
 go install github.com/vtech-com/capigo-api-sdk@latest
 ```
 
-The binary is named `capigo`. Requires Go 1.22+.
+The binary is named `capigo`. Requires Go 1.26.3+.
 
 ### GitHub Releases (recommended for most users)
 
@@ -56,7 +56,7 @@ make build
 # binary at ./dist/capigo
 ```
 
-Requires Go 1.22+.
+Requires Go 1.26.3+.
 
 ### Homebrew (macOS / Linux)
 
