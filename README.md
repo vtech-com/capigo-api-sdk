@@ -30,22 +30,38 @@ Capigo exposes a stable Public API, but integrating it today requires implementi
 
 ## Installation
 
-### Homebrew (macOS / Linux)
+### Go install
+
+```bash
+go install github.com/vtech-com/capigo-api-sdk@latest
+```
+
+The binary is named `capigo`. Requires Go 1.22+.
+
+### GitHub Releases (recommended for most users)
+
+Download the pre-built binary for your platform from [Releases](https://github.com/vtech-com/capigo-api-sdk/releases), extract, and place it in your `PATH`.
+
+Binaries are provided for:
+- Linux: `amd64`, `arm64`
+- macOS (darwin): `amd64`, `arm64`
+- Windows: `amd64`, `arm64`
+
+### Build from source
+
+```bash
+git clone https://github.com/vtech-com/capigo-api-sdk.git
+cd capigo-api-sdk
+make build
+# binary at ./dist/capigo
+```
+
+Requires Go 1.22+.
+
+### Homebrew (macOS / Linux) — coming in Phase 2
 
 ```bash
 brew install vtech-com/tap/capigo
-```
-
-### Install script
-
-```bash
-curl -sSL https://capigo.app/install.sh | sh
-```
-
-To install a specific version:
-
-```bash
-curl -sSL https://capigo.app/install.sh | VERSION=v1.2.0 sh
 ```
 
 ### Docker
@@ -54,40 +70,23 @@ curl -sSL https://capigo.app/install.sh | VERSION=v1.2.0 sh
 docker run --rm -e CAPIGO_API_KEY=csk_... ghcr.io/vtech-com/capigo-api-sdk:latest tasks list
 ```
 
-### Manual (GitHub Releases)
-
-Download the binary for your platform from [Releases](https://github.com/vtech-com/capigo-api-sdk/releases), extract, and place it in your `PATH`.
-
-### Build from source
-
-```bash
-git clone https://github.com/vtech-com/capigo-api-sdk.git
-cd capigo-api-sdk
-go build -o capigo .
-```
-
-Requires Go 1.22+.
-
 ## Quick Start
 
 ```bash
 # 1. Login with your API key (generated at platform.capigo.app)
 capigo auth login --key csk_abc123...
 
-# 2. Verify
-capigo auth whoami
-# ✅ Logged in as: alice@example.com
-
-# 3. List your tenants
+# 2. List your tenants
 capigo tenants list
 
-# 4. (Optional) Set a default tenant
+# 3. List tasks scoped to a tenant
+capigo tasks list --tenant acme
+
+# 4. (Optional) Set a default tenant so you don't need --tenant every time
 capigo config set-default-tenant acme
 
-# 5. Start using
-capigo tasks list
-capigo tasks list --tenant globex   # override for one call
-capigo tasks list --no-tenant       # global view across all tenants
+# 5. Use JSON output for AI agent or script consumption
+capigo tasks list --output json | jq '.[] | select(.status=="To-Do")'
 ```
 
 ## Commands
@@ -97,27 +96,20 @@ capigo auth login        Login with a csk_ API key
 capigo auth logout       Remove credentials from config
 capigo auth whoami       Show current user
 
-capigo config set        Set a config value
-capigo config get        Get a config value
-capigo config set-default-tenant <code>   Set default tenant
-capigo config unset-default-tenant        Clear default tenant
-capigo config list-profiles               List config profiles
+capigo config set <key> <value>           Set a config value
+capigo config get <key>                   Get a config value
+capigo config set-default-tenant <code>   Set default tenant for the active profile
+capigo config unset-default-tenant        Clear the default tenant
 
 capigo tenants list      List tenants you can access
 
-capigo tasks list        List tasks
+capigo tasks list        List tasks (supports --status, --page, --limit)
 capigo tasks get <id>    Get task by ID
-capigo tasks create      Create a new task
+capigo tasks create      Create a new task (--title required; --tenant required)
 
 capigo boards list       List boards
-capigo boards get <id>   Get board with its lists
-
-capigo members list      List tenant members
-
-capigo products list     List products (supports delta sync)
 
 capigo version           Print version info
-capigo completion        Generate shell completions (bash/zsh/fish)
 ```
 
 **Global flags** available on every command:
@@ -127,8 +119,9 @@ capigo completion        Generate shell completions (bash/zsh/fish)
 | `--tenant <code>` | Scope call to a specific tenant |
 | `--no-tenant` | Force global mode (override configured default) |
 | `--profile <name>` | Use a specific config profile |
-| `--output table\|json\|yaml\|quiet` | Output format |
+| `--output table\|json\|quiet` | Output format |
 | `--api-url <url>` | Override API base URL (staging / local dev) |
+| `--verbose` | Print HTTP request/response details (Authorization header is redacted) |
 
 ## Configuration
 
@@ -174,13 +167,13 @@ capigo tasks list --tenant acme
 # │ task_abc123  │ Fix login bug     │ To-Do  │ Alice    │
 # └──────────────┴───────────────────┴────────┴──────────┘
 
-# Global mode adds a Tenant column automatically
+# Global mode (--no-tenant) adds a Tenant column automatically
 capigo tasks list --no-tenant
 
-# JSON for AI agents
+# JSON for AI agents and scripts
 capigo tasks list --output json
 
-# Quiet mode — returns ID only (for piping)
+# Quiet mode — prints the resource ID only (useful for shell piping)
 capigo tasks create --title "New task" --tenant acme --output quiet
 # task_def456
 ```
@@ -202,6 +195,13 @@ AI agents should branch on exit code, **not** on error message text.
 
 ## AI Agent Integration
 
+### Shell / jq
+
+```bash
+# List open tasks and filter with jq
+capigo --output json tasks list --tenant acme | jq '.[] | select(.status=="To-Do")'
+```
+
 ### LangChain / Python
 
 ```python
@@ -216,6 +216,9 @@ if result.returncode == 0:
 elif result.returncode == 6:
     # Network error — retry
     ...
+elif result.returncode == 7:
+    # Rate limit — back off before retrying
+    ...
 ```
 
 ### n8n
@@ -223,7 +226,7 @@ elif result.returncode == 6:
 Use the **Execute Command** node:
 
 ```
-capigo tasks list --output json
+capigo tasks list --tenant acme --output json
 ```
 
 ### Environment variable injection (CI / secrets manager)
@@ -231,7 +234,7 @@ capigo tasks list --output json
 ```bash
 CAPIGO_API_KEY=${{ secrets.CAPIGO_KEY }} \
 CAPIGO_TENANT=acme \
-capigo tasks list
+capigo tasks list --output json
 ```
 
 ## API Reference

@@ -1,0 +1,51 @@
+version: 2
+
+project_name: capigo
+
+builds:
+  - id: capigo
+    binary: capigo
+    main: .
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w
+      - -X github.com/vtech-com/capigo-api-sdk/internal/version.Version={{.Version}}
+      - -X github.com/vtech-com/capigo-api-sdk/internal/version.Commit={{.Commit}}
+      - -X github.com/vtech-com/capigo-api-sdk/internal/version.Date={{.Date}}
+
+archives:
+  - id: capigo
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    files:
+      - LICENSE
+      - README.md
+      - CHANGELOG.md
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ .Tag }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - Merge pull request
+      - Merge branch

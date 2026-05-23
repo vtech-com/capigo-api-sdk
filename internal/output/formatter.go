@@ -1,0 +1,194 @@
+package output
+
+import (
+	"encoding/json"
+	"fmt"
+	"io"
+	"reflect"
+
+	"github.com/jedib0t/go-pretty/v6/table"
+	"github.com/jedib0t/go-pretty/v6/text"
+)
+
+// RenderOpts controls rendering behaviour.
+type RenderOpts struct {
+	// GlobalMode inserts a Tenant column as the first column in table output.
+	GlobalMode bool
+	// ResourceKind selects the registered renderer (e.g. "task", "board").
+	ResourceKind string
+}
+
+// renderer describes how to display a single resource.
+type renderer struct {
+	// headers are the column header strings (without Tenant, which is injected dynamically).
+	headers []string
+	// rowFn extracts column values for a single item; order must match headers.
+	rowFn func(v any) []any
+	// idFn returns the primary key for quiet mode.
+	idFn func(v any) string
+}
+
+var resourceRenderers map[string]renderer
+
+func init() {
+	resourceRenderers = map[string]renderer{
+		"tenant": {
+			headers: []string{"Code", "Name"},
+			rowFn: func(v any) []any {
+				t := v.(Tenant)
+				return []any{t.Code, t.Name}
+			},
+			idFn: func(v any) string { return v.(Tenant).Code },
+		},
+		"member": {
+			headers: []string{"ID", "Name", "Email", "Role"},
+			rowFn: func(v any) []any {
+				m := v.(Member)
+				return []any{m.ID, m.Name, m.Email, m.Role}
+			},
+			idFn: func(v any) string { return v.(Member).ID },
+		},
+		"board": {
+			headers: []string{"ID", "Title"},
+			rowFn: func(v any) []any {
+				b := v.(Board)
+				return []any{b.ID, b.Title}
+			},
+			idFn: func(v any) string { return v.(Board).ID },
+		},
+		"task": {
+			headers: []string{"ID", "Title", "Status", "Assignee"},
+			rowFn: func(v any) []any {
+				t := v.(Task)
+				return []any{t.ID, t.Title, t.Status, t.Assignee}
+			},
+			idFn: func(v any) string { return v.(Task).ID },
+		},
+	}
+}
+
+// Render writes data to w in the requested mode.
+// data may be a single struct or a slice of structs that match opts.ResourceKind.
+func Render(w io.Writer, mode string, data any, opts RenderOpts) error {
+	r, ok := resourceRenderers[opts.ResourceKind]
+	if !ok {
+		return fmt.Errorf("unknown resource kind: %q", opts.ResourceKind)
+	}
+
+	items := toSlice(data)
+
+	switch mode {
+	case "json":
+		return renderJSON(w, items)
+	case "quiet":
+		return renderQuiet(w, items, r)
+	default: // "table" and anything unrecognised falls back to table
+		return renderTable(w, items, r, opts.GlobalMode)
+	}
+}
+
+// RenderError writes a formatted error to w.
+// When mode is "json" the output is a JSON object; otherwise plain text.
+func RenderError(w io.Writer, mode, code, message, requestID string) {
+	if mode == "json" {
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "  ")
+		_ = enc.Encode(map[string]any{
+			"error": map[string]string{
+				"code":       code,
+				"message":    message,
+				"request_id": requestID,
+			},
+		})
+		return
+	}
+	fmt.Fprintf(w, "Error: %s (code=%s, request_id=%s)\n", message, code, requestID)
+}
+
+// toSlice normalises data into []any regardless of whether it arrives as a
+// single struct or a slice of structs.
+func toSlice(data any) []any {
+	if data == nil {
+		return nil
+	}
+	rv := reflect.ValueOf(data)
+	if rv.Kind() == reflect.Slice {
+		out := make([]any, rv.Len())
+		for i := range rv.Len() {
+			out[i] = rv.Index(i).Interface()
+		}
+		return out
+	}
+	return []any{data}
+}
+
+func renderJSON(w io.Writer, items []any) error {
+	if len(items) == 0 {
+		_, err := fmt.Fprintln(w, "[]")
+		return err
+	}
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(items)
+}
+
+func renderQuiet(w io.Writer, items []any, r renderer) error {
+	for _, item := range items {
+		_, err := fmt.Fprintln(w, r.idFn(item))
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func renderTable(w io.Writer, items []any, r renderer, globalMode bool) error {
+	t := table.NewWriter()
+	t.SetOutputMirror(w)
+	t.SetStyle(table.StyleLight)
+	t.Style().Color = table.ColorOptions{}
+	t.Style().Format.Header = text.FormatDefault
+
+	// Build header row.
+	var hdr table.Row
+	if globalMode {
+		hdr = append(hdr, "Tenant")
+	}
+	for _, h := range r.headers {
+		hdr = append(hdr, h)
+	}
+	t.AppendHeader(hdr)
+
+	for _, item := range items {
+		cols := r.rowFn(item)
+
+		var row table.Row
+		if globalMode {
+			row = append(row, tenantCodeOf(item))
+		}
+		for _, c := range cols {
+			row = append(row, c)
+		}
+		t.AppendRow(row)
+	}
+
+	t.Render()
+	return nil
+}
+
+// tenantCodeOf extracts TenantCode from items that carry it; returns empty
+// string for types that do not.
+func tenantCodeOf(v any) string {
+	switch x := v.(type) {
+	case Task:
+		return x.TenantCode
+	case Board:
+		return x.TenantCode
+	case Member:
+		return x.TenantCode
+	case Tenant:
+		return x.Code
+	default:
+		return ""
+	}
+}

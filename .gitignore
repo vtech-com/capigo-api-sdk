@@ -1,0 +1,7 @@
+dist/
+*.local
+.capigo/
+*.env
+coverage.out
+*.test
+*.prof
