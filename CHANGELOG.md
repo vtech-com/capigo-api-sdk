@@ -9,8 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+---
+
+## [0.1.1] — 2026-05-23
+
 ### Added
 
+- Automated Homebrew Cask publishing to `vtech-com/homebrew-tap` via GoReleaser
 - Integration smoke tests with `httptest.NewTLSServer` covering exit-code mapping and header assertions
 
 ### Fixed
@@ -53,5 +58,6 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-[Unreleased]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/vtech-com/capigo-api-sdk/releases/tag/v0.1.0
