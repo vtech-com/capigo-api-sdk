@@ -9,31 +9,41 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Integration smoke tests with `httptest.NewTLSServer` covering exit-code mapping and header assertions
+
 ---
 
 ## [0.1.0] — 2026-05-23
 
 ### Added
 
-- `auth login` — save API key to `~/.capigo/config.json`
-- `auth logout` — remove credentials from config
-- `auth whoami` — display current authenticated user
-- `config set` / `config get` — manage config values
-- `config set-default-tenant` / `config unset-default-tenant`
-- `tenants list` — list tenants accessible by the current key
-- `tasks list` — list tasks with optional `--tenant` / `--no-tenant` scope
+- `auth login --key <csk_...>` — save API key to `~/.capigo/config.json`; key value is scrubbed from `os.Args` immediately after parsing to avoid leaking via `ps`
+- `auth logout` — remove credentials from the active profile
+- `auth whoami` — display the authenticated user (calls `GET /api/v1/me`)
+- `config set` / `config get` — manage config values in the active profile
+- `config set-default-tenant <code>` / `config unset-default-tenant` — manage the default tenant for the active profile
+- `tenants list` — list tenants accessible by the current key; discovered tenant codes are cached in `known_tenants`
+- `tasks list` — list tasks with optional `--tenant` / `--no-tenant` scope; supports `--status`, `--parent-task-id`, `--page`, `--limit` filters
 - `tasks get <id>` — fetch a single task by ID
-- `tasks create` — create a task (tenant required)
+- `tasks create` — create a task (`--title` required; tenant required — rejected in global mode because `POST /mission/tasks` requires `tenant_code` in the request body)
 - `boards list` — list mission boards
-- Global flags: `--tenant`, `--no-tenant`, `--profile`, `--output`, `--api-url`
-- Output modes: `table`, `json`, `quiet`
-- Standardized exit codes (0–7) for AI agent integration
-- Automatic `X-Tenant-Code` header injection based on resolution precedence
-- Config file created with `chmod 600` to protect API key at rest
+- `version` — print version, commit, and build date (injected via ldflags)
+- Global flags on every command: `--tenant`, `--no-tenant`, `--profile`, `--output`, `--api-url`, `--verbose`
+- Output modes: `table` (default), `json`, `quiet`; global mode (`--no-tenant`) adds a `Tenant` column to table output automatically
+- Standardized exit codes 0–7 for AI agent integration (0 success / 1 general / 2 auth / 3 permission / 4 not found / 5 validation / 6 network / 7 rate limit)
+- JSON error format on stderr when `--output json`: `{"error":{"code","message","request_id"}}`
+- Automatic `X-Tenant-Code` header injection following resolution precedence: `--tenant` > `--no-tenant` > `$CAPIGO_TENANT` > `config.default_tenant` > global mode
+- `X-Request-Id` (UUID) and `User-Agent: capigo-api-sdk/<version> (<os>; <arch>)` headers on every request
+- Config file created at `~/.capigo/config.json` with `chmod 0600`; atomic write via temp file + rename
+- Multi-profile config schema (version 1) with `active_profile` and per-profile `api_key`, `api_url`, `default_tenant`, `known_tenants`
 - `CAPIGO_API_KEY`, `CAPIGO_TENANT`, `CAPIGO_PROFILE`, `CAPIGO_API_URL` environment variable support
-- Single binary distribution via GoReleaser for Linux, macOS, Windows (amd64 + arm64)
-- GitHub Actions CI (lint + test on 3 OSes)
-- Docker image published to `ghcr.io/vtech-com/capigo-api-sdk`
+- Single binary distribution via GoReleaser for Linux, macOS, Windows × amd64 + arm64; SHA256 checksums in every release
+- GitHub Actions CI: lint + test matrix on Linux, macOS, Windows with Go 1.22
+- GitHub Actions release workflow: triggered on `v*` tags, runs `goreleaser release --clean`
+- CodeQL security scanning workflow
+- Dependabot configured for Go modules and GitHub Actions (weekly)
 
 ---
 
