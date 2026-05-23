@@ -748,9 +748,17 @@ We will:
 
 - **Whitelist approach**: Every new dependency must be reviewed by a maintainer
 - **Auto-update**: Dependabot opens PRs for patch/minor updates
-- **Latest Stable Policy**: Always use the latest stable version of Go (both in `go.mod` and CI workflows) and core tooling (like GitHub Actions) to ensure compatibility and avoid CI toolchain mismatches.
+- **Latest Stable Policy**: Always use the latest stable version of Go (both in `go.mod` and CI workflows) and core tooling (GitHub Actions, linters, scanners) to ensure compatibility and avoid CI toolchain mismatches. Dependabot PRs that bump action versions must be merged promptly — stale action versions are the #1 cause of CI breakage on newer GitHub runners.
+- **Action version reference** (update when new majors ship):
+  | Action | Minimum version | Notes |
+  |---|---|---|
+  | `actions/checkout` | `@v6` | Node.js 24; `@v4` and below fail on modern runners |
+  | `actions/setup-go` | `@v6` | Required for Go ≥1.26 |
+  | `golangci/golangci-lint-action` | `@v9` | |
+  | `github/codeql-action/*` | `@v4` | |
+  | `goreleaser/goreleaser-action` | `@v7` | |
+- **`govulncheck`**: Run via `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` directly — do NOT use `golang/govulncheck-action` (its nested checkout breaks on PR events).
 - **Major updates**: Manual review + testing
-- **Vulnerability scanning**: `govulncheck` runs in CI
 
 ---
 
