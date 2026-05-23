@@ -17,7 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        go: ["1.26"]
+        go: ["1.26.3"]
 
     steps:
       - name: Checkout
@@ -41,6 +41,4 @@ jobs:
           version: latest
 
       - name: Run govulncheck
-        uses: golang/govulncheck-action@v1
-        with:
-          go-version-input: ${{ matrix.go }}
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
