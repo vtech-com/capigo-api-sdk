@@ -97,8 +97,8 @@ func runLogin(cmd *cobra.Command, _ []string) error {
 		os.Exit(api.ExitCodeFor(err))
 	}
 
-	fmt.Fprintf(cmd.OutOrStdout(), "Logged in as profile %q\n", profileName)
-	return nil
+	_, err = fmt.Fprintf(cmd.OutOrStdout(), "Logged in as profile %q\n", profileName)
+	return err
 }
 
 func runLogout(_ *cobra.Command, _ []string) error {
@@ -117,14 +117,14 @@ func runLogout(_ *cobra.Command, _ []string) error {
 	}
 
 	if cfg.Profiles == nil {
-		fmt.Fprintf(os.Stdout, "Profile %q has no stored credentials\n", profileName)
-		return nil
+		_, err = fmt.Fprintf(os.Stdout, "Profile %q has no stored credentials\n", profileName)
+		return err
 	}
 
 	p, ok := cfg.Profiles[profileName]
 	if !ok || p.APIKey == "" {
-		fmt.Fprintf(os.Stdout, "Profile %q has no stored credentials\n", profileName)
-		return nil
+		_, err = fmt.Fprintf(os.Stdout, "Profile %q has no stored credentials\n", profileName)
+		return err
 	}
 
 	p.APIKey = ""
@@ -135,8 +135,8 @@ func runLogout(_ *cobra.Command, _ []string) error {
 		os.Exit(api.ExitCodeFor(err))
 	}
 
-	fmt.Fprintf(os.Stdout, "Logged out of profile %q\n", profileName)
-	return nil
+	_, err = fmt.Fprintf(os.Stdout, "Logged out of profile %q\n", profileName)
+	return err
 }
 
 func runWhoami(_ *cobra.Command, _ []string) error {
@@ -164,16 +164,15 @@ func runWhoami(_ *cobra.Command, _ []string) error {
 	if outputMode == "json" {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		_ = enc.Encode(me)
-		return nil
+		return enc.Encode(me)
 	}
 
 	if outputMode == "quiet" {
-		fmt.Fprintln(os.Stdout, me.ID)
-		return nil
+		_, err = fmt.Fprintln(os.Stdout, me.ID)
+		return err
 	}
 
 	// table / default
-	fmt.Fprintf(os.Stdout, "ID:    %s\nName:  %s\nEmail: %s\n", me.ID, me.DisplayName, me.Email)
-	return nil
+	_, err = fmt.Fprintf(os.Stdout, "ID:    %s\nName:  %s\nEmail: %s\n", me.ID, me.DisplayName, me.Email)
+	return err
 }

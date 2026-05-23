@@ -93,16 +93,18 @@ func RenderError(w io.Writer, mode, code, message, requestID string) {
 	if mode == "json" {
 		enc := json.NewEncoder(w)
 		enc.SetIndent("", "  ")
-		_ = enc.Encode(map[string]any{
+		if err := enc.Encode(map[string]any{
 			"error": map[string]string{
 				"code":       code,
 				"message":    message,
 				"request_id": requestID,
 			},
-		})
+		}); err != nil {
+			return
+		}
 		return
 	}
-	fmt.Fprintf(w, "Error: %s (code=%s, request_id=%s)\n", message, code, requestID)
+	_, _ = fmt.Fprintf(w, "Error: %s (code=%s, request_id=%s)\n", message, code, requestID)
 }
 
 // toSlice normalises data into []any regardless of whether it arrives as a

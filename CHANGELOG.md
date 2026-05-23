@@ -13,6 +13,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 - Integration smoke tests with `httptest.NewTLSServer` covering exit-code mapping and header assertions
 
+### Fixed
+
+- Added the generated `go.sum` so the Go module resolves dependencies during local and CI verification
+- Fixed version ldflags wiring so `capigo version` prints injected version, commit, and build date
+- Updated the golangci-lint config for v2 and fixed lint findings from the first local verify pass
+
 ---
 
 ## [0.1.0] — 2026-05-23

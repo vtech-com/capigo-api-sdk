@@ -86,11 +86,13 @@ func (c *Client) Do(ctx context.Context, method, path string, body any, tenant *
 	if err != nil {
 		return nil, fmt.Errorf("http: %w", err)
 	}
-	defer resp.Body.Close()
 
 	rawBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("read response body: %w", err)
+	}
+	if err := resp.Body.Close(); err != nil {
+		return nil, fmt.Errorf("close response body: %w", err)
 	}
 
 	r := &Response{

@@ -8,13 +8,13 @@ func strPtr(s string) *string { return &s }
 
 func TestResolveTenant(t *testing.T) {
 	tests := []struct {
-		name           string
-		flag           *string
-		noTenant       bool
-		envVal         string
-		defaultTenant  string
-		wantTenant     *string
-		wantGlobal     bool
+		name          string
+		flag          *string
+		noTenant      bool
+		envVal        string
+		defaultTenant string
+		wantTenant    *string
+		wantGlobal    bool
 	}{
 		{
 			name:       "--tenant flag takes highest priority",
@@ -25,22 +25,22 @@ func TestResolveTenant(t *testing.T) {
 			wantGlobal: false,
 		},
 		{
-			name:       "--no-tenant forces global mode over env and default",
-			flag:       nil,
-			noTenant:   true,
-			envVal:     "env-tenant",
+			name:          "--no-tenant forces global mode over env and default",
+			flag:          nil,
+			noTenant:      true,
+			envVal:        "env-tenant",
 			defaultTenant: "cfg-tenant",
-			wantTenant: nil,
-			wantGlobal: true,
+			wantTenant:    nil,
+			wantGlobal:    true,
 		},
 		{
-			name:       "env var used when no flag and no --no-tenant",
-			flag:       nil,
-			noTenant:   false,
-			envVal:     "env-tenant",
+			name:          "env var used when no flag and no --no-tenant",
+			flag:          nil,
+			noTenant:      false,
+			envVal:        "env-tenant",
 			defaultTenant: "cfg-tenant",
-			wantTenant: strPtr("env-tenant"),
-			wantGlobal: false,
+			wantTenant:    strPtr("env-tenant"),
+			wantGlobal:    false,
 		},
 		{
 			name:          "config default_tenant used when no flag, no --no-tenant, no env",

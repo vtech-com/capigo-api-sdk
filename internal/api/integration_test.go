@@ -62,9 +62,6 @@ func assertCommonHeaders(t *testing.T, r *http.Request, wantTenant *string) {
 	}
 }
 
-// strPtr is a convenience helper.
-func strPtr(s string) *string { return &s }
-
 // --- GET /me ---
 
 func TestIntegration_GetMe(t *testing.T) {
