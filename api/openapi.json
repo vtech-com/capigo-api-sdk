@@ -1,0 +1,1485 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Capigo Public API",
+    "description": "Public API documentation for Capigo Developer Platform. Integrate your external tools with Capigo tasks, boards, and members. See `apps/platform/docs/api-v1-changelog.md` for version history.",
+    "version": "1.0.0",
+    "contact": {
+      "name": "Capigo Developer Support"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3999/api/v1",
+      "description": "Local Development Server"
+    },
+    {
+      "url": "https://platform.capigo.app/api/v1",
+      "description": "Development API Server"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "CSK",
+        "description": "Enter your Capigo Secret Key (starts with `csk_`)"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "INVALID_QUERY_PARAMS"
+              },
+              "message": {
+                "type": "string",
+                "example": "Invalid query parameters"
+              }
+            }
+          }
+        }
+      },
+      "MetaPagination": {
+        "type": "object",
+        "properties": {
+          "page": {
+            "type": "integer",
+            "example": 1
+          },
+          "limit": {
+            "type": "integer",
+            "example": 20
+          },
+          "total": {
+            "type": "integer",
+            "example": 100
+          },
+          "has_more": {
+            "type": "boolean",
+            "example": true
+          }
+        }
+      },
+      "PublicTenantResponse": {
+        "type": "object",
+        "required": [
+          "tenant_code",
+          "name",
+          "role",
+          "joined_at"
+        ],
+        "properties": {
+          "tenant_code": {
+            "type": "string",
+            "example": "demo"
+          },
+          "name": {
+            "type": "string",
+            "example": "Demo Tenant"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "member"
+            ],
+            "example": "owner"
+          },
+          "joined_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PublicMemberResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          },
+          "display_name": {
+            "type": "string",
+            "example": "John Doe"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "john@example.com"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "member"
+            ],
+            "example": "member"
+          },
+          "avatar_url": {
+            "type": "string",
+            "nullable": true,
+            "example": "https://example.com/avatar.jpg"
+          }
+        }
+      },
+      "PublicBoardResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "name": {
+            "type": "string",
+            "example": "Product Roadmap"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true,
+            "example": "Q1 2024 Roadmap"
+          },
+          "is_public": {
+            "type": "boolean",
+            "example": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PublicBoardListResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "To Do"
+          },
+          "position": {
+            "type": "integer",
+            "example": 0
+          }
+        }
+      },
+      "PublicBoardDetailResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PublicBoardResponse"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "lists": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/PublicBoardListResponse"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "PublicTaskResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string",
+            "example": "TASK-123"
+          },
+          "title": {
+            "type": "string",
+            "example": "Fix login bug"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "Pending",
+              "To-Do",
+              "Doing",
+              "Done",
+              "Closed",
+              "Cancelled"
+            ],
+            "example": "To-Do"
+          },
+          "priority": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "Low",
+              "Normal",
+              "High",
+              "Urgent"
+            ],
+            "example": "High"
+          },
+          "assignee": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "display_name": {
+                "type": "string"
+              }
+            }
+          },
+          "owner": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "display_name": {
+                "type": "string"
+              }
+            }
+          },
+          "board_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "board_list_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "parent_task_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "ID of this task's parent, if this row is a subtask; null for top-level tasks."
+          },
+          "has_subtasks": {
+            "type": "boolean",
+            "description": "True if this task has one or more non-archived subtasks. Fetch them via GET /v1/mission/tasks?parent_task_id={thisTaskId}."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PublicProductVariantResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Default"
+          },
+          "sku": {
+            "type": "string",
+            "nullable": true,
+            "example": "SKU-001"
+          },
+          "barcode": {
+            "type": "string",
+            "nullable": true
+          },
+          "price": {
+            "type": "number",
+            "nullable": true,
+            "example": 99000
+          },
+          "compare_at_price": {
+            "type": "number",
+            "nullable": true
+          },
+          "currency": {
+            "type": "string",
+            "example": "VND"
+          },
+          "weight": {
+            "type": "number",
+            "nullable": true
+          },
+          "dimensions": {
+            "type": "object",
+            "nullable": true,
+            "description": "Physical dimensions of the variant. Keys use shorthand notation: l (length), w (width), h (height).",
+            "properties": {
+              "l": {
+                "type": "number",
+                "nullable": true,
+                "description": "Length"
+              },
+              "w": {
+                "type": "number",
+                "nullable": true,
+                "description": "Width"
+              },
+              "h": {
+                "type": "number",
+                "nullable": true,
+                "description": "Height"
+              }
+            }
+          },
+          "option1": {
+            "type": "string",
+            "nullable": true
+          },
+          "option2": {
+            "type": "string",
+            "nullable": true
+          },
+          "option3": {
+            "type": "string",
+            "nullable": true
+          },
+          "variant_type": {
+            "type": "string",
+            "example": "simple"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PublicProductResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Áo thun nam"
+          },
+          "slug": {
+            "type": "string",
+            "example": "ao-thun-nam-001"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "example": "active",
+            "enum": [
+              "active",
+              "draft",
+              "archived"
+            ]
+          },
+          "currency": {
+            "type": "string",
+            "example": "VND"
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": []
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "example": false
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "brand": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "category": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "parent_id": {
+                "type": "string",
+                "format": "uuid",
+                "nullable": true
+              },
+              "parent": {
+                "type": "object",
+                "nullable": true,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "product_type": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "unit": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "position": {
+                  "type": "integer"
+                },
+                "values": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "variants": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicProductVariantResponse"
+            }
+          }
+        }
+      },
+      "CreateTaskRequest": {
+        "type": "object",
+        "required": [
+          "tenant_code",
+          "title"
+        ],
+        "properties": {
+          "tenant_code": {
+            "type": "string",
+            "description": "The tenant/workspace code where the task will be created."
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 10000,
+            "nullable": true
+          },
+          "assignee_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "board_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "board_list_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "follower_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "nullable": true
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "Low",
+              "Normal",
+              "High",
+              "Urgent"
+            ],
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "Pending",
+              "To-Do",
+              "Doing",
+              "Done",
+              "Closed",
+              "Cancelled"
+            ],
+            "nullable": true
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ],
+  "paths": {
+    "/tenants": {
+      "get": {
+        "summary": "List Tenants",
+        "tags": [
+          "Tenants"
+        ],
+        "description": "Retrieve the list of all tenants/workspaces that the authenticated user actively participates in.",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicTenantResponse"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or missing Authorization"
+          }
+        }
+      }
+    },
+    "/members": {
+      "get": {
+        "summary": "List Members",
+        "tags": [
+          "Members"
+        ],
+        "description": "Retrieve a list of members in the tenant(s).",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "description": "Code of the tenant to scope the request to. If omitted, returns members from all accessible tenants.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Search query for display name or email",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicMemberResponse"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/MetaPagination"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mission/boards": {
+      "get": {
+        "summary": "List Boards",
+        "tags": [
+          "Boards"
+        ],
+        "description": "Retrieve a list of public boards.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "description": "Code of the tenant to scope the request to. If omitted, returns boards from all accessible tenants (where user is a member).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicBoardResponse"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/MetaPagination"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mission/boards/{id}": {
+      "get": {
+        "summary": "Get Board Detail",
+        "tags": [
+          "Boards"
+        ],
+        "description": "Retrieve details of a specific board, including its lists.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicBoardDetailResponse"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "list_count": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Board not found"
+          }
+        }
+      }
+    },
+    "/mission/tasks": {
+      "get": {
+        "summary": "List Tasks",
+        "tags": [
+          "Tasks"
+        ],
+        "description": "Search and filter tasks.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Search by task title",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          },
+          {
+            "name": "filters",
+            "in": "query",
+            "style": "deepObject",
+            "explode": true,
+            "description": "Filter by fields, e.g. filters[status][$eq]=Done",
+            "schema": {
+              "type": "object"
+            }
+          },
+          {
+            "name": "parent_task_id",
+            "in": "query",
+            "required": false,
+            "description": "Subtask filter. (a) Omit to include subtasks alongside top-level tasks (default since 2026-04-16). (b) Pass the literal string `null` to return only top-level tasks. (c) Pass a task UUID to return only the subtasks of that parent. (d) Any other value returns HTTP 400.",
+            "schema": {
+              "type": "string"
+            },
+            "examples": {
+              "topLevelOnly": {
+                "value": "null",
+                "summary": "Return only top-level tasks"
+              },
+              "subtasksOfParent": {
+                "value": "550e8400-e29b-41d4-a716-446655440000",
+                "summary": "Return only subtasks of the given parent"
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicTaskResponse"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/MetaPagination"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameter (e.g. malformed parent_task_id)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "invalidParentTaskId": {
+                    "summary": "Malformed parent_task_id value",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_PARENT_TASK_ID",
+                        "message": "invalid parent_task_id filter"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create Task",
+        "tags": [
+          "Tasks"
+        ],
+        "description": "Create a new task.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTaskRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Task created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "403": {
+            "$ref": "#/components/schemas/Error"
+          }
+        }
+      }
+    },
+    "/mission/tasks/{id}": {
+      "get": {
+        "summary": "Get Task Detail",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Task not found"
+          }
+        }
+      }
+    },
+    "/pcms/products": {
+      "get": {
+        "summary": "List Products (Catalog Sync)",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Paginated product feed for external catalog synchronization.\n\nSupports delta sync: pass `updated_since` (ISO 8601 UTC) to receive only products changed after that timestamp; omit for a full sync. Results are ordered by `updated_at` ascending so clients can checkpoint progress reliably.\n\nDeleted products are included with `is_deleted: true` so consumers can remove them from their local catalog. Each product's `variants` array contains only active variants.\n\nInternal fields (cost, audit metadata, tenancy identifiers) are omitted from the response.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Code of the tenant to scope the request to.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "updated_since",
+            "in": "query",
+            "description": "ISO 8601 UTC datetime. When provided, only products updated at or after this timestamp are returned — including products where an active variant was updated. Example: `2026-01-01T00:00:00Z`.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp at query execution — use as `updated_since` for the next delta sync call.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicProductResponse"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/MetaPagination"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameters (e.g. malformed updated_since or out-of-range limit)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied"
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/pcms/products": {
+      "post": {
+        "summary": "Create product",
+        "description": "Create a new product. Supports both simple mode (default variant) and variant mode (with options).",
+        "tags": [
+          "Products"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "brand_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "category_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "product_type_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "unit_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "DRAFT",
+                      "ACTIVE",
+                      "ARCHIVED"
+                    ],
+                    "default": "DRAFT"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "default": "VND"
+                  },
+                  "sku": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "barcode": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "price": {
+                    "type": "number",
+                    "nullable": true
+                  },
+                  "options": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "name",
+                        "values"
+                      ],
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "values": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "variants": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "name"
+                      ],
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "sku": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "barcode": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "price": {
+                          "type": "number",
+                          "nullable": true
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Product created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Product"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/pcms/products/{id}": {
+      "put": {
+        "summary": "Update product details",
+        "description": "Update the core details of a product.",
+        "tags": [
+          "Products"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "description": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "brand_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "category_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "product_type_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "unit_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "DRAFT",
+                      "ACTIVE",
+                      "ARCHIVED"
+                    ]
+                  },
+                  "currency": {
+                    "type": "string"
+                  },
+                  "aliases": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Product updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Product"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/pcms/products/{id}/variants": {
+      "put": {
+        "summary": "Update product variants",
+        "description": "Update existing variants of a product.",
+        "tags": [
+          "Products"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "variant_id"
+                  ],
+                  "properties": {
+                    "variant_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "sku": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "barcode": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "price": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Variants updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Product"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
