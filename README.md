@@ -58,7 +58,7 @@ make build
 
 Requires Go 1.22+.
 
-### Homebrew (macOS / Linux) — coming in Phase 2
+### Homebrew (macOS / Linux)
 
 ```bash
 brew install vtech-com/tap/capigo
