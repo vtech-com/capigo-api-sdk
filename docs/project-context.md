@@ -748,6 +748,7 @@ We will:
 
 - **Whitelist approach**: Every new dependency must be reviewed by a maintainer
 - **Auto-update**: Dependabot opens PRs for patch/minor updates
+- **Latest Stable Policy**: Always use the latest stable version of Go (both in `go.mod` and CI workflows) and core tooling (like GitHub Actions) to ensure compatibility and avoid CI toolchain mismatches.
 - **Major updates**: Manual review + testing
 - **Vulnerability scanning**: `govulncheck` runs in CI
 
