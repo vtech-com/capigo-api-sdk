@@ -20,11 +20,13 @@ func TestExitCodeFor(t *testing.T) {
 		{"403 is 3", &APIError{HTTPStatus: 403}, 3},
 		{"404 is 4", &APIError{HTTPStatus: 404}, 4},
 		{"400 is 5", &APIError{HTTPStatus: 400}, 5},
+		{"409 is 8", &APIError{HTTPStatus: 409}, 8},
 		{"429 is 7", &APIError{HTTPStatus: 429}, 7},
 		{"500 is 1", &APIError{HTTPStatus: 500}, 1},
 		{"context deadline is 6", context.DeadlineExceeded, 6},
 		{"wrapped context deadline is 6", fmt.Errorf("wrapped: %w", context.DeadlineExceeded), 6},
 		{"wrapped APIError 401 is 2", fmt.Errorf("outer: %w", &APIError{HTTPStatus: 401}), 2},
+		{"ErrTenantDenied (403) is 3", &APIError{Code: ErrTenantDenied, HTTPStatus: 403}, 3},
 	}
 
 	for _, tt := range tests {

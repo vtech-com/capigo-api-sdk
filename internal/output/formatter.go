@@ -64,6 +64,14 @@ func init() {
 			},
 			idFn: func(v any) string { return v.(Task).ID },
 		},
+		"product": {
+			headers: []string{"ID", "Name", "Status", "SKU", "Price", "Variants"},
+			rowFn: func(v any) []any {
+				p := v.(Product)
+				return []any{p.ID, p.Name, p.Status, p.SKU, p.Price, p.VariantCount}
+			},
+			idFn: func(v any) string { return v.(Product).ID },
+		},
 	}
 }
 
@@ -82,8 +90,10 @@ func Render(w io.Writer, mode string, data any, opts RenderOpts) error {
 		return renderJSON(w, items)
 	case "quiet":
 		return renderQuiet(w, items, r)
-	default: // "table" and anything unrecognised falls back to table
+	case "table", "":
 		return renderTable(w, items, r, opts.GlobalMode)
+	default:
+		return fmt.Errorf("unknown output format %q: supported formats are table, json, quiet", mode)
 	}
 }
 
@@ -190,6 +200,8 @@ func tenantCodeOf(v any) string {
 		return x.TenantCode
 	case Tenant:
 		return x.Code
+	case Product:
+		return x.TenantCode
 	default:
 		return ""
 	}

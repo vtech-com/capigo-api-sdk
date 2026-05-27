@@ -320,6 +320,7 @@ func TestIntegration_ErrorResponseMapping(t *testing.T) {
 		{"401 unauthorized", 401, "UNAUTHORIZED", 2},
 		{"403 forbidden", 403, "FORBIDDEN", 3},
 		{"404 not found", 404, "NOT_FOUND", 4},
+		{"409 conflict", 409, "CONFLICT", 8},
 		{"429 rate limit", 429, "RATE_LIMIT_EXCEEDED", 7},
 		{"500 server error", 500, "INTERNAL_ERROR", 1},
 	}

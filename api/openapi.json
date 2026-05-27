@@ -399,11 +399,11 @@
           },
           "status": {
             "type": "string",
-            "example": "active",
+            "example": "DRAFT",
             "enum": [
-              "active",
-              "draft",
-              "archived"
+              "DRAFT",
+              "ACTIVE",
+              "ARCHIVED"
             ]
           },
           "currency": {
@@ -1127,18 +1127,27 @@
             }
           }
         }
-      }
-    },
-    "/api/v1/pcms/products": {
+      },
       "post": {
         "summary": "Create product",
-        "description": "Create a new product. Supports both simple mode (default variant) and variant mode (with options).",
+        "description": "Create a new product. Supports both simple mode (name only → default variant) and variant mode (options + variants arrays). When options are provided, variants are required; the backend does not auto-generate the Cartesian matrix.",
         "tags": [
-          "Products"
+          "PCMS"
         ],
         "security": [
           {
             "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Code of the tenant to scope the request to.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -1152,7 +1161,8 @@
                 ],
                 "properties": {
                   "name": {
-                    "type": "string"
+                    "type": "string",
+                    "maxLength": 500
                   },
                   "description": {
                     "type": "string",
@@ -1205,6 +1215,7 @@
                   },
                   "options": {
                     "type": "array",
+                    "description": "Option axes (e.g. Color, Size). Required when variants are provided.",
                     "items": {
                       "type": "object",
                       "required": [
@@ -1226,6 +1237,7 @@
                   },
                   "variants": {
                     "type": "array",
+                    "description": "Required when options are provided. Each variant must reference the option values via option1/option2/option3.",
                     "items": {
                       "type": "object",
                       "required": [
@@ -1246,6 +1258,21 @@
                         "price": {
                           "type": "number",
                           "nullable": true
+                        },
+                        "option1": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Value for the first option axis."
+                        },
+                        "option2": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Value for the second option axis."
+                        },
+                        "option3": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Value for the third option axis."
                         }
                       }
                     }
@@ -1264,7 +1291,7 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/Product"
+                      "$ref": "#/components/schemas/PublicProductResponse"
                     }
                   }
                 }
@@ -1276,20 +1303,26 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied"
           }
         }
       }
     },
-    "/api/v1/pcms/products/{id}": {
+    "/pcms/products/{id}": {
       "put": {
         "summary": "Update product details",
-        "description": "Update the core details of a product.",
+        "description": "Update the core details of a product. All body fields are optional; at least one must be provided.",
         "tags": [
-          "Products"
+          "PCMS"
         ],
         "security": [
           {
@@ -1304,6 +1337,15 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Code of the tenant to scope the request to.",
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -1372,7 +1414,7 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/Product"
+                      "$ref": "#/components/schemas/PublicProductResponse"
                     }
                   }
                 }
@@ -1384,7 +1426,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied"
+          },
+          "404": {
+            "description": "Product not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }
@@ -1392,12 +1450,12 @@
         }
       }
     },
-    "/api/v1/pcms/products/{id}/variants": {
+    "/pcms/products/{id}/variants": {
       "put": {
-        "summary": "Update product variants",
-        "description": "Update existing variants of a product.",
+        "summary": "Upsert product variants",
+        "description": "Create or update variants of a product. Mixed operations are supported in a single call: items with `variant_id` are updated; items without `variant_id` are created (and require `name`). Maximum 50 items per call.",
         "tags": [
-          "Products"
+          "PCMS"
         ],
         "security": [
           {
@@ -1413,6 +1471,15 @@
               "type": "string",
               "format": "uuid"
             }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Code of the tenant to scope the request to.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "requestBody": {
@@ -1421,15 +1488,18 @@
             "application/json": {
               "schema": {
                 "type": "array",
+                "maxItems": 50,
                 "items": {
                   "type": "object",
-                  "required": [
-                    "variant_id"
-                  ],
                   "properties": {
                     "variant_id": {
                       "type": "string",
-                      "format": "uuid"
+                      "format": "uuid",
+                      "description": "Present → UPDATE existing variant. Absent → CREATE new variant (name required)."
+                    },
+                    "name": {
+                      "type": "string",
+                      "description": "Required when creating a new variant (variant_id absent)."
                     },
                     "sku": {
                       "type": "string",
@@ -1443,8 +1513,17 @@
                       "type": "number",
                       "nullable": true
                     },
-                    "name": {
-                      "type": "string"
+                    "option1": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "option2": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "option3": {
+                      "type": "string",
+                      "nullable": true
                     }
                   }
                 }
@@ -1454,14 +1533,14 @@
         },
         "responses": {
           "200": {
-            "description": "Variants updated successfully",
+            "description": "Variants upserted successfully",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/Product"
+                      "$ref": "#/components/schemas/PublicProductResponse"
                     }
                   }
                 }
@@ -1473,7 +1552,23 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied"
+          },
+          "404": {
+            "description": "Product not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
                 }
               }
             }

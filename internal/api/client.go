@@ -20,6 +20,10 @@ type Response struct {
 	StatusCode int
 	Body       []byte
 	RequestID  string
+	// ServerTime holds the X-Server-Time response header value (ISO 8601).
+	// Populated on GET /pcms/products responses; empty when absent.
+	// Use as updated_since for the next delta sync call.
+	ServerTime string
 }
 
 // Client is an HTTP client for the Capigo Public API.
@@ -99,6 +103,7 @@ func (c *Client) Do(ctx context.Context, method, path string, body any, tenant *
 		StatusCode: resp.StatusCode,
 		Body:       rawBody,
 		RequestID:  resp.Header.Get("X-Request-Id"),
+		ServerTime: resp.Header.Get("X-Server-Time"),
 	}
 
 	if resp.StatusCode >= 400 {

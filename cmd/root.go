@@ -1,11 +1,12 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"github.com/vtech-com/capigo-api-sdk/internal/api"
+	"github.com/vtech-com/capigo-api-sdk/internal/output"
 )
 
 var (
@@ -32,8 +33,15 @@ API keys must start with csk_. Use 'capigo auth login --key <key>' to authentica
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "Error:", err)
-		os.Exit(1)
+		// Wrap cobra arg-validation errors so they render through the output
+		// formatter (respecting --output json) and map to exit code 5.
+		wrapped := &api.APIError{
+			Code:       "VALIDATION_ERROR",
+			Message:    err.Error(),
+			HTTPStatus: 400,
+		}
+		output.RenderError(os.Stderr, outputMode, wrapped.Code, wrapped.Message, "")
+		os.Exit(api.ExitCodeFor(wrapped))
 	}
 }
 
@@ -43,7 +51,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgProfile, "profile", "", "config profile to use (default: active_profile from config file)")
 	rootCmd.PersistentFlags().StringVar(&cfgTenant, "tenant", "", "scope request to this tenant code")
 	rootCmd.PersistentFlags().BoolVar(&noTenant, "no-tenant", false, "force global mode (override default_tenant from config)")
-	rootCmd.PersistentFlags().StringVarP(&outputMode, "output", "o", "table", "output format: table, json, quiet")
+	rootCmd.PersistentFlags().StringVarP(&outputMode, "output", "o", "table", "output format: table, json, or quiet (unknown formats are rejected with an error)")
 	rootCmd.PersistentFlags().StringVar(&apiURL, "api-url", "", "override API base URL (e.g. http://localhost:3999)")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "print HTTP request/response details (redacts Authorization header)")
 

@@ -9,6 +9,31 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `products list` — list products from PCMS catalog with optional `--updated-since` (ISO 8601) for delta sync, `--page`, `--limit`, and `--all` (auto-paginate). Tenant required; server timestamp surfaced to stderr for subsequent delta sync calls.
+- `products list --ids <uuid,...>` — fetch up to 50 specific products by UUID (comma-separated); composable with `--updated-since`; mutually exclusive with `--all`
+- `products create` — create a new product via individual flags (simple mode) or `--from-json <file|->` (variant mode with options+variants array); extended `Long` help with concrete JSON examples for both simple and variant modes
+- `products update <id>` — update product core fields (name, description, status, currency, brand/category/product-type/unit IDs); now also supports `--from-json <file|->` for full JSON body (mutually exclusive with individual field flags)
+- `products variants --product-id <uuid> --from-json <file|->` — upsert variants via JSON array; items with `variant_id` are updated, items without are created (max 50 per call)
+- `internal/api/models.go`: `CreateProductRequest`, `CreateProductOptionItem`, `CreateProductVariantItem`, `UpdateProductRequest`, `UpsertVariantItem` structs for PCMS write endpoints
+- `internal/api/errors.go`: product-domain error code constants (`E9417`–`E9447`, `E9103`, `E0004`, `E0102`)
+- `internal/api/client.go`: `Response.ServerTime` field populated from `X-Server-Time` response header (enables delta sync checkpoint)
+- `internal/output/types.go`: `Product` display type with `VariantCount` field
+- `internal/output/formatter.go`: `"product"` renderer (columns: ID, Name, Status, SKU, Price, Variants)
+- Exit code 8 for HTTP 409 Conflict errors; `ExitCodeFor` updated; README exit-code table updated
+
+### Fixed
+
+- `products list/create/update/variants --output json`: JSON output now renders the full `api.Product` struct (all fields) instead of the stripped 5-field `output.Product` display model; list output uses a `{"data":[...],"meta":{...}}` envelope so empty results include pagination context rather than a bare `[]`
+- `products list --output json` empty result: returns `{"data":[],"meta":{"page":1,"limit":20,"total":0,"has_more":false}}` instead of `[]`
+- `X-Server-Time` header: now always printed to stderr regardless of output mode (was previously suppressed in `--output json` mode)
+- Cobra arg-validation errors (e.g. missing positional arg): now rendered via `output.RenderError` respecting `--output json` and mapped to exit code 5 instead of printing plain text and exiting with code 1
+- `--output yaml` and any other unknown format: now returns a clear error (`unknown output format "yaml": supported formats are table, json, quiet`) instead of silently falling back to table
+- `internal/output/formatter.go`: product table renderer now includes a `Variants` column showing the total variant count; `VariantCount` added to `output.Product`
+- `README.md`: removed `yaml` from output mode list (never implemented); updated `--output` flag description and exit-code table
+- `api/openapi.json`: fixed 6 defects — path double-prefix on 3 write endpoints, broken `$ref` to non-existent `Product`/`ErrorResponse` schemas, missing `X-Tenant-Code` parameter on write endpoints, incorrect lowercase status enum on `PublicProductResponse`, `variant_id` incorrectly required in variants upsert body; added `option1/2/3` fields to create-variants schema
+
 ---
 
 ## [0.1.1] — 2026-05-23
