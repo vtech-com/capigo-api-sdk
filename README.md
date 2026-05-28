@@ -242,6 +242,8 @@ capigo tasks list --output json
 
 OpenAPI spec: [`api/openapi.json`](./api/openapi.json)
 
+Source: `https://platform.capigo.app/api/openapi`. Run `make update-spec` to sync.
+
 View it interactively:
 
 - Paste into [editor.swagger.io](https://editor.swagger.io)
