@@ -331,8 +331,8 @@ func TestProductsVariants_UpsertSemantics(t *testing.T) {
 	variantName := "Red / M"
 	price := 99000.0
 	items := []UpsertVariantItem{
-		{VariantID: &existingID, Price: &price},   // UPDATE
-		{Name: &variantName},                       // CREATE
+		{VariantID: &existingID, Price: &price}, // UPDATE
+		{Name: &variantName},                    // CREATE
 	}
 	_, err := c.Do(context.Background(), "PUT",
 		"/pcms/products/"+productID+"/variants", items, &tenant)
