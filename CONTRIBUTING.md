@@ -28,7 +28,7 @@ This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.
 
 **For new features or significant changes:** please open a GitHub Issue first and wait for a maintainer to apply the `approved` label. This avoids wasted effort on PRs that won't be accepted.
 
-**For new command bindings** (wrapping additional API endpoints): check `api/openapi.json` for the endpoint contract, then open an issue to discuss scope before implementing.
+**For new command bindings** (wrapping additional API endpoints): check `api/openapi.json` for the endpoint contract, then open an issue to discuss scope before implementing. Source: `https://platform.capigo.app/api/openapi`. Run `make update-spec` to sync.
 
 ---
 

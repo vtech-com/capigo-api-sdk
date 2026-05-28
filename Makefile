@@ -13,7 +13,12 @@ LDFLAGS := -ldflags "\
 DIST_DIR := dist
 BINARY   := $(DIST_DIR)/capigo
 
-.PHONY: build test lint release-snapshot install clean
+.PHONY: build test lint release-snapshot install clean update-spec
+
+## update-spec: Fetch latest OpenAPI spec from Capigo platform
+update-spec:
+	curl -fsSL https://platform.capigo.app/api/openapi -o api/openapi.json
+	@echo "Updated api/openapi.json from https://platform.capigo.app/api/openapi"
 
 build:
 	@mkdir -p $(DIST_DIR)
