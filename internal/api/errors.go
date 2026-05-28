@@ -7,6 +7,23 @@ import (
 	"net"
 )
 
+// Product-domain error codes returned by /pcms/* endpoints.
+// These are informational constants; ExitCodeFor() maps HTTP status → exit code.
+const (
+	ErrProductNotFound     = "E9417" // product not found (404)
+	ErrProductCreateFailed = "E9418" // create failed (500)
+	ErrProductUpdateFailed = "E9419" // update failed (500)
+	ErrVariantNotFound     = "E9425" // variant not found (404)
+	ErrProductValidation1  = "E9443" // validation: name
+	ErrProductValidation2  = "E9444" // validation: status
+	ErrProductValidation3  = "E9445" // validation: currency
+	ErrProductValidation4  = "E9446" // validation: options/variants pairing
+	ErrProductVariantLimit = "E9447" // validation: variant limit exceeded (max 50)
+	ErrTenantDenied        = "E9103" // tenant access denied (403)
+	ErrAuthRequired        = "E0004" // auth required (401)
+	ErrInsufficientPerms   = "E0102" // insufficient permissions (403)
+)
+
 // APIError represents a structured error returned by the Capigo API.
 type APIError struct {
 	Code       string
@@ -32,6 +49,7 @@ func (e *APIError) Error() string {
 // 5 — validation error (HTTP 400)
 // 6 — network error (DNS, timeout, connection refused)
 // 7 — rate limit (HTTP 429)
+// 8 — conflict (HTTP 409)
 func ExitCodeFor(err error) int {
 	if err == nil {
 		return 0
@@ -57,6 +75,8 @@ func ExitCodeFor(err error) int {
 			return 4
 		case 400:
 			return 5
+		case 409:
+			return 8
 		case 429:
 			return 7
 		}

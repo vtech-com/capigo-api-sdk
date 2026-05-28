@@ -30,3 +30,16 @@ type Task struct {
 	Assignee   string `json:"assignee,omitempty"`
 	TenantCode string `json:"tenant_code,omitempty"`
 }
+
+// Product is the display model for a Capigo PCMS product.
+// SKU and Price are derived from the first variant for table display.
+// VariantCount holds the total number of variants for the Variants column.
+type Product struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Status       string `json:"status"`
+	SKU          string `json:"sku,omitempty"`
+	Price        string `json:"price,omitempty"`
+	VariantCount int    `json:"variant_count"`
+	TenantCode   string `json:"tenant_code,omitempty"`
+}

@@ -168,3 +168,70 @@ type Me struct {
 	Email       string  `json:"email"`
 	AvatarURL   *string `json:"avatar_url"`
 }
+
+// CreateProductOptionItem is one option axis in POST /pcms/products.
+// Name is the axis label (e.g. "Color"); Values are the allowed values (e.g. ["Red","Blue"]).
+type CreateProductOptionItem struct {
+	Name   string   `json:"name"`
+	Values []string `json:"values"`
+}
+
+// CreateProductVariantItem is one variant entry in POST /pcms/products.
+// Option1/2/3 reference the values of the corresponding option axes.
+type CreateProductVariantItem struct {
+	Name    string   `json:"name"`
+	SKU     *string  `json:"sku,omitempty"`
+	Barcode *string  `json:"barcode,omitempty"`
+	Price   *float64 `json:"price,omitempty"`
+	Option1 *string  `json:"option1,omitempty"`
+	Option2 *string  `json:"option2,omitempty"`
+	Option3 *string  `json:"option3,omitempty"`
+}
+
+// CreateProductRequest is the body for POST /pcms/products.
+// Only Name is required. When Options are provided, Variants must also be provided;
+// the backend does not auto-generate the Cartesian matrix.
+type CreateProductRequest struct {
+	Name          string                     `json:"name"`
+	Description   *string                    `json:"description,omitempty"`
+	BrandID       *string                    `json:"brand_id,omitempty"`
+	CategoryID    *string                    `json:"category_id,omitempty"`
+	ProductTypeID *string                    `json:"product_type_id,omitempty"`
+	UnitID        *string                    `json:"unit_id,omitempty"`
+	Status        *string                    `json:"status,omitempty"`
+	Currency      *string                    `json:"currency,omitempty"`
+	SKU           *string                    `json:"sku,omitempty"`
+	Barcode       *string                    `json:"barcode,omitempty"`
+	Price         *float64                   `json:"price,omitempty"`
+	Options       []CreateProductOptionItem  `json:"options,omitempty"`
+	Variants      []CreateProductVariantItem `json:"variants,omitempty"`
+}
+
+// UpdateProductRequest is the body for PUT /pcms/products/{id}.
+// All fields are optional pointers; only non-nil fields are serialized.
+// At least one field must be provided.
+type UpdateProductRequest struct {
+	Name          *string  `json:"name,omitempty"`
+	Description   *string  `json:"description,omitempty"`
+	BrandID       *string  `json:"brand_id,omitempty"`
+	CategoryID    *string  `json:"category_id,omitempty"`
+	ProductTypeID *string  `json:"product_type_id,omitempty"`
+	UnitID        *string  `json:"unit_id,omitempty"`
+	Status        *string  `json:"status,omitempty"`
+	Currency      *string  `json:"currency,omitempty"`
+	Aliases       []string `json:"aliases,omitempty"`
+}
+
+// UpsertVariantItem is one element of the PUT /pcms/products/{id}/variants array.
+// VariantID present → UPDATE the existing variant.
+// VariantID absent  → CREATE a new variant (Name is required in that case).
+type UpsertVariantItem struct {
+	VariantID *string  `json:"variant_id,omitempty"`
+	Name      *string  `json:"name,omitempty"`
+	SKU       *string  `json:"sku,omitempty"`
+	Barcode   *string  `json:"barcode,omitempty"`
+	Price     *float64 `json:"price,omitempty"`
+	Option1   *string  `json:"option1,omitempty"`
+	Option2   *string  `json:"option2,omitempty"`
+	Option3   *string  `json:"option3,omitempty"`
+}

@@ -23,7 +23,7 @@ capigo tasks list --output json | jq '.[] | select(.status=="To-Do")'
 Capigo exposes a stable Public API, but integrating it today requires implementing your own HTTP client, handling auth, pagination, and error codes from scratch. This SDK removes that friction:
 
 - **Zero-config for AI agents** — `shell exec("capigo tasks list")` just works
-- **Standardized output** — `table | json | yaml | quiet` for human and machine consumption
+- **Standardized output** — `table | json | quiet` for human and machine consumption
 - **Deterministic exit codes** — agents branch on exit code, not error message text
 - **Single binary** — no Node.js, Python, or any runtime required
 - **Cross-platform** — Linux, macOS, Windows on amd64 and arm64
@@ -119,7 +119,7 @@ capigo version           Print version info
 | `--tenant <code>` | Scope call to a specific tenant |
 | `--no-tenant` | Force global mode (override configured default) |
 | `--profile <name>` | Use a specific config profile |
-| `--output table\|json\|quiet` | Output format |
+| `--output table\|json\|quiet` | Output format (unknown values are rejected with an error) |
 | `--api-url <url>` | Override API base URL (staging / local dev) |
 | `--verbose` | Print HTTP request/response details (Authorization header is redacted) |
 
@@ -192,6 +192,7 @@ AI agents should branch on exit code, **not** on error message text.
 | `5` | Validation error (400) |
 | `6` | Network error — agent should retry |
 | `7` | Rate limit (429) — agent should back off |
+| `8` | Conflict (409) — resource already exists or state conflict |
 
 ## AI Agent Integration
 
