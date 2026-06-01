@@ -61,7 +61,7 @@ Requires Go 1.26.3+.
 ### Homebrew (macOS / Linux)
 
 ```bash
-brew install vtech-com/tap/capigo
+brew install --cask vtech-com/tap/capigo
 ```
 
 ### Docker
