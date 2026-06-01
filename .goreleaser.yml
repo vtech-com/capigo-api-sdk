@@ -50,11 +50,13 @@ changelog:
       - Merge pull request
       - Merge branch
 
-homebrew_casks:
+brews:
   - repository:
       owner: vtech-com
       name: homebrew-tap
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
     homepage: "https://capigo.app"
     description: "CLI tool and Go SDK for the Capigo platform"
+    install: |
+      bin.install "capigo"
 
