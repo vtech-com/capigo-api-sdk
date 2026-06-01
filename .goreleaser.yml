@@ -59,6 +59,6 @@ homebrew_casks:
     description: "CLI tool and Go SDK for the Capigo platform"
     binary: "capigo"
     hooks:
-      post_install:
-        - 'system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/capigo"]'
+      post:
+        install: 'system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/capigo"]'
 
