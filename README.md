@@ -145,8 +145,8 @@ Credentials and settings are stored in `~/.capigo/config.json` (permissions `600
 ### Configuration precedence
 
 ```
-CLI flag (--api-key, --tenant)
-  > Environment variable (CAPIGO_API_KEY, CAPIGO_TENANT, CAPIGO_PROFILE)
+CLI flag (--api-url, --tenant, …)
+  > Environment variable (CAPIGO_API_KEY, CAPIGO_API_URL, CAPIGO_TENANT, CAPIGO_PROFILE)
     > Config file (~/.capigo/config.json)
 ```
 
@@ -154,6 +154,12 @@ AI agents can inject credentials via environment variables without writing a con
 
 ```bash
 CAPIGO_API_KEY=csk_... CAPIGO_TENANT=acme capigo tasks list
+```
+
+To point at a different environment (staging, local dev) without touching the config file:
+
+```bash
+CAPIGO_API_URL=http://localhost:3999 CAPIGO_API_KEY=csk_dev_... capigo tasks list
 ```
 
 ## Output Modes
@@ -234,6 +240,7 @@ capigo tasks list --tenant acme --output json
 
 ```bash
 CAPIGO_API_KEY=${{ secrets.CAPIGO_KEY }} \
+CAPIGO_API_URL=${{ vars.CAPIGO_API_URL }} \
 CAPIGO_TENANT=acme \
 capigo tasks list --output json
 ```
