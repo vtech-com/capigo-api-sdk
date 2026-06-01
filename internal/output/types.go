@@ -43,3 +43,38 @@ type Product struct {
 	VariantCount int    `json:"variant_count"`
 	TenantCode   string `json:"tenant_code,omitempty"`
 }
+
+// Brand is the display model for a Capigo PCMS brand.
+type Brand struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// Category is the display model for a Capigo PCMS category.
+type Category struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	ParentID string `json:"parent_id,omitempty"`
+}
+
+// ProductType is the display model for a Capigo PCMS product type.
+type ProductType struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// Unit is the display model for a Capigo PCMS unit.
+type Unit struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Abbreviation string `json:"abbreviation"`
+}
+
+// VariantRecord is the display model for a Capigo PCMS variant record.
+type VariantRecord struct {
+	ID        string `json:"id"`
+	Barcode   string `json:"barcode"`
+	SKU       string `json:"sku"`
+	Name      string `json:"name"`
+	ProductID string `json:"product_id"`
+}

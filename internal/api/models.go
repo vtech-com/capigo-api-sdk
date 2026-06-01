@@ -223,8 +223,8 @@ type UpdateProductRequest struct {
 }
 
 // UpsertVariantItem is one element of the PUT /pcms/products/{id}/variants array.
-// VariantID present → UPDATE the existing variant.
-// VariantID absent  → CREATE a new variant (Name is required in that case).
+// VariantID present -> UPDATE the existing variant.
+// VariantID absent  -> CREATE a new variant (Name is required in that case).
 type UpsertVariantItem struct {
 	VariantID *string  `json:"variant_id,omitempty"`
 	Name      *string  `json:"name,omitempty"`
@@ -235,3 +235,55 @@ type UpsertVariantItem struct {
 	Option2   *string  `json:"option2,omitempty"`
 	Option3   *string  `json:"option3,omitempty"`
 }
+
+// Brand represents a PublicBrandResponse from GET /pcms/brands.
+type Brand struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	LogoURL string `json:"logo_url"`
+}
+
+// Category represents a PublicCategoryResponse from GET /pcms/categories.
+type Category struct {
+	ID       string  `json:"id"`
+	Name     string  `json:"name"`
+	ParentID *string `json:"parent_id"`
+}
+
+// ProductType represents a PublicProductTypeResponse from GET /pcms/product-types.
+type ProductType struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// Unit represents a PublicUnitResponse from GET /pcms/units.
+type Unit struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Abbreviation string `json:"abbreviation"`
+}
+
+// VariantRecord represents a flat variant entry from GET /pcms/variants.
+// Named VariantRecord to avoid collision with the existing ProductVariant type.
+type VariantRecord struct {
+	ID        string `json:"id"`
+	Barcode   string `json:"barcode"`
+	SKU       string `json:"sku"`
+	Name      string `json:"name"`
+	ProductID string `json:"product_id"`
+}
+
+// ListBrandsResponse is an Envelope for paginated brand lists.
+type ListBrandsResponse = Envelope[[]Brand]
+
+// ListCategoriesResponse is an Envelope for paginated category lists.
+type ListCategoriesResponse = Envelope[[]Category]
+
+// ListProductTypesResponse is an Envelope for paginated product-type lists.
+type ListProductTypesResponse = Envelope[[]ProductType]
+
+// ListUnitsResponse is an Envelope for paginated unit lists.
+type ListUnitsResponse = Envelope[[]Unit]
+
+// ListVariantRecordsResponse is an Envelope for paginated variant-record lists.
+type ListVariantRecordsResponse = Envelope[[]VariantRecord]

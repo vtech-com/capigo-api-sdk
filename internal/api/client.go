@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -141,4 +142,95 @@ func parseAPIError(body []byte, status int, requestID string) *APIError {
 		RequestID:  requestID,
 		HTTPStatus: status,
 	}
+}
+
+// ListProducts fetches a page of products for the given tenant.
+// q is an optional free-text search fragment (min 2 chars); pass empty string to skip.
+func (c *Client) ListProducts(ctx context.Context, tenant *string, q, updatedSince, ids string, page, limit int) (*Response, error) {
+	params := buildParams(map[string]string{
+		"q":             q,
+		"updated_since": updatedSince,
+		"ids":           ids,
+	}, page, limit)
+	path := "/pcms/products"
+	if len(params) > 0 {
+		path += "?" + params.Encode()
+	}
+	return c.Do(ctx, "GET", path, nil, tenant)
+}
+
+// ListBrands fetches a page of brands for the given tenant.
+// q is an optional name-contains filter; pass empty string to skip.
+func (c *Client) ListBrands(ctx context.Context, tenant *string, q string, page, limit int) (*Response, error) {
+	params := buildParams(map[string]string{"q": q}, page, limit)
+	path := "/pcms/brands"
+	if len(params) > 0 {
+		path += "?" + params.Encode()
+	}
+	return c.Do(ctx, "GET", path, nil, tenant)
+}
+
+// ListCategories fetches a page of categories for the given tenant.
+// q is an optional name-contains filter; pass empty string to skip.
+func (c *Client) ListCategories(ctx context.Context, tenant *string, q string, page, limit int) (*Response, error) {
+	params := buildParams(map[string]string{"q": q}, page, limit)
+	path := "/pcms/categories"
+	if len(params) > 0 {
+		path += "?" + params.Encode()
+	}
+	return c.Do(ctx, "GET", path, nil, tenant)
+}
+
+// ListProductTypes fetches a page of product types for the given tenant.
+// q is an optional name-contains filter; pass empty string to skip.
+func (c *Client) ListProductTypes(ctx context.Context, tenant *string, q string, page, limit int) (*Response, error) {
+	params := buildParams(map[string]string{"q": q}, page, limit)
+	path := "/pcms/product-types"
+	if len(params) > 0 {
+		path += "?" + params.Encode()
+	}
+	return c.Do(ctx, "GET", path, nil, tenant)
+}
+
+// ListUnits fetches a page of units for the given tenant.
+// q is an optional name-contains filter; pass empty string to skip.
+func (c *Client) ListUnits(ctx context.Context, tenant *string, q string, page, limit int) (*Response, error) {
+	params := buildParams(map[string]string{"q": q}, page, limit)
+	path := "/pcms/units"
+	if len(params) > 0 {
+		path += "?" + params.Encode()
+	}
+	return c.Do(ctx, "GET", path, nil, tenant)
+}
+
+// ListVariants fetches a page of variant records for the given tenant.
+// barcodePrefix and sort are optional; pass empty strings to skip.
+func (c *Client) ListVariants(ctx context.Context, tenant *string, barcodePrefix, sort string, page, limit int) (*Response, error) {
+	params := buildParams(map[string]string{
+		"barcode_prefix": barcodePrefix,
+		"sort":           sort,
+	}, page, limit)
+	path := "/pcms/variants"
+	if len(params) > 0 {
+		path += "?" + params.Encode()
+	}
+	return c.Do(ctx, "GET", path, nil, tenant)
+}
+
+// buildParams constructs a url.Values from the given string map (skipping empty values)
+// and appends page/limit when non-zero.
+func buildParams(extras map[string]string, page, limit int) url.Values {
+	params := url.Values{}
+	for k, v := range extras {
+		if v != "" {
+			params.Set(k, v)
+		}
+	}
+	if page > 0 {
+		params.Set("page", strconv.Itoa(page))
+	}
+	if limit > 0 {
+		params.Set("limit", strconv.Itoa(limit))
+	}
+	return params
 }

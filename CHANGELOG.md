@@ -11,6 +11,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `brands list` — list reference brands for a tenant with optional `--query`/`-q` name-contains search (min 2 chars), `--page`, `--limit`
+- `categories list` — list reference categories for a tenant with optional `--query`/`-q` name-contains search, `--page`, `--limit`
+- `product-types list` — list reference product types for a tenant with optional `--query`/`-q` name-contains search, `--page`, `--limit`
+- `units list` — list reference units for a tenant with optional `--query`/`-q` name-contains search, `--page`, `--limit`
+- `variants list` — query product variants by `--barcode-prefix` for barcode counter lookup; `--sort` accepts `barcode` or `-barcode` (validated); default `--limit 1` for top-barcode lookup pattern; tenant required
+- `products list --query`/`-q` — free-text search (2–500 chars) across product name, variant name, SKU, and barcode; composes with `--updated-since` and `--ids`
+- `internal/api/models.go`: `Brand`, `Category`, `ProductType`, `Unit`, `VariantRecord` structs and corresponding list-response type aliases
+- `internal/api/client.go`: `ListBrands`, `ListCategories`, `ListProductTypes`, `ListUnits`, `ListVariants` methods; shared `buildParams` helper
+- `internal/output/types.go`: `Brand`, `Category`, `ProductType`, `Unit`, `VariantRecord` display types
+- `internal/output/formatter.go`: renderers for `brand`, `category`, `product_type`, `unit`, `variant_record`
+- `api/openapi.json`: added `/pcms/brands`, `/pcms/categories`, `/pcms/product-types`, `/pcms/units`, `/pcms/variants` GET paths; `PublicBrandResponse`, `PublicCategoryResponse`, `PublicProductTypeResponse`, `PublicUnitResponse` component schemas; `?q` parameter on `/pcms/products` GET
+
 - `products list` — list products from PCMS catalog with optional `--updated-since` (ISO 8601) for delta sync, `--page`, `--limit`, and `--all` (auto-paginate). Tenant required; server timestamp surfaced to stderr for subsequent delta sync calls.
 - `products list --ids <uuid,...>` — fetch up to 50 specific products by UUID (comma-separated); composable with `--updated-since`; mutually exclusive with `--all`
 - `products create` — create a new product via individual flags (simple mode) or `--from-json <file|->` (variant mode with options+variants array); extended `Long` help with concrete JSON examples for both simple and variant modes
