@@ -36,6 +36,25 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.2.0] — 2026-06-01
+
+### Added
+
+- `products list` — paginated catalog sync with `--updated-since` delta sync, `--ids` UUID filter (max 50), `--all` auto-paginate
+- `products create` — simple mode (flags) or JSON mode (`--from-json`)
+- `products update <id>` — partial update via flags or `--from-json`
+- `products variants <id>` — mixed create/update upsert via `--from-json` (max 50 items)
+- `make update-spec` — fetch latest OpenAPI spec from `https://platform.capigo.app/api/openapi`
+
+### Fixed
+
+- Fixed 6 defects in `api/openapi.json`
+- `--output json` now renders full product object instead of stripped display model
+- HTTP 409 mapped to exit code 8 (SKU conflict)
+- Cobra validation errors now respect `--output json` mode
+
+---
+
 ## [0.1.1] — 2026-05-23
 
 ### Added
