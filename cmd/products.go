@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"unicode/utf8"
 
 	"github.com/spf13/cobra"
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
@@ -30,6 +31,7 @@ or config default_tenant). Use --help on any subcommand for flag details.`,
 
 var (
 	productListUpdatedSince string
+	productListQuery        string
 	productListPage         int
 	productListLimit        int
 	productListAll          bool
@@ -54,6 +56,16 @@ Use --ids to fetch specific products by UUID (comma-separated, max 50).
 			e := &api.APIError{
 				Code:       "VALIDATION_ERROR",
 				Message:    "--ids and --all are mutually exclusive; use --ids to fetch specific products or --all to paginate the full catalog",
+				HTTPStatus: 400,
+			}
+			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
+			os.Exit(api.ExitCodeFor(e))
+		}
+
+		if productListQuery != "" && utf8.RuneCountInString(productListQuery) < 2 {
+			e := &api.APIError{
+				Code:       "VALIDATION_ERROR",
+				Message:    "--query must be at least 2 characters",
 				HTTPStatus: 400,
 			}
 			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
@@ -92,6 +104,9 @@ Use --ids to fetch specific products by UUID (comma-separated, max 50).
 		}
 
 		params := url.Values{}
+		if productListQuery != "" {
+			params.Set("q", productListQuery)
+		}
 		if productListUpdatedSince != "" {
 			params.Set("updated_since", productListUpdatedSince)
 		}
@@ -162,6 +177,9 @@ func productsListAll(ctx context.Context, client *api.Client, tenant *string) er
 
 	for {
 		params := url.Values{}
+		if productListQuery != "" {
+			params.Set("q", productListQuery)
+		}
 		if productListUpdatedSince != "" {
 			params.Set("updated_since", productListUpdatedSince)
 		}
@@ -671,6 +689,7 @@ Example JSON input:
 
 func init() {
 	// products list flags
+	productsListCmd.Flags().StringVarP(&productListQuery, "query", "q", "", "free-text search (min 2 chars): matches product name, variant name, SKU, and barcode")
 	productsListCmd.Flags().StringVar(&productListUpdatedSince, "updated-since", "", "ISO 8601 timestamp for delta sync (from previous X-Server-Time header)")
 	productsListCmd.Flags().IntVar(&productListPage, "page", 0, "page number (default 1)")
 	productsListCmd.Flags().IntVar(&productListLimit, "limit", 0, "items per page (1–100, default 20)")

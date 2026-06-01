@@ -72,6 +72,50 @@ func init() {
 			},
 			idFn: func(v any) string { return v.(Product).ID },
 		},
+		"brand": {
+			headers: []string{"ID", "Name"},
+			rowFn: func(v any) []any {
+				b := v.(Brand)
+				return []any{b.ID, b.Name}
+			},
+			idFn: func(v any) string { return v.(Brand).ID },
+		},
+		"category": {
+			headers: []string{"ID", "Name", "ParentID"},
+			rowFn: func(v any) []any {
+				c := v.(Category)
+				parentID := ""
+				if c.ParentID != nil {
+					parentID = *c.ParentID
+				}
+				return []any{c.ID, c.Name, parentID}
+			},
+			idFn: func(v any) string { return v.(Category).ID },
+		},
+		"product_type": {
+			headers: []string{"ID", "Name"},
+			rowFn: func(v any) []any {
+				pt := v.(ProductType)
+				return []any{pt.ID, pt.Name}
+			},
+			idFn: func(v any) string { return v.(ProductType).ID },
+		},
+		"unit": {
+			headers: []string{"ID", "Name", "Abbreviation"},
+			rowFn: func(v any) []any {
+				u := v.(Unit)
+				return []any{u.ID, u.Name, u.Abbreviation}
+			},
+			idFn: func(v any) string { return v.(Unit).ID },
+		},
+		"variant_record": {
+			headers: []string{"ID", "Barcode", "SKU", "Name", "ProductID"},
+			rowFn: func(v any) []any {
+				vr := v.(VariantRecord)
+				return []any{vr.ID, vr.Barcode, vr.SKU, vr.Name, vr.ProductID}
+			},
+			idFn: func(v any) string { return v.(VariantRecord).ID },
+		},
 	}
 }
 

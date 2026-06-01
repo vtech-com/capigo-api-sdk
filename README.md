@@ -109,6 +109,18 @@ capigo tasks create      Create a new task (--title required; --tenant required)
 
 capigo boards list       List boards
 
+capigo products list     List products (supports --query, --updated-since, --ids, --all)
+capigo products get      (coming soon)
+capigo products create   Create a product (--name required, or --from-json)
+capigo products update   Update a product
+capigo products variants Upsert product variants
+
+capigo brands list           List reference brands (supports --query)
+capigo categories list       List reference categories (supports --query)
+capigo product-types list    List reference product types (supports --query)
+capigo units list            List reference units (supports --query)
+capigo variants list         List variants by barcode prefix (supports --barcode-prefix, --sort)
+
 capigo version           Print version info
 ```
 
@@ -122,6 +134,63 @@ capigo version           Print version info
 | `--output table\|json\|quiet` | Output format (unknown values are rejected with an error) |
 | `--api-url <url>` | Override API base URL (staging / local dev) |
 | `--verbose` | Print HTTP request/response details (Authorization header is redacted) |
+
+## Products
+
+```bash
+# List products
+capigo products list --tenant acme
+
+# Search products by name, variant name, SKU, or barcode
+capigo products list --tenant acme --query iphone
+
+# Delta sync — only products updated since a previous call
+capigo products list --tenant acme --updated-since 2026-01-01T00:00:00Z
+
+# Fetch all pages into a single JSON stream
+capigo products list --tenant acme --all --output json
+
+# Create a simple product
+capigo products create --tenant acme --name "Blue T-Shirt" --sku "SKU-001" --price 299000
+```
+
+| Flag | Description |
+|------|-------------|
+| `--query`/`-q` | Free-text search (2–500 chars): product name, variant name, SKU, barcode |
+| `--updated-since` | ISO 8601 timestamp for delta sync |
+| `--ids` | Comma-separated product UUIDs (max 50); mutually exclusive with `--all` |
+| `--all` | Auto-paginate the full catalog |
+| `--page` | Page number (default 1) |
+| `--limit` | Items per page (1–100, default 20) |
+
+## Reference data
+
+Reference endpoints return bounded sets of lookup values (brands, categories, product types, units). Use them to resolve names to UUIDs before creating products.
+
+```bash
+# List brands (name search)
+capigo brands list --tenant acme --query nike
+
+# List categories
+capigo categories list --tenant acme
+
+# List product types
+capigo product-types list --tenant acme --query shirt
+
+# List units
+capigo units list --tenant acme
+
+# List variants by barcode prefix (top-1 highest barcode for auto-increment)
+capigo variants list --tenant acme --barcode-prefix 620111 --sort -barcode --limit 1
+```
+
+| Command | Key flags | Description |
+|---------|-----------|-------------|
+| `brands list` | `--query`/`-q` | Name-contains search (min 2 chars) |
+| `categories list` | `--query`/`-q` | Name-contains search (min 2 chars) |
+| `product-types list` | `--query`/`-q` | Name-contains search (min 2 chars) |
+| `units list` | `--query`/`-q` | Name-contains search (min 2 chars) |
+| `variants list` | `--barcode-prefix`, `--sort` | `--sort` accepts `barcode` or `-barcode` only |
 
 ## Configuration
 
@@ -142,7 +211,64 @@ Credentials and settings are stored in `~/.capigo/config.json` (permissions `600
 }
 ```
 
-### Configuration precedence
+### Products
+
+```bash
+# List products
+capigo products list --tenant acme
+
+# Search products by name, variant name, SKU, or barcode
+capigo products list --tenant acme --query iphone
+
+# Delta sync — only products updated since a previous call
+capigo products list --tenant acme --updated-since 2026-01-01T00:00:00Z
+
+# Fetch all pages into a single JSON stream
+capigo products list --tenant acme --all --output json
+
+# Create a simple product
+capigo products create --tenant acme --name "Blue T-Shirt" --sku "SKU-001" --price 299000
+```
+
+| Flag | Description |
+|------|-------------|
+| `--query`/`-q` | Free-text search (2–500 chars): product name, variant name, SKU, barcode |
+| `--updated-since` | ISO 8601 timestamp for delta sync |
+| `--ids` | Comma-separated product UUIDs (max 50); mutually exclusive with `--all` |
+| `--all` | Auto-paginate the full catalog |
+| `--page` | Page number (default 1) |
+| `--limit` | Items per page (1–100, default 20) |
+
+## Reference data
+
+Reference endpoints return bounded sets of lookup values (brands, categories, product types, units). Use them to resolve names to UUIDs before creating products.
+
+```bash
+# List brands (name search)
+capigo brands list --tenant acme --query nike
+
+# List categories
+capigo categories list --tenant acme
+
+# List product types
+capigo product-types list --tenant acme --query shirt
+
+# List units
+capigo units list --tenant acme
+
+# List variants by barcode prefix (top-1 highest barcode for auto-increment)
+capigo variants list --tenant acme --barcode-prefix 620111 --sort -barcode --limit 1
+```
+
+| Command | Key flags | Description |
+|---------|-----------|-------------|
+| `brands list` | `--query`/`-q` | Name-contains search (min 2 chars) |
+| `categories list` | `--query`/`-q` | Name-contains search (min 2 chars) |
+| `product-types list` | `--query`/`-q` | Name-contains search (min 2 chars) |
+| `units list` | `--query`/`-q` | Name-contains search (min 2 chars) |
+| `variants list` | `--barcode-prefix`, `--sort` | `--sort` accepts `barcode` or `-barcode` only |
+
+## Configuration precedence
 
 ```
 CLI flag (--api-url, --tenant, …)
