@@ -9,42 +9,25 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+---
+
+## [0.3.0] — 2026-06-01
+
 ### Added
 
-- `brands list` — list reference brands for a tenant with optional `--query`/`-q` name-contains search (min 2 chars), `--page`, `--limit`
-- `categories list` — list reference categories for a tenant with optional `--query`/`-q` name-contains search, `--page`, `--limit`
-- `product-types list` — list reference product types for a tenant with optional `--query`/`-q` name-contains search, `--page`, `--limit`
-- `units list` — list reference units for a tenant with optional `--query`/`-q` name-contains search, `--page`, `--limit`
-- `variants list` — query product variants by `--barcode-prefix` for barcode counter lookup; `--sort` accepts `barcode` or `-barcode` (validated); default `--limit 1` for top-barcode lookup pattern; tenant required
-- `products list --query`/`-q` — free-text search (2–500 chars) across product name, variant name, SKU, and barcode; composes with `--updated-since` and `--ids`
-- `internal/api/models.go`: `Brand`, `Category`, `ProductType`, `Unit`, `VariantRecord` structs and corresponding list-response type aliases
-- `internal/api/client.go`: `ListBrands`, `ListCategories`, `ListProductTypes`, `ListUnits`, `ListVariants` methods; shared `buildParams` helper
-- `internal/output/types.go`: `Brand`, `Category`, `ProductType`, `Unit`, `VariantRecord` display types
-- `internal/output/formatter.go`: renderers for `brand`, `category`, `product_type`, `unit`, `variant_record`
-- `api/openapi.json`: added `/pcms/brands`, `/pcms/categories`, `/pcms/product-types`, `/pcms/units`, `/pcms/variants` GET paths; `PublicBrandResponse`, `PublicCategoryResponse`, `PublicProductTypeResponse`, `PublicUnitResponse` component schemas; `?q` parameter on `/pcms/products` GET
-
-- `products list` — list products from PCMS catalog with optional `--updated-since` (ISO 8601) for delta sync, `--page`, `--limit`, and `--all` (auto-paginate). Tenant required; server timestamp surfaced to stderr for subsequent delta sync calls.
-- `products list --ids <uuid,...>` — fetch up to 50 specific products by UUID (comma-separated); composable with `--updated-since`; mutually exclusive with `--all`
-- `products create` — create a new product via individual flags (simple mode) or `--from-json <file|->` (variant mode with options+variants array); extended `Long` help with concrete JSON examples for both simple and variant modes
-- `products update <id>` — update product core fields (name, description, status, currency, brand/category/product-type/unit IDs); now also supports `--from-json <file|->` for full JSON body (mutually exclusive with individual field flags)
-- `products variants --product-id <uuid> --from-json <file|->` — upsert variants via JSON array; items with `variant_id` are updated, items without are created (max 50 per call)
-- `internal/api/models.go`: `CreateProductRequest`, `CreateProductOptionItem`, `CreateProductVariantItem`, `UpdateProductRequest`, `UpsertVariantItem` structs for PCMS write endpoints
-- `internal/api/errors.go`: product-domain error code constants (`E9417`–`E9447`, `E9103`, `E0004`, `E0102`)
-- `internal/api/client.go`: `Response.ServerTime` field populated from `X-Server-Time` response header (enables delta sync checkpoint)
-- `internal/output/types.go`: `Product` display type with `VariantCount` field
-- `internal/output/formatter.go`: `"product"` renderer (columns: ID, Name, Status, SKU, Price, Variants)
-- Exit code 8 for HTTP 409 Conflict errors; `ExitCodeFor` updated; README exit-code table updated
+- `brands list` — list reference brands for a tenant; optional `--query`/`-q` name-contains search (case-insensitive, max 200 chars), `--page`, `--limit`
+- `categories list` — list reference categories for a tenant; optional `--query`/`-q`, `--page`, `--limit`
+- `product-types list` — list reference product types for a tenant; optional `--query`/`-q`, `--page`, `--limit`
+- `units list` — list reference units for a tenant; optional `--query`/`-q`, `--page`, `--limit`
+- `variants list` — query variants by `--barcode-prefix`; `--sort barcode|-barcode` (validated, default `-barcode`); default `--limit 1` for top-barcode-in-namespace lookup; cross-tenant without `--tenant`
+- `products list --query`/`-q` — free-text search (min 2 chars, max 500) across product name, variant name, SKU, and barcode; composes with `--updated-since` and `--ids`
+- `api/openapi.json`: added `/pcms/brands`, `/pcms/categories`, `/pcms/product-types`, `/pcms/units`, `/pcms/variants` GET paths and component schemas; `?q` parameter on `/pcms/products`
 
 ### Fixed
 
-- `products list/create/update/variants --output json`: JSON output now renders the full `api.Product` struct (all fields) instead of the stripped 5-field `output.Product` display model; list output uses a `{"data":[...],"meta":{...}}` envelope so empty results include pagination context rather than a bare `[]`
-- `products list --output json` empty result: returns `{"data":[],"meta":{"page":1,"limit":20,"total":0,"has_more":false}}` instead of `[]`
-- `X-Server-Time` header: now always printed to stderr regardless of output mode (was previously suppressed in `--output json` mode)
-- Cobra arg-validation errors (e.g. missing positional arg): now rendered via `output.RenderError` respecting `--output json` and mapped to exit code 5 instead of printing plain text and exiting with code 1
-- `--output yaml` and any other unknown format: now returns a clear error (`unknown output format "yaml": supported formats are table, json, quiet`) instead of silently falling back to table
-- `internal/output/formatter.go`: product table renderer now includes a `Variants` column showing the total variant count; `VariantCount` added to `output.Product`
-- `README.md`: removed `yaml` from output mode list (never implemented); updated `--output` flag description and exit-code table
-- `api/openapi.json`: fixed 6 defects — path double-prefix on 3 write endpoints, broken `$ref` to non-existent `Product`/`ErrorResponse` schemas, missing `X-Tenant-Code` parameter on write endpoints, incorrect lowercase status enum on `PublicProductResponse`, `variant_id` incorrectly required in variants upsert body; added `option1/2/3` fields to create-variants schema
+- `Brand.LogoURL`, `VariantRecord.Barcode`, `VariantRecord.SKU`: changed to `*string` to correctly represent nullable API fields (previously unmarshalled `null` as `""`)
+- `output.Category.ParentID`: changed to `*string` without `omitempty` so root categories emit `"parent_id": null` in JSON instead of omitting the field
+- `products list --query`: length validation now uses `utf8.RuneCountInString` instead of `len` (byte count), correctly handling multi-byte Vietnamese characters
 
 ---
 
@@ -114,6 +97,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-[Unreleased]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/vtech-com/capigo-api-sdk/releases/tag/v0.1.0
