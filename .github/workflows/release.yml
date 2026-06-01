@@ -35,3 +35,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+
+      - name: Remove stale Formula from tap (Cask is canonical)
+        env:
+          TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+        run: |
+          SHA=$(curl -sf -H "Authorization: token $TAP_GITHUB_TOKEN" \
+            https://api.github.com/repos/vtech-com/homebrew-tap/contents/capigo.rb \
+            | jq -r '.sha // empty')
+          if [ -n "$SHA" ]; then
+            curl -sf -X DELETE \
+              -H "Authorization: token $TAP_GITHUB_TOKEN" \
+              -H "Content-Type: application/json" \
+              https://api.github.com/repos/vtech-com/homebrew-tap/contents/capigo.rb \
+              -d "{\"message\":\"chore: remove stale Formula (Cask is canonical)\",\"sha\":\"$SHA\"}"
+            echo "Deleted capigo.rb from tap"
+          else
+            echo "capigo.rb not found in tap, nothing to delete"
+          fi
