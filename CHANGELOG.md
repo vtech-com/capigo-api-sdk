@@ -11,6 +11,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.3.1] — 2026-06-01
+
+### Fixed
+
+- Homebrew distribution: switched from Cask to Formula so `brew install vtech-com/tap/capigo` correctly places the binary in PATH
+
+---
+
 ## [0.3.0] — 2026-06-01
 
 ### Added
@@ -97,7 +105,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-[Unreleased]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.1.0...v0.1.1
