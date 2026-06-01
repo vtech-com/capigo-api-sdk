@@ -32,19 +32,9 @@ var unitsListCmd = &cobra.Command{
 	Short: "List units",
 	Long: `List product units from the PCMS catalog.
 
-Use --query / -q for a name-contains search (minimum 2 characters).`,
+Use --query / -q for a name-contains search.`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
-
-		if unitListQuery != "" && len(unitListQuery) < 2 {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "--query must be at least 2 characters",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
-		}
 
 		client, cfg, err := buildClient()
 		if err != nil {

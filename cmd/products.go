@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"unicode/utf8"
 
 	"github.com/spf13/cobra"
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
@@ -61,7 +62,7 @@ Use --ids to fetch specific products by UUID (comma-separated, max 50).
 			os.Exit(api.ExitCodeFor(e))
 		}
 
-		if productListQuery != "" && len(productListQuery) < 2 {
+		if productListQuery != "" && utf8.RuneCountInString(productListQuery) < 2 {
 			e := &api.APIError{
 				Code:       "VALIDATION_ERROR",
 				Message:    "--query must be at least 2 characters",

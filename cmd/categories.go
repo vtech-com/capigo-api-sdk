@@ -32,19 +32,9 @@ var categoriesListCmd = &cobra.Command{
 	Short: "List categories",
 	Long: `List categories from the PCMS catalog.
 
-Use --query / -q for a name-contains search (minimum 2 characters).`,
+Use --query / -q for a name-contains search.`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
-
-		if categoryListQuery != "" && len(categoryListQuery) < 2 {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "--query must be at least 2 characters",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
-		}
 
 		client, cfg, err := buildClient()
 		if err != nil {
@@ -81,14 +71,10 @@ Use --query / -q for a name-contains search (minimum 2 characters).`,
 
 		items := make([]output.Category, len(envelope.Data))
 		for i, c := range envelope.Data {
-			parentID := ""
-			if c.ParentID != nil {
-				parentID = *c.ParentID
-			}
 			items[i] = output.Category{
 				ID:       c.ID,
 				Name:     c.Name,
-				ParentID: parentID,
+				ParentID: c.ParentID,
 			}
 		}
 

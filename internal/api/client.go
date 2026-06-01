@@ -144,21 +144,6 @@ func parseAPIError(body []byte, status int, requestID string) *APIError {
 	}
 }
 
-// ListProducts fetches a page of products for the given tenant.
-// q is an optional free-text search fragment (min 2 chars); pass empty string to skip.
-func (c *Client) ListProducts(ctx context.Context, tenant *string, q, updatedSince, ids string, page, limit int) (*Response, error) {
-	params := buildParams(map[string]string{
-		"q":             q,
-		"updated_since": updatedSince,
-		"ids":           ids,
-	}, page, limit)
-	path := "/pcms/products"
-	if len(params) > 0 {
-		path += "?" + params.Encode()
-	}
-	return c.Do(ctx, "GET", path, nil, tenant)
-}
-
 // ListBrands fetches a page of brands for the given tenant.
 // q is an optional name-contains filter; pass empty string to skip.
 func (c *Client) ListBrands(ctx context.Context, tenant *string, q string, page, limit int) (*Response, error) {

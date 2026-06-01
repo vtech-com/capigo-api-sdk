@@ -84,7 +84,11 @@ func init() {
 			headers: []string{"ID", "Name", "ParentID"},
 			rowFn: func(v any) []any {
 				c := v.(Category)
-				return []any{c.ID, c.Name, c.ParentID}
+				parentID := ""
+				if c.ParentID != nil {
+					parentID = *c.ParentID
+				}
+				return []any{c.ID, c.Name, parentID}
 			},
 			idFn: func(v any) string { return v.(Category).ID },
 		},

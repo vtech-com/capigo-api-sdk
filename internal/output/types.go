@@ -46,15 +46,16 @@ type Product struct {
 
 // Brand is the display model for a Capigo PCMS brand.
 type Brand struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID      string  `json:"id"`
+	Name    string  `json:"name"`
+	LogoURL *string `json:"logo_url"`
 }
 
 // Category is the display model for a Capigo PCMS category.
 type Category struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	ParentID string `json:"parent_id,omitempty"`
+	ID       string  `json:"id"`
+	Name     string  `json:"name"`
+	ParentID *string `json:"parent_id"`
 }
 
 // ProductType is the display model for a Capigo PCMS product type.

@@ -86,10 +86,18 @@ The primary use case is finding the highest barcode in a prefix namespace; use
 
 		items := make([]output.VariantRecord, len(envelope.Data))
 		for i, v := range envelope.Data {
+			barcode := ""
+			if v.Barcode != nil {
+				barcode = *v.Barcode
+			}
+			sku := ""
+			if v.SKU != nil {
+				sku = *v.SKU
+			}
 			items[i] = output.VariantRecord{
 				ID:        v.ID,
-				Barcode:   v.Barcode,
-				SKU:       v.SKU,
+				Barcode:   barcode,
+				SKU:       sku,
 				Name:      v.Name,
 				ProductID: v.ProductID,
 			}

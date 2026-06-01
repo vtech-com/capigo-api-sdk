@@ -238,9 +238,9 @@ type UpsertVariantItem struct {
 
 // Brand represents a PublicBrandResponse from GET /pcms/brands.
 type Brand struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	LogoURL string `json:"logo_url"`
+	ID      string  `json:"id"`
+	Name    string  `json:"name"`
+	LogoURL *string `json:"logo_url"`
 }
 
 // Category represents a PublicCategoryResponse from GET /pcms/categories.
@@ -266,11 +266,11 @@ type Unit struct {
 // VariantRecord represents a flat variant entry from GET /pcms/variants.
 // Named VariantRecord to avoid collision with the existing ProductVariant type.
 type VariantRecord struct {
-	ID        string `json:"id"`
-	Barcode   string `json:"barcode"`
-	SKU       string `json:"sku"`
-	Name      string `json:"name"`
-	ProductID string `json:"product_id"`
+	ID        string  `json:"id"`
+	Barcode   *string `json:"barcode"`
+	SKU       *string `json:"sku"`
+	Name      string  `json:"name"`
+	ProductID string  `json:"product_id"`
 }
 
 // ListBrandsResponse is an Envelope for paginated brand lists.
