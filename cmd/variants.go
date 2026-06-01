@@ -61,18 +61,7 @@ The primary use case is finding the highest barcode in a prefix namespace; use
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
-
-		_ = api.PCMSRequiresTenant
-		if isGlobal {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "variants commands require a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
-		}
+		tenant, _ := resolveTenant(profile)
 
 		resp, err := client.ListVariants(ctx, tenant, variantListBarcodePrefix, variantListSort, variantListPage, variantListLimit)
 		if err != nil {

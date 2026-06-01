@@ -97,7 +97,7 @@ Use --query / -q for a name-contains search.`,
 }
 
 func init() {
-	categoriesListCmd.Flags().StringVarP(&categoryListQuery, "query", "q", "", "name-contains filter (min 2 chars)")
+	categoriesListCmd.Flags().StringVarP(&categoryListQuery, "query", "q", "", "name-contains filter (case-insensitive, max 200 chars)")
 	categoriesListCmd.Flags().IntVar(&categoryListPage, "page", 1, "page number")
 	categoriesListCmd.Flags().IntVar(&categoryListLimit, "limit", 20, "items per page (1-100)")
 

@@ -97,7 +97,7 @@ Use --query / -q for a name-contains search.`,
 }
 
 func init() {
-	unitsListCmd.Flags().StringVarP(&unitListQuery, "query", "q", "", "name-contains filter (min 2 chars)")
+	unitsListCmd.Flags().StringVarP(&unitListQuery, "query", "q", "", "name-contains filter (case-insensitive, max 200 chars)")
 	unitsListCmd.Flags().IntVar(&unitListPage, "page", 1, "page number")
 	unitsListCmd.Flags().IntVar(&unitListLimit, "limit", 20, "items per page (1-100)")
 
