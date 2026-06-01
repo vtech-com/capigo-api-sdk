@@ -186,10 +186,10 @@ capigo variants list --tenant acme --barcode-prefix 620111 --sort -barcode --lim
 
 | Command | Key flags | Description |
 |---------|-----------|-------------|
-| `brands list` | `--query`/`-q` | Name-contains search (min 2 chars) |
-| `categories list` | `--query`/`-q` | Name-contains search (min 2 chars) |
-| `product-types list` | `--query`/`-q` | Name-contains search (min 2 chars) |
-| `units list` | `--query`/`-q` | Name-contains search (min 2 chars) |
+| `brands list` | `--query`/`-q` | Name-contains search (case-insensitive, max 200 chars) |
+| `categories list` | `--query`/`-q` | Name-contains search (case-insensitive, max 200 chars) |
+| `product-types list` | `--query`/`-q` | Name-contains search (case-insensitive, max 200 chars) |
+| `units list` | `--query`/`-q` | Name-contains search (case-insensitive, max 200 chars) |
 | `variants list` | `--barcode-prefix`, `--sort` | `--sort` accepts `barcode` or `-barcode` only |
 
 ## Configuration
@@ -262,10 +262,10 @@ capigo variants list --tenant acme --barcode-prefix 620111 --sort -barcode --lim
 
 | Command | Key flags | Description |
 |---------|-----------|-------------|
-| `brands list` | `--query`/`-q` | Name-contains search (min 2 chars) |
-| `categories list` | `--query`/`-q` | Name-contains search (min 2 chars) |
-| `product-types list` | `--query`/`-q` | Name-contains search (min 2 chars) |
-| `units list` | `--query`/`-q` | Name-contains search (min 2 chars) |
+| `brands list` | `--query`/`-q` | Name-contains search (case-insensitive, max 200 chars) |
+| `categories list` | `--query`/`-q` | Name-contains search (case-insensitive, max 200 chars) |
+| `product-types list` | `--query`/`-q` | Name-contains search (case-insensitive, max 200 chars) |
+| `units list` | `--query`/`-q` | Name-contains search (case-insensitive, max 200 chars) |
 | `variants list` | `--barcode-prefix`, `--sort` | `--sort` accepts `barcode` or `-barcode` only |
 
 ## Configuration precedence
