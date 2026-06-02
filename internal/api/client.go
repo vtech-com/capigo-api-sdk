@@ -202,6 +202,46 @@ func (c *Client) ListVariants(ctx context.Context, tenant *string, barcodePrefix
 	return c.Do(ctx, "GET", path, nil, tenant)
 }
 
+// CreateBrand creates a new brand for the given tenant.
+func (c *Client) CreateBrand(ctx context.Context, tenant *string, body CreateBrandRequest) (*Response, error) {
+	return c.Do(ctx, "POST", "/pcms/brands", body, tenant)
+}
+
+// UpdateBrand updates an existing brand by ID.
+func (c *Client) UpdateBrand(ctx context.Context, tenant *string, id string, body UpdateBrandRequest) (*Response, error) {
+	return c.Do(ctx, "PUT", "/pcms/brands/"+id, body, tenant)
+}
+
+// CreateCategory creates a new category for the given tenant.
+func (c *Client) CreateCategory(ctx context.Context, tenant *string, body CreateCategoryRequest) (*Response, error) {
+	return c.Do(ctx, "POST", "/pcms/categories", body, tenant)
+}
+
+// UpdateCategory updates an existing category by ID.
+func (c *Client) UpdateCategory(ctx context.Context, tenant *string, id string, body UpdateCategoryRequest) (*Response, error) {
+	return c.Do(ctx, "PUT", "/pcms/categories/"+id, body, tenant)
+}
+
+// CreateProductType creates a new product type for the given tenant.
+func (c *Client) CreateProductType(ctx context.Context, tenant *string, body CreateProductTypeRequest) (*Response, error) {
+	return c.Do(ctx, "POST", "/pcms/product-types", body, tenant)
+}
+
+// UpdateProductType updates an existing product type by ID.
+func (c *Client) UpdateProductType(ctx context.Context, tenant *string, id string, body UpdateProductTypeRequest) (*Response, error) {
+	return c.Do(ctx, "PUT", "/pcms/product-types/"+id, body, tenant)
+}
+
+// CreateUnit creates a new unit for the given tenant.
+func (c *Client) CreateUnit(ctx context.Context, tenant *string, body CreateUnitRequest) (*Response, error) {
+	return c.Do(ctx, "POST", "/pcms/units", body, tenant)
+}
+
+// UpdateUnit updates an existing unit by ID.
+func (c *Client) UpdateUnit(ctx context.Context, tenant *string, id string, body UpdateUnitRequest) (*Response, error) {
+	return c.Do(ctx, "PUT", "/pcms/units/"+id, body, tenant)
+}
+
 // buildParams constructs a url.Values from the given string map (skipping empty values)
 // and appends page/limit when non-zero.
 func buildParams(extras map[string]string, page, limit int) url.Values {

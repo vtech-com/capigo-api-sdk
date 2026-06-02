@@ -1752,6 +1752,88 @@
             "description": "Tenant access denied"
           }
         }
+      },
+      "post": {
+        "summary": "Create Brand",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Create a new brand in the tenant's catalog. A URL-safe slug is auto-generated from the name.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to scope the request to. Required.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500,
+                    "example": "Nike"
+                  },
+                  "logo_url": {
+                    "type": "string",
+                    "format": "uri",
+                    "nullable": true,
+                    "example": "https://example.com/logo.png"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Brand created successfully",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicBrandResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid request body"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient permissions"
+          },
+          "409": {
+            "description": "A brand with this name (slug) already exists in the tenant"
+          }
+        }
       }
     },
     "/pcms/categories": {
@@ -1836,6 +1918,90 @@
           },
           "403": {
             "description": "Tenant access denied"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create Category",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Create a new product category. A slug is auto-generated from the name.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500,
+                    "example": "Electronics"
+                  },
+                  "parent_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true,
+                    "description": "Parent category UUID. Omit or pass null for a root category."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Category created successfully",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicCategoryResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid request body"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient permissions"
+          },
+          "409": {
+            "description": "A category with this name (slug) already exists in the tenant"
+          },
+          "422": {
+            "description": "Invalid parent_id (not found or cross-tenant)"
           }
         }
       }
@@ -1924,6 +2090,86 @@
             "description": "Tenant access denied"
           }
         }
+      },
+      "post": {
+        "summary": "Create Product Type",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Create a new product type in the tenant's catalog. Name must be unique within the tenant (case-insensitive).",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500,
+                    "example": "Smartphone"
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Product type created successfully",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicProductTypeResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid request body"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient permissions"
+          },
+          "409": {
+            "description": "A product type with this name already exists in the tenant"
+          }
+        }
       }
     },
     "/pcms/units": {
@@ -2008,6 +2254,91 @@
           },
           "403": {
             "description": "Tenant access denied"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create Product Unit",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Create a new product unit in the tenant's catalog. Both `name` and `abbreviation` are required. The `abbreviation` is normalized to lowercase automatically.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to scope the request to. Required.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "abbreviation"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500,
+                    "example": "Kilogram"
+                  },
+                  "abbreviation": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20,
+                    "example": "kg",
+                    "description": "Normalized to lowercase automatically."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Unit created successfully",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicUnitResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid request body (both name and abbreviation are required)"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient permissions"
+          },
+          "409": {
+            "description": "A unit with this abbreviation already exists in the tenant"
           }
         }
       }
@@ -2152,6 +2483,380 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/pcms/brands/{id}": {
+      "put": {
+        "summary": "Update Brand",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Update an existing brand. At least one field must be provided. Updating `name` automatically recomputes the slug.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Brand UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500,
+                    "example": "Nike"
+                  },
+                  "logo_url": {
+                    "type": "string",
+                    "format": "uri",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Brand updated successfully",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicBrandResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Empty or invalid request body"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient permissions"
+          },
+          "404": {
+            "description": "Brand not found or does not belong to this tenant"
+          },
+          "409": {
+            "description": "A brand with this name (slug) already exists in the tenant"
+          }
+        }
+      }
+    },
+    "/pcms/categories/{id}": {
+      "put": {
+        "summary": "Update Category",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Update an existing category. Pass `parent_id: null` to promote to root. Updating `name` recomputes the slug.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Category UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "parent_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true,
+                    "description": "Pass null to promote to root. Omit to leave unchanged."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Category updated successfully",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicCategoryResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Empty or invalid request body"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient permissions"
+          },
+          "404": {
+            "description": "Category not found or does not belong to this tenant"
+          },
+          "409": {
+            "description": "A category with this name (slug) already exists in the tenant"
+          },
+          "422": {
+            "description": "Circular reference or invalid parent_id"
+          }
+        }
+      }
+    },
+    "/pcms/product-types/{id}": {
+      "put": {
+        "summary": "Update Product Type",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Update an existing product type. At least one field must be provided. Name must be unique (case-insensitive) within the tenant.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Product type UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Product type updated successfully",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicProductTypeResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Empty or invalid request body"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient permissions"
+          },
+          "404": {
+            "description": "Product type not found or does not belong to this tenant"
+          },
+          "409": {
+            "description": "A product type with this name already exists in the tenant"
+          }
+        }
+      }
+    },
+    "/pcms/units/{id}": {
+      "put": {
+        "summary": "Update Product Unit",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Update an existing product unit. At least one field must be provided. The `abbreviation` is normalized to lowercase automatically.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Product unit UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to scope the request to. Required.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500,
+                    "example": "Kilogram"
+                  },
+                  "abbreviation": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20,
+                    "example": "kg",
+                    "description": "Normalized to lowercase automatically."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unit updated successfully",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicUnitResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Empty or invalid request body"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient permissions"
+          },
+          "404": {
+            "description": "Unit not found or does not belong to this tenant"
+          },
+          "409": {
+            "description": "A unit with this abbreviation already exists in the tenant"
           }
         }
       }

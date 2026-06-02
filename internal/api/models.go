@@ -236,6 +236,60 @@ type UpsertVariantItem struct {
 	Option3   *string  `json:"option3,omitempty"`
 }
 
+// CreateBrandRequest is the body for POST /pcms/brands.
+type CreateBrandRequest struct {
+	Name    string  `json:"name"`
+	LogoURL *string `json:"logo_url,omitempty"`
+}
+
+// UpdateBrandRequest is the body for PUT /pcms/brands/{id}.
+// All fields are optional; at least one must be provided.
+type UpdateBrandRequest struct {
+	Name    *string `json:"name,omitempty"`
+	LogoURL *string `json:"logo_url,omitempty"`
+}
+
+// CreateCategoryRequest is the body for POST /pcms/categories.
+type CreateCategoryRequest struct {
+	Name     string  `json:"name"`
+	ParentID *string `json:"parent_id,omitempty"`
+}
+
+// UpdateCategoryRequest is the body for PUT /pcms/categories/{id}.
+// All fields are optional; at least one must be provided.
+// Passing parent_id: null promotes the category to root.
+type UpdateCategoryRequest struct {
+	Name     *string `json:"name,omitempty"`
+	ParentID *string `json:"parent_id,omitempty"`
+}
+
+// CreateProductTypeRequest is the body for POST /pcms/product-types.
+type CreateProductTypeRequest struct {
+	Name        string  `json:"name"`
+	Description *string `json:"description,omitempty"`
+}
+
+// UpdateProductTypeRequest is the body for PUT /pcms/product-types/{id}.
+// All fields are optional; at least one must be provided.
+type UpdateProductTypeRequest struct {
+	Name        *string `json:"name,omitempty"`
+	Description *string `json:"description,omitempty"`
+}
+
+// CreateUnitRequest is the body for POST /pcms/units.
+// Both Name and Abbreviation are required.
+type CreateUnitRequest struct {
+	Name         string `json:"name"`
+	Abbreviation string `json:"abbreviation"`
+}
+
+// UpdateUnitRequest is the body for PUT /pcms/units/{id}.
+// All fields are optional; at least one must be provided.
+type UpdateUnitRequest struct {
+	Name         *string `json:"name,omitempty"`
+	Abbreviation *string `json:"abbreviation,omitempty"`
+}
+
 // Brand represents a PublicBrandResponse from GET /pcms/brands.
 type Brand struct {
 	ID      string  `json:"id"`

@@ -96,11 +96,243 @@ Use --query / -q for a name-contains search.`,
 	},
 }
 
+// --------------------------------------------------------------------------
+// brands create
+// --------------------------------------------------------------------------
+
+var (
+	brandCreateName     string
+	brandCreateLogoURL  string
+	brandCreateFromJSON string
+)
+
+var brandsCreateCmd = &cobra.Command{
+	Use:   "create",
+	Short: "Create a new brand",
+	Long: `Create a new brand in PCMS.
+
+Provide --name and optional --logo-url, or supply the full request body
+with --from-json <file> (use - to read from stdin). When --from-json is
+set, all individual field flags are ignored.`,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		ctx := context.Background()
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant, isGlobal := resolveTenant(profile)
+
+		_ = api.PCMSRequiresTenant
+		if isGlobal {
+			e := &api.APIError{
+				Code:       "VALIDATION_ERROR",
+				Message:    "brands commands require a tenant; pass --tenant <code> or set default",
+				HTTPStatus: 400,
+			}
+			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
+			os.Exit(api.ExitCodeFor(e))
+		}
+
+		var body any
+		if brandCreateFromJSON != "" {
+			for _, f := range []string{"name", "logo-url"} {
+				if cmd.Flags().Changed(f) {
+					e := &api.APIError{
+						Code:       "VALIDATION_ERROR",
+						Message:    fmt.Sprintf("--from-json and --%s are mutually exclusive", f),
+						HTTPStatus: 400,
+					}
+					output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
+					os.Exit(api.ExitCodeFor(e))
+				}
+			}
+			raw, err := readJSONInput(brandCreateFromJSON)
+			if err != nil {
+				return handleErr(fmt.Errorf("read --from-json: %w", err))
+			}
+			body = json.RawMessage(raw)
+		} else {
+			if brandCreateName == "" {
+				e := &api.APIError{Code: "VALIDATION_ERROR", Message: "--name is required", HTTPStatus: 400}
+				output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
+				os.Exit(api.ExitCodeFor(e))
+			}
+			req := api.CreateBrandRequest{Name: brandCreateName}
+			if brandCreateLogoURL != "" {
+				req.LogoURL = &brandCreateLogoURL
+			}
+			body = req
+		}
+
+		resp, err := client.Do(ctx, "POST", "/pcms/brands", body, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope struct {
+			Data api.Brand `json:"data"`
+		}
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		if resp.ServerTime != "" {
+			fmt.Fprintf(os.Stderr, "Server time: %s\n", resp.ServerTime)
+		}
+
+		if outputMode == "json" {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			return enc.Encode(envelope.Data)
+		}
+
+		return output.Render(os.Stdout, outputMode, output.Brand{
+			ID:      envelope.Data.ID,
+			Name:    envelope.Data.Name,
+			LogoURL: envelope.Data.LogoURL,
+		}, output.RenderOpts{GlobalMode: false, ResourceKind: "brand"})
+	},
+}
+
+// --------------------------------------------------------------------------
+// brands update
+// --------------------------------------------------------------------------
+
+var (
+	brandUpdateName     string
+	brandUpdateLogoURL  string
+	brandUpdateFromJSON string
+)
+
+var brandsUpdateCmd = &cobra.Command{
+	Use:   "update <id>",
+	Short: "Update an existing brand",
+	Long: `Update an existing brand in PCMS.
+
+All fields are optional; at least one must be provided. Fields not specified
+are left unchanged on the server.
+
+Use --from-json to supply the full update body as JSON (file path or - for
+stdin). When --from-json is set, all individual field flags are ignored.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := context.Background()
+		id := args[0]
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant, isGlobal := resolveTenant(profile)
+
+		_ = api.PCMSRequiresTenant
+		if isGlobal {
+			e := &api.APIError{
+				Code:       "VALIDATION_ERROR",
+				Message:    "brands commands require a tenant; pass --tenant <code> or set default",
+				HTTPStatus: 400,
+			}
+			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
+			os.Exit(api.ExitCodeFor(e))
+		}
+
+		var body any
+		if brandUpdateFromJSON != "" {
+			for _, f := range []string{"name", "logo-url"} {
+				if cmd.Flags().Changed(f) {
+					e := &api.APIError{
+						Code:       "VALIDATION_ERROR",
+						Message:    fmt.Sprintf("--from-json and --%s are mutually exclusive", f),
+						HTTPStatus: 400,
+					}
+					output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
+					os.Exit(api.ExitCodeFor(e))
+				}
+			}
+			raw, err := readJSONInput(brandUpdateFromJSON)
+			if err != nil {
+				return handleErr(fmt.Errorf("read --from-json: %w", err))
+			}
+			body = json.RawMessage(raw)
+		} else {
+			req := api.UpdateBrandRequest{}
+			fieldCount := 0
+			if brandUpdateName != "" {
+				req.Name = &brandUpdateName
+				fieldCount++
+			}
+			if brandUpdateLogoURL != "" {
+				req.LogoURL = &brandUpdateLogoURL
+				fieldCount++
+			}
+			if fieldCount == 0 {
+				e := &api.APIError{
+					Code:       "VALIDATION_ERROR",
+					Message:    "at least one field must be provided for update",
+					HTTPStatus: 400,
+				}
+				output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
+				os.Exit(api.ExitCodeFor(e))
+			}
+			body = req
+		}
+
+		resp, err := client.Do(ctx, "PUT", "/pcms/brands/"+id, body, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope struct {
+			Data api.Brand `json:"data"`
+		}
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		if resp.ServerTime != "" {
+			fmt.Fprintf(os.Stderr, "Server time: %s\n", resp.ServerTime)
+		}
+
+		if outputMode == "json" {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			return enc.Encode(envelope.Data)
+		}
+
+		return output.Render(os.Stdout, outputMode, output.Brand{
+			ID:      envelope.Data.ID,
+			Name:    envelope.Data.Name,
+			LogoURL: envelope.Data.LogoURL,
+		}, output.RenderOpts{GlobalMode: false, ResourceKind: "brand"})
+	},
+}
+
 func init() {
 	brandsListCmd.Flags().StringVarP(&brandListQuery, "query", "q", "", "name-contains filter (case-insensitive, max 200 chars)")
 	brandsListCmd.Flags().IntVar(&brandListPage, "page", 1, "page number")
 	brandsListCmd.Flags().IntVar(&brandListLimit, "limit", 20, "items per page (1-100)")
 
-	brandsCmd.AddCommand(brandsListCmd)
+	brandsCreateCmd.Flags().StringVar(&brandCreateName, "name", "", "brand name (required unless --from-json is used)")
+	brandsCreateCmd.Flags().StringVar(&brandCreateLogoURL, "logo-url", "", "brand logo URL")
+	brandsCreateCmd.Flags().StringVar(&brandCreateFromJSON, "from-json", "", "path to JSON file with full request body (use - for stdin)")
+
+	brandsUpdateCmd.Flags().StringVar(&brandUpdateName, "name", "", "new brand name")
+	brandsUpdateCmd.Flags().StringVar(&brandUpdateLogoURL, "logo-url", "", "new brand logo URL")
+	brandsUpdateCmd.Flags().StringVar(&brandUpdateFromJSON, "from-json", "", "path to JSON file with update body (use - for stdin); mutually exclusive with individual field flags")
+
+	brandsCmd.AddCommand(brandsListCmd, brandsCreateCmd, brandsUpdateCmd)
 	rootCmd.AddCommand(brandsCmd)
 }

@@ -9,6 +9,20 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `brands create`: create a brand with `--name` (required) and optional `--logo-url`; supports `--from-json`
+- `brands update <id>`: update a brand's name or logo URL; at least one field required; supports `--from-json`
+- `categories create`: create a category with `--name` (required) and optional `--parent-id`; supports `--from-json`
+- `categories update <id>`: update a category's name or parent; at least one field required; supports `--from-json`
+- `product-types create`: create a product type with `--name` (required) and optional `--description`; supports `--from-json`
+- `product-types update <id>`: update a product type's name or description; at least one field required; supports `--from-json`
+- `units create`: create a unit with `--name` and `--abbreviation` (both required); supports `--from-json`
+- `units update <id>`: update a unit's name or abbreviation; at least one field required; supports `--from-json`
+- New request models: `CreateBrandRequest`, `UpdateBrandRequest`, `CreateCategoryRequest`, `UpdateCategoryRequest`, `CreateProductTypeRequest`, `UpdateProductTypeRequest`, `CreateUnitRequest`, `UpdateUnitRequest` in `internal/api/models.go`
+- New client methods: `CreateBrand`, `UpdateBrand`, `CreateCategory`, `UpdateCategory`, `CreateProductType`, `UpdateProductType`, `CreateUnit`, `UpdateUnit` in `internal/api/client.go`
+- OpenAPI spec (`api/openapi.json`): added `POST /pcms/brands`, `PUT /pcms/brands/{id}`, `POST /pcms/categories`, `PUT /pcms/categories/{id}`, `POST /pcms/product-types`, `PUT /pcms/product-types/{id}`, `POST /pcms/units`, `PUT /pcms/units/{id}`
+
 ---
 
 ## [0.3.4] — 2026-06-02
