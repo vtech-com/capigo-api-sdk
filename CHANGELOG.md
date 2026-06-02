@@ -11,6 +11,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.3.4] — 2026-06-02
+
+### Fixed
+
+- `variants list`: restore tenant guard — global mode now rejected with exit 5 (was silently passing nil tenant to API)
+- `variants list`: `--limit` default corrected from `1` to `20` to match API default
+- `products list`: `--query` description now shows `2–500 chars` (max was missing)
+- `products variants`: removed invented "Maximum 50 items per call" constraint from help text (not in OpenAPI spec)
+
+---
+
 ## [0.3.3] — 2026-06-01
 
 ### Fixed
@@ -121,7 +132,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-[Unreleased]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.3.4...HEAD
+[0.3.4]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.3.0...v0.3.1
