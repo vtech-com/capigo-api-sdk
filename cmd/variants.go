@@ -61,7 +61,17 @@ The primary use case is finding the highest barcode in a prefix namespace; use
 			return handleErr(err)
 		}
 
-		tenant, _ := resolveTenant(profile)
+		tenant, isGlobal := resolveTenant(profile)
+		_ = api.PCMSRequiresTenant
+		if isGlobal {
+			e := &api.APIError{
+				Code:       "VALIDATION_ERROR",
+				Message:    "variants commands require a tenant; pass --tenant <code> or set default",
+				HTTPStatus: 400,
+			}
+			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
+			os.Exit(api.ExitCodeFor(e))
+		}
 
 		resp, err := client.ListVariants(ctx, tenant, variantListBarcodePrefix, variantListSort, variantListPage, variantListLimit)
 		if err != nil {
@@ -114,7 +124,7 @@ func init() {
 	variantsListCmd.Flags().StringVar(&variantListBarcodePrefix, "barcode-prefix", "", "filter variants whose barcode starts with this value")
 	variantsListCmd.Flags().StringVar(&variantListSort, "sort", "-barcode", `sort order: "barcode" (ascending) or "-barcode" (descending)`)
 	variantsListCmd.Flags().IntVar(&variantListPage, "page", 1, "page number")
-	variantsListCmd.Flags().IntVar(&variantListLimit, "limit", 1, "items per page (1-100, default 1 for top-barcode lookup)")
+	variantsListCmd.Flags().IntVar(&variantListLimit, "limit", 20, "items per page (1-100, default 20)")
 
 	variantsCmd.AddCommand(variantsListCmd)
 	rootCmd.AddCommand(variantsCmd)

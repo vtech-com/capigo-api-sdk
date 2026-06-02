@@ -594,8 +594,6 @@ The --from-json flag accepts a path to a JSON file containing an array of
 variant objects, or - to read from stdin. Items with variant_id are updated;
 items without variant_id are created (name is required for new variants).
 
-Maximum 50 items per call.
-
 Example JSON input:
   [
     {"variant_id": "uuid", "price": 99000},
@@ -689,7 +687,7 @@ Example JSON input:
 
 func init() {
 	// products list flags
-	productsListCmd.Flags().StringVarP(&productListQuery, "query", "q", "", "free-text search (min 2 chars): matches product name, variant name, SKU, and barcode")
+	productsListCmd.Flags().StringVarP(&productListQuery, "query", "q", "", "free-text search (2–500 chars): matches product name, variant name, SKU, and barcode")
 	productsListCmd.Flags().StringVar(&productListUpdatedSince, "updated-since", "", "ISO 8601 timestamp for delta sync (from previous X-Server-Time header)")
 	productsListCmd.Flags().IntVar(&productListPage, "page", 0, "page number (default 1)")
 	productsListCmd.Flags().IntVar(&productListLimit, "limit", 0, "items per page (1–100, default 20)")
