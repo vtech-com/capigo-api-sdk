@@ -204,9 +204,10 @@ set, all individual field flags are ignored.`,
 // --------------------------------------------------------------------------
 
 var (
-	productTypeUpdateName        string
-	productTypeUpdateDescription string
-	productTypeUpdateFromJSON    string
+	productTypeUpdateName             string
+	productTypeUpdateDescription      string
+	productTypeUpdateClearDescription bool
+	productTypeUpdateFromJSON         string
 )
 
 var productTypesUpdateCmd = &cobra.Command{
@@ -238,26 +239,16 @@ stdin). When --from-json is set, all individual field flags are ignored.`,
 
 		_ = api.PCMSRequiresTenant
 		if isGlobal {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "product-types commands require a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
+			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "product-types commands require a tenant; pass --tenant <code> or set default", "")
+			os.Exit(5)
 		}
 
 		var body any
 		if productTypeUpdateFromJSON != "" {
-			for _, f := range []string{"name", "description"} {
+			for _, f := range []string{"name", "description", "clear-description"} {
 				if cmd.Flags().Changed(f) {
-					e := &api.APIError{
-						Code:       "VALIDATION_ERROR",
-						Message:    fmt.Sprintf("--from-json and --%s are mutually exclusive", f),
-						HTTPStatus: 400,
-					}
-					output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-					os.Exit(api.ExitCodeFor(e))
+					output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", fmt.Sprintf("--from-json and --%s are mutually exclusive", f), "")
+					os.Exit(5)
 				}
 			}
 			raw, err := readJSONInput(productTypeUpdateFromJSON)
@@ -266,26 +257,20 @@ stdin). When --from-json is set, all individual field flags are ignored.`,
 			}
 			body = json.RawMessage(raw)
 		} else {
-			req := api.UpdateProductTypeRequest{}
-			fieldCount := 0
+			m := map[string]any{}
 			if productTypeUpdateName != "" {
-				req.Name = &productTypeUpdateName
-				fieldCount++
+				m["name"] = productTypeUpdateName
 			}
-			if productTypeUpdateDescription != "" {
-				req.Description = &productTypeUpdateDescription
-				fieldCount++
+			if productTypeUpdateClearDescription {
+				m["description"] = nil
+			} else if productTypeUpdateDescription != "" {
+				m["description"] = productTypeUpdateDescription
 			}
-			if fieldCount == 0 {
-				e := &api.APIError{
-					Code:       "VALIDATION_ERROR",
-					Message:    "at least one field must be provided for update",
-					HTTPStatus: 400,
-				}
-				output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-				os.Exit(api.ExitCodeFor(e))
+			if len(m) == 0 {
+				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "at least one field must be provided for update", "")
+				os.Exit(5)
 			}
-			body = req
+			body = m
 		}
 
 		resp, err := client.Do(ctx, "PUT", "/pcms/product-types/"+id, body, tenant)
@@ -328,6 +313,7 @@ func init() {
 
 	productTypesUpdateCmd.Flags().StringVar(&productTypeUpdateName, "name", "", "new product type name")
 	productTypesUpdateCmd.Flags().StringVar(&productTypeUpdateDescription, "description", "", "new product type description (max 2000 chars)")
+	productTypesUpdateCmd.Flags().BoolVar(&productTypeUpdateClearDescription, "clear-description", false, "set description to null (remove description)")
 	productTypesUpdateCmd.Flags().StringVar(&productTypeUpdateFromJSON, "from-json", "", "path to JSON file with update body (use - for stdin); mutually exclusive with individual field flags")
 
 	productTypesCmd.AddCommand(productTypesListCmd, productTypesCreateCmd, productTypesUpdateCmd)

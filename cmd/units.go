@@ -244,26 +244,16 @@ stdin). When --from-json is set, all individual field flags are ignored.`,
 
 		_ = api.PCMSRequiresTenant
 		if isGlobal {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "units commands require a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
+			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "units commands require a tenant; pass --tenant <code> or set default", "")
+			os.Exit(5)
 		}
 
 		var body any
 		if unitUpdateFromJSON != "" {
 			for _, f := range []string{"name", "abbreviation"} {
 				if cmd.Flags().Changed(f) {
-					e := &api.APIError{
-						Code:       "VALIDATION_ERROR",
-						Message:    fmt.Sprintf("--from-json and --%s are mutually exclusive", f),
-						HTTPStatus: 400,
-					}
-					output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-					os.Exit(api.ExitCodeFor(e))
+					output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", fmt.Sprintf("--from-json and --%s are mutually exclusive", f), "")
+					os.Exit(5)
 				}
 			}
 			raw, err := readJSONInput(unitUpdateFromJSON)
@@ -272,26 +262,18 @@ stdin). When --from-json is set, all individual field flags are ignored.`,
 			}
 			body = json.RawMessage(raw)
 		} else {
-			req := api.UpdateUnitRequest{}
-			fieldCount := 0
+			m := map[string]any{}
 			if unitUpdateName != "" {
-				req.Name = &unitUpdateName
-				fieldCount++
+				m["name"] = unitUpdateName
 			}
 			if unitUpdateAbbreviation != "" {
-				req.Abbreviation = &unitUpdateAbbreviation
-				fieldCount++
+				m["abbreviation"] = unitUpdateAbbreviation
 			}
-			if fieldCount == 0 {
-				e := &api.APIError{
-					Code:       "VALIDATION_ERROR",
-					Message:    "at least one field must be provided for update",
-					HTTPStatus: 400,
-				}
-				output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-				os.Exit(api.ExitCodeFor(e))
+			if len(m) == 0 {
+				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "at least one field must be provided for update", "")
+				os.Exit(5)
 			}
-			body = req
+			body = m
 		}
 
 		resp, err := client.Do(ctx, "PUT", "/pcms/units/"+id, body, tenant)

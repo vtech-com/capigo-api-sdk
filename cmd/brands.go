@@ -206,9 +206,10 @@ set, all individual field flags are ignored.`,
 // --------------------------------------------------------------------------
 
 var (
-	brandUpdateName     string
-	brandUpdateLogoURL  string
-	brandUpdateFromJSON string
+	brandUpdateName      string
+	brandUpdateLogoURL   string
+	brandUpdateClearLogo bool
+	brandUpdateFromJSON  string
 )
 
 var brandsUpdateCmd = &cobra.Command{
@@ -240,26 +241,16 @@ stdin). When --from-json is set, all individual field flags are ignored.`,
 
 		_ = api.PCMSRequiresTenant
 		if isGlobal {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "brands commands require a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
+			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "brands commands require a tenant; pass --tenant <code> or set default", "")
+			os.Exit(5)
 		}
 
 		var body any
 		if brandUpdateFromJSON != "" {
-			for _, f := range []string{"name", "logo-url"} {
+			for _, f := range []string{"name", "logo-url", "clear-logo"} {
 				if cmd.Flags().Changed(f) {
-					e := &api.APIError{
-						Code:       "VALIDATION_ERROR",
-						Message:    fmt.Sprintf("--from-json and --%s are mutually exclusive", f),
-						HTTPStatus: 400,
-					}
-					output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-					os.Exit(api.ExitCodeFor(e))
+					output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", fmt.Sprintf("--from-json and --%s are mutually exclusive", f), "")
+					os.Exit(5)
 				}
 			}
 			raw, err := readJSONInput(brandUpdateFromJSON)
@@ -268,26 +259,20 @@ stdin). When --from-json is set, all individual field flags are ignored.`,
 			}
 			body = json.RawMessage(raw)
 		} else {
-			req := api.UpdateBrandRequest{}
-			fieldCount := 0
+			m := map[string]any{}
 			if brandUpdateName != "" {
-				req.Name = &brandUpdateName
-				fieldCount++
+				m["name"] = brandUpdateName
 			}
-			if brandUpdateLogoURL != "" {
-				req.LogoURL = &brandUpdateLogoURL
-				fieldCount++
+			if brandUpdateClearLogo {
+				m["logo_url"] = nil
+			} else if brandUpdateLogoURL != "" {
+				m["logo_url"] = brandUpdateLogoURL
 			}
-			if fieldCount == 0 {
-				e := &api.APIError{
-					Code:       "VALIDATION_ERROR",
-					Message:    "at least one field must be provided for update",
-					HTTPStatus: 400,
-				}
-				output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-				os.Exit(api.ExitCodeFor(e))
+			if len(m) == 0 {
+				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "at least one field must be provided for update", "")
+				os.Exit(5)
 			}
-			body = req
+			body = m
 		}
 
 		resp, err := client.Do(ctx, "PUT", "/pcms/brands/"+id, body, tenant)
@@ -331,6 +316,7 @@ func init() {
 
 	brandsUpdateCmd.Flags().StringVar(&brandUpdateName, "name", "", "new brand name")
 	brandsUpdateCmd.Flags().StringVar(&brandUpdateLogoURL, "logo-url", "", "new brand logo URL")
+	brandsUpdateCmd.Flags().BoolVar(&brandUpdateClearLogo, "clear-logo", false, "set logo_url to null (remove logo)")
 	brandsUpdateCmd.Flags().StringVar(&brandUpdateFromJSON, "from-json", "", "path to JSON file with update body (use - for stdin); mutually exclusive with individual field flags")
 
 	brandsCmd.AddCommand(brandsListCmd, brandsCreateCmd, brandsUpdateCmd)

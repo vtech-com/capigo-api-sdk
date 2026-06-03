@@ -206,9 +206,10 @@ set, all individual field flags are ignored.`,
 // --------------------------------------------------------------------------
 
 var (
-	categoryUpdateName     string
-	categoryUpdateParentID string
-	categoryUpdateFromJSON string
+	categoryUpdateName        string
+	categoryUpdateParentID    string
+	categoryUpdateClearParent bool
+	categoryUpdateFromJSON    string
 )
 
 var categoriesUpdateCmd = &cobra.Command{
@@ -217,8 +218,7 @@ var categoriesUpdateCmd = &cobra.Command{
 	Long: `Update an existing category in PCMS.
 
 All fields are optional; at least one must be provided. Fields not specified
-are left unchanged. Pass --parent-id "" (empty string via --from-json null)
-to promote a category to root.
+are left unchanged. Use --clear-parent to promote a category to root (sets parent_id: null).
 
 Use --from-json to supply the full update body as JSON (file path or - for
 stdin). When --from-json is set, all individual field flags are ignored.`,
@@ -241,26 +241,16 @@ stdin). When --from-json is set, all individual field flags are ignored.`,
 
 		_ = api.PCMSRequiresTenant
 		if isGlobal {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "categories commands require a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
+			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "categories commands require a tenant; pass --tenant <code> or set default", "")
+			os.Exit(5)
 		}
 
 		var body any
 		if categoryUpdateFromJSON != "" {
-			for _, f := range []string{"name", "parent-id"} {
+			for _, f := range []string{"name", "parent-id", "clear-parent"} {
 				if cmd.Flags().Changed(f) {
-					e := &api.APIError{
-						Code:       "VALIDATION_ERROR",
-						Message:    fmt.Sprintf("--from-json and --%s are mutually exclusive", f),
-						HTTPStatus: 400,
-					}
-					output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-					os.Exit(api.ExitCodeFor(e))
+					output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", fmt.Sprintf("--from-json and --%s are mutually exclusive", f), "")
+					os.Exit(5)
 				}
 			}
 			raw, err := readJSONInput(categoryUpdateFromJSON)
@@ -269,26 +259,20 @@ stdin). When --from-json is set, all individual field flags are ignored.`,
 			}
 			body = json.RawMessage(raw)
 		} else {
-			req := api.UpdateCategoryRequest{}
-			fieldCount := 0
+			m := map[string]any{}
 			if categoryUpdateName != "" {
-				req.Name = &categoryUpdateName
-				fieldCount++
+				m["name"] = categoryUpdateName
 			}
-			if categoryUpdateParentID != "" {
-				req.ParentID = &categoryUpdateParentID
-				fieldCount++
+			if categoryUpdateClearParent {
+				m["parent_id"] = nil
+			} else if categoryUpdateParentID != "" {
+				m["parent_id"] = categoryUpdateParentID
 			}
-			if fieldCount == 0 {
-				e := &api.APIError{
-					Code:       "VALIDATION_ERROR",
-					Message:    "at least one field must be provided for update",
-					HTTPStatus: 400,
-				}
-				output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-				os.Exit(api.ExitCodeFor(e))
+			if len(m) == 0 {
+				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "at least one field must be provided for update", "")
+				os.Exit(5)
 			}
-			body = req
+			body = m
 		}
 
 		resp, err := client.Do(ctx, "PUT", "/pcms/categories/"+id, body, tenant)
@@ -332,6 +316,7 @@ func init() {
 
 	categoriesUpdateCmd.Flags().StringVar(&categoryUpdateName, "name", "", "new category name")
 	categoriesUpdateCmd.Flags().StringVar(&categoryUpdateParentID, "parent-id", "", "new parent category UUID")
+	categoriesUpdateCmd.Flags().BoolVar(&categoryUpdateClearParent, "clear-parent", false, "set parent_id to null (promote category to root)")
 	categoriesUpdateCmd.Flags().StringVar(&categoryUpdateFromJSON, "from-json", "", "path to JSON file with update body (use - for stdin); mutually exclusive with individual field flags")
 
 	categoriesCmd.AddCommand(categoriesListCmd, categoriesCreateCmd, categoriesUpdateCmd)
