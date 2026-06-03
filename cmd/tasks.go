@@ -21,6 +21,7 @@ var taskCmd = &cobra.Command{
 
 // tasks list flags
 var (
+	taskListTenant       string
 	taskListStatus       string
 	taskListParentTaskID string
 	taskListPage         int
@@ -43,7 +44,7 @@ var tasksListCmd = &cobra.Command{
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
+		tenant := resolveTenant(taskListTenant, profile)
 
 		params := url.Values{}
 		if taskListStatus != "" {
@@ -80,7 +81,7 @@ var tasksListCmd = &cobra.Command{
 		}
 
 		if err := output.Render(os.Stdout, outputMode, items, output.RenderOpts{
-			GlobalMode:   isGlobal,
+			GlobalMode:   tenant == nil,
 			ResourceKind: "task",
 		}); err != nil {
 			return handleErr(err)
@@ -94,6 +95,10 @@ var tasksListCmd = &cobra.Command{
 		return nil
 	},
 }
+
+var (
+	taskGetTenant string
+)
 
 var tasksGetCmd = &cobra.Command{
 	Use:   "get <id>",
@@ -112,7 +117,7 @@ var tasksGetCmd = &cobra.Command{
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
+		tenant := resolveTenant(taskGetTenant, profile)
 
 		resp, err := client.Do(ctx, "GET", "/mission/tasks/"+args[0], nil, tenant)
 		if err != nil {
@@ -127,7 +132,7 @@ var tasksGetCmd = &cobra.Command{
 		}
 
 		if err := output.Render(os.Stdout, outputMode, toOutputTask(envelope.Data), output.RenderOpts{
-			GlobalMode:   isGlobal,
+			GlobalMode:   tenant == nil,
 			ResourceKind: "task",
 		}); err != nil {
 			return handleErr(err)
@@ -139,6 +144,7 @@ var tasksGetCmd = &cobra.Command{
 
 // tasks create flags
 var (
+	taskCreateTenant      string
 	taskCreateTitle       string
 	taskCreateDescription string
 	taskCreatePriority    string
@@ -171,11 +177,11 @@ var tasksCreateCmd = &cobra.Command{
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
+		tenant := resolveTenant(taskCreateTenant, profile)
 
-		// POST /mission/tasks requires a tenant; reject global mode.
+		// POST /mission/tasks requires a tenant; reject if nil.
 		_ = api.CreateTaskUsesBodyField
-		if isGlobal {
+		if tenant == nil {
 			err := &api.APIError{
 				Code:       "VALIDATION_ERROR",
 				Message:    "tasks create requires a tenant; pass --tenant <code> or set default",
@@ -211,8 +217,8 @@ var tasksCreateCmd = &cobra.Command{
 			body.BoardListID = &taskCreateList
 		}
 
-		// For POST /mission/tasks, tenant is encoded in the body, not the header.
-		resp, err := client.Do(ctx, "POST", "/mission/tasks", body, nil)
+		// POST /mission/tasks: tenant_code is in the body; also send X-Tenant-Code header for consistency.
+		resp, err := client.Do(ctx, "POST", "/mission/tasks", body, tenant)
 		if err != nil {
 			return handleErr(err)
 		}
@@ -237,12 +243,17 @@ var tasksCreateCmd = &cobra.Command{
 
 func init() {
 	// tasks list flags
+	tasksListCmd.Flags().StringVar(&taskListTenant, "tenant", "", "scope to this tenant code")
 	tasksListCmd.Flags().StringVar(&taskListStatus, "status", "", "filter by status")
 	tasksListCmd.Flags().StringVar(&taskListParentTaskID, "parent-task-id", "", "filter by parent task ID (use 'null' for top-level only)")
 	tasksListCmd.Flags().IntVar(&taskListPage, "page", 0, "page number")
 	tasksListCmd.Flags().IntVar(&taskListLimit, "limit", 0, "items per page")
 
+	// tasks get flags
+	tasksGetCmd.Flags().StringVar(&taskGetTenant, "tenant", "", "scope to this tenant code")
+
 	// tasks create flags
+	tasksCreateCmd.Flags().StringVar(&taskCreateTenant, "tenant", "", "tenant code (required)")
 	tasksCreateCmd.Flags().StringVar(&taskCreateTitle, "title", "", "task title (required)")
 	tasksCreateCmd.Flags().StringVar(&taskCreateDescription, "description", "", "task description")
 	tasksCreateCmd.Flags().StringVar(&taskCreatePriority, "priority", "", "priority (e.g. low, medium, high)")

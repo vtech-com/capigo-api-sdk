@@ -8,7 +8,7 @@
 A CLI tool and Go SDK for the [Capigo](https://capigo.app) platform — built for third-party AI agents, automation scripts, and developers who need a scriptable interface to Capigo's Public API.
 
 ```bash
-# List tasks across all your tenants
+# List tasks (omit --tenant to see tasks across all your tenants)
 capigo tasks list
 
 # Create a task in a specific tenant
@@ -148,12 +148,11 @@ capigo version           Print version info
 
 | Flag | Description |
 |------|-------------|
-| `--tenant <code>` | Scope call to a specific tenant |
-| `--no-tenant` | Force global mode (override configured default) |
-| `--profile <name>` | Use a specific config profile |
 | `--output table\|json\|quiet` | Output format (unknown values are rejected with an error) |
 | `--api-url <url>` | Override API base URL (staging / local dev) |
 | `--verbose` | Print HTTP request/response details (Authorization header is redacted) |
+
+`--tenant <code>` appears as a local flag on commands that require or accept a tenant scope (e.g. `capigo products list --tenant acme`). It is not a global flag. The active config profile is always read from `~/.capigo/config.json` and cannot be overridden at runtime.
 
 ## Products
 

@@ -22,9 +22,10 @@ var unitsCmd = &cobra.Command{
 // --------------------------------------------------------------------------
 
 var (
-	unitListQuery string
-	unitListPage  int
-	unitListLimit int
+	unitListTenant string
+	unitListQuery  string
+	unitListPage   int
+	unitListLimit  int
 )
 
 var unitsListCmd = &cobra.Command{
@@ -47,10 +48,8 @@ Each unit in the response has: id, name, abbreviation.`,
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
-
-		_ = api.PCMSRequiresTenant
-		if isGlobal {
+		tenant := resolveTenant(unitListTenant, profile)
+		if tenant == nil {
 			e := &api.APIError{
 				Code:       "VALIDATION_ERROR",
 				Message:    "units commands require a tenant; pass --tenant <code> or set default",
@@ -102,6 +101,7 @@ Each unit in the response has: id, name, abbreviation.`,
 // --------------------------------------------------------------------------
 
 var (
+	unitCreateTenant       string
 	unitCreateName         string
 	unitCreateAbbreviation string
 	unitCreateFromJSON     string
@@ -135,10 +135,8 @@ Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" }
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
-
-		_ = api.PCMSRequiresTenant
-		if isGlobal {
+		tenant := resolveTenant(unitCreateTenant, profile)
+		if tenant == nil {
 			e := &api.APIError{
 				Code:       "VALIDATION_ERROR",
 				Message:    "units commands require a tenant; pass --tenant <code> or set default",
@@ -218,6 +216,7 @@ Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" }
 // --------------------------------------------------------------------------
 
 var (
+	unitUpdateTenant       string
 	unitUpdateName         string
 	unitUpdateAbbreviation string
 	unitUpdateFromJSON     string
@@ -255,10 +254,8 @@ Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" }
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
-
-		_ = api.PCMSRequiresTenant
-		if isGlobal {
+		tenant := resolveTenant(unitUpdateTenant, profile)
+		if tenant == nil {
 			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "units commands require a tenant; pass --tenant <code> or set default", "")
 			os.Exit(5)
 		}
@@ -325,6 +322,8 @@ Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" }
 // units get
 // --------------------------------------------------------------------------
 
+var unitGetTenant string
+
 var unitsGetCmd = &cobra.Command{
 	Use:   "get <id>",
 	Short: "Get a unit by ID",
@@ -346,10 +345,8 @@ Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" }
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
-
-		_ = api.PCMSRequiresTenant
-		if isGlobal {
+		tenant := resolveTenant(unitGetTenant, profile)
+		if tenant == nil {
 			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "units commands require a tenant; pass --tenant <code> or set default", "")
 			os.Exit(5)
 		}
@@ -385,6 +382,7 @@ Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" }
 // --------------------------------------------------------------------------
 
 var (
+	unitReplaceTenant       string
 	unitReplaceName         string
 	unitReplaceAbbreviation string
 	unitReplaceFromJSON     string
@@ -419,10 +417,8 @@ Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" }
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
-
-		_ = api.PCMSRequiresTenant
-		if isGlobal {
+		tenant := resolveTenant(unitReplaceTenant, profile)
+		if tenant == nil {
 			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "units commands require a tenant; pass --tenant <code> or set default", "")
 			os.Exit(5)
 		}
@@ -486,18 +482,24 @@ Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" }
 }
 
 func init() {
+	unitsListCmd.Flags().StringVar(&unitListTenant, "tenant", "", "tenant code (required)")
 	unitsListCmd.Flags().StringVarP(&unitListQuery, "query", "q", "", "name-contains filter (case-insensitive, max 200 chars)")
 	unitsListCmd.Flags().IntVar(&unitListPage, "page", 1, "page number")
 	unitsListCmd.Flags().IntVar(&unitListLimit, "limit", 20, "items per page (1-100)")
 
+	unitsCreateCmd.Flags().StringVar(&unitCreateTenant, "tenant", "", "tenant code (required)")
 	unitsCreateCmd.Flags().StringVar(&unitCreateName, "name", "", "unit name (required unless --from-json is used)")
 	unitsCreateCmd.Flags().StringVar(&unitCreateAbbreviation, "abbreviation", "", "unit abbreviation, e.g. kg (required unless --from-json is used)")
 	unitsCreateCmd.Flags().StringVar(&unitCreateFromJSON, "from-json", "", "path to JSON file with full request body (use - for stdin)")
 
+	unitsUpdateCmd.Flags().StringVar(&unitUpdateTenant, "tenant", "", "tenant code (required)")
 	unitsUpdateCmd.Flags().StringVar(&unitUpdateName, "name", "", "new unit name")
 	unitsUpdateCmd.Flags().StringVar(&unitUpdateAbbreviation, "abbreviation", "", "new unit abbreviation")
 	unitsUpdateCmd.Flags().StringVar(&unitUpdateFromJSON, "from-json", "", "path to JSON file with update body (use - for stdin); mutually exclusive with individual field flags")
 
+	unitsGetCmd.Flags().StringVar(&unitGetTenant, "tenant", "", "tenant code (required)")
+
+	unitsReplaceCmd.Flags().StringVar(&unitReplaceTenant, "tenant", "", "tenant code (required)")
 	unitsReplaceCmd.Flags().StringVar(&unitReplaceName, "name", "", "unit name (required)")
 	unitsReplaceCmd.Flags().StringVar(&unitReplaceAbbreviation, "abbreviation", "", "unit abbreviation, e.g. kg (required)")
 	unitsReplaceCmd.Flags().StringVar(&unitReplaceFromJSON, "from-json", "", "path to JSON file with full request body (use - for stdin); mutually exclusive with individual field flags")

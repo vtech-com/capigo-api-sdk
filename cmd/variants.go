@@ -22,6 +22,7 @@ var variantsCmd = &cobra.Command{
 // --------------------------------------------------------------------------
 
 var (
+	variantListTenant        string
 	variantListBarcodePrefix string
 	variantListSort          string
 	variantListPage          int
@@ -61,9 +62,8 @@ The primary use case is finding the highest barcode in a prefix namespace; use
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
-		_ = api.PCMSRequiresTenant
-		if isGlobal {
+		tenant := resolveTenant(variantListTenant, profile)
+		if tenant == nil {
 			e := &api.APIError{
 				Code:       "VALIDATION_ERROR",
 				Message:    "variants commands require a tenant; pass --tenant <code> or set default",
@@ -121,6 +121,7 @@ The primary use case is finding the highest barcode in a prefix namespace; use
 }
 
 func init() {
+	variantsListCmd.Flags().StringVar(&variantListTenant, "tenant", "", "tenant code (required)")
 	variantsListCmd.Flags().StringVar(&variantListBarcodePrefix, "barcode-prefix", "", "filter variants whose barcode starts with this value")
 	variantsListCmd.Flags().StringVar(&variantListSort, "sort", "-barcode", `sort order: "barcode" (ascending) or "-barcode" (descending)`)
 	variantsListCmd.Flags().IntVar(&variantListPage, "page", 1, "page number")

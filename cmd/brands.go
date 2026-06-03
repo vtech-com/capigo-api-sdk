@@ -22,9 +22,10 @@ var brandsCmd = &cobra.Command{
 // --------------------------------------------------------------------------
 
 var (
-	brandListQuery string
-	brandListPage  int
-	brandListLimit int
+	brandListTenant string
+	brandListQuery  string
+	brandListPage   int
+	brandListLimit  int
 )
 
 var brandsListCmd = &cobra.Command{
@@ -47,10 +48,8 @@ Each brand in the response has: id, name, logo_url (string or null).`,
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
-
-		_ = api.PCMSRequiresTenant
-		if isGlobal {
+		tenant := resolveTenant(brandListTenant, profile)
+		if tenant == nil {
 			e := &api.APIError{
 				Code:       "VALIDATION_ERROR",
 				Message:    "brands commands require a tenant; pass --tenant <code> or set default",
@@ -102,6 +101,7 @@ Each brand in the response has: id, name, logo_url (string or null).`,
 // --------------------------------------------------------------------------
 
 var (
+	brandCreateTenant   string
 	brandCreateName     string
 	brandCreateLogoURL  string
 	brandCreateFromJSON string
@@ -134,10 +134,8 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
-
-		_ = api.PCMSRequiresTenant
-		if isGlobal {
+		tenant := resolveTenant(brandCreateTenant, profile)
+		if tenant == nil {
 			e := &api.APIError{
 				Code:       "VALIDATION_ERROR",
 				Message:    "brands commands require a tenant; pass --tenant <code> or set default",
@@ -213,6 +211,7 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 // --------------------------------------------------------------------------
 
 var (
+	brandUpdateTenant    string
 	brandUpdateName      string
 	brandUpdateLogoURL   string
 	brandUpdateClearLogo bool
@@ -252,10 +251,8 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
-
-		_ = api.PCMSRequiresTenant
-		if isGlobal {
+		tenant := resolveTenant(brandUpdateTenant, profile)
+		if tenant == nil {
 			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "brands commands require a tenant; pass --tenant <code> or set default", "")
 			os.Exit(5)
 		}
@@ -324,6 +321,8 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 // brands get
 // --------------------------------------------------------------------------
 
+var brandGetTenant string
+
 var brandsGetCmd = &cobra.Command{
 	Use:   "get <id>",
 	Short: "Get a brand by ID",
@@ -345,10 +344,8 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
-
-		_ = api.PCMSRequiresTenant
-		if isGlobal {
+		tenant := resolveTenant(brandGetTenant, profile)
+		if tenant == nil {
 			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "brands commands require a tenant; pass --tenant <code> or set default", "")
 			os.Exit(5)
 		}
@@ -384,6 +381,7 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 // --------------------------------------------------------------------------
 
 var (
+	brandReplaceTenant   string
 	brandReplaceName     string
 	brandReplaceLogoURL  string
 	brandReplaceNoLogo   bool
@@ -421,10 +419,8 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
-
-		_ = api.PCMSRequiresTenant
-		if isGlobal {
+		tenant := resolveTenant(brandReplaceTenant, profile)
+		if tenant == nil {
 			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "brands commands require a tenant; pass --tenant <code> or set default", "")
 			os.Exit(5)
 		}
@@ -494,19 +490,25 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 }
 
 func init() {
+	brandsListCmd.Flags().StringVar(&brandListTenant, "tenant", "", "tenant code (required)")
 	brandsListCmd.Flags().StringVarP(&brandListQuery, "query", "q", "", "name-contains filter (case-insensitive, max 200 chars)")
 	brandsListCmd.Flags().IntVar(&brandListPage, "page", 1, "page number")
 	brandsListCmd.Flags().IntVar(&brandListLimit, "limit", 20, "items per page (1-100)")
 
+	brandsCreateCmd.Flags().StringVar(&brandCreateTenant, "tenant", "", "tenant code (required)")
 	brandsCreateCmd.Flags().StringVar(&brandCreateName, "name", "", "brand name (required unless --from-json is used)")
 	brandsCreateCmd.Flags().StringVar(&brandCreateLogoURL, "logo-url", "", "brand logo URL")
 	brandsCreateCmd.Flags().StringVar(&brandCreateFromJSON, "from-json", "", "path to JSON file with full request body (use - for stdin)")
 
+	brandsUpdateCmd.Flags().StringVar(&brandUpdateTenant, "tenant", "", "tenant code (required)")
 	brandsUpdateCmd.Flags().StringVar(&brandUpdateName, "name", "", "new brand name")
 	brandsUpdateCmd.Flags().StringVar(&brandUpdateLogoURL, "logo-url", "", "new brand logo URL")
 	brandsUpdateCmd.Flags().BoolVar(&brandUpdateClearLogo, "clear-logo", false, "set logo_url to null (remove logo)")
 	brandsUpdateCmd.Flags().StringVar(&brandUpdateFromJSON, "from-json", "", "path to JSON file with update body (use - for stdin); mutually exclusive with individual field flags")
 
+	brandsGetCmd.Flags().StringVar(&brandGetTenant, "tenant", "", "tenant code (required)")
+
+	brandsReplaceCmd.Flags().StringVar(&brandReplaceTenant, "tenant", "", "tenant code (required)")
 	brandsReplaceCmd.Flags().StringVar(&brandReplaceName, "name", "", "brand name (required)")
 	brandsReplaceCmd.Flags().StringVar(&brandReplaceLogoURL, "logo-url", "", "brand logo URL (mutually exclusive with --no-logo)")
 	brandsReplaceCmd.Flags().BoolVar(&brandReplaceNoLogo, "no-logo", false, "set logo_url to null (mutually exclusive with --logo-url)")

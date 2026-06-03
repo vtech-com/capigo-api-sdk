@@ -30,6 +30,7 @@ or config default_tenant). Use --help on any subcommand for flag details.`,
 // --------------------------------------------------------------------------
 
 var (
+	productListTenant       string
 	productListUpdatedSince string
 	productListQuery        string
 	productListPage         int
@@ -82,11 +83,10 @@ Use --ids to fetch specific products by UUID (comma-separated, max 50).
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
+		tenant := resolveTenant(productListTenant, profile)
 
 		// /pcms/* requires a tenant — reject early per §5.3 rule #2.
-		_ = api.PCMSRequiresTenant
-		if isGlobal {
+		if tenant == nil {
 			e := &api.APIError{
 				Code:       "VALIDATION_ERROR",
 				Message:    "products commands require a tenant; pass --tenant <code> or set default",
@@ -248,6 +248,7 @@ func productsListAll(ctx context.Context, client *api.Client, tenant *string) er
 // --------------------------------------------------------------------------
 
 var (
+	productCreateTenant        string
 	productCreateName          string
 	productCreateDescription   string
 	productCreateStatus        string
@@ -269,12 +270,12 @@ var productsCreateCmd = &cobra.Command{
 
 Simple mode (single variant): provide --name and optional individual flags.
 
-  capigo products create --name "Blue T-Shirt" --sku "SKU-001" --price 299000
+  capigo products create --tenant acme --name "Blue T-Shirt" --sku "SKU-001" --price 299000
 
 Variant mode (options + variants): provide --from-json <file> with the full
 request body as JSON (use - to read from stdin).
 
-  capigo products create --from-json product.json
+  capigo products create --tenant acme --from-json product.json
 
 Simple mode JSON (no options):
 
@@ -317,10 +318,10 @@ When --from-json is provided, all other flags are ignored.`,
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
+		tenant := resolveTenant(productCreateTenant, profile)
 
 		// /pcms/* requires a tenant.
-		if isGlobal {
+		if tenant == nil {
 			e := &api.APIError{
 				Code:       "VALIDATION_ERROR",
 				Message:    "products commands require a tenant; pass --tenant <code> or set default",
@@ -418,6 +419,7 @@ When --from-json is provided, all other flags are ignored.`,
 // --------------------------------------------------------------------------
 
 var (
+	productUpdateTenant        string
 	productUpdateName          string
 	productUpdateDescription   string
 	productUpdateStatus        string
@@ -456,9 +458,9 @@ When --from-json is set, all individual field flags are ignored.`,
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
+		tenant := resolveTenant(productUpdateTenant, profile)
 
-		if isGlobal {
+		if tenant == nil {
 			e := &api.APIError{
 				Code:       "VALIDATION_ERROR",
 				Message:    "products commands require a tenant; pass --tenant <code> or set default",
@@ -581,6 +583,7 @@ When --from-json is set, all individual field flags are ignored.`,
 // --------------------------------------------------------------------------
 
 var (
+	productVariantsTenant    string
 	productVariantsProductID string
 	productVariantsFromJSON  string
 )
@@ -623,9 +626,9 @@ Example JSON input:
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
+		tenant := resolveTenant(productVariantsTenant, profile)
 
-		if isGlobal {
+		if tenant == nil {
 			e := &api.APIError{
 				Code:       "VALIDATION_ERROR",
 				Message:    "products commands require a tenant; pass --tenant <code> or set default",
@@ -687,6 +690,7 @@ Example JSON input:
 
 func init() {
 	// products list flags
+	productsListCmd.Flags().StringVar(&productListTenant, "tenant", "", "tenant code (required)")
 	productsListCmd.Flags().StringVarP(&productListQuery, "query", "q", "", "free-text search (2–500 chars): matches product name, variant name, SKU, and barcode")
 	productsListCmd.Flags().StringVar(&productListUpdatedSince, "updated-since", "", "ISO 8601 timestamp for delta sync (from previous X-Server-Time header)")
 	productsListCmd.Flags().IntVar(&productListPage, "page", 0, "page number (default 1)")
@@ -695,6 +699,7 @@ func init() {
 	productsListCmd.Flags().StringVar(&productListIDs, "ids", "", "comma-separated list of product UUIDs to fetch (max 50); mutually exclusive with --all")
 
 	// products create flags
+	productsCreateCmd.Flags().StringVar(&productCreateTenant, "tenant", "", "tenant code (required)")
 	productsCreateCmd.Flags().StringVar(&productCreateName, "name", "", "product name (required unless --from-json is used)")
 	productsCreateCmd.Flags().StringVar(&productCreateDescription, "description", "", "product description")
 	productsCreateCmd.Flags().StringVar(&productCreateStatus, "status", "", "product status: DRAFT, ACTIVE, or ARCHIVED (default DRAFT)")
@@ -709,6 +714,7 @@ func init() {
 	productsCreateCmd.Flags().StringVar(&productCreateFromJSON, "from-json", "", "path to JSON file with full request body (use - for stdin)")
 
 	// products update flags
+	productsUpdateCmd.Flags().StringVar(&productUpdateTenant, "tenant", "", "tenant code (required)")
 	productsUpdateCmd.Flags().StringVar(&productUpdateName, "name", "", "new product name")
 	productsUpdateCmd.Flags().StringVar(&productUpdateDescription, "description", "", "new product description")
 	productsUpdateCmd.Flags().StringVar(&productUpdateStatus, "status", "", "new status: DRAFT, ACTIVE, or ARCHIVED")
@@ -721,6 +727,7 @@ func init() {
 	productsUpdateCmd.Flags().StringVar(&productUpdateFromJSON, "from-json", "", "path to JSON file with update body (use - for stdin); mutually exclusive with individual field flags")
 
 	// products variants flags
+	productsVariantsCmd.Flags().StringVar(&productVariantsTenant, "tenant", "", "tenant code (required)")
 	productsVariantsCmd.Flags().StringVar(&productVariantsProductID, "product-id", "", "product UUID (required)")
 	productsVariantsCmd.Flags().StringVar(&productVariantsFromJSON, "from-json", "", "path to JSON array file (use - for stdin) (required)")
 

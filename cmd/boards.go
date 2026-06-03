@@ -17,6 +17,8 @@ var boardCmd = &cobra.Command{
 	Short: "Manage boards",
 }
 
+var boardListTenant string
+
 var boardsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List boards",
@@ -33,7 +35,7 @@ var boardsListCmd = &cobra.Command{
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
+		tenant := resolveTenant(boardListTenant, profile)
 
 		resp, err := client.Do(ctx, "GET", "/mission/boards", nil, tenant)
 		if err != nil {
@@ -54,7 +56,7 @@ var boardsListCmd = &cobra.Command{
 		}
 
 		if err := output.Render(os.Stdout, outputMode, items, output.RenderOpts{
-			GlobalMode:   isGlobal,
+			GlobalMode:   tenant == nil,
 			ResourceKind: "board",
 		}); err != nil {
 			return handleErr(err)
@@ -70,6 +72,7 @@ var boardsListCmd = &cobra.Command{
 }
 
 func init() {
+	boardsListCmd.Flags().StringVar(&boardListTenant, "tenant", "", "scope to this tenant code")
 	boardCmd.AddCommand(boardsListCmd)
 	rootCmd.AddCommand(boardCmd)
 }
