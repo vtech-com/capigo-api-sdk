@@ -83,12 +83,9 @@ func readJSONInput(path string) ([]byte, error) {
 	return data, nil
 }
 
-// resolveTenant reads --tenant / --no-tenant / CAPIGO_TENANT env / active
-// profile default_tenant and delegates to api.ResolveTenant.
-func resolveTenant(profile *config.Profile) (tenant *string, isGlobal bool) {
-	var tenantPtr *string
-	if cfgTenant != "" {
-		tenantPtr = &cfgTenant
-	}
-	return api.ResolveTenant(tenantPtr, noTenant, viper.GetString("tenant"), profile.DefaultTenant)
+// resolveTenant resolves the tenant from the per-command flag, CAPIGO_TENANT env,
+// or the active profile's default_tenant — in that order of precedence.
+// Returns nil if none is resolved.
+func resolveTenant(tenantFlag string, profile *config.Profile) *string {
+	return api.ResolveTenant(tenantFlag, viper.GetString("tenant"), profile.DefaultTenant)
 }

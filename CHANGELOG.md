@@ -30,6 +30,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **Breaking:** `--tenant` is now a per-command flag instead of a global flag. Position changes: `capigo --tenant acme products list` → `capigo products list --tenant acme`. Applies to all commands that accept a tenant.
+- **Breaking:** `--no-tenant` global flag removed. There is no global mode for data APIs; the tenant boundary is always enforced.
+- **Breaking:** `--profile` global flag removed. The active profile is always read from `~/.capigo/config.json` (`active_profile` field); runtime override is not supported.
 - `brands update <id>`: now uses `PATCH` (was `PUT`) — partial update, at least one field required; supports `--from-json`
 - `categories update <id>`: now uses `PATCH` (was `PUT`) — partial update, at least one field required; supports `--from-json`
 - `product-types update <id>`: now uses `PATCH` (was `PUT`) — partial update, at least one field required; supports `--from-json`

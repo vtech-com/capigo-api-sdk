@@ -22,9 +22,10 @@ var categoriesCmd = &cobra.Command{
 // --------------------------------------------------------------------------
 
 var (
-	categoryListQuery string
-	categoryListPage  int
-	categoryListLimit int
+	categoryListTenant string
+	categoryListQuery  string
+	categoryListPage   int
+	categoryListLimit  int
 )
 
 var categoriesListCmd = &cobra.Command{
@@ -47,10 +48,8 @@ Each category in the response has: id, name, parent_id (uuid or null for root).`
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
-
-		_ = api.PCMSRequiresTenant
-		if isGlobal {
+		tenant := resolveTenant(categoryListTenant, profile)
+		if tenant == nil {
 			e := &api.APIError{
 				Code:       "VALIDATION_ERROR",
 				Message:    "categories commands require a tenant; pass --tenant <code> or set default",
@@ -102,6 +101,7 @@ Each category in the response has: id, name, parent_id (uuid or null for root).`
 // --------------------------------------------------------------------------
 
 var (
+	categoryCreateTenant   string
 	categoryCreateName     string
 	categoryCreateParentID string
 	categoryCreateFromJSON string
@@ -135,10 +135,8 @@ Response: { "data": { "id": "uuid", "name": "string", "parent_id": "uuid|null" }
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
-
-		_ = api.PCMSRequiresTenant
-		if isGlobal {
+		tenant := resolveTenant(categoryCreateTenant, profile)
+		if tenant == nil {
 			e := &api.APIError{
 				Code:       "VALIDATION_ERROR",
 				Message:    "categories commands require a tenant; pass --tenant <code> or set default",
@@ -214,6 +212,7 @@ Response: { "data": { "id": "uuid", "name": "string", "parent_id": "uuid|null" }
 // --------------------------------------------------------------------------
 
 var (
+	categoryUpdateTenant      string
 	categoryUpdateName        string
 	categoryUpdateParentID    string
 	categoryUpdateClearParent bool
@@ -253,10 +252,8 @@ Response: { "data": { "id": "uuid", "name": "string", "parent_id": "uuid|null" }
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
-
-		_ = api.PCMSRequiresTenant
-		if isGlobal {
+		tenant := resolveTenant(categoryUpdateTenant, profile)
+		if tenant == nil {
 			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "categories commands require a tenant; pass --tenant <code> or set default", "")
 			os.Exit(5)
 		}
@@ -325,6 +322,8 @@ Response: { "data": { "id": "uuid", "name": "string", "parent_id": "uuid|null" }
 // categories get
 // --------------------------------------------------------------------------
 
+var categoryGetTenant string
+
 var categoriesGetCmd = &cobra.Command{
 	Use:   "get <id>",
 	Short: "Get a category by ID",
@@ -346,10 +345,8 @@ Response: { "data": { "id": "uuid", "name": "string", "parent_id": "uuid|null" }
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
-
-		_ = api.PCMSRequiresTenant
-		if isGlobal {
+		tenant := resolveTenant(categoryGetTenant, profile)
+		if tenant == nil {
 			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "categories commands require a tenant; pass --tenant <code> or set default", "")
 			os.Exit(5)
 		}
@@ -385,6 +382,7 @@ Response: { "data": { "id": "uuid", "name": "string", "parent_id": "uuid|null" }
 // --------------------------------------------------------------------------
 
 var (
+	categoryReplaceTenant   string
 	categoryReplaceName     string
 	categoryReplaceParentID string
 	categoryReplaceRoot     bool
@@ -423,10 +421,8 @@ Response: { "data": { "id": "uuid", "name": "string", "parent_id": "uuid|null" }
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
-
-		_ = api.PCMSRequiresTenant
-		if isGlobal {
+		tenant := resolveTenant(categoryReplaceTenant, profile)
+		if tenant == nil {
 			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "categories commands require a tenant; pass --tenant <code> or set default", "")
 			os.Exit(5)
 		}
@@ -496,19 +492,25 @@ Response: { "data": { "id": "uuid", "name": "string", "parent_id": "uuid|null" }
 }
 
 func init() {
+	categoriesListCmd.Flags().StringVar(&categoryListTenant, "tenant", "", "tenant code (required)")
 	categoriesListCmd.Flags().StringVarP(&categoryListQuery, "query", "q", "", "name-contains filter (case-insensitive, max 200 chars)")
 	categoriesListCmd.Flags().IntVar(&categoryListPage, "page", 1, "page number")
 	categoriesListCmd.Flags().IntVar(&categoryListLimit, "limit", 20, "items per page (1-100)")
 
+	categoriesCreateCmd.Flags().StringVar(&categoryCreateTenant, "tenant", "", "tenant code (required)")
 	categoriesCreateCmd.Flags().StringVar(&categoryCreateName, "name", "", "category name (required unless --from-json is used)")
 	categoriesCreateCmd.Flags().StringVar(&categoryCreateParentID, "parent-id", "", "parent category UUID (omit for root)")
 	categoriesCreateCmd.Flags().StringVar(&categoryCreateFromJSON, "from-json", "", "path to JSON file with full request body (use - for stdin)")
 
+	categoriesUpdateCmd.Flags().StringVar(&categoryUpdateTenant, "tenant", "", "tenant code (required)")
 	categoriesUpdateCmd.Flags().StringVar(&categoryUpdateName, "name", "", "new category name")
 	categoriesUpdateCmd.Flags().StringVar(&categoryUpdateParentID, "parent-id", "", "new parent category UUID")
 	categoriesUpdateCmd.Flags().BoolVar(&categoryUpdateClearParent, "clear-parent", false, "set parent_id to null (promote category to root)")
 	categoriesUpdateCmd.Flags().StringVar(&categoryUpdateFromJSON, "from-json", "", "path to JSON file with update body (use - for stdin); mutually exclusive with individual field flags")
 
+	categoriesGetCmd.Flags().StringVar(&categoryGetTenant, "tenant", "", "tenant code (required)")
+
+	categoriesReplaceCmd.Flags().StringVar(&categoryReplaceTenant, "tenant", "", "tenant code (required)")
 	categoriesReplaceCmd.Flags().StringVar(&categoryReplaceName, "name", "", "category name (required)")
 	categoriesReplaceCmd.Flags().StringVar(&categoryReplaceParentID, "parent-id", "", "parent category UUID (mutually exclusive with --root)")
 	categoriesReplaceCmd.Flags().BoolVar(&categoryReplaceRoot, "root", false, "set parent_id to null (promote to root; mutually exclusive with --parent-id)")

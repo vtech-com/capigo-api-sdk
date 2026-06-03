@@ -75,9 +75,6 @@ func runLogin(cmd *cobra.Command, _ []string) error {
 	if profileName == "" {
 		profileName = "default"
 	}
-	if cfgProfile != "" {
-		profileName = cfgProfile
-	}
 
 	if cfg.Profiles == nil {
 		cfg.Profiles = make(map[string]config.Profile)
@@ -111,9 +108,6 @@ func runLogout(_ *cobra.Command, _ []string) error {
 	profileName := cfg.ActiveProfile
 	if profileName == "" {
 		profileName = "default"
-	}
-	if cfgProfile != "" {
-		profileName = cfgProfile
 	}
 
 	if cfg.Profiles == nil {

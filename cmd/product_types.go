@@ -22,9 +22,10 @@ var productTypesCmd = &cobra.Command{
 // --------------------------------------------------------------------------
 
 var (
-	productTypeListQuery string
-	productTypeListPage  int
-	productTypeListLimit int
+	productTypeListTenant string
+	productTypeListQuery  string
+	productTypeListPage   int
+	productTypeListLimit  int
 )
 
 var productTypesListCmd = &cobra.Command{
@@ -47,10 +48,8 @@ Each product type in the response has: id, name, description (string or null).`,
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
-
-		_ = api.PCMSRequiresTenant
-		if isGlobal {
+		tenant := resolveTenant(productTypeListTenant, profile)
+		if tenant == nil {
 			e := &api.APIError{
 				Code:       "VALIDATION_ERROR",
 				Message:    "product-types commands require a tenant; pass --tenant <code> or set default",
@@ -102,6 +101,7 @@ Each product type in the response has: id, name, description (string or null).`,
 // --------------------------------------------------------------------------
 
 var (
+	productTypeCreateTenant      string
 	productTypeCreateName        string
 	productTypeCreateDescription string
 	productTypeCreateFromJSON    string
@@ -134,10 +134,8 @@ Response: { "data": { "id": "uuid", "name": "string", "description": "string|nul
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
-
-		_ = api.PCMSRequiresTenant
-		if isGlobal {
+		tenant := resolveTenant(productTypeCreateTenant, profile)
+		if tenant == nil {
 			e := &api.APIError{
 				Code:       "VALIDATION_ERROR",
 				Message:    "product-types commands require a tenant; pass --tenant <code> or set default",
@@ -213,6 +211,7 @@ Response: { "data": { "id": "uuid", "name": "string", "description": "string|nul
 // --------------------------------------------------------------------------
 
 var (
+	productTypeUpdateTenant           string
 	productTypeUpdateName             string
 	productTypeUpdateDescription      string
 	productTypeUpdateClearDescription bool
@@ -252,10 +251,8 @@ Response: { "data": { "id": "uuid", "name": "string", "description": "string|nul
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
-
-		_ = api.PCMSRequiresTenant
-		if isGlobal {
+		tenant := resolveTenant(productTypeUpdateTenant, profile)
+		if tenant == nil {
 			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "product-types commands require a tenant; pass --tenant <code> or set default", "")
 			os.Exit(5)
 		}
@@ -324,6 +321,8 @@ Response: { "data": { "id": "uuid", "name": "string", "description": "string|nul
 // product-types get
 // --------------------------------------------------------------------------
 
+var productTypeGetTenant string
+
 var productTypesGetCmd = &cobra.Command{
 	Use:   "get <id>",
 	Short: "Get a product type by ID",
@@ -345,10 +344,8 @@ Response: { "data": { "id": "uuid", "name": "string", "description": "string|nul
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
-
-		_ = api.PCMSRequiresTenant
-		if isGlobal {
+		tenant := resolveTenant(productTypeGetTenant, profile)
+		if tenant == nil {
 			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "product-types commands require a tenant; pass --tenant <code> or set default", "")
 			os.Exit(5)
 		}
@@ -384,6 +381,7 @@ Response: { "data": { "id": "uuid", "name": "string", "description": "string|nul
 // --------------------------------------------------------------------------
 
 var (
+	productTypeReplaceTenant        string
 	productTypeReplaceName          string
 	productTypeReplaceDescription   string
 	productTypeReplaceNoDescription bool
@@ -421,10 +419,8 @@ Response: { "data": { "id": "uuid", "name": "string", "description": "string|nul
 			return handleErr(err)
 		}
 
-		tenant, isGlobal := resolveTenant(profile)
-
-		_ = api.PCMSRequiresTenant
-		if isGlobal {
+		tenant := resolveTenant(productTypeReplaceTenant, profile)
+		if tenant == nil {
 			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "product-types commands require a tenant; pass --tenant <code> or set default", "")
 			os.Exit(5)
 		}
@@ -494,19 +490,25 @@ Response: { "data": { "id": "uuid", "name": "string", "description": "string|nul
 }
 
 func init() {
+	productTypesListCmd.Flags().StringVar(&productTypeListTenant, "tenant", "", "tenant code (required)")
 	productTypesListCmd.Flags().StringVarP(&productTypeListQuery, "query", "q", "", "name-contains filter (case-insensitive, max 200 chars)")
 	productTypesListCmd.Flags().IntVar(&productTypeListPage, "page", 1, "page number")
 	productTypesListCmd.Flags().IntVar(&productTypeListLimit, "limit", 20, "items per page (1-100)")
 
+	productTypesCreateCmd.Flags().StringVar(&productTypeCreateTenant, "tenant", "", "tenant code (required)")
 	productTypesCreateCmd.Flags().StringVar(&productTypeCreateName, "name", "", "product type name (required unless --from-json is used)")
 	productTypesCreateCmd.Flags().StringVar(&productTypeCreateDescription, "description", "", "product type description (max 2000 chars)")
 	productTypesCreateCmd.Flags().StringVar(&productTypeCreateFromJSON, "from-json", "", "path to JSON file with full request body (use - for stdin)")
 
+	productTypesUpdateCmd.Flags().StringVar(&productTypeUpdateTenant, "tenant", "", "tenant code (required)")
 	productTypesUpdateCmd.Flags().StringVar(&productTypeUpdateName, "name", "", "new product type name")
 	productTypesUpdateCmd.Flags().StringVar(&productTypeUpdateDescription, "description", "", "new product type description (max 2000 chars)")
 	productTypesUpdateCmd.Flags().BoolVar(&productTypeUpdateClearDescription, "clear-description", false, "set description to null (remove description)")
 	productTypesUpdateCmd.Flags().StringVar(&productTypeUpdateFromJSON, "from-json", "", "path to JSON file with update body (use - for stdin); mutually exclusive with individual field flags")
 
+	productTypesGetCmd.Flags().StringVar(&productTypeGetTenant, "tenant", "", "tenant code (required)")
+
+	productTypesReplaceCmd.Flags().StringVar(&productTypeReplaceTenant, "tenant", "", "tenant code (required)")
 	productTypesReplaceCmd.Flags().StringVar(&productTypeReplaceName, "name", "", "product type name (required)")
 	productTypesReplaceCmd.Flags().StringVar(&productTypeReplaceDescription, "description", "", "product type description (mutually exclusive with --no-description)")
 	productTypesReplaceCmd.Flags().BoolVar(&productTypeReplaceNoDescription, "no-description", false, "set description to null (mutually exclusive with --description)")
