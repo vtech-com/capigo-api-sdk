@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/spf13/viper"
@@ -64,6 +65,22 @@ func handleErr(err error) error {
 	output.RenderError(os.Stderr, outputMode, code, message, requestID)
 	os.Exit(api.ExitCodeFor(err))
 	return nil
+}
+
+// readJSONInput reads raw bytes from a file path or from stdin when path is "-".
+func readJSONInput(path string) ([]byte, error) {
+	if path == "-" {
+		data, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return nil, fmt.Errorf("read stdin: %w", err)
+		}
+		return data, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("open %q: %w", path, err)
+	}
+	return data, nil
 }
 
 // resolveTenant reads --tenant / --no-tenant / CAPIGO_TENANT env / active

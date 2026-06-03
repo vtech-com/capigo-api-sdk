@@ -116,9 +116,29 @@ capigo products update   Update a product
 capigo products variants Upsert product variants
 
 capigo brands list           List reference brands (supports --query)
-capigo categories list       List reference categories (supports --query)
-capigo product-types list    List reference product types (supports --query)
-capigo units list            List reference units (supports --query)
+capigo brands get <id>       Get a brand by ID
+capigo brands create         Create a brand (--name required)
+capigo brands update <id>    Partial update a brand (PATCH)
+capigo brands replace <id>   Full replace a brand (PUT, all fields required)
+
+capigo categories list           List reference categories (supports --query)
+capigo categories get <id>       Get a category by ID
+capigo categories create         Create a category (--name required)
+capigo categories update <id>    Partial update a category (PATCH)
+capigo categories replace <id>   Full replace a category (PUT, all fields required)
+
+capigo product-types list           List reference product types (supports --query)
+capigo product-types get <id>       Get a product type by ID
+capigo product-types create         Create a product type (--name required)
+capigo product-types update <id>    Partial update a product type (PATCH)
+capigo product-types replace <id>   Full replace a product type (PUT, all fields required)
+
+capigo units list           List reference units (supports --query)
+capigo units get <id>       Get a unit by ID
+capigo units create         Create a unit (--name and --abbreviation required)
+capigo units update <id>    Partial update a unit (PATCH)
+capigo units replace <id>   Full replace a unit (PUT, all fields required)
+
 capigo variants list         List variants by barcode prefix (supports --barcode-prefix, --sort)
 
 capigo version           Print version info
@@ -165,20 +185,30 @@ capigo products create --tenant acme --name "Blue T-Shirt" --sku "SKU-001" --pri
 
 ## Reference data
 
-Reference endpoints return bounded sets of lookup values (brands, categories, product types, units). Use them to resolve names to UUIDs before creating products.
+Reference endpoints manage lookup values (brands, categories, product types, units) used to resolve names to UUIDs when creating products.
 
 ```bash
-# List brands (name search)
+# List brands with optional name search
 capigo brands list --tenant acme --query nike
 
-# List categories
-capigo categories list --tenant acme
+# Get a specific brand by ID
+capigo brands get <id> --tenant acme
 
-# List product types
-capigo product-types list --tenant acme --query shirt
+# Create a brand
+capigo brands create --tenant acme --name "Nike" --logo-url "https://example.com/logo.png"
 
-# List units
-capigo units list --tenant acme
+# Partial update (PATCH) — only provided fields change
+capigo brands update <id> --tenant acme --name "Nike Inc"
+
+# Full replace (PUT) — all fields required
+capigo brands replace <id> --tenant acme --name "Nike" --no-logo
+
+# Categories: --clear-parent promotes to root; replace uses --root or --parent-id
+capigo categories update <id> --tenant acme --clear-parent
+capigo categories replace <id> --tenant acme --name "Electronics" --root
+
+# Product types: --clear-description removes description; replace uses --no-description
+capigo product-types replace <id> --tenant acme --name "Phone" --no-description
 
 # List variants by barcode prefix (top-1 highest barcode for auto-increment)
 capigo variants list --tenant acme --barcode-prefix 620111 --sort -barcode --limit 1
@@ -186,10 +216,26 @@ capigo variants list --tenant acme --barcode-prefix 620111 --sort -barcode --lim
 
 | Command | Key flags | Description |
 |---------|-----------|-------------|
-| `brands list` | `--query`/`-q` | Name-contains search (case-insensitive, max 200 chars) |
-| `categories list` | `--query`/`-q` | Name-contains search (case-insensitive, max 200 chars) |
-| `product-types list` | `--query`/`-q` | Name-contains search (case-insensitive, max 200 chars) |
-| `units list` | `--query`/`-q` | Name-contains search (case-insensitive, max 200 chars) |
+| `brands list` | `--query`/`-q` | Name-contains search (max 200 chars) |
+| `brands get <id>` | | Fetch single brand by UUID |
+| `brands create` | `--name` (required), `--logo-url` | Create brand |
+| `brands update <id>` | `--name`, `--logo-url`, `--clear-logo` | Partial update (PATCH) |
+| `brands replace <id>` | `--name` (required), `--logo-url`/`--no-logo` (one required) | Full replace (PUT) |
+| `categories list` | `--query`/`-q` | Name-contains search (max 200 chars) |
+| `categories get <id>` | | Fetch single category by UUID |
+| `categories create` | `--name` (required), `--parent-id` | Create category |
+| `categories update <id>` | `--name`, `--parent-id`, `--clear-parent` | Partial update (PATCH) |
+| `categories replace <id>` | `--name` (required), `--parent-id`/`--root` (one required) | Full replace (PUT) |
+| `product-types list` | `--query`/`-q` | Name-contains search (max 200 chars) |
+| `product-types get <id>` | | Fetch single product type by UUID |
+| `product-types create` | `--name` (required), `--description` | Create product type |
+| `product-types update <id>` | `--name`, `--description`, `--clear-description` | Partial update (PATCH) |
+| `product-types replace <id>` | `--name` (required), `--description`/`--no-description` (one required) | Full replace (PUT) |
+| `units list` | `--query`/`-q` | Name-contains search (max 200 chars) |
+| `units get <id>` | | Fetch single unit by UUID |
+| `units create` | `--name`, `--abbreviation` (both required) | Create unit |
+| `units update <id>` | `--name`, `--abbreviation` | Partial update (PATCH) |
+| `units replace <id>` | `--name`, `--abbreviation` (both required) | Full replace (PUT) |
 | `variants list` | `--barcode-prefix`, `--sort` | `--sort` accepts `barcode` or `-barcode` only |
 
 ## Configuration
@@ -241,20 +287,30 @@ capigo products create --tenant acme --name "Blue T-Shirt" --sku "SKU-001" --pri
 
 ## Reference data
 
-Reference endpoints return bounded sets of lookup values (brands, categories, product types, units). Use them to resolve names to UUIDs before creating products.
+Reference endpoints manage lookup values (brands, categories, product types, units) used to resolve names to UUIDs when creating products.
 
 ```bash
-# List brands (name search)
+# List brands with optional name search
 capigo brands list --tenant acme --query nike
 
-# List categories
-capigo categories list --tenant acme
+# Get a specific brand by ID
+capigo brands get <id> --tenant acme
 
-# List product types
-capigo product-types list --tenant acme --query shirt
+# Create a brand
+capigo brands create --tenant acme --name "Nike" --logo-url "https://example.com/logo.png"
 
-# List units
-capigo units list --tenant acme
+# Partial update (PATCH) — only provided fields change
+capigo brands update <id> --tenant acme --name "Nike Inc"
+
+# Full replace (PUT) — all fields required
+capigo brands replace <id> --tenant acme --name "Nike" --no-logo
+
+# Categories: --clear-parent promotes to root; replace uses --root or --parent-id
+capigo categories update <id> --tenant acme --clear-parent
+capigo categories replace <id> --tenant acme --name "Electronics" --root
+
+# Product types: --clear-description removes description; replace uses --no-description
+capigo product-types replace <id> --tenant acme --name "Phone" --no-description
 
 # List variants by barcode prefix (top-1 highest barcode for auto-increment)
 capigo variants list --tenant acme --barcode-prefix 620111 --sort -barcode --limit 1
@@ -262,10 +318,26 @@ capigo variants list --tenant acme --barcode-prefix 620111 --sort -barcode --lim
 
 | Command | Key flags | Description |
 |---------|-----------|-------------|
-| `brands list` | `--query`/`-q` | Name-contains search (case-insensitive, max 200 chars) |
-| `categories list` | `--query`/`-q` | Name-contains search (case-insensitive, max 200 chars) |
-| `product-types list` | `--query`/`-q` | Name-contains search (case-insensitive, max 200 chars) |
-| `units list` | `--query`/`-q` | Name-contains search (case-insensitive, max 200 chars) |
+| `brands list` | `--query`/`-q` | Name-contains search (max 200 chars) |
+| `brands get <id>` | | Fetch single brand by UUID |
+| `brands create` | `--name` (required), `--logo-url` | Create brand |
+| `brands update <id>` | `--name`, `--logo-url`, `--clear-logo` | Partial update (PATCH) |
+| `brands replace <id>` | `--name` (required), `--logo-url`/`--no-logo` (one required) | Full replace (PUT) |
+| `categories list` | `--query`/`-q` | Name-contains search (max 200 chars) |
+| `categories get <id>` | | Fetch single category by UUID |
+| `categories create` | `--name` (required), `--parent-id` | Create category |
+| `categories update <id>` | `--name`, `--parent-id`, `--clear-parent` | Partial update (PATCH) |
+| `categories replace <id>` | `--name` (required), `--parent-id`/`--root` (one required) | Full replace (PUT) |
+| `product-types list` | `--query`/`-q` | Name-contains search (max 200 chars) |
+| `product-types get <id>` | | Fetch single product type by UUID |
+| `product-types create` | `--name` (required), `--description` | Create product type |
+| `product-types update <id>` | `--name`, `--description`, `--clear-description` | Partial update (PATCH) |
+| `product-types replace <id>` | `--name` (required), `--description`/`--no-description` (one required) | Full replace (PUT) |
+| `units list` | `--query`/`-q` | Name-contains search (max 200 chars) |
+| `units get <id>` | | Fetch single unit by UUID |
+| `units create` | `--name`, `--abbreviation` (both required) | Create unit |
+| `units update <id>` | `--name`, `--abbreviation` | Partial update (PATCH) |
+| `units replace <id>` | `--name`, `--abbreviation` (both required) | Full replace (PUT) |
 | `variants list` | `--barcode-prefix`, `--sort` | `--sort` accepts `barcode` or `-barcode` only |
 
 ## Configuration precedence

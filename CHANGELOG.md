@@ -9,6 +9,32 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `brands create`: create a brand with `--name` (required) and optional `--logo-url`; supports `--from-json`
+- `brands get <id>`: fetch a single brand by ID (GET /pcms/brands/{id}); tenant required
+- `brands replace <id>`: full replace (PUT) of a brand; `--name` required, one of `--logo-url` / `--no-logo` required; supports `--from-json`
+- `categories create`: create a category with `--name` (required) and optional `--parent-id`; supports `--from-json`
+- `categories get <id>`: fetch a single category by ID (GET /pcms/categories/{id}); tenant required
+- `categories replace <id>`: full replace (PUT) of a category; `--name` required, one of `--parent-id` / `--root` required; supports `--from-json`
+- `product-types create`: create a product type with `--name` (required) and optional `--description`; supports `--from-json`
+- `product-types get <id>`: fetch a single product type by ID (GET /pcms/product-types/{id}); tenant required
+- `product-types replace <id>`: full replace (PUT) of a product type; `--name` required, one of `--description` / `--no-description` required; supports `--from-json`
+- `units create`: create a unit with `--name` and `--abbreviation` (both required); supports `--from-json`
+- `units get <id>`: fetch a single unit by ID (GET /pcms/units/{id}); tenant required
+- `units replace <id>`: full replace (PUT) of a unit; `--name` and `--abbreviation` both required; supports `--from-json`
+- New request models: `CreateBrandRequest`, `UpdateBrandRequest`, `ReplaceBrandRequest`, `CreateCategoryRequest`, `UpdateCategoryRequest`, `ReplaceCategoryRequest`, `CreateProductTypeRequest`, `UpdateProductTypeRequest`, `ReplaceProductTypeRequest`, `CreateUnitRequest`, `UpdateUnitRequest`, `ReplaceUnitRequest` in `internal/api/models.go`
+- New client methods: `CreateBrand`, `UpdateBrand`, `CreateCategory`, `UpdateCategory`, `CreateProductType`, `UpdateProductType`, `CreateUnit`, `UpdateUnit` in `internal/api/client.go`
+- `api.ProductType` struct: added `Description *string` field (API now returns description on product type responses)
+- OpenAPI spec (`api/openapi.json`): added `GET /pcms/{brands,categories,product-types,units}/{id}`, `PATCH /pcms/{brands,categories,product-types,units}/{id}`, and updated `PUT /:id` schemas to require all fields; updated `PublicProductTypeResponse` schema to include `description`
+
+### Changed
+
+- `brands update <id>`: now uses `PATCH` (was `PUT`) — partial update, at least one field required; supports `--from-json`
+- `categories update <id>`: now uses `PATCH` (was `PUT`) — partial update, at least one field required; supports `--from-json`
+- `product-types update <id>`: now uses `PATCH` (was `PUT`) — partial update, at least one field required; supports `--from-json`
+- `units update <id>`: now uses `PATCH` (was `PUT`) — partial update, at least one field required; supports `--from-json`
+
 ---
 
 ## [0.3.4] — 2026-06-02

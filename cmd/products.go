@@ -783,24 +783,3 @@ func renderProductListJSON(w io.Writer, products []api.Product, meta api.Meta) e
 	enc.SetIndent("", "  ")
 	return enc.Encode(envelope)
 }
-
-// readJSONInput reads raw bytes from a file path or from stdin when path is "-".
-func readJSONInput(path string) ([]byte, error) {
-	if path == "-" {
-		return readStdin()
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("open %q: %w", path, err)
-	}
-	return data, nil
-}
-
-// readStdin reads all bytes from os.Stdin.
-func readStdin() ([]byte, error) {
-	data, err := io.ReadAll(os.Stdin)
-	if err != nil {
-		return nil, fmt.Errorf("read stdin: %w", err)
-	}
-	return data, nil
-}

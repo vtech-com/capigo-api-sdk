@@ -73,7 +73,7 @@ func ExitCodeFor(err error) int {
 			return 3
 		case 404:
 			return 4
-		case 400:
+		case 400, 422:
 			return 5
 		case 409:
 			return 8

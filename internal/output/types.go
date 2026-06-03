@@ -60,8 +60,9 @@ type Category struct {
 
 // ProductType is the display model for a Capigo PCMS product type.
 type ProductType struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Description *string `json:"description,omitempty"`
 }
 
 // Unit is the display model for a Capigo PCMS unit.
