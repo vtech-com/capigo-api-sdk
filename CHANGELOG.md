@@ -9,6 +9,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+---
+
+## [0.4.0] — 2026-06-03
+
 ### Added
 
 - `brands create`: create a brand with `--name` (required) and optional `--logo-url`; supports `--from-json`
@@ -161,7 +165,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-[Unreleased]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.3.4...HEAD
+[Unreleased]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.3.4...v0.4.0
 [0.3.4]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.3.1...v0.3.2
