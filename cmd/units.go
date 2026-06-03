@@ -30,9 +30,10 @@ var (
 var unitsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List units",
-	Long: `List product units from the PCMS catalog.
+	Long: `List product units from the PCMS catalog. Tenant is required.
 
-Use --query / -q for a name-contains search.`,
+Use --query / -q for a name-contains search (case-insensitive, max 200 chars).
+Each unit in the response has: id, name, abbreviation.`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -109,11 +110,18 @@ var (
 var unitsCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a new unit",
-	Long: `Create a new product unit in PCMS.
+	Long: `Create a new product unit in PCMS. Tenant is required.
 
 Both --name and --abbreviation are required, or supply the full request body
 with --from-json <file> (use - to read from stdin). When --from-json is
-set, all individual field flags are ignored.`,
+set, all individual field flags are ignored. Abbreviation is normalized to
+lowercase by the server.
+
+JSON body (--from-json):
+  { "name": "Kilogram", "abbreviation": "kg" }
+  { "name": "Piece", "abbreviation": "pc" }
+
+Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" } }`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -218,13 +226,20 @@ var (
 var unitsUpdateCmd = &cobra.Command{
 	Use:   "update <id>",
 	Short: "Partial update of an existing unit (PATCH)",
-	Long: `Partial update (PATCH) of an existing product unit in PCMS.
+	Long: `Partial update (PATCH) of an existing product unit in PCMS. Tenant is required.
 
 All fields are optional; at least one must be provided. Fields not specified
 are left unchanged on the server.
 
 Use --from-json to supply the full update body as JSON (file path or - for
-stdin). When --from-json is set, all individual field flags are ignored.`,
+stdin). When --from-json is set, all individual field flags are ignored.
+
+JSON body (--from-json):
+  { "name": "Kilogram" }
+  { "abbreviation": "kg" }
+  { "name": "Kilogram", "abbreviation": "kg" }
+
+Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" } }`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -313,10 +328,10 @@ stdin). When --from-json is set, all individual field flags are ignored.`,
 var unitsGetCmd = &cobra.Command{
 	Use:   "get <id>",
 	Short: "Get a unit by ID",
-	Long: `Get a single product unit by ID from PCMS.
+	Long: `Get a single product unit by ID from PCMS. Tenant is required.
 
 Returns 404 for both not-found and cross-tenant resources (no info leakage).
-Tenant is required.`,
+Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" } }`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -378,12 +393,17 @@ var (
 var unitsReplaceCmd = &cobra.Command{
 	Use:   "replace <id>",
 	Short: "Full replace of a unit (PUT)",
-	Long: `Full replace (PUT) of an existing product unit in PCMS.
+	Long: `Full replace (PUT) of an existing product unit in PCMS. Tenant is required.
 
 All fields are required by the server: --name and --abbreviation must both be provided.
 
 Use --from-json to supply the full request body as JSON (file path or - for
-stdin). When --from-json is set, all individual field flags are ignored.`,
+stdin). When --from-json is set, all individual field flags are ignored.
+
+JSON body (--from-json):
+  { "name": "Kilogram", "abbreviation": "kg" }
+
+Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" } }`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()

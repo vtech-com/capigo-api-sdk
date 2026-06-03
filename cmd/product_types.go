@@ -30,9 +30,10 @@ var (
 var productTypesListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List product types",
-	Long: `List product types from the PCMS catalog.
+	Long: `List product types from the PCMS catalog. Tenant is required.
 
-Use --query / -q for a name-contains search.`,
+Use --query / -q for a name-contains search (case-insensitive, max 200 chars).
+Each product type in the response has: id, name, description (string or null).`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -109,11 +110,17 @@ var (
 var productTypesCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a new product type",
-	Long: `Create a new product type in PCMS.
+	Long: `Create a new product type in PCMS. Tenant is required.
 
 Provide --name and optional --description, or supply the full request body
 with --from-json <file> (use - to read from stdin). When --from-json is
-set, all individual field flags are ignored.`,
+set, all individual field flags are ignored.
+
+JSON body (--from-json):
+  { "name": "Smartphone" }
+  { "name": "Laptop", "description": "Portable computers" }
+
+Response: { "data": { "id": "uuid", "name": "string", "description": "string|null" } }`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -215,13 +222,21 @@ var (
 var productTypesUpdateCmd = &cobra.Command{
 	Use:   "update <id>",
 	Short: "Partial update of an existing product type (PATCH)",
-	Long: `Partial update (PATCH) of an existing product type in PCMS.
+	Long: `Partial update (PATCH) of an existing product type in PCMS. Tenant is required.
 
 All fields are optional; at least one must be provided. Fields not specified
-are left unchanged on the server.
+are left unchanged on the server. Use --clear-description to explicitly set
+description to null.
 
 Use --from-json to supply the full update body as JSON (file path or - for
-stdin). When --from-json is set, all individual field flags are ignored.`,
+stdin). When --from-json is set, all individual field flags are ignored.
+
+JSON body (--from-json):
+  { "name": "New Name" }
+  { "description": "Updated description" }
+  { "description": null }
+
+Response: { "data": { "id": "uuid", "name": "string", "description": "string|null" } }`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -312,10 +327,10 @@ stdin). When --from-json is set, all individual field flags are ignored.`,
 var productTypesGetCmd = &cobra.Command{
 	Use:   "get <id>",
 	Short: "Get a product type by ID",
-	Long: `Get a single product type by ID from PCMS.
+	Long: `Get a single product type by ID from PCMS. Tenant is required.
 
 Returns 404 for both not-found and cross-tenant resources (no info leakage).
-Tenant is required.`,
+Response: { "data": { "id": "uuid", "name": "string", "description": "string|null" } }`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -378,13 +393,19 @@ var (
 var productTypesReplaceCmd = &cobra.Command{
 	Use:   "replace <id>",
 	Short: "Full replace of a product type (PUT)",
-	Long: `Full replace (PUT) of an existing product type in PCMS.
+	Long: `Full replace (PUT) of an existing product type in PCMS. Tenant is required.
 
 All fields are required by the server. You must provide either --description <text>
 or --no-description (to set description to null); these flags are mutually exclusive.
 
 Use --from-json to supply the full request body as JSON (file path or - for
-stdin). When --from-json is set, all individual field flags are ignored.`,
+stdin). When --from-json is set, all individual field flags are ignored.
+
+JSON body (--from-json):
+  { "name": "Smartphone", "description": "Mobile phones and tablets" }
+  { "name": "Laptop", "description": null }
+
+Response: { "data": { "id": "uuid", "name": "string", "description": "string|null" } }`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()

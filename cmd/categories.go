@@ -30,9 +30,10 @@ var (
 var categoriesListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List categories",
-	Long: `List categories from the PCMS catalog.
+	Long: `List categories from the PCMS catalog. Tenant is required.
 
-Use --query / -q for a name-contains search.`,
+Use --query / -q for a name-contains search (case-insensitive, max 200 chars).
+Each category in the response has: id, name, parent_id (uuid or null for root).`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -109,11 +110,18 @@ var (
 var categoriesCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a new category",
-	Long: `Create a new category in PCMS.
+	Long: `Create a new category in PCMS. Tenant is required.
 
 Provide --name and optional --parent-id, or supply the full request body
 with --from-json <file> (use - to read from stdin). When --from-json is
-set, all individual field flags are ignored.`,
+set, all individual field flags are ignored.
+
+JSON body (--from-json):
+  { "name": "Electronics" }
+  { "name": "Smartphones", "parent_id": "uuid-of-parent" }
+  { "name": "Root Category", "parent_id": null }
+
+Response: { "data": { "id": "uuid", "name": "string", "parent_id": "uuid|null" } }`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -215,13 +223,21 @@ var (
 var categoriesUpdateCmd = &cobra.Command{
 	Use:   "update <id>",
 	Short: "Partial update of an existing category (PATCH)",
-	Long: `Partial update (PATCH) of an existing category in PCMS.
+	Long: `Partial update (PATCH) of an existing category in PCMS. Tenant is required.
 
 All fields are optional; at least one must be provided. Fields not specified
-are left unchanged. Use --clear-parent to promote a category to root (sets parent_id: null).
+are left unchanged. Use --clear-parent to promote a category to root (sets
+parent_id to null). Omitting --parent-id leaves the current parent unchanged.
 
 Use --from-json to supply the full update body as JSON (file path or - for
-stdin). When --from-json is set, all individual field flags are ignored.`,
+stdin). When --from-json is set, all individual field flags are ignored.
+
+JSON body (--from-json):
+  { "name": "New Name" }
+  { "parent_id": "uuid-of-new-parent" }
+  { "parent_id": null }
+
+Response: { "data": { "id": "uuid", "name": "string", "parent_id": "uuid|null" } }`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -312,10 +328,10 @@ stdin). When --from-json is set, all individual field flags are ignored.`,
 var categoriesGetCmd = &cobra.Command{
 	Use:   "get <id>",
 	Short: "Get a category by ID",
-	Long: `Get a single category by ID from PCMS.
+	Long: `Get a single category by ID from PCMS. Tenant is required.
 
 Returns 404 for both not-found and cross-tenant resources (no info leakage).
-Tenant is required.`,
+Response: { "data": { "id": "uuid", "name": "string", "parent_id": "uuid|null" } }`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -378,14 +394,20 @@ var (
 var categoriesReplaceCmd = &cobra.Command{
 	Use:   "replace <id>",
 	Short: "Full replace of a category (PUT)",
-	Long: `Full replace (PUT) of an existing category in PCMS.
+	Long: `Full replace (PUT) of an existing category in PCMS. Tenant is required.
 
 All fields are required by the server. You must provide either --parent-id <uuid>
 or --root (to set parent_id to null, promoting the category to root);
 these flags are mutually exclusive.
 
 Use --from-json to supply the full request body as JSON (file path or - for
-stdin). When --from-json is set, all individual field flags are ignored.`,
+stdin). When --from-json is set, all individual field flags are ignored.
+
+JSON body (--from-json):
+  { "name": "Electronics", "parent_id": null }
+  { "name": "Smartphones", "parent_id": "uuid-of-parent" }
+
+Response: { "data": { "id": "uuid", "name": "string", "parent_id": "uuid|null" } }`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()

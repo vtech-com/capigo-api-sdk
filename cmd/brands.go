@@ -30,9 +30,10 @@ var (
 var brandsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List brands",
-	Long: `List brands from the PCMS catalog.
+	Long: `List brands from the PCMS catalog. Tenant is required.
 
-Use --query / -q for a name-contains search.`,
+Use --query / -q for a name-contains search (case-insensitive, max 200 chars).
+Each brand in the response has: id, name, logo_url (string or null).`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -109,11 +110,17 @@ var (
 var brandsCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a new brand",
-	Long: `Create a new brand in PCMS.
+	Long: `Create a new brand in PCMS. Tenant is required.
 
 Provide --name and optional --logo-url, or supply the full request body
 with --from-json <file> (use - to read from stdin). When --from-json is
-set, all individual field flags are ignored.`,
+set, all individual field flags are ignored.
+
+JSON body (--from-json):
+  { "name": "Nike", "logo_url": "https://example.com/logo.png" }
+  { "name": "No Brand" }
+
+Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" } }`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -215,13 +222,21 @@ var (
 var brandsUpdateCmd = &cobra.Command{
 	Use:   "update <id>",
 	Short: "Partial update of an existing brand (PATCH)",
-	Long: `Partial update (PATCH) of an existing brand in PCMS.
+	Long: `Partial update (PATCH) of an existing brand in PCMS. Tenant is required.
 
 All fields are optional; at least one must be provided. Fields not specified
-are left unchanged on the server.
+are left unchanged on the server. Use --clear-logo to explicitly set logo_url
+to null (removing the logo).
 
 Use --from-json to supply the full update body as JSON (file path or - for
-stdin). When --from-json is set, all individual field flags are ignored.`,
+stdin). When --from-json is set, all individual field flags are ignored.
+
+JSON body (--from-json):
+  { "name": "Nike Inc" }
+  { "logo_url": "https://example.com/new-logo.png" }
+  { "logo_url": null }
+
+Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" } }`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -312,10 +327,10 @@ stdin). When --from-json is set, all individual field flags are ignored.`,
 var brandsGetCmd = &cobra.Command{
 	Use:   "get <id>",
 	Short: "Get a brand by ID",
-	Long: `Get a single brand by ID from PCMS.
+	Long: `Get a single brand by ID from PCMS. Tenant is required.
 
 Returns 404 for both not-found and cross-tenant resources (no info leakage).
-Tenant is required.`,
+Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" } }`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -378,13 +393,19 @@ var (
 var brandsReplaceCmd = &cobra.Command{
 	Use:   "replace <id>",
 	Short: "Full replace of a brand (PUT)",
-	Long: `Full replace (PUT) of an existing brand in PCMS.
+	Long: `Full replace (PUT) of an existing brand in PCMS. Tenant is required.
 
 All fields are required by the server. You must provide either --logo-url <url>
 or --no-logo (to set logo_url to null); these flags are mutually exclusive.
 
 Use --from-json to supply the full request body as JSON (file path or - for
-stdin). When --from-json is set, all individual field flags are ignored.`,
+stdin). When --from-json is set, all individual field flags are ignored.
+
+JSON body (--from-json):
+  { "name": "Nike", "logo_url": "https://example.com/logo.png" }
+  { "name": "No Brand", "logo_url": null }
+
+Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" } }`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
