@@ -8,7 +8,7 @@
 A CLI tool and Go SDK for the [Capigo](https://capigo.app) platform — built for third-party AI agents, automation scripts, and developers who need a scriptable interface to Capigo's Public API.
 
 ```bash
-# List tasks across all your tenants
+# List tasks (omit --tenant to see tasks across all your tenants)
 capigo tasks list
 
 # Create a task in a specific tenant

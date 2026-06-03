@@ -217,8 +217,8 @@ var tasksCreateCmd = &cobra.Command{
 			body.BoardListID = &taskCreateList
 		}
 
-		// For POST /mission/tasks, tenant is encoded in the body, not the header.
-		resp, err := client.Do(ctx, "POST", "/mission/tasks", body, nil)
+		// POST /mission/tasks: tenant_code is in the body; also send X-Tenant-Code header for consistency.
+		resp, err := client.Do(ctx, "POST", "/mission/tasks", body, tenant)
 		if err != nil {
 			return handleErr(err)
 		}

@@ -15,10 +15,11 @@ func TestResolveTenant(t *testing.T) {
 		wantTenant    *string
 	}{
 		{
-			name:       "--tenant flag takes highest priority",
-			tenantFlag: "acme",
-			envVal:     "env-tenant",
-			wantTenant: strPtr("acme"),
+			name:          "--tenant flag takes highest priority over env and config",
+			tenantFlag:    "acme",
+			envVal:        "env-tenant",
+			defaultTenant: "cfg-tenant",
+			wantTenant:    strPtr("acme"),
 		},
 		{
 			name:          "env var used when no flag",
