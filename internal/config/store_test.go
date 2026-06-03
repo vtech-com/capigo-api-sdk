@@ -27,6 +27,7 @@ func TestLoadMissingFile(t *testing.T) {
 	}
 	if cfg == nil {
 		t.Fatal("Load returned nil Config")
+		return
 	}
 	if cfg.Version != 0 {
 		t.Errorf("expected version 0 for empty config, got %d", cfg.Version)
