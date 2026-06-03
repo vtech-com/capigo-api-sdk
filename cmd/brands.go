@@ -214,8 +214,8 @@ var (
 
 var brandsUpdateCmd = &cobra.Command{
 	Use:   "update <id>",
-	Short: "Update an existing brand",
-	Long: `Update an existing brand in PCMS.
+	Short: "Partial update of an existing brand (PATCH)",
+	Long: `Partial update (PATCH) of an existing brand in PCMS.
 
 All fields are optional; at least one must be provided. Fields not specified
 are left unchanged on the server.
@@ -275,6 +275,173 @@ stdin). When --from-json is set, all individual field flags are ignored.`,
 			body = m
 		}
 
+		resp, err := client.Do(ctx, "PATCH", "/pcms/brands/"+id, body, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope struct {
+			Data api.Brand `json:"data"`
+		}
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		if resp.ServerTime != "" {
+			fmt.Fprintf(os.Stderr, "Server time: %s\n", resp.ServerTime)
+		}
+
+		if outputMode == "json" {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			return enc.Encode(envelope.Data)
+		}
+
+		return output.Render(os.Stdout, outputMode, output.Brand{
+			ID:      envelope.Data.ID,
+			Name:    envelope.Data.Name,
+			LogoURL: envelope.Data.LogoURL,
+		}, output.RenderOpts{GlobalMode: false, ResourceKind: "brand"})
+	},
+}
+
+// --------------------------------------------------------------------------
+// brands get
+// --------------------------------------------------------------------------
+
+var brandsGetCmd = &cobra.Command{
+	Use:   "get <id>",
+	Short: "Get a brand by ID",
+	Long: `Get a single brand by ID from PCMS.
+
+Returns 404 for both not-found and cross-tenant resources (no info leakage).
+Tenant is required.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant, isGlobal := resolveTenant(profile)
+
+		_ = api.PCMSRequiresTenant
+		if isGlobal {
+			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "brands commands require a tenant; pass --tenant <code> or set default", "")
+			os.Exit(5)
+		}
+
+		resp, err := client.Do(ctx, "GET", "/pcms/brands/"+args[0], nil, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope struct {
+			Data api.Brand `json:"data"`
+		}
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		if outputMode == "json" {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			return enc.Encode(envelope.Data)
+		}
+
+		return output.Render(os.Stdout, outputMode, output.Brand{
+			ID:      envelope.Data.ID,
+			Name:    envelope.Data.Name,
+			LogoURL: envelope.Data.LogoURL,
+		}, output.RenderOpts{GlobalMode: false, ResourceKind: "brand"})
+	},
+}
+
+// --------------------------------------------------------------------------
+// brands replace
+// --------------------------------------------------------------------------
+
+var (
+	brandReplaceName     string
+	brandReplaceLogoURL  string
+	brandReplaceNoLogo   bool
+	brandReplaceFromJSON string
+)
+
+var brandsReplaceCmd = &cobra.Command{
+	Use:   "replace <id>",
+	Short: "Full replace of a brand (PUT)",
+	Long: `Full replace (PUT) of an existing brand in PCMS.
+
+All fields are required by the server. You must provide either --logo-url <url>
+or --no-logo (to set logo_url to null); these flags are mutually exclusive.
+
+Use --from-json to supply the full request body as JSON (file path or - for
+stdin). When --from-json is set, all individual field flags are ignored.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := context.Background()
+		id := args[0]
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant, isGlobal := resolveTenant(profile)
+
+		_ = api.PCMSRequiresTenant
+		if isGlobal {
+			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "brands commands require a tenant; pass --tenant <code> or set default", "")
+			os.Exit(5)
+		}
+
+		var body any
+		if brandReplaceFromJSON != "" {
+			for _, f := range []string{"name", "logo-url", "no-logo"} {
+				if cmd.Flags().Changed(f) {
+					output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", fmt.Sprintf("--from-json and --%s are mutually exclusive", f), "")
+					os.Exit(5)
+				}
+			}
+			raw, err := readJSONInput(brandReplaceFromJSON)
+			if err != nil {
+				return handleErr(fmt.Errorf("read --from-json: %w", err))
+			}
+			body = json.RawMessage(raw)
+		} else {
+			if brandReplaceName == "" {
+				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "--name is required for replace", "")
+				os.Exit(5)
+			}
+			logoSet := cmd.Flags().Changed("logo-url")
+			if logoSet && brandReplaceNoLogo {
+				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "--logo-url and --no-logo are mutually exclusive", "")
+				os.Exit(5)
+			}
+			if !logoSet && !brandReplaceNoLogo {
+				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "one of --logo-url or --no-logo is required for replace", "")
+				os.Exit(5)
+			}
+			req := api.ReplaceBrandRequest{Name: brandReplaceName}
+			if !brandReplaceNoLogo {
+				req.LogoURL = &brandReplaceLogoURL
+			}
+			body = req
+		}
+
 		resp, err := client.Do(ctx, "PUT", "/pcms/brands/"+id, body, tenant)
 		if err != nil {
 			return handleErr(err)
@@ -319,6 +486,11 @@ func init() {
 	brandsUpdateCmd.Flags().BoolVar(&brandUpdateClearLogo, "clear-logo", false, "set logo_url to null (remove logo)")
 	brandsUpdateCmd.Flags().StringVar(&brandUpdateFromJSON, "from-json", "", "path to JSON file with update body (use - for stdin); mutually exclusive with individual field flags")
 
-	brandsCmd.AddCommand(brandsListCmd, brandsCreateCmd, brandsUpdateCmd)
+	brandsReplaceCmd.Flags().StringVar(&brandReplaceName, "name", "", "brand name (required)")
+	brandsReplaceCmd.Flags().StringVar(&brandReplaceLogoURL, "logo-url", "", "brand logo URL (mutually exclusive with --no-logo)")
+	brandsReplaceCmd.Flags().BoolVar(&brandReplaceNoLogo, "no-logo", false, "set logo_url to null (mutually exclusive with --logo-url)")
+	brandsReplaceCmd.Flags().StringVar(&brandReplaceFromJSON, "from-json", "", "path to JSON file with full request body (use - for stdin); mutually exclusive with individual field flags")
+
+	brandsCmd.AddCommand(brandsListCmd, brandsCreateCmd, brandsUpdateCmd, brandsGetCmd, brandsReplaceCmd)
 	rootCmd.AddCommand(brandsCmd)
 }

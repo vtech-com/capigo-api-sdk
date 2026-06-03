@@ -72,8 +72,9 @@ Use --query / -q for a name-contains search.`,
 		items := make([]output.ProductType, len(envelope.Data))
 		for i, pt := range envelope.Data {
 			items[i] = output.ProductType{
-				ID:   pt.ID,
-				Name: pt.Name,
+				ID:          pt.ID,
+				Name:        pt.Name,
+				Description: pt.Description,
 			}
 		}
 
@@ -193,8 +194,9 @@ set, all individual field flags are ignored.`,
 		}
 
 		return output.Render(os.Stdout, outputMode, output.ProductType{
-			ID:   envelope.Data.ID,
-			Name: envelope.Data.Name,
+			ID:          envelope.Data.ID,
+			Name:        envelope.Data.Name,
+			Description: envelope.Data.Description,
 		}, output.RenderOpts{GlobalMode: false, ResourceKind: "product_type"})
 	},
 }
@@ -212,8 +214,8 @@ var (
 
 var productTypesUpdateCmd = &cobra.Command{
 	Use:   "update <id>",
-	Short: "Update an existing product type",
-	Long: `Update an existing product type in PCMS.
+	Short: "Partial update of an existing product type (PATCH)",
+	Long: `Partial update (PATCH) of an existing product type in PCMS.
 
 All fields are optional; at least one must be provided. Fields not specified
 are left unchanged on the server.
@@ -273,6 +275,173 @@ stdin). When --from-json is set, all individual field flags are ignored.`,
 			body = m
 		}
 
+		resp, err := client.Do(ctx, "PATCH", "/pcms/product-types/"+id, body, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope struct {
+			Data api.ProductType `json:"data"`
+		}
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		if resp.ServerTime != "" {
+			fmt.Fprintf(os.Stderr, "Server time: %s\n", resp.ServerTime)
+		}
+
+		if outputMode == "json" {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			return enc.Encode(envelope.Data)
+		}
+
+		return output.Render(os.Stdout, outputMode, output.ProductType{
+			ID:          envelope.Data.ID,
+			Name:        envelope.Data.Name,
+			Description: envelope.Data.Description,
+		}, output.RenderOpts{GlobalMode: false, ResourceKind: "product_type"})
+	},
+}
+
+// --------------------------------------------------------------------------
+// product-types get
+// --------------------------------------------------------------------------
+
+var productTypesGetCmd = &cobra.Command{
+	Use:   "get <id>",
+	Short: "Get a product type by ID",
+	Long: `Get a single product type by ID from PCMS.
+
+Returns 404 for both not-found and cross-tenant resources (no info leakage).
+Tenant is required.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant, isGlobal := resolveTenant(profile)
+
+		_ = api.PCMSRequiresTenant
+		if isGlobal {
+			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "product-types commands require a tenant; pass --tenant <code> or set default", "")
+			os.Exit(5)
+		}
+
+		resp, err := client.Do(ctx, "GET", "/pcms/product-types/"+args[0], nil, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope struct {
+			Data api.ProductType `json:"data"`
+		}
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		if outputMode == "json" {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			return enc.Encode(envelope.Data)
+		}
+
+		return output.Render(os.Stdout, outputMode, output.ProductType{
+			ID:          envelope.Data.ID,
+			Name:        envelope.Data.Name,
+			Description: envelope.Data.Description,
+		}, output.RenderOpts{GlobalMode: false, ResourceKind: "product_type"})
+	},
+}
+
+// --------------------------------------------------------------------------
+// product-types replace
+// --------------------------------------------------------------------------
+
+var (
+	productTypeReplaceName          string
+	productTypeReplaceDescription   string
+	productTypeReplaceNoDescription bool
+	productTypeReplaceFromJSON      string
+)
+
+var productTypesReplaceCmd = &cobra.Command{
+	Use:   "replace <id>",
+	Short: "Full replace of a product type (PUT)",
+	Long: `Full replace (PUT) of an existing product type in PCMS.
+
+All fields are required by the server. You must provide either --description <text>
+or --no-description (to set description to null); these flags are mutually exclusive.
+
+Use --from-json to supply the full request body as JSON (file path or - for
+stdin). When --from-json is set, all individual field flags are ignored.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := context.Background()
+		id := args[0]
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant, isGlobal := resolveTenant(profile)
+
+		_ = api.PCMSRequiresTenant
+		if isGlobal {
+			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "product-types commands require a tenant; pass --tenant <code> or set default", "")
+			os.Exit(5)
+		}
+
+		var body any
+		if productTypeReplaceFromJSON != "" {
+			for _, f := range []string{"name", "description", "no-description"} {
+				if cmd.Flags().Changed(f) {
+					output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", fmt.Sprintf("--from-json and --%s are mutually exclusive", f), "")
+					os.Exit(5)
+				}
+			}
+			raw, err := readJSONInput(productTypeReplaceFromJSON)
+			if err != nil {
+				return handleErr(fmt.Errorf("read --from-json: %w", err))
+			}
+			body = json.RawMessage(raw)
+		} else {
+			if productTypeReplaceName == "" {
+				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "--name is required for replace", "")
+				os.Exit(5)
+			}
+			descSet := cmd.Flags().Changed("description")
+			if descSet && productTypeReplaceNoDescription {
+				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "--description and --no-description are mutually exclusive", "")
+				os.Exit(5)
+			}
+			if !descSet && !productTypeReplaceNoDescription {
+				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "one of --description or --no-description is required for replace", "")
+				os.Exit(5)
+			}
+			req := api.ReplaceProductTypeRequest{Name: productTypeReplaceName}
+			if !productTypeReplaceNoDescription {
+				req.Description = &productTypeReplaceDescription
+			}
+			body = req
+		}
+
 		resp, err := client.Do(ctx, "PUT", "/pcms/product-types/"+id, body, tenant)
 		if err != nil {
 			return handleErr(err)
@@ -296,8 +465,9 @@ stdin). When --from-json is set, all individual field flags are ignored.`,
 		}
 
 		return output.Render(os.Stdout, outputMode, output.ProductType{
-			ID:   envelope.Data.ID,
-			Name: envelope.Data.Name,
+			ID:          envelope.Data.ID,
+			Name:        envelope.Data.Name,
+			Description: envelope.Data.Description,
 		}, output.RenderOpts{GlobalMode: false, ResourceKind: "product_type"})
 	},
 }
@@ -316,6 +486,11 @@ func init() {
 	productTypesUpdateCmd.Flags().BoolVar(&productTypeUpdateClearDescription, "clear-description", false, "set description to null (remove description)")
 	productTypesUpdateCmd.Flags().StringVar(&productTypeUpdateFromJSON, "from-json", "", "path to JSON file with update body (use - for stdin); mutually exclusive with individual field flags")
 
-	productTypesCmd.AddCommand(productTypesListCmd, productTypesCreateCmd, productTypesUpdateCmd)
+	productTypesReplaceCmd.Flags().StringVar(&productTypeReplaceName, "name", "", "product type name (required)")
+	productTypesReplaceCmd.Flags().StringVar(&productTypeReplaceDescription, "description", "", "product type description (mutually exclusive with --no-description)")
+	productTypesReplaceCmd.Flags().BoolVar(&productTypeReplaceNoDescription, "no-description", false, "set description to null (mutually exclusive with --description)")
+	productTypesReplaceCmd.Flags().StringVar(&productTypeReplaceFromJSON, "from-json", "", "path to JSON file with full request body (use - for stdin); mutually exclusive with individual field flags")
+
+	productTypesCmd.AddCommand(productTypesListCmd, productTypesCreateCmd, productTypesUpdateCmd, productTypesGetCmd, productTypesReplaceCmd)
 	rootCmd.AddCommand(productTypesCmd)
 }

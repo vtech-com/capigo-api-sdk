@@ -242,11 +242,19 @@ type CreateBrandRequest struct {
 	LogoURL *string `json:"logo_url,omitempty"`
 }
 
-// UpdateBrandRequest is the body for PUT /pcms/brands/{id}.
+// UpdateBrandRequest is the body for PATCH /pcms/brands/{id}.
 // All fields are optional; at least one must be provided.
 type UpdateBrandRequest struct {
 	Name    *string `json:"name,omitempty"`
 	LogoURL *string `json:"logo_url,omitempty"`
+}
+
+// ReplaceBrandRequest is the body for PUT /pcms/brands/{id}.
+// All fields are required; the server enforces this with Zod.
+// LogoURL must always be sent (use nil to set null).
+type ReplaceBrandRequest struct {
+	Name    string  `json:"name"`
+	LogoURL *string `json:"logo_url"` // no omitempty — null must be sent
 }
 
 // CreateCategoryRequest is the body for POST /pcms/categories.
@@ -255,12 +263,20 @@ type CreateCategoryRequest struct {
 	ParentID *string `json:"parent_id,omitempty"`
 }
 
-// UpdateCategoryRequest is the body for PUT /pcms/categories/{id}.
+// UpdateCategoryRequest is the body for PATCH /pcms/categories/{id}.
 // All fields are optional; at least one must be provided.
 // Passing parent_id: null promotes the category to root.
 type UpdateCategoryRequest struct {
 	Name     *string `json:"name,omitempty"`
 	ParentID *string `json:"parent_id,omitempty"`
+}
+
+// ReplaceCategoryRequest is the body for PUT /pcms/categories/{id}.
+// All fields are required; the server enforces this with Zod.
+// ParentID must always be sent (use nil/null to promote to root).
+type ReplaceCategoryRequest struct {
+	Name     string  `json:"name"`
+	ParentID *string `json:"parent_id"` // no omitempty — null must be sent
 }
 
 // CreateProductTypeRequest is the body for POST /pcms/product-types.
@@ -269,11 +285,19 @@ type CreateProductTypeRequest struct {
 	Description *string `json:"description,omitempty"`
 }
 
-// UpdateProductTypeRequest is the body for PUT /pcms/product-types/{id}.
+// UpdateProductTypeRequest is the body for PATCH /pcms/product-types/{id}.
 // All fields are optional; at least one must be provided.
 type UpdateProductTypeRequest struct {
 	Name        *string `json:"name,omitempty"`
 	Description *string `json:"description,omitempty"`
+}
+
+// ReplaceProductTypeRequest is the body for PUT /pcms/product-types/{id}.
+// All fields are required; the server enforces this with Zod.
+// Description must always be sent (use nil to set null).
+type ReplaceProductTypeRequest struct {
+	Name        string  `json:"name"`
+	Description *string `json:"description"` // no omitempty — null must be sent
 }
 
 // CreateUnitRequest is the body for POST /pcms/units.
@@ -283,11 +307,18 @@ type CreateUnitRequest struct {
 	Abbreviation string `json:"abbreviation"`
 }
 
-// UpdateUnitRequest is the body for PUT /pcms/units/{id}.
+// UpdateUnitRequest is the body for PATCH /pcms/units/{id}.
 // All fields are optional; at least one must be provided.
 type UpdateUnitRequest struct {
 	Name         *string `json:"name,omitempty"`
 	Abbreviation *string `json:"abbreviation,omitempty"`
+}
+
+// ReplaceUnitRequest is the body for PUT /pcms/units/{id}.
+// All fields are required; the server enforces this with Zod.
+type ReplaceUnitRequest struct {
+	Name         string `json:"name"`
+	Abbreviation string `json:"abbreviation"`
 }
 
 // Brand represents a PublicBrandResponse from GET /pcms/brands.
@@ -306,8 +337,9 @@ type Category struct {
 
 // ProductType represents a PublicProductTypeResponse from GET /pcms/product-types.
 type ProductType struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Description *string `json:"description"`
 }
 
 // Unit represents a PublicUnitResponse from GET /pcms/units.
