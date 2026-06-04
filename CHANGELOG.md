@@ -9,6 +9,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `boards list`: now registers and honors `--page` / `--limit` flags. Previously the command printed the hint "Use --page / --limit to paginate." but rejected those flags with `unknown flag: --page` and never sent pagination params to `GET /mission/boards`, even though the endpoint supports them. All other list commands already paginated; only `boards` was missed.
+
+### Added
+
+- Regression tests (`cmd/pagination_test.go`): assert every list command that prints the pagination hint also registers `--page`/`--limit`, including a dynamic source scan that catches future list commands forgetting the flags.
+
 ---
 
 ## [0.4.0] — 2026-06-03
