@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
+	"strconv"
 
 	"github.com/spf13/cobra"
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
@@ -17,7 +19,11 @@ var boardCmd = &cobra.Command{
 	Short: "Manage boards",
 }
 
-var boardListTenant string
+var (
+	boardListTenant string
+	boardListPage   int
+	boardListLimit  int
+)
 
 var boardsListCmd = &cobra.Command{
 	Use:   "list",
@@ -37,7 +43,20 @@ var boardsListCmd = &cobra.Command{
 
 		tenant := resolveTenant(boardListTenant, profile)
 
-		resp, err := client.Do(ctx, "GET", "/mission/boards", nil, tenant)
+		params := url.Values{}
+		if boardListPage > 0 {
+			params.Set("page", strconv.Itoa(boardListPage))
+		}
+		if boardListLimit > 0 {
+			params.Set("limit", strconv.Itoa(boardListLimit))
+		}
+
+		path := "/mission/boards"
+		if len(params) > 0 {
+			path += "?" + params.Encode()
+		}
+
+		resp, err := client.Do(ctx, "GET", path, nil, tenant)
 		if err != nil {
 			return handleErr(err)
 		}
@@ -73,6 +92,8 @@ var boardsListCmd = &cobra.Command{
 
 func init() {
 	boardsListCmd.Flags().StringVar(&boardListTenant, "tenant", "", "scope to this tenant code")
+	boardsListCmd.Flags().IntVar(&boardListPage, "page", 1, "page number")
+	boardsListCmd.Flags().IntVar(&boardListLimit, "limit", 20, "items per page")
 	boardCmd.AddCommand(boardsListCmd)
 	rootCmd.AddCommand(boardCmd)
 }
