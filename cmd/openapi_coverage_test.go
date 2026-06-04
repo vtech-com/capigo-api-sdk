@@ -61,6 +61,7 @@ var commandPathMapping = []struct {
 	path string
 }{
 	{name: "boardsListCmd", cmd: boardsListCmd, path: "/mission/boards"},
+	{name: "membersListCmd", cmd: membersListCmd, path: "/members"},
 	{name: "tasksListCmd", cmd: tasksListCmd, path: "/mission/tasks"},
 	{name: "productsListCmd", cmd: productsListCmd, path: "/pcms/products"},
 	{name: "brandsListCmd", cmd: brandsListCmd, path: "/pcms/brands"},
@@ -120,6 +121,8 @@ func TestOpenAPICoverage(t *testing.T) {
 			switch entry.name {
 			case "boardsListCmd":
 				flagLookup = func(n string) bool { return boardsListCmd.Flags().Lookup(n) != nil }
+			case "membersListCmd":
+				flagLookup = func(n string) bool { return membersListCmd.Flags().Lookup(n) != nil }
 			case "tasksListCmd":
 				flagLookup = func(n string) bool { return tasksListCmd.Flags().Lookup(n) != nil }
 			case "productsListCmd":

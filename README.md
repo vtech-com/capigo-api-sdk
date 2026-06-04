@@ -110,6 +110,8 @@ capigo tasks create      Create a new task (--title required; --tenant required;
 capigo boards list       List boards (supports --page, --limit)
 capigo boards get <id>   Get board by ID
 
+capigo members list      List workspace members (supports --query/-q, --page, --limit)
+
 capigo products list     List products (supports --query, --updated-since, --ids, --all)
 capigo products get      (coming soon)
 capigo products create   Create a product (--name required, or --from-json)

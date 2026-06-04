@@ -24,6 +24,7 @@ const paginationHint = "Use --page / --limit to paginate"
 // flags even if they are forgotten here.
 var paginatedListCommands = map[string]*cobra.Command{
 	"boards list":        boardsListCmd,
+	"members list":       membersListCmd,
 	"brands list":        brandsListCmd,
 	"categories list":    categoriesListCmd,
 	"product-types list": productTypesListCmd,
