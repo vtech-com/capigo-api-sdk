@@ -161,6 +161,13 @@ type Product struct {
 	Variants    []ProductVariant `json:"variants"`
 }
 
+// Health is the response from GET /health — a preflight that confirms
+// connectivity and that the API key is accepted.
+type Health struct {
+	OK        bool   `json:"ok"`
+	Timestamp string `json:"timestamp"`
+}
+
 // Me represents the authenticated user from GET /me.
 type Me struct {
 	ID          string  `json:"id"`

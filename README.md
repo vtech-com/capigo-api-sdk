@@ -95,6 +95,7 @@ capigo tasks list --output json | jq '.data[] | select(.status=="To-Do")'
 capigo auth login        Login with a csk_ API key
 capigo auth logout       Remove credentials from config
 capigo auth whoami       Show current user
+capigo health            Preflight: check API connectivity + key (exit 2 if auth fails)
 
 capigo config set <key> <value>           Set a config value
 capigo config get <key>                   Get a config value

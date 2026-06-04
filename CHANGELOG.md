@@ -9,6 +9,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- `health`: new top-level command calling `GET /health` as a preflight. Exit 0 confirms the API is reachable and the API key is accepted; a non-zero exit (e.g. 2 for auth) tells an automated caller why it failed before running real work. Not tenant-scoped. JSON mode emits `{"ok":bool,"timestamp":string}`.
+- `docs/api-coverage-gaps.md`: living backlog of Public API endpoints/actions the CLI can't yet wrap because the server-side endpoint doesn't exist (e.g. `GET /pcms/products/{id}`, `PATCH /mission/tasks/{id}`), assessed against the monorepo `develop` route handlers.
+
 ---
 
 ## [0.6.0] — 2026-06-04
