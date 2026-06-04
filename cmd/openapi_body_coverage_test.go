@@ -111,6 +111,14 @@ func buildWriteCommandMapping() []writeCommandEntry {
 			method:    "post",
 			hasFlag:   func(n string) bool { return tasksCreateCmd.Flags().Lookup(n) != nil },
 		},
+		// tasks update: no --from-json; must have per-field flags for every PATCH body field.
+		// Pre-staged from develop; endpoint not yet on prod.
+		{
+			humanName: "tasks update",
+			path:      "/mission/tasks/{id}",
+			method:    "patch",
+			hasFlag:   func(n string) bool { return tasksUpdateCmd.Flags().Lookup(n) != nil },
+		},
 		// PCMS resource commands: all register --from-json, so per-field assertion is
 		// skipped. Listed here so NEW spec fields still surface as a test failure when
 		// --from-json is absent (i.e. if a command forgets --from-json).

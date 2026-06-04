@@ -387,7 +387,7 @@
           },
           "name": {
             "type": "string",
-            "example": "\u00c1o thun nam"
+            "example": "Áo thun nam"
           },
           "slug": {
             "type": "string",
@@ -1105,6 +1105,126 @@
             "description": "Task not found"
           }
         }
+      },
+      "patch": {
+        "summary": "Update Task",
+        "description": "Partial update of a task. Any subset of fields may be provided; at least one is required. Each changed field emits its corresponding domain event. `PATCH` is partial-update (cf. there is no full-replace `PUT` for tasks).",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": false,
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "Pending",
+                      "To-Do",
+                      "Doing",
+                      "Done",
+                      "Closed",
+                      "Cancelled"
+                    ]
+                  },
+                  "assignee_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true,
+                    "description": "Set to null to unassign."
+                  },
+                  "board_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true,
+                    "description": "Must be provided together with board_list_id. Both null removes the task from its board."
+                  },
+                  "board_list_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true,
+                    "description": "Must be provided together with board_id."
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 10000,
+                    "nullable": true
+                  },
+                  "follower_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "description": "Additive: listed users are added as followers (idempotent)."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated task",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (empty body, invalid status, invalid assignee/followers, board mismatch)"
+          },
+          "403": {
+            "description": "Insufficient permission to perform the update"
+          },
+          "404": {
+            "description": "Task not found"
+          }
+        }
       }
     },
     "/pcms/products": {
@@ -1113,7 +1233,7 @@
         "tags": [
           "PCMS"
         ],
-        "description": "Paginated product feed for external catalog synchronization.\n\nSupports delta sync: pass `updated_since` (ISO 8601 UTC) to receive only products changed after that timestamp; omit for a full sync. Results are ordered by `updated_at` ascending so clients can checkpoint progress reliably.\n\nAlternatively, pass `ids` (comma-separated UUIDs, max 50) to fetch a specific subset of products by ID \u2014 useful after `POST`/`PUT` or to refresh a local cache for known items. `ids` AND-composes with `updated_since` and pagination, and is tenant-scoped (foreign IDs are silently filtered, never leaked).\n\nDeleted products are included with `is_deleted: true` so consumers can remove them from their local catalog. Each product's `variants` array contains only active variants.\n\nInternal fields (cost, audit metadata, tenancy identifiers) are omitted from the response.",
+        "description": "Paginated product feed for external catalog synchronization.\n\nSupports delta sync: pass `updated_since` (ISO 8601 UTC) to receive only products changed after that timestamp; omit for a full sync. Results are ordered by `updated_at` ascending so clients can checkpoint progress reliably.\n\nAlternatively, pass `ids` (comma-separated UUIDs, max 50) to fetch a specific subset of products by ID — useful after `POST`/`PUT` or to refresh a local cache for known items. `ids` AND-composes with `updated_since` and pagination, and is tenant-scoped (foreign IDs are silently filtered, never leaked).\n\nDeleted products are included with `is_deleted: true` so consumers can remove them from their local catalog. Each product's `variants` array contains only active variants.\n\nInternal fields (cost, audit metadata, tenancy identifiers) are omitted from the response.",
         "parameters": [
           {
             "name": "X-Tenant-Code",
@@ -1127,7 +1247,7 @@
           {
             "name": "updated_since",
             "in": "query",
-            "description": "ISO 8601 UTC datetime. When provided, only products updated at or after this timestamp are returned \u2014 including products where an active variant was updated. Example: `2026-01-01T00:00:00Z`.",
+            "description": "ISO 8601 UTC datetime. When provided, only products updated at or after this timestamp are returned — including products where an active variant was updated. Example: `2026-01-01T00:00:00Z`.",
             "schema": {
               "type": "string",
               "format": "date-time"
@@ -1187,7 +1307,7 @@
             "description": "Successful response",
             "headers": {
               "X-Server-Time": {
-                "description": "ISO 8601 server timestamp at query execution \u2014 use as `updated_since` for the next delta sync call.",
+                "description": "ISO 8601 server timestamp at query execution — use as `updated_since` for the next delta sync call.",
                 "schema": {
                   "type": "string",
                   "format": "date-time"
@@ -1246,7 +1366,7 @@
         "tags": [
           "PCMS"
         ],
-        "description": "Create a new product within the tenant identified by `X-Tenant-Code`.\n\nSupports two creation modes:\n- **Simple mode**: omit `options` and `variants`. A single default variant is created from `sku`, `barcode`, and `price` on the product body.\n- **Variant mode**: supply 1\u20133 entries in `options` (e.g. Color, Size) plus a `variants` array. Each variant must populate `option1`/`option2`/`option3` with the chosen value for the corresponding option (positions match `options[]` order). The backend does not auto-generate the cartesian product \u2014 clients are responsible for sending the exact list of variants to create.",
+        "description": "Create a new product within the tenant identified by `X-Tenant-Code`.\n\nSupports two creation modes:\n- **Simple mode**: omit `options` and `variants`. A single default variant is created from `sku`, `barcode`, and `price` on the product body.\n- **Variant mode**: supply 1–3 entries in `options` (e.g. Color, Size) plus a `variants` array. Each variant must populate `option1`/`option2`/`option3` with the chosen value for the corresponding option (positions match `options[]` order). The backend does not auto-generate the cartesian product — clients are responsible for sending the exact list of variants to create.",
         "parameters": [
           {
             "name": "X-Tenant-Code",
@@ -1436,7 +1556,7 @@
         "tags": [
           "PCMS"
         ],
-        "description": "Update the core details of a product. Variant-level fields (`sku`, `barcode`, `price`, option values) are intentionally **not** editable through this endpoint \u2014 use `PUT /pcms/products/{id}/variants` to modify variants.",
+        "description": "Update the core details of a product. Variant-level fields (`sku`, `barcode`, `price`, option values) are intentionally **not** editable through this endpoint — use `PUT /pcms/products/{id}/variants` to modify variants.",
         "parameters": [
           {
             "name": "id",
@@ -1552,6 +1672,60 @@
             "description": "Product not found in the specified tenant"
           }
         }
+      },
+      "get": {
+        "summary": "Get Product Detail",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Fetch a single product by id (same shape as the catalog sync feed), tenant-scoped. Returns 404 if the product does not exist or belongs to another tenant.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "description": "Scope to a tenant. If omitted, the product is resolved across all tenants the caller belongs to.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product detail",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicProductResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Product not found"
+          }
+        }
       }
     },
     "/pcms/products/{id}/variants": {
@@ -1560,7 +1734,7 @@
         "tags": [
           "PCMS"
         ],
-        "description": "Upsert variants of a product. The request body is an array of items.\n\n- Items **with** `variant_id` (UUID) \u2192 update the existing variant.\n- Items **without** `variant_id` \u2192 create a new variant (`name` is required; `option1`/`option2`/`option3` should match the product's option matrix).\n\nA single request may mix create and update items. Variants **not** included in the payload are left untouched (this endpoint does not delete variants). Unknown `variant_id` values return 404.",
+        "description": "Upsert variants of a product. The request body is an array of items.\n\n- Items **with** `variant_id` (UUID) → update the existing variant.\n- Items **without** `variant_id` → create a new variant (`name` is required; `option1`/`option2`/`option3` should match the product's option matrix).\n\nA single request may mix create and update items. Variants **not** included in the payload are left untouched (this endpoint does not delete variants). Unknown `variant_id` values return 404.",
         "parameters": [
           {
             "name": "id",
@@ -3445,6 +3619,119 @@
           },
           "409": {
             "description": "A unit with this name (slug) already exists in the tenant"
+          }
+        }
+      }
+    },
+    "/members/{id}": {
+      "get": {
+        "summary": "Get Member by ID",
+        "tags": [
+          "Members"
+        ],
+        "description": "Fetch a single tenant member by their user id, scoped to the tenants the caller belongs to. Sensitive PII is excluded. Returns 404 if the member is not in any accessible tenant.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The member's user id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "description": "Scope to a tenant. If omitted, resolved across all tenants the caller belongs to.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Member detail",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicMemberResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Member not found"
+          }
+        }
+      }
+    },
+    "/pcms/variants/{id}": {
+      "get": {
+        "summary": "Get Variant Detail",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Fetch a single product variant by id (full variant shape), tenant-scoped. Orphaned, soft-deleted, and cross-tenant variants return 404.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "description": "Scope to a tenant. If omitted, the variant is resolved across all tenants the caller belongs to.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Variant detail",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicProductVariantResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Variant not found"
           }
         }
       }

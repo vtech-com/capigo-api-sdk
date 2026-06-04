@@ -82,11 +82,24 @@ type Unit struct {
 	Abbreviation string `json:"abbreviation"`
 }
 
-// VariantRecord is the display model for a Capigo PCMS variant record.
+// VariantRecord is the display model for a Capigo PCMS variant record
+// (the flat shape returned by the variants list endpoint).
 type VariantRecord struct {
 	ID        string `json:"id"`
 	Barcode   string `json:"barcode"`
 	SKU       string `json:"sku"`
 	Name      string `json:"name"`
 	ProductID string `json:"product_id"`
+}
+
+// Variant is the display model for a single full PCMS variant
+// (the PublicProductVariantResponse shape returned by variants get).
+// It deliberately omits product_id, which is not part of the response.
+type Variant struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	SKU         string `json:"sku"`
+	Barcode     string `json:"barcode"`
+	Price       string `json:"price"`
+	VariantType string `json:"variant_type"`
 }

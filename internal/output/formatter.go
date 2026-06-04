@@ -175,6 +175,14 @@ func init() {
 			},
 			idFn: func(v any) string { return v.(VariantRecord).ID },
 		},
+		"variant": {
+			headers: []string{"ID", "Name", "SKU", "Barcode", "Price", "Type"},
+			rowFn: func(v any) []any {
+				vr := v.(Variant)
+				return []any{vr.ID, vr.Name, vr.SKU, vr.Barcode, vr.Price, vr.VariantType}
+			},
+			idFn: func(v any) string { return v.(Variant).ID },
+		},
 	}
 }
 
