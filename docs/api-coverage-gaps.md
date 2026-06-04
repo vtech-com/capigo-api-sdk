@@ -1,0 +1,45 @@
+# API coverage gaps
+
+Living backlog of Capigo Public API (`/api/v1`) endpoints/actions the CLI cannot
+yet wrap because the **server-side endpoint does not exist**, plus any endpoints
+that exist but the CLI hasn't surfaced. Add to the SDK as endpoints land.
+
+**Last assessed:** 2026-06-04, against the `capigo` monorepo **`develop`** branch.
+
+## How this was determined
+
+The authoritative source is the actual route handlers, not a spec file:
+`apps/platform/src/app/api/v1/**/route.ts` (which `export async function GET/POST/PATCH/PUT/DELETE`).
+
+> ⚠️ **Do not trust the checked-in `apps/platform/src/lib/api/openapi.json` for gap analysis.** On 2026-06-04 it was stale: it listed `/pcms/{brands,categories,product-types,units}/{id}` as `PUT`-only, but the real handlers expose `GET,PATCH,PUT` (and the SDK already wraps get/update/replace from the **prod** openapi). The SDK syncs from prod (`make update-spec` ← `https://platform.capigo.app/api/openapi`), which is accurate; the checked-in file is hand-maintained and drifts. **Recommendation to backend: regenerate `openapi.json` from the routes.**
+
+## SDK vs. existing API: essentially complete
+
+The CLI wraps every endpoint that currently exists, with one exception:
+
+| Endpoint (exists on develop) | SDK command | Status |
+|---|---|---|
+| `GET /health` | — | ✅ **being added** (`capigo health`) |
+
+Everything else under `/members`, `/mission/*`, `/pcms/*`, `/tenants` is wrapped.
+
+## API-level gaps — endpoints that do NOT exist yet
+
+"Needed" depends on the Tấm skill scope (defined elsewhere). The clearly-justified
+ones for a work-management agent are task update/delete and product get.
+
+| Priority | Missing action | Notes / status |
+|---|---|---|
+| High | `GET /pcms/products/{id}` (product get) | **API being added by team.** Then wrap as `capigo products get <id>` (bare object, mirror `brands get`). Workaround today: `products list --ids <id>`. |
+| High | `PATCH /mission/tasks/{id}` (task update) | Not implemented. Needed for any "update task status/assignee/due-date" workflow. Then wrap as `capigo tasks update <id>`. |
+| High | `DELETE /mission/tasks/{id}` (task delete/cancel) | No way to delete/cancel a task via API. |
+| Medium | `POST/PATCH/DELETE /mission/boards` (board create/update/delete) | Boards are **read-only** via the public API. No programmatic board creation. |
+| Medium | Board lists management (the `lists`/columns inside a board) | `tasks create` accepts `board_list_id` but there's no endpoint to list/create board lists via the public API. |
+| Medium | Members: `GET /members/{id}`, invite, role change, remove | Only `list` is exposed. Member management (invite/RBAC/positions) exists in product docs but not in public `/api/v1`. `members list --query` covers name→id lookup for assignment. |
+| Low (likely intentional) | `DELETE` on brands/categories/product-types/units/products | No resource exposes delete. Probably deliberate for reference data. |
+
+## When an endpoint lands
+
+1. Backend implements the route handler in the monorepo + the endpoint reaches **prod**.
+2. In this repo: `make update-spec` (pulls prod openapi).
+3. The `cmd/openapi_path_coverage_test.go` guard will flag the new path → add the CLI command (mirror the closest existing command) and register it in the coverage guards.
