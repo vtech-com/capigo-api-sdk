@@ -50,18 +50,14 @@ func TestRender_TableMode_GlobalMode_TenantColumn(t *testing.T) {
 	}
 }
 
-func TestRender_JSONMode(t *testing.T) {
+func TestRender_JSONMode_Rejected(t *testing.T) {
+	// Render is the human-facing path; json must go through WriteJSONList /
+	// WriteJSONObject so the machine-facing contract shape is enforced. Render
+	// must refuse json mode rather than silently emit a display-model array.
 	var buf bytes.Buffer
 	opts := RenderOpts{GlobalMode: false, ResourceKind: "task"}
-	if err := Render(&buf, "json", fakeTasks, opts); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	var decoded []map[string]any
-	if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
-		t.Fatalf("output is not valid JSON: %v\ngot:\n%s", err, buf.String())
-	}
-	if len(decoded) != 2 {
-		t.Errorf("expected 2 items, got %d", len(decoded))
+	if err := Render(&buf, "json", fakeTasks, opts); err == nil {
+		t.Fatalf("Render should reject json mode, but returned nil error\ngot output:\n%s", buf.String())
 	}
 }
 
@@ -92,17 +88,6 @@ func TestRender_EmptySlice_Table(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("empty table should still show header %q\ngot:\n%s", want, out)
 		}
-	}
-}
-
-func TestRender_EmptySlice_JSON(t *testing.T) {
-	var buf bytes.Buffer
-	opts := RenderOpts{ResourceKind: "task"}
-	if err := Render(&buf, "json", []Task{}, opts); err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if strings.TrimSpace(buf.String()) != "[]" {
-		t.Errorf("expected '[]' for empty JSON slice, got: %q", buf.String())
 	}
 }
 
@@ -197,7 +182,10 @@ func TestRender_AllResourceKinds(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.kind, func(t *testing.T) {
-			for _, mode := range []string{"table", "json", "quiet"} {
+			// json is intentionally excluded: Render serves only the
+			// human-facing table/quiet paths; json goes through WriteJSONList /
+			// WriteJSONObject.
+			for _, mode := range []string{"table", "quiet"} {
 				var buf bytes.Buffer
 				opts := RenderOpts{ResourceKind: tc.kind}
 				if err := Render(&buf, mode, tc.data, opts); err != nil {
@@ -205,5 +193,117 @@ func TestRender_AllResourceKinds(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// WriteJSONList and WriteJSONObject contract tests
+// ---------------------------------------------------------------------------
+
+// fakeMeta is a minimal pagination meta for test assertions.
+type fakeMeta struct {
+	Page    int  `json:"page"`
+	Limit   int  `json:"limit"`
+	Total   int  `json:"total"`
+	HasMore bool `json:"has_more"`
+}
+
+func TestWriteJSONList_Shape(t *testing.T) {
+	items := []Task{
+		{ID: "t1", Title: "Task one", Status: "open"},
+		{ID: "t2", Title: "Task two", Status: "done"},
+	}
+	meta := fakeMeta{Page: 1, Limit: 20, Total: 2, HasMore: false}
+
+	var buf bytes.Buffer
+	if err := WriteJSONList(&buf, items, meta); err != nil {
+		t.Fatalf("WriteJSONList error: %v", err)
+	}
+
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal(buf.Bytes(), &envelope); err != nil {
+		t.Fatalf("output is not valid JSON: %v\ngot:\n%s", err, buf.String())
+	}
+	if _, ok := envelope["data"]; !ok {
+		t.Error("expected 'data' key in envelope")
+	}
+	if _, ok := envelope["meta"]; !ok {
+		t.Error("expected 'meta' key in envelope")
+	}
+
+	var decoded []map[string]any
+	if err := json.Unmarshal(envelope["data"], &decoded); err != nil {
+		t.Fatalf("data is not a JSON array: %v", err)
+	}
+	if len(decoded) != 2 {
+		t.Errorf("expected 2 items in data, got %d", len(decoded))
+	}
+}
+
+func TestWriteJSONList_EmptySlice(t *testing.T) {
+	meta := fakeMeta{Page: 1, Limit: 20, Total: 0, HasMore: false}
+
+	var buf bytes.Buffer
+	if err := WriteJSONList(&buf, []Task{}, meta); err != nil {
+		t.Fatalf("WriteJSONList error: %v", err)
+	}
+
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal(buf.Bytes(), &envelope); err != nil {
+		t.Fatalf("output is not valid JSON: %v\ngot:\n%s", err, buf.String())
+	}
+	dataRaw := string(envelope["data"])
+	if dataRaw != "[]" {
+		t.Errorf("expected data=[] for empty slice, got %s", dataRaw)
+	}
+}
+
+func TestWriteJSONList_NilSlice(t *testing.T) {
+	meta := fakeMeta{}
+
+	var buf bytes.Buffer
+	if err := WriteJSONList(&buf, ([]Task)(nil), meta); err != nil {
+		t.Fatalf("WriteJSONList error: %v", err)
+	}
+
+	var envelope map[string]json.RawMessage
+	if err := json.Unmarshal(buf.Bytes(), &envelope); err != nil {
+		t.Fatalf("output is not valid JSON: %v\ngot:\n%s", err, buf.String())
+	}
+	dataRaw := string(envelope["data"])
+	if dataRaw != "[]" {
+		t.Errorf("expected data=[] for nil slice, got %s", dataRaw)
+	}
+}
+
+func TestWriteJSONObject_BareObject(t *testing.T) {
+	task := Task{ID: "t1", Code: "TASK-1", Title: "Fix it", Status: "open"}
+
+	var buf bytes.Buffer
+	if err := WriteJSONObject(&buf, task); err != nil {
+		t.Fatalf("WriteJSONObject error: %v", err)
+	}
+
+	// Must decode to a map (bare object), NOT an array.
+	var decoded map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &decoded); err != nil {
+		t.Fatalf("output is not a valid JSON object: %v\ngot:\n%s", err, buf.String())
+	}
+	if decoded["id"] != "t1" {
+		t.Errorf("expected id=t1, got %v", decoded["id"])
+	}
+	if decoded["title"] != "Fix it" {
+		t.Errorf("expected title='Fix it', got %v", decoded["title"])
+	}
+	// Must NOT be wrapped in an array.
+	if err := json.Unmarshal(buf.Bytes(), &[]map[string]any{}); err == nil {
+		var arr []map[string]any
+		_ = json.Unmarshal(buf.Bytes(), &arr)
+		// An object can unmarshal to []map but it won't as it starts with {
+		// Check the raw prefix.
+		raw := strings.TrimSpace(buf.String())
+		if strings.HasPrefix(raw, "[") {
+			t.Errorf("WriteJSONObject must emit a bare object, not an array\ngot:\n%s", buf.String())
+		}
 	}
 }

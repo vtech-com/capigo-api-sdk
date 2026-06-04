@@ -10,6 +10,51 @@ import (
 	"github.com/jedib0t/go-pretty/v6/text"
 )
 
+// WriteJSONList marshals a list response as {"data":[...],"meta":{...}} to w
+// with 2-space indentation. When data is nil or an empty slice the envelope
+// still emits "data":[] so callers can reliably distinguish an empty result
+// from an error.
+//
+// data must be a slice value (or nil); meta may be any JSON-serialisable value.
+func WriteJSONList(w io.Writer, data, meta any) error {
+	// Normalise nil and empty slices so JSON always emits "data":[].
+	rv := reflect.ValueOf(data)
+	if data == nil || (rv.Kind() == reflect.Slice && rv.IsNil()) {
+		data = emptySliceOf(data)
+	}
+
+	envelope := struct {
+		Data any `json:"data"`
+		Meta any `json:"meta"`
+	}{Data: data, Meta: meta}
+
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(envelope)
+}
+
+// emptySliceOf returns an empty non-nil slice of the same element type as v,
+// or []any{} when v is nil / not a slice.
+func emptySliceOf(v any) any {
+	if v == nil {
+		return []any{}
+	}
+	rv := reflect.ValueOf(v)
+	if rv.Kind() != reflect.Slice {
+		return []any{}
+	}
+	return reflect.MakeSlice(rv.Type(), 0, 0).Interface()
+}
+
+// WriteJSONObject marshals a single item as a bare JSON object (no wrapper)
+// to w with 2-space indentation. Use for get / create / update / replace
+// commands where the response is a single resource.
+func WriteJSONObject(w io.Writer, v any) error {
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	return enc.Encode(v)
+}
+
 // RenderOpts controls rendering behaviour.
 type RenderOpts struct {
 	// GlobalMode inserts a Tenant column as the first column in table output.
@@ -145,7 +190,13 @@ func Render(w io.Writer, mode string, data any, opts RenderOpts) error {
 
 	switch mode {
 	case "json":
-		return renderJSON(w, items)
+		// Render is the human-facing (display-model) path. The machine-facing
+		// JSON contract is intentionally NOT served here: lists must emit
+		// {"data":[...],"meta":{...}} and single items a bare object. Commands
+		// handle json mode themselves via WriteJSONList / WriteJSONObject before
+		// reaching Render. Rejecting json here stops a future command from
+		// silently emitting the wrong (display-model array) shape.
+		return fmt.Errorf("output.Render does not serve json mode; use output.WriteJSONList (lists) or output.WriteJSONObject (single items)")
 	case "quiet":
 		return renderQuiet(w, items, r)
 	case "table", "":
@@ -190,16 +241,6 @@ func toSlice(data any) []any {
 		return out
 	}
 	return []any{data}
-}
-
-func renderJSON(w io.Writer, items []any) error {
-	if len(items) == 0 {
-		_, err := fmt.Fprintln(w, "[]")
-		return err
-	}
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	return enc.Encode(items)
 }
 
 func renderQuiet(w io.Writer, items []any, r renderer) error {

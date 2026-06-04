@@ -71,6 +71,14 @@ Each unit in the response has: id, name, abbreviation.`,
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
+		if outputMode == "json" {
+			data := envelope.Data
+			if data == nil {
+				data = []api.Unit{}
+			}
+			return output.WriteJSONList(os.Stdout, data, envelope.Meta)
+		}
+
 		items := make([]output.Unit, len(envelope.Data))
 		for i, u := range envelope.Data {
 			items[i] = output.Unit{
@@ -200,9 +208,7 @@ Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" }
 		}
 
 		if outputMode == "json" {
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			return enc.Encode(envelope.Data)
+			return output.WriteJSONObject(os.Stdout, envelope.Data)
 		}
 
 		return output.Render(os.Stdout, outputMode, output.Unit{
@@ -307,9 +313,7 @@ Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" }
 		}
 
 		if outputMode == "json" {
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			return enc.Encode(envelope.Data)
+			return output.WriteJSONObject(os.Stdout, envelope.Data)
 		}
 
 		return output.Render(os.Stdout, outputMode, output.Unit{
@@ -366,9 +370,7 @@ Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" }
 		}
 
 		if outputMode == "json" {
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			return enc.Encode(envelope.Data)
+			return output.WriteJSONObject(os.Stdout, envelope.Data)
 		}
 
 		return output.Render(os.Stdout, outputMode, output.Unit{
@@ -470,9 +472,7 @@ Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" }
 		}
 
 		if outputMode == "json" {
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			return enc.Encode(envelope.Data)
+			return output.WriteJSONObject(os.Stdout, envelope.Data)
 		}
 
 		return output.Render(os.Stdout, outputMode, output.Unit{
@@ -486,7 +486,7 @@ Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" }
 func init() {
 	unitsListCmd.Flags().StringVar(&unitListTenant, "tenant", "", "tenant code (required)")
 	unitsListCmd.Flags().StringVarP(&unitListQuery, "query", "q", "", "name-contains filter (case-insensitive, max 200 chars)")
-	unitsListCmd.Flags().IntVar(&unitListPage, "page", 1, "page number")
+	unitsListCmd.Flags().IntVar(&unitListPage, "page", 0, "page number")
 	unitsListCmd.Flags().IntVar(&unitListLimit, "limit", 20, "items per page (1-100)")
 
 	unitsCreateCmd.Flags().StringVar(&unitCreateTenant, "tenant", "", "tenant code (required)")

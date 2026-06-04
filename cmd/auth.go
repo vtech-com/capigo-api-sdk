@@ -94,6 +94,13 @@ func runLogin(cmd *cobra.Command, _ []string) error {
 		os.Exit(api.ExitCodeFor(err))
 	}
 
+	if outputMode == "json" {
+		return output.WriteJSONObject(cmd.OutOrStdout(), map[string]string{
+			"profile": profileName,
+			"status":  "logged_in",
+		})
+	}
+
 	_, err = fmt.Fprintf(cmd.OutOrStdout(), "Logged in as profile %q\n", profileName)
 	return err
 }
@@ -156,9 +163,7 @@ func runWhoami(_ *cobra.Command, _ []string) error {
 	}
 
 	if outputMode == "json" {
-		enc := json.NewEncoder(os.Stdout)
-		enc.SetIndent("", "  ")
-		return enc.Encode(me)
+		return output.WriteJSONObject(os.Stdout, me)
 	}
 
 	if outputMode == "quiet" {

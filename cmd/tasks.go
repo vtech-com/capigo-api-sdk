@@ -79,6 +79,14 @@ var tasksListCmd = &cobra.Command{
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
+		if outputMode == "json" {
+			data := envelope.Data
+			if data == nil {
+				data = []api.Task{}
+			}
+			return output.WriteJSONList(os.Stdout, data, envelope.Meta)
+		}
+
 		items := make([]output.Task, len(envelope.Data))
 		for i, t := range envelope.Data {
 			items[i] = toOutputTask(t)
@@ -133,6 +141,10 @@ var tasksGetCmd = &cobra.Command{
 		}
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		if outputMode == "json" {
+			return output.WriteJSONObject(os.Stdout, envelope.Data)
 		}
 
 		if err := output.Render(os.Stdout, outputMode, toOutputTask(envelope.Data), output.RenderOpts{
@@ -236,6 +248,10 @@ var tasksCreateCmd = &cobra.Command{
 		}
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		if outputMode == "json" {
+			return output.WriteJSONObject(os.Stdout, envelope.Data)
 		}
 
 		if err := output.Render(os.Stdout, outputMode, toOutputTask(envelope.Data), output.RenderOpts{

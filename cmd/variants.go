@@ -85,6 +85,14 @@ The primary use case is finding the highest barcode in a prefix namespace; use
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
+		if outputMode == "json" {
+			data := envelope.Data
+			if data == nil {
+				data = []api.VariantRecord{}
+			}
+			return output.WriteJSONList(os.Stdout, data, envelope.Meta)
+		}
+
 		items := make([]output.VariantRecord, len(envelope.Data))
 		for i, v := range envelope.Data {
 			barcode := ""
@@ -126,7 +134,7 @@ func init() {
 	variantsListCmd.Flags().StringVar(&variantListTenant, "tenant", "", "tenant code (required)")
 	variantsListCmd.Flags().StringVar(&variantListBarcodePrefix, "barcode-prefix", "", "filter variants whose barcode starts with this value")
 	variantsListCmd.Flags().StringVar(&variantListSort, "sort", "-barcode", `sort order: "barcode" (ascending) or "-barcode" (descending)`)
-	variantsListCmd.Flags().IntVar(&variantListPage, "page", 1, "page number")
+	variantsListCmd.Flags().IntVar(&variantListPage, "page", 0, "page number")
 	variantsListCmd.Flags().IntVar(&variantListLimit, "limit", 20, "items per page (1-100, default 20)")
 
 	variantsCmd.AddCommand(variantsListCmd)

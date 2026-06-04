@@ -37,20 +37,30 @@ var tenantsListCmd = &cobra.Command{
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		// Convert api.Tenant to output.Tenant for rendering.
-		outTenants := make([]output.Tenant, len(envelope.Data))
+		// Merge discovered tenants back into config.
 		codes := make([]string, len(envelope.Data))
+		for i, t := range envelope.Data {
+			codes[i] = t.TenantCode
+		}
+		if err := config.MergeKnownTenants(cfg, codes); err == nil {
+			_ = config.Save(cfg)
+		}
+
+		if outputMode == "json" {
+			data := envelope.Data
+			if data == nil {
+				data = []api.Tenant{}
+			}
+			return output.WriteJSONList(os.Stdout, data, envelope.Meta)
+		}
+
+		// Convert api.Tenant to output.Tenant for table/quiet rendering.
+		outTenants := make([]output.Tenant, len(envelope.Data))
 		for i, t := range envelope.Data {
 			outTenants[i] = output.Tenant{
 				Code: t.TenantCode,
 				Name: t.Name,
 			}
-			codes[i] = t.TenantCode
-		}
-
-		// Merge discovered tenants back into config.
-		if err := config.MergeKnownTenants(cfg, codes); err == nil {
-			_ = config.Save(cfg)
 		}
 
 		if err := output.Render(os.Stdout, outputMode, outTenants, output.RenderOpts{

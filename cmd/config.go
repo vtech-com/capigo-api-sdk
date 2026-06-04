@@ -10,6 +10,20 @@ import (
 	"github.com/vtech-com/capigo-api-sdk/internal/output"
 )
 
+// configValidationErr exits with code 5 (validation) via the standard error path.
+func configValidationErr(msg string) {
+	e := &api.APIError{Code: "VALIDATION_ERROR", Message: msg, HTTPStatus: 400}
+	output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
+	os.Exit(api.ExitCodeFor(e))
+}
+
+// configNotFoundErr exits with code 4 (not found) via the standard error path.
+func configNotFoundErr(msg string) {
+	e := &api.APIError{Code: "NOT_FOUND", Message: msg, HTTPStatus: 404}
+	output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
+	os.Exit(api.ExitCodeFor(e))
+}
+
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Manage capigo CLI configuration",
@@ -29,7 +43,7 @@ Supported keys:
 
 		cfg, err := config.Load()
 		if err != nil {
-			output.RenderError(os.Stderr, outputMode, "config_load_error", err.Error(), "")
+			output.RenderError(os.Stderr, outputMode, "CONFIG_LOAD_ERROR", err.Error(), "")
 			os.Exit(api.ExitCodeFor(err))
 		}
 
@@ -41,28 +55,23 @@ Supported keys:
 			}
 			p, ok := cfg.Profiles[profileName]
 			if !ok {
-				msg := fmt.Sprintf("profile %q not found", profileName)
-				output.RenderError(os.Stderr, outputMode, "profile_not_found", msg, "")
-				os.Exit(1)
+				configNotFoundErr(fmt.Sprintf("profile %q not found", profileName))
 			}
 			p.APIURL = value
 			cfg.Profiles[profileName] = p
 
 		case "default_profile":
 			if err := config.SetProfile(cfg, value); err != nil {
-				output.RenderError(os.Stderr, outputMode, "set_profile_error", err.Error(), "")
-				os.Exit(1)
+				configValidationErr(err.Error())
 			}
 
 		default:
-			msg := fmt.Sprintf("unknown key %q; supported: api_url, default_profile", key)
-			output.RenderError(os.Stderr, outputMode, "unknown_key", msg, "")
-			os.Exit(1)
+			configValidationErr(fmt.Sprintf("unknown key %q; supported: api_url, default_profile", key))
 		}
 
 		if err := config.Save(cfg); err != nil {
-			output.RenderError(os.Stderr, outputMode, "config_save_error", err.Error(), "")
-			os.Exit(api.ExitCodeFor(err))
+			output.RenderError(os.Stderr, outputMode, "CONFIG_SAVE_ERROR", err.Error(), "")
+			os.Exit(1)
 		}
 		return nil
 	},
@@ -83,7 +92,7 @@ Supported keys:
 
 		cfg, err := config.Load()
 		if err != nil {
-			output.RenderError(os.Stderr, outputMode, "config_load_error", err.Error(), "")
+			output.RenderError(os.Stderr, outputMode, "CONFIG_LOAD_ERROR", err.Error(), "")
 			os.Exit(api.ExitCodeFor(err))
 		}
 
@@ -98,23 +107,19 @@ Supported keys:
 		case "api_url":
 			p, err := config.ActiveProfile(cfg)
 			if err != nil {
-				output.RenderError(os.Stderr, outputMode, "profile_not_found", err.Error(), "")
-				os.Exit(1)
+				configNotFoundErr(err.Error())
 			}
 			fmt.Println(p.APIURL)
 
 		case "default_tenant":
 			p, err := config.ActiveProfile(cfg)
 			if err != nil {
-				output.RenderError(os.Stderr, outputMode, "profile_not_found", err.Error(), "")
-				os.Exit(1)
+				configNotFoundErr(err.Error())
 			}
 			fmt.Println(p.DefaultTenant)
 
 		default:
-			msg := fmt.Sprintf("unknown key %q; supported: api_url, default_profile, default_tenant", key)
-			output.RenderError(os.Stderr, outputMode, "unknown_key", msg, "")
-			os.Exit(1)
+			configValidationErr(fmt.Sprintf("unknown key %q; supported: api_url, default_profile, default_tenant", key))
 		}
 		return nil
 	},
@@ -129,7 +134,7 @@ var configSetDefaultTenantCmd = &cobra.Command{
 
 		cfg, err := config.Load()
 		if err != nil {
-			output.RenderError(os.Stderr, outputMode, "config_load_error", err.Error(), "")
+			output.RenderError(os.Stderr, outputMode, "CONFIG_LOAD_ERROR", err.Error(), "")
 			os.Exit(api.ExitCodeFor(err))
 		}
 
@@ -139,16 +144,14 @@ var configSetDefaultTenantCmd = &cobra.Command{
 		}
 		p, ok := cfg.Profiles[profileName]
 		if !ok {
-			msg := fmt.Sprintf("profile %q not found", profileName)
-			output.RenderError(os.Stderr, outputMode, "profile_not_found", msg, "")
-			os.Exit(1)
+			configNotFoundErr(fmt.Sprintf("profile %q not found", profileName))
 		}
 		p.DefaultTenant = code
 		cfg.Profiles[profileName] = p
 
 		if err := config.Save(cfg); err != nil {
-			output.RenderError(os.Stderr, outputMode, "config_save_error", err.Error(), "")
-			os.Exit(api.ExitCodeFor(err))
+			output.RenderError(os.Stderr, outputMode, "CONFIG_SAVE_ERROR", err.Error(), "")
+			os.Exit(1)
 		}
 		return nil
 	},
@@ -161,7 +164,7 @@ var configUnsetDefaultTenantCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {
-			output.RenderError(os.Stderr, outputMode, "config_load_error", err.Error(), "")
+			output.RenderError(os.Stderr, outputMode, "CONFIG_LOAD_ERROR", err.Error(), "")
 			os.Exit(api.ExitCodeFor(err))
 		}
 
@@ -171,16 +174,14 @@ var configUnsetDefaultTenantCmd = &cobra.Command{
 		}
 		p, ok := cfg.Profiles[profileName]
 		if !ok {
-			msg := fmt.Sprintf("profile %q not found", profileName)
-			output.RenderError(os.Stderr, outputMode, "profile_not_found", msg, "")
-			os.Exit(1)
+			configNotFoundErr(fmt.Sprintf("profile %q not found", profileName))
 		}
 		p.DefaultTenant = ""
 		cfg.Profiles[profileName] = p
 
 		if err := config.Save(cfg); err != nil {
-			output.RenderError(os.Stderr, outputMode, "config_save_error", err.Error(), "")
-			os.Exit(api.ExitCodeFor(err))
+			output.RenderError(os.Stderr, outputMode, "CONFIG_SAVE_ERROR", err.Error(), "")
+			os.Exit(1)
 		}
 		return nil
 	},

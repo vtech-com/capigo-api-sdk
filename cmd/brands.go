@@ -71,6 +71,14 @@ Each brand in the response has: id, name, logo_url (string or null).`,
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
+		if outputMode == "json" {
+			data := envelope.Data
+			if data == nil {
+				data = []api.Brand{}
+			}
+			return output.WriteJSONList(os.Stdout, data, envelope.Meta)
+		}
+
 		items := make([]output.Brand, len(envelope.Data))
 		for i, b := range envelope.Data {
 			items[i] = output.Brand{
@@ -195,9 +203,7 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 		}
 
 		if outputMode == "json" {
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			return enc.Encode(envelope.Data)
+			return output.WriteJSONObject(os.Stdout, envelope.Data)
 		}
 
 		return output.Render(os.Stdout, outputMode, output.Brand{
@@ -306,9 +312,7 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 		}
 
 		if outputMode == "json" {
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			return enc.Encode(envelope.Data)
+			return output.WriteJSONObject(os.Stdout, envelope.Data)
 		}
 
 		return output.Render(os.Stdout, outputMode, output.Brand{
@@ -365,9 +369,7 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 		}
 
 		if outputMode == "json" {
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			return enc.Encode(envelope.Data)
+			return output.WriteJSONObject(os.Stdout, envelope.Data)
 		}
 
 		return output.Render(os.Stdout, outputMode, output.Brand{
@@ -478,9 +480,7 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 		}
 
 		if outputMode == "json" {
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			return enc.Encode(envelope.Data)
+			return output.WriteJSONObject(os.Stdout, envelope.Data)
 		}
 
 		return output.Render(os.Stdout, outputMode, output.Brand{
@@ -494,7 +494,7 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 func init() {
 	brandsListCmd.Flags().StringVar(&brandListTenant, "tenant", "", "tenant code (required)")
 	brandsListCmd.Flags().StringVarP(&brandListQuery, "query", "q", "", "name-contains filter (case-insensitive, max 200 chars)")
-	brandsListCmd.Flags().IntVar(&brandListPage, "page", 1, "page number")
+	brandsListCmd.Flags().IntVar(&brandListPage, "page", 0, "page number")
 	brandsListCmd.Flags().IntVar(&brandListLimit, "limit", 20, "items per page (1-100)")
 
 	brandsCreateCmd.Flags().StringVar(&brandCreateTenant, "tenant", "", "tenant code (required)")

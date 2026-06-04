@@ -71,6 +71,14 @@ Each category in the response has: id, name, parent_id (uuid or null for root).`
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
+		if outputMode == "json" {
+			data := envelope.Data
+			if data == nil {
+				data = []api.Category{}
+			}
+			return output.WriteJSONList(os.Stdout, data, envelope.Meta)
+		}
+
 		items := make([]output.Category, len(envelope.Data))
 		for i, c := range envelope.Data {
 			items[i] = output.Category{
@@ -196,9 +204,7 @@ Response: { "data": { "id": "uuid", "name": "string", "parent_id": "uuid|null" }
 		}
 
 		if outputMode == "json" {
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			return enc.Encode(envelope.Data)
+			return output.WriteJSONObject(os.Stdout, envelope.Data)
 		}
 
 		return output.Render(os.Stdout, outputMode, output.Category{
@@ -307,9 +313,7 @@ Response: { "data": { "id": "uuid", "name": "string", "parent_id": "uuid|null" }
 		}
 
 		if outputMode == "json" {
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			return enc.Encode(envelope.Data)
+			return output.WriteJSONObject(os.Stdout, envelope.Data)
 		}
 
 		return output.Render(os.Stdout, outputMode, output.Category{
@@ -366,9 +370,7 @@ Response: { "data": { "id": "uuid", "name": "string", "parent_id": "uuid|null" }
 		}
 
 		if outputMode == "json" {
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			return enc.Encode(envelope.Data)
+			return output.WriteJSONObject(os.Stdout, envelope.Data)
 		}
 
 		return output.Render(os.Stdout, outputMode, output.Category{
@@ -480,9 +482,7 @@ Response: { "data": { "id": "uuid", "name": "string", "parent_id": "uuid|null" }
 		}
 
 		if outputMode == "json" {
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			return enc.Encode(envelope.Data)
+			return output.WriteJSONObject(os.Stdout, envelope.Data)
 		}
 
 		return output.Render(os.Stdout, outputMode, output.Category{
@@ -496,7 +496,7 @@ Response: { "data": { "id": "uuid", "name": "string", "parent_id": "uuid|null" }
 func init() {
 	categoriesListCmd.Flags().StringVar(&categoryListTenant, "tenant", "", "tenant code (required)")
 	categoriesListCmd.Flags().StringVarP(&categoryListQuery, "query", "q", "", "name-contains filter (case-insensitive, max 200 chars)")
-	categoriesListCmd.Flags().IntVar(&categoryListPage, "page", 1, "page number")
+	categoriesListCmd.Flags().IntVar(&categoryListPage, "page", 0, "page number")
 	categoriesListCmd.Flags().IntVar(&categoryListLimit, "limit", 20, "items per page (1-100)")
 
 	categoriesCreateCmd.Flags().StringVar(&categoryCreateTenant, "tenant", "", "tenant code (required)")

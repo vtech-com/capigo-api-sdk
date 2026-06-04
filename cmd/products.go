@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/url"
 	"os"
 	"strconv"
@@ -158,7 +157,7 @@ Use --ids to fetch specific products by UUID (comma-separated, max 50).
 
 		if outputMode == "json" {
 			// C1 + M1: render full api.Product with meta envelope in JSON mode.
-			return renderProductListJSON(os.Stdout, envelope.Data, envelope.Meta)
+			return output.WriteJSONList(os.Stdout, envelope.Data, envelope.Meta)
 		}
 
 		items := make([]output.Product, len(envelope.Data))
@@ -241,7 +240,7 @@ func productsListAll(ctx context.Context, client *api.Client, tenant *string) er
 			Total:   len(allProducts),
 			HasMore: false,
 		}
-		return renderProductListJSON(os.Stdout, allProducts, syntheticMeta)
+		return output.WriteJSONList(os.Stdout, allProducts, syntheticMeta)
 	}
 
 	items := make([]output.Product, len(allProducts))
@@ -416,7 +415,7 @@ When --from-json is provided, all other flags are ignored.`,
 
 		if outputMode == "json" {
 			// C1: render full api.Product in JSON mode.
-			return renderProductJSON(os.Stdout, envelope.Data)
+			return output.WriteJSONObject(os.Stdout, envelope.Data)
 		}
 
 		if err := output.Render(os.Stdout, outputMode, toOutputProduct(envelope.Data), output.RenderOpts{
@@ -580,7 +579,7 @@ When --from-json is set, all individual field flags are ignored.`,
 
 		if outputMode == "json" {
 			// C1: render full api.Product in JSON mode.
-			return renderProductJSON(os.Stdout, envelope.Data)
+			return output.WriteJSONObject(os.Stdout, envelope.Data)
 		}
 
 		if err := output.Render(os.Stdout, outputMode, toOutputProduct(envelope.Data), output.RenderOpts{
@@ -686,7 +685,7 @@ Example JSON input:
 
 		if outputMode == "json" {
 			// C1: render full api.Product in JSON mode.
-			return renderProductJSON(os.Stdout, envelope.Data)
+			return output.WriteJSONObject(os.Stdout, envelope.Data)
 		}
 
 		if err := output.Render(os.Stdout, outputMode, toOutputProduct(envelope.Data), output.RenderOpts{
@@ -709,7 +708,7 @@ func init() {
 	productsListCmd.Flags().StringVar(&productListTenant, "tenant", "", "tenant code (required)")
 	productsListCmd.Flags().StringVarP(&productListQuery, "query", "q", "", "free-text search (2–500 chars): matches product name, variant name, SKU, and barcode")
 	productsListCmd.Flags().StringVar(&productListUpdatedSince, "updated-since", "", "ISO 8601 timestamp for delta sync (from previous X-Server-Time header)")
-	productsListCmd.Flags().IntVar(&productListPage, "page", 0, "page number (default 1)")
+	productsListCmd.Flags().IntVar(&productListPage, "page", 0, "page number (0 = server default)")
 	productsListCmd.Flags().IntVar(&productListLimit, "limit", 0, "items per page (1–100, default 20)")
 	productsListCmd.Flags().BoolVar(&productListAll, "all", false, "fetch all pages automatically (loads all pages into memory before output; for large catalogs prefer paginating manually)")
 	productsListCmd.Flags().StringVar(&productListIDs, "ids", "", "comma-separated list of product UUIDs to fetch (max 50); mutually exclusive with --all")
@@ -778,31 +777,4 @@ func toOutputProduct(p api.Product) output.Product {
 		Price:        price,
 		VariantCount: len(p.Variants),
 	}
-}
-
-// renderProductJSON marshals a single api.Product as a JSON object to w.
-func renderProductJSON(w io.Writer, p api.Product) error {
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	return enc.Encode(p)
-}
-
-// renderProductListJSON marshals a list of api.Product with pagination meta
-// into a JSON envelope: {"data":[...],"meta":{...}}.
-// When the list is empty the envelope still includes meta so callers can
-// distinguish an empty catalog from an error.
-func renderProductListJSON(w io.Writer, products []api.Product, meta api.Meta) error {
-	if products == nil {
-		products = []api.Product{}
-	}
-	envelope := struct {
-		Data []api.Product `json:"data"`
-		Meta api.Meta      `json:"meta"`
-	}{
-		Data: products,
-		Meta: meta,
-	}
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	return enc.Encode(envelope)
 }
