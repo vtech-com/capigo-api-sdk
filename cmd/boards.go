@@ -68,9 +68,15 @@ var boardsListCmd = &cobra.Command{
 
 		items := make([]output.Board, len(envelope.Data))
 		for i, b := range envelope.Data {
+			desc := ""
+			if b.Description != nil {
+				desc = *b.Description
+			}
 			items[i] = output.Board{
-				ID:    b.ID,
-				Title: b.Name,
+				ID:          b.ID,
+				Title:       b.Name,
+				IsPublic:    b.IsPublic,
+				Description: desc,
 			}
 		}
 

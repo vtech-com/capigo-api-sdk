@@ -8,8 +8,8 @@ import (
 )
 
 var fakeTasks = []Task{
-	{ID: "task_001", Title: "Fix login bug", Status: "open", Assignee: "Alice", TenantCode: "acme"},
-	{ID: "task_002", Title: "Update menu", Status: "done", Assignee: "Bob", TenantCode: "globex"},
+	{Code: "TASK-1", ID: "task_001", Title: "Fix login bug", Status: "open", Assignee: "Alice", TenantCode: "acme"},
+	{Code: "TASK-2", ID: "task_002", Title: "Update menu", Status: "done", Assignee: "Bob", TenantCode: "globex"},
 }
 
 func TestRender_TableMode_SingleTenant(t *testing.T) {
@@ -19,7 +19,7 @@ func TestRender_TableMode_SingleTenant(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	out := buf.String()
-	for _, want := range []string{"ID", "Title", "Status", "Assignee", "task_001", "Fix login bug", "task_002", "Update menu"} {
+	for _, want := range []string{"Code", "ID", "Title", "Status", "Assignee", "TASK-1", "task_001", "Fix login bug", "task_002", "Update menu"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("table output missing %q\ngot:\n%s", want, out)
 		}

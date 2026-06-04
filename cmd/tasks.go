@@ -285,6 +285,7 @@ func toOutputTask(t api.Task) output.Task {
 	}
 	return output.Task{
 		ID:       t.ID,
+		Code:     t.Code,
 		Title:    t.Title,
 		Status:   t.Status,
 		Assignee: assignee,
