@@ -9,6 +9,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+---
+
+## [0.6.0] — 2026-06-04
+
 ### Added
 
 - `members list`: list workspace members via `GET /members` with `--query`/`-q` (name/email search), `--page`, `--limit`, and optional `--tenant`. Emits the standard `{"data":[...],"meta":{...}}` JSON contract. The `api.Member` model and `member` table renderer already existed; this wires up the command. Registered in the openapi path/query coverage guards (`/members` moved from `unimplementedPaths` to `implementedPaths`).
