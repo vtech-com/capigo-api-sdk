@@ -38,6 +38,39 @@ ones for a work-management agent are task update/delete and product get.
 | Medium | Members: `GET /members/{id}`, invite, role change, remove | Only `list` is exposed. Member management (invite/RBAC/positions) exists in product docs but not in public `/api/v1`. `members list --query` covers name→id lookup for assignment. |
 | Low (likely intentional) | `DELETE` on brands/categories/product-types/units/products | No resource exposes delete. Probably deliberate for reference data. |
 
+## Addressing resources by human key (code), not UUID — API requirement
+
+**Decision (2026-06-04):** users and Tấm hand off / reference work by a **human key**
+(e.g. task `TASK-123`, `tenant_code` `acme`), not by UUID. Single-resource operations
+(`get`, and future `update`/`delete`) should be addressable by that key.
+
+**Chosen strategy: API-side exact lookup (Strategy A).** The SDK will NOT do client-side
+"resolve key → UUID via search". Instead the API must expose exact lookup by the human
+key, and the SDK wraps it. Rationale: search-resolve is fuzzy (ilike), can match 0/many,
+and isn't uniform (boards/variants have no `q`). Until the endpoint exists, the only
+interim option is `tasks list -q "TASK-123"` (fuzzy, returns a list) — not shipped as a
+`get` behaviour.
+
+**Current state:** every single-item `GET` is **UUID-only**; no resource supports exact
+lookup by its human key. This blocks the whole pattern.
+
+**Canonical human key per resource** (unique keys only — these are the ones in scope):
+
+| Resource | Human key | Unique | API lookup needed |
+|---|---|---|---|
+| tenant | `tenant_code` | ✅ | already the handle (`--tenant`) — done |
+| **task** | `code` (TASK-123) | ✅ per tenant | **priority** — exact lookup by code (backend already has `findOneTaskByCode`). Apply to get + future update/delete. |
+| member | `email` | ✅ | exact lookup by email (members has no get-by-id at all yet) |
+| variant | `barcode` / `sku` | ✅ | exact lookup (today only `barcode_prefix` search, no exact get) |
+| product | `slug` / `sku` | slug ✅ | fold into the `GET /pcms/products/{id}` work being added — also accept slug/sku |
+
+**Deferred (not in scope now):** ref-data (brand / category / product-type / unit) and
+**board** only have `name`, which is **not guaranteed unique** — clean code-lookup there
+needs the API to add a `code`/`slug` field first. Shelved until there's a concrete need.
+
+**SDK follow-up (per resource, once the API endpoint exists):** `capigo <resource> get <key>`
+accepts the human key (and still UUID); same for update/delete. No SDK work until then.
+
 ## When an endpoint lands
 
 1. Backend implements the route handler in the monorepo + the endpoint reaches **prod**.
