@@ -38,6 +38,9 @@ var implementedPaths = map[string]string{
 	// Auth / identity
 	"/tenants": "tenants list — GET /tenants",
 
+	// Members
+	"/members": "members list — GET /members",
+
 	// Mission
 	"/mission/boards":      "boards list — GET /mission/boards",
 	"/mission/boards/{id}": "boards get — GET /mission/boards/{id}",
@@ -70,11 +73,9 @@ var implementedPaths = map[string]string{
 // unimplementedPaths is every OpenAPI path the CLI deliberately does not wrap.
 // Document a rationale for each entry. Update this set — rather than implementedPaths —
 // when a path is intentionally left as a no-CLI-command.
-var unimplementedPaths = map[string]string{
-	// GET /members returns workspace member lists. There is no current agent or user
-	// workflow that needs to enumerate members; skipped until there is a concrete need.
-	"/members": "no CLI need yet — member listing not required by any current workflow",
-}
+// Currently empty: every spec path is wrapped by a CLI command. Add an entry here
+// (rather than implementedPaths) when a path is intentionally left without a command.
+var unimplementedPaths = map[string]string{}
 
 // openAPIPathOnlySpec is the minimal subset of OpenAPI 3.0 needed for path enumeration.
 type openAPIPathOnlySpec struct {
