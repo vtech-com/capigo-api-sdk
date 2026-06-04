@@ -104,17 +104,19 @@ capigo config unset-default-tenant        Clear the default tenant
 
 capigo tenants list      List tenants you can access
 
-capigo tasks list        List tasks (supports --query/-q, --status, --page, --limit)
-capigo tasks get <id>    Get task by ID
-capigo tasks create      Create a new task (--title required; --tenant required; --follower-id repeatable)
+capigo tasks list           List tasks (supports --query/-q, --status, --page, --limit)
+capigo tasks get <id>       Get task by ID
+capigo tasks update <id>    Partial update a task (PATCH; --tenant optional; at least one field required)
+capigo tasks create         Create a new task (--title required; --tenant required; --follower-id repeatable)
 
 capigo boards list       List boards (supports --page, --limit)
 capigo boards get <id>   Get board by ID
 
 capigo members list      List workspace members (supports --query/-q, --page, --limit)
+capigo members get <id>  Get a member by ID
 
 capigo products list     List products (supports --query, --updated-since, --ids, --all)
-capigo products get      (coming soon)
+capigo products get <id> Get a product by ID
 capigo products create   Create a product (--name required, or --from-json)
 capigo products update   Update a product
 capigo products variants Upsert product variants
@@ -144,6 +146,7 @@ capigo units update <id>    Partial update a unit (PATCH)
 capigo units replace <id>   Full replace a unit (PUT, all fields required)
 
 capigo variants list         List variants by barcode prefix (supports --barcode-prefix, --sort)
+capigo variants get <id>     Get a variant by ID
 
 capigo version           Print version info
 ```

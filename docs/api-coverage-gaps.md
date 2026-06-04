@@ -20,6 +20,10 @@ The CLI wraps every endpoint that currently exists, with one exception:
 | Endpoint (exists on develop) | SDK command | Status |
 |---|---|---|
 | `GET /health` | — | ✅ **being added** (`capigo health`) |
+| `GET /pcms/products/{id}` | `capigo products get <id>` | ✅ **landed on develop / pre-staged in SDK** — UUID-only; reconciles on `make update-spec` after prod deploy |
+| `PATCH /mission/tasks/{id}` | `capigo tasks update <id>` | ✅ **landed on develop / pre-staged in SDK** — UUID-only; reconciles on `make update-spec` after prod deploy |
+| `GET /members/{id}` | `capigo members get <id>` | ✅ **landed on develop / pre-staged in SDK** — UUID-only; reconciles on `make update-spec` after prod deploy |
+| `GET /pcms/variants/{id}` | `capigo variants get <id>` | ✅ **landed on develop / pre-staged in SDK** — UUID-only; reconciles on `make update-spec` after prod deploy |
 
 Everything else under `/members`, `/mission/*`, `/pcms/*`, `/tenants` is wrapped.
 
@@ -30,12 +34,10 @@ ones for a work-management agent are task update/delete and product get.
 
 | Priority | Missing action | Notes / status |
 |---|---|---|
-| High | `GET /pcms/products/{id}` (product get) | **API being added by team.** Then wrap as `capigo products get <id>` (bare object, mirror `brands get`). Workaround today: `products list --ids <id>`. |
-| High | `PATCH /mission/tasks/{id}` (task update) | Not implemented. Needed for any "update task status/assignee/due-date" workflow. Then wrap as `capigo tasks update <id>`. |
 | High | `DELETE /mission/tasks/{id}` (task delete/cancel) | No way to delete/cancel a task via API. |
 | Medium | `POST/PATCH/DELETE /mission/boards` (board create/update/delete) | Boards are **read-only** via the public API. No programmatic board creation. |
 | Medium | Board lists management (the `lists`/columns inside a board) | `tasks create` accepts `board_list_id` but there's no endpoint to list/create board lists via the public API. |
-| Medium | Members: `GET /members/{id}`, invite, role change, remove | Only `list` is exposed. Member management (invite/RBAC/positions) exists in product docs but not in public `/api/v1`. `members list --query` covers name→id lookup for assignment. |
+| Medium | Members: invite, role change, remove | `list` and `get` (UUID) are exposed. Member management (invite/RBAC/positions) exists in product docs but not in public `/api/v1`. |
 | Low (likely intentional) | `DELETE` on brands/categories/product-types/units/products | No resource exposes delete. Probably deliberate for reference data. |
 
 ## Addressing resources by human key (code), not UUID — API requirement
@@ -70,6 +72,10 @@ needs the API to add a `code`/`slug` field first. Shelved until there's a concre
 
 **SDK follow-up (per resource, once the API endpoint exists):** `capigo <resource> get <key>`
 accepts the human key (and still UUID); same for update/delete. No SDK work until then.
+
+**Note:** The four `get`-by-id commands added in this pre-stage (`products get`, `tasks update`,
+`members get`, `variants get`) are **UUID-only** — they do not accept human keys. This section
+remains pending until the API exposes exact lookup by code/key.
 
 ## When an endpoint lands
 

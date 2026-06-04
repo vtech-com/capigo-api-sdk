@@ -104,11 +104,74 @@ var membersListCmd = &cobra.Command{
 	},
 }
 
+var memberGetTenant string
+
+var membersGetCmd = &cobra.Command{
+	Use:   "get <id>",
+	Short: "Get a member by ID",
+	Long: `Get a single workspace member by UUID. Optional --tenant scopes the lookup.
+
+If --tenant is omitted the member is resolved across all tenants the caller belongs to.
+Returns 404 if the member is not found in any accessible tenant.
+
+Response: { "data": { "id": "uuid", "display_name": "string", "email": "string",
+  "role": "owner|member", "avatar_url": "string|null" } }`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(memberGetTenant, profile)
+
+		resp, err := client.Do(ctx, "GET", "/members/"+args[0], nil, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope struct {
+			Data api.Member `json:"data"`
+		}
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		if outputMode == "json" {
+			return output.WriteJSONObject(os.Stdout, envelope.Data)
+		}
+
+		if err := output.Render(os.Stdout, outputMode, output.Member{
+			ID:    envelope.Data.ID,
+			Name:  envelope.Data.DisplayName,
+			Email: envelope.Data.Email,
+			Role:  envelope.Data.Role,
+		}, output.RenderOpts{
+			GlobalMode:   tenant == nil,
+			ResourceKind: "member",
+		}); err != nil {
+			return handleErr(err)
+		}
+
+		return nil
+	},
+}
+
 func init() {
 	membersListCmd.Flags().StringVar(&memberListTenant, "tenant", "", "scope to this tenant code")
 	membersListCmd.Flags().StringVarP(&memberListQuery, "query", "q", "", "filter by member name or email")
 	membersListCmd.Flags().IntVar(&memberListPage, "page", 0, "page number (0 = server default)")
 	membersListCmd.Flags().IntVar(&memberListLimit, "limit", 0, "items per page (0 = server default)")
-	memberCmd.AddCommand(membersListCmd)
+
+	membersGetCmd.Flags().StringVar(&memberGetTenant, "tenant", "", "scope to this tenant code")
+
+	memberCmd.AddCommand(membersListCmd, membersGetCmd)
 	rootCmd.AddCommand(memberCmd)
 }

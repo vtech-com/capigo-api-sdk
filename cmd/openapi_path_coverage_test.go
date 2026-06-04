@@ -39,19 +39,21 @@ var implementedPaths = map[string]string{
 	"/tenants": "tenants list — GET /tenants",
 
 	// Members
-	"/members": "members list — GET /members",
+	"/members":      "members list — GET /members",
+	"/members/{id}": "members get — GET /members/{id} (pre-staged from develop; not yet on prod)",
 
 	// Mission
 	"/mission/boards":      "boards list — GET /mission/boards",
 	"/mission/boards/{id}": "boards get — GET /mission/boards/{id}",
 	"/mission/tasks":       "tasks list + tasks create — GET + POST /mission/tasks",
-	"/mission/tasks/{id}":  "tasks get — GET /mission/tasks/{id}",
+	"/mission/tasks/{id}":  "tasks get + tasks update — GET + PATCH /mission/tasks/{id} (PATCH pre-staged from develop; not yet on prod)",
 
 	// PCMS products
 	"/pcms/products":               "products list + products create — GET + POST /pcms/products",
-	"/pcms/products/{id}":          "products update — PUT /pcms/products/{id}",
+	"/pcms/products/{id}":          "products get + products update — GET (pre-staged from develop; not yet on prod) + PUT /pcms/products/{id}",
 	"/pcms/products/{id}/variants": "products variants — PUT /pcms/products/{id}/variants",
 	"/pcms/variants":               "variants list — GET /pcms/variants",
+	"/pcms/variants/{id}":          "variants get — GET /pcms/variants/{id} (pre-staged from develop; not yet on prod)",
 
 	// PCMS ref data — brands
 	"/pcms/brands":      "brands list + brands create — GET + POST /pcms/brands",

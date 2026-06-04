@@ -259,6 +259,81 @@ func productsListAll(ctx context.Context, client *api.Client, tenant *string) er
 }
 
 // --------------------------------------------------------------------------
+// products get
+// --------------------------------------------------------------------------
+
+var productGetTenant string
+
+var productsGetCmd = &cobra.Command{
+	Use:   "get <id>",
+	Short: "Get a product by ID",
+	Long: `Get a single product by UUID from PCMS. Tenant is required.
+
+Returns the full product detail including all variants, options, brand, category,
+product type, and unit. Returns 404 if the product does not exist or belongs to
+another tenant.
+
+Response: { "data": { ... } } — same shape as products list items.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(productGetTenant, profile)
+
+		// /pcms/* requires a tenant.
+		if tenant == nil {
+			e := &api.APIError{
+				Code:       "VALIDATION_ERROR",
+				Message:    "products commands require a tenant; pass --tenant <code> or set default",
+				HTTPStatus: 400,
+			}
+			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
+			os.Exit(api.ExitCodeFor(e))
+		}
+
+		resp, err := client.Do(ctx, "GET", "/pcms/products/"+args[0], nil, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope struct {
+			Data api.Product `json:"data"`
+		}
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		// M2: emit X-Server-Time to stderr.
+		if resp.ServerTime != "" {
+			fmt.Fprintf(os.Stderr, "Server time: %s\n", resp.ServerTime)
+		}
+
+		if outputMode == "json" {
+			return output.WriteJSONObject(os.Stdout, envelope.Data)
+		}
+
+		if err := output.Render(os.Stdout, outputMode, toOutputProduct(envelope.Data), output.RenderOpts{
+			GlobalMode:   false,
+			ResourceKind: "product",
+		}); err != nil {
+			return handleErr(err)
+		}
+
+		return nil
+	},
+}
+
+// --------------------------------------------------------------------------
 // products create
 // --------------------------------------------------------------------------
 
@@ -704,6 +779,9 @@ Example JSON input:
 // --------------------------------------------------------------------------
 
 func init() {
+	// products get flags
+	productsGetCmd.Flags().StringVar(&productGetTenant, "tenant", "", "tenant code (required)")
+
 	// products list flags
 	productsListCmd.Flags().StringVar(&productListTenant, "tenant", "", "tenant code (required)")
 	productsListCmd.Flags().StringVarP(&productListQuery, "query", "q", "", "free-text search (2–500 chars): matches product name, variant name, SKU, and barcode")
@@ -746,7 +824,7 @@ func init() {
 	productsVariantsCmd.Flags().StringVar(&productVariantsProductID, "product-id", "", "product UUID (required)")
 	productsVariantsCmd.Flags().StringVar(&productVariantsFromJSON, "from-json", "", "path to JSON array file (use - for stdin) (required)")
 
-	productCmd.AddCommand(productsListCmd, productsCreateCmd, productsUpdateCmd, productsVariantsCmd)
+	productCmd.AddCommand(productsGetCmd, productsListCmd, productsCreateCmd, productsUpdateCmd, productsVariantsCmd)
 	rootCmd.AddCommand(productCmd)
 }
 
