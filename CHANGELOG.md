@@ -9,6 +9,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Body-field coverage guard (`cmd/openapi_body_coverage_test.go`): for each write command (POST/PATCH/PUT), reads the OpenAPI requestBody schema and asserts that every field either has a corresponding cobra flag or the command registers `--from-json` (the generic escape hatch). A documented alias map handles non-obvious renames (`follower_ids`→`follower-id`, `tenant_code`→`tenant`, `assignee_id`→`assignee`, etc.). The `intentionallyUnexposedBodyFields` allowlist documents server-managed fields with no flag. Guards against the class of bugs where a request-body field exists in the spec but is never wired to a CLI flag (e.g. the original `tasks create` `--follower-id` omission). Verified: temporarily removing the `--follower-id` StringArrayVar registration causes the test to fail with a clear message identifying the missing flag.
+- New-path detection guard (`cmd/openapi_path_coverage_test.go`): asserts that every path in `api/openapi.json` is listed in either `implementedPaths` (CLI wraps it) or `unimplementedPaths` (deliberately skipped, with rationale). Does NOT enforce 1:1 coverage — the CLI is a curated subset. Fails only when `make update-spec` pulls a new endpoint that is in neither set, requiring a conscious decision. Integrity checks prevent the allowlists from rotting: both sets must be disjoint, and every listed path must actually exist in the spec.
+- `tasks list` / `tasks get`: surface task `code` field (e.g. "TASK-123") in output. Added `Code string` to `output.Task`, populated it in `toOutputTask`, and added a `Code` column as the first column in the task table renderer (before Title). JSON and quiet modes unaffected (quiet still emits ID only).
+- `boards list`: surface `is_public` and `description` columns. Added `IsPublic bool` and `Description string` to `output.Board`, populated both in the `boards list` mapping, and added `Public` (rendered as "yes"/"no") and `Description` columns to the board table renderer. JSON mode already rendered the full `api.Board`; quiet mode (ID only) unaffected.
+
+### Removed
+
+- `internal/api/paginate.go` and `internal/api/paginate_test.go`: deleted `FetchAll[T]` and its test. The function was dead code — the only caller was its own test; the `products --all` path uses its own inline pagination loop in `cmd/products.go`. Removing the footgun eliminates a latent tenant-propagation bug (the dead `FetchAll` passed `nil` tenant unconditionally).
+
 ---
 
 ## [0.5.0] — 2026-06-04

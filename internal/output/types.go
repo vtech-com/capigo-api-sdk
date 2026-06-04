@@ -17,9 +17,11 @@ type Member struct {
 
 // Board is the display model for a Capigo mission board.
 type Board struct {
-	ID         string `json:"id"`
-	Title      string `json:"title"`
-	TenantCode string `json:"tenant_code,omitempty"`
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	IsPublic    bool   `json:"is_public"`
+	Description string `json:"description,omitempty"`
+	TenantCode  string `json:"tenant_code,omitempty"`
 }
 
 // BoardDetail is the display model for a single board with its lists.
@@ -32,6 +34,7 @@ type BoardDetail struct {
 // Task is the display model for a Capigo mission task.
 type Task struct {
 	ID         string `json:"id"`
+	Code       string `json:"code,omitempty"`
 	Title      string `json:"title"`
 	Status     string `json:"status"`
 	Assignee   string `json:"assignee,omitempty"`

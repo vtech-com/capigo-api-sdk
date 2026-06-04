@@ -49,10 +49,14 @@ func init() {
 			idFn: func(v any) string { return v.(Member).ID },
 		},
 		"board": {
-			headers: []string{"ID", "Title"},
+			headers: []string{"ID", "Title", "Public", "Description"},
 			rowFn: func(v any) []any {
 				b := v.(Board)
-				return []any{b.ID, b.Title}
+				pub := "no"
+				if b.IsPublic {
+					pub = "yes"
+				}
+				return []any{b.ID, b.Title, pub, b.Description}
 			},
 			idFn: func(v any) string { return v.(Board).ID },
 		},
@@ -65,10 +69,12 @@ func init() {
 			idFn: func(v any) string { return v.(BoardDetail).ID },
 		},
 		"task": {
-			headers: []string{"ID", "Title", "Status", "Assignee"},
+			// Code (e.g. "TASK-123") is the primary human/agent-facing reference;
+			// it appears first so it is immediately visible in table output.
+			headers: []string{"Code", "ID", "Title", "Status", "Assignee"},
 			rowFn: func(v any) []any {
 				t := v.(Task)
-				return []any{t.ID, t.Title, t.Status, t.Assignee}
+				return []any{t.Code, t.ID, t.Title, t.Status, t.Assignee}
 			},
 			idFn: func(v any) string { return v.(Task).ID },
 		},
