@@ -90,10 +90,73 @@ var boardsListCmd = &cobra.Command{
 	},
 }
 
+var (
+	boardGetTenant string
+)
+
+var boardsGetCmd = &cobra.Command{
+	Use:   "get <id>",
+	Short: "Get a board by ID",
+	Long: `Get a single board by ID, including its lists.
+
+Returns the board detail with lists array. Use --tenant to scope to a specific
+tenant; if omitted, the API uses your active tenant context.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(boardGetTenant, profile)
+
+		resp, err := client.Do(ctx, "GET", "/mission/boards/"+args[0], nil, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope struct {
+			Data api.BoardDetail `json:"data"`
+		}
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		if outputMode == "json" {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			return enc.Encode(envelope.Data)
+		}
+
+		if err := output.Render(os.Stdout, outputMode, output.BoardDetail{
+			ID:        envelope.Data.ID,
+			Title:     envelope.Data.Name,
+			ListCount: len(envelope.Data.Lists),
+		}, output.RenderOpts{
+			GlobalMode:   tenant == nil,
+			ResourceKind: "board_detail",
+		}); err != nil {
+			return handleErr(err)
+		}
+
+		return nil
+	},
+}
+
 func init() {
 	boardsListCmd.Flags().StringVar(&boardListTenant, "tenant", "", "scope to this tenant code")
 	boardsListCmd.Flags().IntVar(&boardListPage, "page", 1, "page number")
 	boardsListCmd.Flags().IntVar(&boardListLimit, "limit", 20, "items per page")
-	boardCmd.AddCommand(boardsListCmd)
+
+	boardsGetCmd.Flags().StringVar(&boardGetTenant, "tenant", "", "scope to this tenant code")
+
+	boardCmd.AddCommand(boardsListCmd, boardsGetCmd)
 	rootCmd.AddCommand(boardCmd)
 }

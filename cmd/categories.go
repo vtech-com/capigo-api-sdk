@@ -59,6 +59,8 @@ Each category in the response has: id, name, parent_id (uuid or null for root).`
 			os.Exit(api.ExitCodeFor(e))
 		}
 
+		validatePCMSLimit(categoryListLimit)
+
 		resp, err := client.ListCategories(ctx, tenant, categoryListQuery, categoryListPage, categoryListLimit)
 		if err != nil {
 			return handleErr(err)

@@ -22,6 +22,13 @@ type Board struct {
 	TenantCode string `json:"tenant_code,omitempty"`
 }
 
+// BoardDetail is the display model for a single board with its lists.
+type BoardDetail struct {
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	ListCount int    `json:"list_count"`
+}
+
 // Task is the display model for a Capigo mission task.
 type Task struct {
 	ID         string `json:"id"`

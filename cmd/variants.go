@@ -41,6 +41,8 @@ The primary use case is finding the highest barcode in a prefix namespace; use
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
+		validatePCMSLimit(variantListLimit)
+
 		validSorts := map[string]bool{"barcode": true, "-barcode": true}
 		if variantListSort != "" && !validSorts[variantListSort] {
 			e := &api.APIError{

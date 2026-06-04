@@ -12,10 +12,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - `boards list`: now registers and honors `--page` / `--limit` flags. Previously the command printed the hint "Use --page / --limit to paginate." but rejected those flags with `unknown flag: --page` and never sent pagination params to `GET /mission/boards`, even though the endpoint supports them. All other list commands already paginated; only `boards` was missed.
+- `tasks list`: added `--query` / `-q` flag to search tasks by title via the `q` query param on `GET /mission/tasks`. Previously the endpoint supported this param but the command had no way to set it. No length constraints in the OpenAPI spec; the value is passed through as-is.
+- `products list --ids`: added client-side validation that rejects more than 50 comma-separated UUIDs before making the HTTP request (exit 5). The OpenAPI spec declares `maxItems: 50` on the `ids` param; the server already enforces this, but the preflight avoids an unnecessary round-trip and produces a clear message.
+- `brands list`, `categories list`, `product-types list`, `units list`, `products list`, `variants list`: added client-side `--limit` upper-bound check (maximum 100) matching the `maximum: 100` declared in the OpenAPI spec for all `/pcms/*` list endpoints. Exceeding the limit now exits with code 5 and a clear message before the HTTP call. Mission endpoints (`tasks list`, `boards list`) are unaffected — their spec has no limit maximum.
 
 ### Added
 
 - Regression tests (`cmd/pagination_test.go`): assert every list command that prints the pagination hint also registers `--page`/`--limit`, including a dynamic source scan that catches future list commands forgetting the flags.
+- Systemic guard test (`cmd/openapi_coverage_test.go`): parses `api/openapi.json` at test time and asserts that every `in:query` parameter of each list endpoint's GET operation has a corresponding cobra flag registered on the matching list command. A documented alias map handles non-obvious renames (`q`→`query`, `filters`→`status`); params deliberately not exposed must be added to the `intentionallyUnexposed` allowlist. Prevents the whole class of "endpoint supports a query param but the CLI never exposes it" bugs.
+- `tasks create --follower-id`: repeatable flag (StringArrayVar) to set `follower_ids` on `POST /mission/tasks`. The `FollowerIDs` field already existed in `api.CreateTaskRequest`; it was just never wired to a CLI flag. Use `--follower-id <uuid>` one or more times; the field is omitted from the request body when the flag is not provided.
+- `boards get <id>`: new subcommand that calls `GET /mission/boards/{id}` and renders the board detail (id, title, list count). Mirrors `tasks get` in structure. Renders a table with columns ID/Title/Lists in table mode, the full JSON API response in `--output json` mode, and the board ID in quiet mode. Optional `--tenant` flag consistent with `boards list`.
 
 ---
 

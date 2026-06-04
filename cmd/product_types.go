@@ -59,6 +59,8 @@ Each product type in the response has: id, name, description (string or null).`,
 			os.Exit(api.ExitCodeFor(e))
 		}
 
+		validatePCMSLimit(productTypeListLimit)
+
 		resp, err := client.ListProductTypes(ctx, tenant, productTypeListQuery, productTypeListPage, productTypeListLimit)
 		if err != nil {
 			return handleErr(err)

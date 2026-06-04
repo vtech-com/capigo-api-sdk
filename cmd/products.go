@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/spf13/cobra"
@@ -62,6 +63,21 @@ Use --ids to fetch specific products by UUID (comma-separated, max 50).
 			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
 			os.Exit(api.ExitCodeFor(e))
 		}
+
+		if productListIDs != "" {
+			idParts := strings.Split(productListIDs, ",")
+			if len(idParts) > 50 {
+				e := &api.APIError{
+					Code:       "VALIDATION_ERROR",
+					Message:    fmt.Sprintf("--ids accepts at most 50 UUIDs (got %d); split into multiple requests", len(idParts)),
+					HTTPStatus: 400,
+				}
+				output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
+				os.Exit(api.ExitCodeFor(e))
+			}
+		}
+
+		validatePCMSLimit(productListLimit)
 
 		if productListQuery != "" && utf8.RuneCountInString(productListQuery) < 2 {
 			e := &api.APIError{
