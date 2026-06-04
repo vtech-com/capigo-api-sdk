@@ -103,11 +103,12 @@ capigo config unset-default-tenant        Clear the default tenant
 
 capigo tenants list      List tenants you can access
 
-capigo tasks list        List tasks (supports --status, --page, --limit)
+capigo tasks list        List tasks (supports --query/-q, --status, --page, --limit)
 capigo tasks get <id>    Get task by ID
-capigo tasks create      Create a new task (--title required; --tenant required)
+capigo tasks create      Create a new task (--title required; --tenant required; --follower-id repeatable)
 
-capigo boards list       List boards
+capigo boards list       List boards (supports --page, --limit)
+capigo boards get <id>   Get board by ID
 
 capigo products list     List products (supports --query, --updated-since, --ids, --all)
 capigo products get      (coming soon)

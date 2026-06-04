@@ -89,3 +89,20 @@ func readJSONInput(path string) ([]byte, error) {
 func resolveTenant(tenantFlag string, profile *config.Profile) *string {
 	return api.ResolveTenant(tenantFlag, viper.GetString("tenant"), profile.DefaultTenant)
 }
+
+// validatePCMSLimit checks that limit does not exceed 100 for PCMS list endpoints
+// (which declare maximum: 100 in the OpenAPI spec). Call before making the HTTP
+// request; it exits with code 5 (VALIDATION_ERROR) on violation.
+// Pass limit=0 to skip the check (means "use server default").
+func validatePCMSLimit(limit int) {
+	const maxPCMSLimit = 100
+	if limit > maxPCMSLimit {
+		e := &api.APIError{
+			Code:       "VALIDATION_ERROR",
+			Message:    fmt.Sprintf("--limit must be at most %d for this command (got %d)", maxPCMSLimit, limit),
+			HTTPStatus: 400,
+		}
+		output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
+		os.Exit(api.ExitCodeFor(e))
+	}
+}

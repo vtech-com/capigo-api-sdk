@@ -59,6 +59,8 @@ Each brand in the response has: id, name, logo_url (string or null).`,
 			os.Exit(api.ExitCodeFor(e))
 		}
 
+		validatePCMSLimit(brandListLimit)
+
 		resp, err := client.ListBrands(ctx, tenant, brandListQuery, brandListPage, brandListLimit)
 		if err != nil {
 			return handleErr(err)

@@ -59,6 +59,8 @@ Each unit in the response has: id, name, abbreviation.`,
 			os.Exit(api.ExitCodeFor(e))
 		}
 
+		validatePCMSLimit(unitListLimit)
+
 		resp, err := client.ListUnits(ctx, tenant, unitListQuery, unitListPage, unitListLimit)
 		if err != nil {
 			return handleErr(err)
