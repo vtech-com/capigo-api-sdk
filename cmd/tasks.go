@@ -22,6 +22,7 @@ var taskCmd = &cobra.Command{
 // tasks list flags
 var (
 	taskListTenant       string
+	taskListQuery        string
 	taskListStatus       string
 	taskListParentTaskID string
 	taskListPage         int
@@ -47,6 +48,9 @@ var tasksListCmd = &cobra.Command{
 		tenant := resolveTenant(taskListTenant, profile)
 
 		params := url.Values{}
+		if taskListQuery != "" {
+			params.Set("q", taskListQuery)
+		}
 		if taskListStatus != "" {
 			params.Set("filters[status][$eq]", taskListStatus)
 		}
@@ -153,6 +157,7 @@ var (
 	taskCreateAssignee    string
 	taskCreateBoard       string
 	taskCreateList        string
+	taskCreateFollowerIDs []string
 )
 
 var tasksCreateCmd = &cobra.Command{
@@ -216,6 +221,9 @@ var tasksCreateCmd = &cobra.Command{
 		if taskCreateList != "" {
 			body.BoardListID = &taskCreateList
 		}
+		if len(taskCreateFollowerIDs) > 0 {
+			body.FollowerIDs = taskCreateFollowerIDs
+		}
 
 		// POST /mission/tasks: tenant_code is in the body; also send X-Tenant-Code header for consistency.
 		resp, err := client.Do(ctx, "POST", "/mission/tasks", body, tenant)
@@ -244,6 +252,7 @@ var tasksCreateCmd = &cobra.Command{
 func init() {
 	// tasks list flags
 	tasksListCmd.Flags().StringVar(&taskListTenant, "tenant", "", "scope to this tenant code")
+	tasksListCmd.Flags().StringVarP(&taskListQuery, "query", "q", "", "search by task title")
 	tasksListCmd.Flags().StringVar(&taskListStatus, "status", "", "filter by status")
 	tasksListCmd.Flags().StringVar(&taskListParentTaskID, "parent-task-id", "", "filter by parent task ID (use 'null' for top-level only)")
 	tasksListCmd.Flags().IntVar(&taskListPage, "page", 0, "page number")
@@ -262,6 +271,7 @@ func init() {
 	tasksCreateCmd.Flags().StringVar(&taskCreateAssignee, "assignee", "", "assignee user ID")
 	tasksCreateCmd.Flags().StringVar(&taskCreateBoard, "board", "", "board ID")
 	tasksCreateCmd.Flags().StringVar(&taskCreateList, "list", "", "board list ID")
+	tasksCreateCmd.Flags().StringArrayVar(&taskCreateFollowerIDs, "follower-id", nil, "follower user ID (repeatable: --follower-id <uuid> --follower-id <uuid>)")
 
 	taskCmd.AddCommand(tasksListCmd, tasksGetCmd, tasksCreateCmd)
 	rootCmd.AddCommand(taskCmd)

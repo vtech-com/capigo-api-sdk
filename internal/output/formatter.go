@@ -56,6 +56,14 @@ func init() {
 			},
 			idFn: func(v any) string { return v.(Board).ID },
 		},
+		"board_detail": {
+			headers: []string{"ID", "Title", "Lists"},
+			rowFn: func(v any) []any {
+				b := v.(BoardDetail)
+				return []any{b.ID, b.Title, b.ListCount}
+			},
+			idFn: func(v any) string { return v.(BoardDetail).ID },
+		},
 		"task": {
 			headers: []string{"ID", "Title", "Status", "Assignee"},
 			rowFn: func(v any) []any {
