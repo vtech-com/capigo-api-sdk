@@ -9,6 +9,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+---
+
+## [0.7.0] — 2026-06-04
+
 ### Added
 
 - `products get <id>` — `GET /pcms/products/{id}`: fetch a single product by UUID with full detail (variants, options, brand, category, product type, unit). Tenant required. Returns same shape as `products list` items. **UUID-addressed only.** Spec pre-staged from the monorepo `develop` branch ahead of prod deployment; will reconcile automatically on `make update-spec` after deploy.
