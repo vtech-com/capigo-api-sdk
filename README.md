@@ -15,7 +15,7 @@ capigo tasks list
 capigo tasks create --title "Fix login bug" --tenant acme
 
 # Pipe to jq for AI agent processing
-capigo tasks list --output json | jq '.[] | select(.status=="To-Do")'
+capigo tasks list --output json | jq '.data[] | select(.status=="To-Do")'
 ```
 
 ## Why Capigo CLI?
@@ -86,7 +86,7 @@ capigo tasks list --tenant acme
 capigo config set-default-tenant acme
 
 # 5. Use JSON output for AI agent or script consumption
-capigo tasks list --output json | jq '.[] | select(.status=="To-Do")'
+capigo tasks list --output json | jq '.data[] | select(.status=="To-Do")'
 ```
 
 ## Commands
@@ -344,7 +344,7 @@ capigo variants list --tenant acme --barcode-prefix 620111 --sort -barcode --lim
 
 ```
 CLI flag (--api-url, --tenant, …)
-  > Environment variable (CAPIGO_API_KEY, CAPIGO_API_URL, CAPIGO_TENANT, CAPIGO_PROFILE)
+  > Environment variable (CAPIGO_API_KEY, CAPIGO_API_URL, CAPIGO_TENANT)
     > Config file (~/.capigo/config.json)
 ```
 
@@ -382,6 +382,24 @@ capigo tasks create --title "New task" --tenant acme --output quiet
 # task_def456
 ```
 
+### JSON output contract
+
+When `--output json` is used, every command follows a stable machine-readable contract:
+
+| Command type | JSON shape | Notes |
+|---|---|---|
+| `list` commands | `{"data": [...], "meta": {"page", "limit", "total", "has_more"}}` | Full API objects, never stripped display models. `data` is always a JSON array (never `null`). `tenants list` returns zero-value `meta` (the endpoint provides no pagination metadata). |
+| Single-item commands (`get`, `create`, `update`, `replace`, `variants`, `auth whoami`, `auth login`) | `{...}` bare object | Full API object, no wrapper. (`auth login` emits `{"profile", "status"}`.) |
+
+Table mode uses human-friendly display models and is for human consumption only. Quiet mode emits the resource ID only (one per line). Only the JSON contract is stable for machine consumption.
+
+Skill authors: use `.data[]` to iterate list results, e.g.:
+
+```bash
+capigo tasks list --output json | jq '.data[] | select(.status=="To-Do")'
+capigo brands list --tenant acme --output json | jq '.data[].id'
+```
+
 ## Exit Codes
 
 AI agents should branch on exit code, **not** on error message text.
@@ -404,7 +422,7 @@ AI agents should branch on exit code, **not** on error message text.
 
 ```bash
 # List open tasks and filter with jq
-capigo --output json tasks list --tenant acme | jq '.[] | select(.status=="To-Do")'
+capigo --output json tasks list --tenant acme | jq '.data[] | select(.status=="To-Do")'
 ```
 
 ### LangChain / Python
@@ -417,7 +435,7 @@ result = subprocess.run(
     capture_output=True, text=True
 )
 if result.returncode == 0:
-    tasks = json.loads(result.stdout)
+    tasks = json.loads(result.stdout)["data"]
 elif result.returncode == 6:
     # Network error — retry
     ...

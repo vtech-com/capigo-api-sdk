@@ -66,6 +66,14 @@ var boardsListCmd = &cobra.Command{
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
+		if outputMode == "json" {
+			data := envelope.Data
+			if data == nil {
+				data = []api.Board{}
+			}
+			return output.WriteJSONList(os.Stdout, data, envelope.Meta)
+		}
+
 		items := make([]output.Board, len(envelope.Data))
 		for i, b := range envelope.Data {
 			desc := ""
@@ -136,9 +144,7 @@ tenant; if omitted, the API uses your active tenant context.`,
 		}
 
 		if outputMode == "json" {
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			return enc.Encode(envelope.Data)
+			return output.WriteJSONObject(os.Stdout, envelope.Data)
 		}
 
 		if err := output.Render(os.Stdout, outputMode, output.BoardDetail{
@@ -158,7 +164,7 @@ tenant; if omitted, the API uses your active tenant context.`,
 
 func init() {
 	boardsListCmd.Flags().StringVar(&boardListTenant, "tenant", "", "scope to this tenant code")
-	boardsListCmd.Flags().IntVar(&boardListPage, "page", 1, "page number")
+	boardsListCmd.Flags().IntVar(&boardListPage, "page", 0, "page number")
 	boardsListCmd.Flags().IntVar(&boardListLimit, "limit", 20, "items per page")
 
 	boardsGetCmd.Flags().StringVar(&boardGetTenant, "tenant", "", "scope to this tenant code")

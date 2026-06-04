@@ -15,10 +15,26 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - New-path detection guard (`cmd/openapi_path_coverage_test.go`): asserts that every path in `api/openapi.json` is listed in either `implementedPaths` (CLI wraps it) or `unimplementedPaths` (deliberately skipped, with rationale). Does NOT enforce 1:1 coverage — the CLI is a curated subset. Fails only when `make update-spec` pulls a new endpoint that is in neither set, requiring a conscious decision. Integrity checks prevent the allowlists from rotting: both sets must be disjoint, and every listed path must actually exist in the spec.
 - `tasks list` / `tasks get`: surface task `code` field (e.g. "TASK-123") in output. Added `Code string` to `output.Task`, populated it in `toOutputTask`, and added a `Code` column as the first column in the task table renderer (before Title). JSON and quiet modes unaffected (quiet still emits ID only).
 - `boards list`: surface `is_public` and `description` columns. Added `IsPublic bool` and `Description string` to `output.Board`, populated both in the `boards list` mapping, and added `Public` (rendered as "yes"/"no") and `Description` columns to the board table renderer. JSON mode already rendered the full `api.Board`; quiet mode (ID only) unaffected.
+- `internal/output.WriteJSONList(w, data, meta)`: shared helper that marshals `{"data":[...],"meta":{...}}` for every list command; forces `data` to `[]` when nil/empty.
+- `internal/output.WriteJSONObject(w, v)`: shared helper that marshals a bare object for every single-item command (get, create, update, replace).
+- `auth login --output json`: now emits `{"profile":"<name>","status":"logged_in"}` when `--output json` is set, instead of a human string.
+- README: added "JSON output contract" subsection documenting the stable machine-readable shape; updated all jq examples that assumed a bare array to use `.data[]`.
+
+### Changed
+
+- **Breaking (JSON shape):** All `list` commands (`tasks list`, `boards list`, `tenants list`, `brands list`, `categories list`, `product-types list`, `units list`, `variants list`, `products list`) now emit `{"data":[...],"meta":{...}}` in `--output json` mode, replacing the former bare JSON array. Callers must change `.[]` → `.data[]` in jq expressions and `json.loads(stdout)` → `json.loads(stdout)["data"]` in scripts.
+- `tasks get` / `tasks create`: JSON output now emits the bare full `api.Task` object (no array wrapper), consistent with all other single-item commands. Previously `tasks get` and `tasks create` routed through `output.Render` which wrapped the item in `[{...}]`.
+- `config set` / `config get` / `config set-default-tenant` / `config unset-default-tenant`: validation and not-found errors now exit with standard codes (5 / 4) via `output.RenderError`, and use UPPER_SNAKE error codes (`VALIDATION_ERROR`, `NOT_FOUND`, `CONFIG_LOAD_ERROR`, `CONFIG_SAVE_ERROR`). Previously these commands used `os.Exit(1)` with lowercase codes (`config_load_error`, `profile_not_found`, `unknown_key`).
+- `--page` default for `boards list`, `brands list`, `categories list`, `product-types list`, `units list`, `variants list` changed from `1` to `0` (meaning "omit → server default"), consistent with `tasks list` and `products list`. The existing `if page > 0` guard means the param is only sent when the flag is explicitly set.
+- `products list` / `products list --all`: JSON now uses the shared `WriteJSONList` helper (no behaviour change; logic extracted from the now-deleted `renderProductListJSON`).
+- `boards get`: JSON now uses the shared `WriteJSONObject` helper (no behaviour change; logic extracted from the inline `json.NewEncoder`).
+- `output.Render` now rejects `json` mode with an error directing callers to `WriteJSONList` / `WriteJSONObject`. Render is the human-facing (table/quiet) path; this enforces the JSON contract by making it impossible for a new command to silently emit the wrong (display-model array) shape. The dead `renderJSON` helper was removed.
 
 ### Removed
 
 - `internal/api/paginate.go` and `internal/api/paginate_test.go`: deleted `FetchAll[T]` and its test. The function was dead code — the only caller was its own test; the `products --all` path uses its own inline pagination loop in `cmd/products.go`. Removing the footgun eliminates a latent tenant-propagation bug (the dead `FetchAll` passed `nil` tenant unconditionally).
+- `renderProductJSON` and `renderProductListJSON` private helpers in `cmd/products.go` — replaced by the shared `output.WriteJSONObject` / `output.WriteJSONList`.
+- `CAPIGO_PROFILE` removed from the README configuration precedence table. The env var was never bound at runtime (the `--profile` flag and runtime profile override were removed in v0.4.0); documenting it was a doc bug.
 
 ---
 

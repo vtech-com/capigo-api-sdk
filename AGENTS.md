@@ -19,7 +19,7 @@ If you find yourself guessing at a rule (tenant headers, exit codes, output shap
 
 ## Repository state
 
-The repo is currently **pre-code**. There is no Go source yet — only specs and boilerplate. The plan to bring up the first working binary lives in `docs/tasks/0.1-implementation-plan.md`. Subsequent milestone plans will be added under `docs/tasks/` over time; treat the highest-numbered plan as the current scope of work.
+The repo is at **v0.5.0** with a full working Go CLI binary (`capigo`). All commands documented in the README are implemented and ship in production. New milestone plans are added under `docs/tasks/` over time; treat the highest-numbered plan as the current scope of work.
 
 ## Language
 

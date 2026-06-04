@@ -71,6 +71,14 @@ Each product type in the response has: id, name, description (string or null).`,
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
+		if outputMode == "json" {
+			data := envelope.Data
+			if data == nil {
+				data = []api.ProductType{}
+			}
+			return output.WriteJSONList(os.Stdout, data, envelope.Meta)
+		}
+
 		items := make([]output.ProductType, len(envelope.Data))
 		for i, pt := range envelope.Data {
 			items[i] = output.ProductType{
@@ -195,9 +203,7 @@ Response: { "data": { "id": "uuid", "name": "string", "description": "string|nul
 		}
 
 		if outputMode == "json" {
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			return enc.Encode(envelope.Data)
+			return output.WriteJSONObject(os.Stdout, envelope.Data)
 		}
 
 		return output.Render(os.Stdout, outputMode, output.ProductType{
@@ -306,9 +312,7 @@ Response: { "data": { "id": "uuid", "name": "string", "description": "string|nul
 		}
 
 		if outputMode == "json" {
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			return enc.Encode(envelope.Data)
+			return output.WriteJSONObject(os.Stdout, envelope.Data)
 		}
 
 		return output.Render(os.Stdout, outputMode, output.ProductType{
@@ -365,9 +369,7 @@ Response: { "data": { "id": "uuid", "name": "string", "description": "string|nul
 		}
 
 		if outputMode == "json" {
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			return enc.Encode(envelope.Data)
+			return output.WriteJSONObject(os.Stdout, envelope.Data)
 		}
 
 		return output.Render(os.Stdout, outputMode, output.ProductType{
@@ -478,9 +480,7 @@ Response: { "data": { "id": "uuid", "name": "string", "description": "string|nul
 		}
 
 		if outputMode == "json" {
-			enc := json.NewEncoder(os.Stdout)
-			enc.SetIndent("", "  ")
-			return enc.Encode(envelope.Data)
+			return output.WriteJSONObject(os.Stdout, envelope.Data)
 		}
 
 		return output.Render(os.Stdout, outputMode, output.ProductType{
@@ -494,7 +494,7 @@ Response: { "data": { "id": "uuid", "name": "string", "description": "string|nul
 func init() {
 	productTypesListCmd.Flags().StringVar(&productTypeListTenant, "tenant", "", "tenant code (required)")
 	productTypesListCmd.Flags().StringVarP(&productTypeListQuery, "query", "q", "", "name-contains filter (case-insensitive, max 200 chars)")
-	productTypesListCmd.Flags().IntVar(&productTypeListPage, "page", 1, "page number")
+	productTypesListCmd.Flags().IntVar(&productTypeListPage, "page", 0, "page number")
 	productTypesListCmd.Flags().IntVar(&productTypeListLimit, "limit", 20, "items per page (1-100)")
 
 	productTypesCreateCmd.Flags().StringVar(&productTypeCreateTenant, "tenant", "", "tenant code (required)")
