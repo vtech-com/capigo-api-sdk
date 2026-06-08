@@ -9,6 +9,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+---
+
+## [0.8.0] — 2026-06-08
+
 ### Added
 
 - `tasks comments <id>` — `GET /mission/tasks/{id}/comments`: list a task's conversation + activity timeline (human comments interleaved with system activity such as status/assignment/title/description/due-date/create events). Each entry carries a `kind` (`comment` for a person/agent message, `activity` for a system event), a resolved `author` (`{id, name, type}`; name never exposes email), flat `attachments` metadata, raw structured `ui_data`, `parent_id`, and `created_at`. Flags: `--type comment|activity` (default both), `--sort asc|desc` (default `desc`, newest first), `--page`, `--limit` (max 50), optional `--tenant`. A task with no comments yet returns an empty list (exit 0), not an error — the authoritative current status lives on the task itself (`tasks get`); this command provides the history/narrative. **UUID-addressed only.** Spec pre-staged from the monorepo `develop` branch ahead of prod deployment; the endpoint returns 404 until deployed, and will reconcile on `make update-spec` after deploy (at which point it joins the OpenAPI param-coverage guard).
