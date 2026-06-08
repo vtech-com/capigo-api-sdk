@@ -123,6 +123,17 @@ func init() {
 			},
 			idFn: func(v any) string { return v.(Task).ID },
 		},
+		"task_comment": {
+			// A timeline is read top-to-bottom, so Created leads. ID is a UUID with
+			// little human value and would crowd the wide Content column, so it is
+			// kept for quiet mode (idFn) but omitted from the table.
+			headers: []string{"Created", "Author", "Kind", "Content", "Files"},
+			rowFn: func(v any) []any {
+				c := v.(TaskComment)
+				return []any{c.Created, c.Author, c.Kind, c.Content, c.Attachments}
+			},
+			idFn: func(v any) string { return v.(TaskComment).ID },
+		},
 		"product": {
 			headers: []string{"ID", "Name", "Status", "SKU", "Price", "Variants"},
 			rowFn: func(v any) []any {

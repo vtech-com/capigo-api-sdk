@@ -41,6 +41,17 @@ type Task struct {
 	TenantCode string `json:"tenant_code,omitempty"`
 }
 
+// TaskComment is the display model for a single task comment / activity entry.
+// ID is carried for quiet mode but is not shown as a table column.
+type TaskComment struct {
+	ID          string `json:"id"`
+	Created     string `json:"created"`
+	Author      string `json:"author"`
+	Kind        string `json:"kind"`
+	Content     string `json:"content"`
+	Attachments int    `json:"attachments"`
+}
+
 // Product is the display model for a Capigo PCMS product.
 // SKU and Price are derived from the first variant for table display.
 // VariantCount holds the total number of variants for the Variants column.
