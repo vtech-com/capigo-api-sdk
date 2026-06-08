@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
@@ -152,6 +153,97 @@ var tasksGetCmd = &cobra.Command{
 			ResourceKind: "task",
 		}); err != nil {
 			return handleErr(err)
+		}
+
+		return nil
+	},
+}
+
+// tasks comments flags
+var (
+	taskCommentsTenant string
+	taskCommentsType   string
+	taskCommentsSort   string
+	taskCommentsPage   int
+	taskCommentsLimit  int
+)
+
+var tasksCommentsCmd = &cobra.Command{
+	Use:   "comments <id>",
+	Short: "List a task's comments and activity timeline",
+	Long: `List the conversation and activity timeline of a task: human comments
+interleaved with system activity (status, assignment, title, description,
+due-date and create events).
+
+Each entry has a "kind":
+  comment   a message typed by a person or an agent
+  activity  a system event (e.g. "X changed status from Doing to Done")
+
+Use --type comment or --type activity to return only one kind. Order is newest
+first by default; pass --sort asc for oldest first.
+
+A task that nobody has commented on yet returns an empty list (exit 0), not an
+error. The authoritative current status of a task lives on the task itself
+(tasks get) — this command provides the history/narrative.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		// Validate flag values client-side so we fail fast (exit 5) before any
+		// network call.
+		if e := validateCommentParams(taskCommentsType, taskCommentsSort, taskCommentsLimit); e != nil {
+			return handleErr(e)
+		}
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(taskCommentsTenant, profile)
+
+		path := commentsPath(args[0], taskCommentsType, taskCommentsSort, taskCommentsPage, taskCommentsLimit)
+
+		resp, err := client.Do(ctx, "GET", path, nil, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope api.Envelope[[]api.TaskComment]
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		if outputMode == "json" {
+			data := envelope.Data
+			if data == nil {
+				data = []api.TaskComment{}
+			}
+			return output.WriteJSONList(os.Stdout, data, envelope.Meta)
+		}
+
+		items := make([]output.TaskComment, len(envelope.Data))
+		for i, c := range envelope.Data {
+			items[i] = toOutputComment(c)
+		}
+
+		// Comments are scoped to a single task, so there is no tenant column even
+		// when the tenant was resolved implicitly.
+		if err := output.Render(os.Stdout, outputMode, items, output.RenderOpts{
+			GlobalMode:   false,
+			ResourceKind: "task_comment",
+		}); err != nil {
+			return handleErr(err)
+		}
+
+		if outputMode == "table" && envelope.Meta.HasMore {
+			fmt.Fprintf(os.Stderr, "Showing %d of %d. Use --page / --limit to paginate.\n",
+				len(envelope.Data), envelope.Meta.Total)
 		}
 
 		return nil
@@ -400,6 +492,13 @@ func init() {
 	// tasks get flags
 	tasksGetCmd.Flags().StringVar(&taskGetTenant, "tenant", "", "scope to this tenant code")
 
+	// tasks comments flags
+	tasksCommentsCmd.Flags().StringVar(&taskCommentsTenant, "tenant", "", "scope to this tenant code")
+	tasksCommentsCmd.Flags().StringVar(&taskCommentsType, "type", "", "filter by kind: comment | activity (default: both)")
+	tasksCommentsCmd.Flags().StringVar(&taskCommentsSort, "sort", "", "order by created_at: asc | desc (default: desc — newest first)")
+	tasksCommentsCmd.Flags().IntVar(&taskCommentsPage, "page", 0, "page number (1-based)")
+	tasksCommentsCmd.Flags().IntVar(&taskCommentsLimit, "limit", 0, "items per page (max 50)")
+
 	// tasks update flags
 	tasksUpdateCmd.Flags().StringVar(&taskUpdateTenant, "tenant", "", "scope to this tenant code")
 	tasksUpdateCmd.Flags().StringVar(&taskUpdateTitle, "title", "", "new task title")
@@ -422,7 +521,7 @@ func init() {
 	tasksCreateCmd.Flags().StringVar(&taskCreateList, "list", "", "board list ID")
 	tasksCreateCmd.Flags().StringArrayVar(&taskCreateFollowerIDs, "follower-id", nil, "follower user ID (repeatable: --follower-id <uuid> --follower-id <uuid>)")
 
-	taskCmd.AddCommand(tasksListCmd, tasksGetCmd, tasksUpdateCmd, tasksCreateCmd)
+	taskCmd.AddCommand(tasksListCmd, tasksGetCmd, tasksCommentsCmd, tasksUpdateCmd, tasksCreateCmd)
 	rootCmd.AddCommand(taskCmd)
 }
 
@@ -439,4 +538,91 @@ func toOutputTask(t api.Task) output.Task {
 		Status:   t.Status,
 		Assignee: assignee,
 	}
+}
+
+// toOutputComment converts an api.TaskComment to an output.TaskComment for
+// table/quiet rendering. The full, unmodified content and structured ui_data are
+// only available in json mode; the table content is flattened to one line and
+// truncated for readability.
+func toOutputComment(c api.TaskComment) output.TaskComment {
+	content := ""
+	if c.Content != nil {
+		content = flattenForTable(*c.Content, 100)
+	}
+	return output.TaskComment{
+		ID:          c.ID,
+		Created:     c.CreatedAt,
+		Author:      c.Author.Name,
+		Kind:        c.Kind,
+		Content:     content,
+		Attachments: len(c.Attachments),
+	}
+}
+
+// flattenForTable collapses whitespace runs (newlines/tabs) into single spaces
+// and truncates to max runes with an ellipsis, so free-form comment text does
+// not break table layout. Display-only: json mode returns the raw content.
+func flattenForTable(s string, max int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	r := []rune(s)
+	if len(r) > max {
+		return string(r[:max-1]) + "…"
+	}
+	return s
+}
+
+// commentMaxLimit mirrors the server's pagination cap for this endpoint
+// (parsePagination rejects limit > 50); validated client-side for fast feedback.
+const commentMaxLimit = 50
+
+// validateCommentParams checks the enum and pagination flags for
+// `tasks comments`. Returns nil when valid, or a VALIDATION_ERROR APIError
+// (HTTP 400 → exit 5) describing the first offending flag.
+func validateCommentParams(typeFlag, sortFlag string, limit int) *api.APIError {
+	if typeFlag != "" && typeFlag != "comment" && typeFlag != "activity" {
+		return &api.APIError{
+			Code:       "VALIDATION_ERROR",
+			Message:    "--type must be 'comment' or 'activity'",
+			HTTPStatus: 400,
+		}
+	}
+	if sortFlag != "" && sortFlag != "asc" && sortFlag != "desc" {
+		return &api.APIError{
+			Code:       "VALIDATION_ERROR",
+			Message:    "--sort must be 'asc' or 'desc'",
+			HTTPStatus: 400,
+		}
+	}
+	if limit > commentMaxLimit {
+		return &api.APIError{
+			Code:       "VALIDATION_ERROR",
+			Message:    fmt.Sprintf("--limit must be at most %d (got %d)", commentMaxLimit, limit),
+			HTTPStatus: 400,
+		}
+	}
+	return nil
+}
+
+// commentsPath builds the request path + query string for `tasks comments`.
+// Empty/zero flag values are omitted so the server applies its own defaults.
+func commentsPath(id, typeFlag, sortFlag string, page, limit int) string {
+	params := url.Values{}
+	if typeFlag != "" {
+		params.Set("type", typeFlag)
+	}
+	if sortFlag != "" {
+		params.Set("sort", sortFlag)
+	}
+	if page > 0 {
+		params.Set("page", strconv.Itoa(page))
+	}
+	if limit > 0 {
+		params.Set("limit", strconv.Itoa(limit))
+	}
+
+	path := "/mission/tasks/" + id + "/comments"
+	if len(params) > 0 {
+		path += "?" + params.Encode()
+	}
+	return path
 }

@@ -78,6 +78,37 @@ type Task struct {
 	UpdatedAt    string    `json:"updated_at"`
 }
 
+// CommentAuthor is the resolved author of a task comment / activity entry.
+// Name follows the server's resolution chain (member display_name → agent name →
+// "System"); the email is never exposed.
+type CommentAuthor struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Type string `json:"type"` // "user" | "agent"
+}
+
+// CommentAttachment is flat attachment metadata on a task comment.
+type CommentAttachment struct {
+	ID        string `json:"id"`
+	FileName  string `json:"file_name"`
+	MimeType  string `json:"mime_type"`
+	SizeBytes int64  `json:"size_bytes"`
+}
+
+// TaskComment represents a PublicTaskCommentResponse from
+// GET /mission/tasks/{id}/comments. It is a read-only projection of a thread
+// message: either a human "comment" or a system "activity" event.
+type TaskComment struct {
+	ID          string              `json:"id"`
+	Author      CommentAuthor       `json:"author"`
+	Kind        string              `json:"kind"` // comment | activity | card | artifact
+	Content     *string             `json:"content"`
+	UIData      map[string]any      `json:"ui_data"`
+	Attachments []CommentAttachment `json:"attachments"`
+	ParentID    *string             `json:"parent_id"`
+	CreatedAt   string              `json:"created_at"`
+}
+
 // CreateTaskRequest is the body for POST /mission/tasks.
 // tenant_code is required and is sent as a body field (not a header).
 type CreateTaskRequest struct {

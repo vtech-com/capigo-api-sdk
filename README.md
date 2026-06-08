@@ -106,6 +106,7 @@ capigo tenants list      List tenants you can access
 
 capigo tasks list           List tasks (supports --query/-q, --status, --page, --limit)
 capigo tasks get <id>       Get task by ID
+capigo tasks comments <id>  List a task's comment + activity timeline (--type comment|activity, --sort asc|desc, --page, --limit)
 capigo tasks update <id>    Partial update a task (PATCH; --tenant optional; at least one field required)
 capigo tasks create         Create a new task (--title required; --tenant required; --follower-id repeatable)
 
