@@ -12,8 +12,14 @@ LDFLAGS := -ldflags "\
 
 DIST_DIR := dist
 BINARY   := $(DIST_DIR)/capigo
+SKILL_ZIP := $(DIST_DIR)/capigo-api-skill.zip
 
-.PHONY: build test lint release-snapshot install clean update-spec skill-package
+# Tấm openclaw host — override on the command line if the SSH alias/path differ,
+# e.g. `make skill-install-tam TAM_HOST=other-host`.
+TAM_HOST       ?= vtech:tam
+TAM_SKILLS_DIR ?= ~/.openclaw/plugin-skills
+
+.PHONY: build test lint release-snapshot install clean update-spec skill-package skill-install-tam
 
 ## update-spec: Fetch latest OpenAPI spec from Capigo platform
 update-spec:
@@ -23,8 +29,15 @@ update-spec:
 ## skill-package: Zip the bundled agent skill for distribution (openclaw / other hosts)
 skill-package:
 	@mkdir -p $(DIST_DIR)
-	cd skills && zip -r ../$(DIST_DIR)/capigo-api-skill.zip capigo-api -x '*.DS_Store'
-	@echo "Packaged skill at $(DIST_DIR)/capigo-api-skill.zip"
+	@rm -f $(SKILL_ZIP)
+	cd skills && zip -r ../$(SKILL_ZIP) capigo-api -x '*.DS_Store'
+	@echo "Packaged skill at $(SKILL_ZIP)"
+
+## skill-install-tam: Package and install the skill onto the Tấm openclaw host (idempotent)
+skill-install-tam: skill-package
+	ssh $(TAM_HOST) 'cat > /tmp/capigo-api-skill.zip' < $(SKILL_ZIP)
+	ssh $(TAM_HOST) 'rm -rf $(TAM_SKILLS_DIR)/capigo-api && mkdir -p $(TAM_SKILLS_DIR) && unzip -oq /tmp/capigo-api-skill.zip -d $(TAM_SKILLS_DIR) && rm -f /tmp/capigo-api-skill.zip'
+	@echo "Installed capigo-api skill to $(TAM_HOST):$(TAM_SKILLS_DIR)/capigo-api"
 
 build:
 	@mkdir -p $(DIST_DIR)
