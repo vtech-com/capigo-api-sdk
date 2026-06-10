@@ -468,6 +468,29 @@ CAPIGO_TENANT=acme \
 capigo tasks list --output json
 ```
 
+### Bundled agent skill
+
+This repo ships an agent **skill** under [`skills/capigo-api/`](./skills/capigo-api/) — a
+self-contained guide (`SKILL.md` + `references/`) that teaches an AI agent how to drive the
+`capigo` CLI correctly: auth, tenant handling, exit codes, output modes, and the PCMS
+catalogue workflows (Product Code / Barcode generation, Brands, Product Types, sync checks).
+
+It is meant to be consumed by skill-aware agent runtimes. Because the skill lives next to the
+CLI it documents, anyone with access to this repo (including partners using the public API with
+their own auth token) gets the same operating instructions the CLI author intended — no need to
+reverse-engineer raw API calls.
+
+```bash
+# Package the skill into a distributable zip (dist/capigo-api-skill.zip)
+make skill-package
+
+# Example: install into an openclaw host
+unzip dist/capigo-api-skill.zip -d ~/.openclaw/plugin-skills/
+```
+
+The skill content is location-independent (all internal links are relative), so it works the
+same whether read in-repo, unzipped into an agent runtime, or browsed on GitHub.
+
 ## API Reference
 
 OpenAPI spec: [`api/openapi.json`](./api/openapi.json)

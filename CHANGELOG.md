@@ -9,6 +9,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Bundled agent skill `skills/capigo-api/` — a self-contained `SKILL.md` + `references/` guide that teaches an AI agent how to operate the `capigo` CLI (auth, tenant handling, exit codes, output modes, PCMS catalogue workflows incl. Product Code / Barcode generation). The skill ships alongside the CLI it documents so anyone with repo access — including partners using the public API with their own token — gets the intended operating instructions. New `make skill-package` target zips it to `dist/capigo-api-skill.zip` for distribution to skill-aware runtimes (e.g. openclaw). README **AI Agent Integration** section documents usage.
+
 ---
 
 ## [0.8.0] — 2026-06-08
