@@ -13,12 +13,18 @@ LDFLAGS := -ldflags "\
 DIST_DIR := dist
 BINARY   := $(DIST_DIR)/capigo
 
-.PHONY: build test lint release-snapshot install clean update-spec
+.PHONY: build test lint release-snapshot install clean update-spec skill-package
 
 ## update-spec: Fetch latest OpenAPI spec from Capigo platform
 update-spec:
 	curl -fsSL https://platform.capigo.app/api/openapi -o api/openapi.json
 	@echo "Updated api/openapi.json from https://platform.capigo.app/api/openapi"
+
+## skill-package: Zip the bundled agent skill for distribution (openclaw / other hosts)
+skill-package:
+	@mkdir -p $(DIST_DIR)
+	cd skills && zip -r ../$(DIST_DIR)/capigo-api-skill.zip capigo-api -x '*.DS_Store'
+	@echo "Packaged skill at $(DIST_DIR)/capigo-api-skill.zip"
 
 build:
 	@mkdir -p $(DIST_DIR)
