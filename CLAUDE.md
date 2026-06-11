@@ -19,7 +19,15 @@ If you find yourself guessing at a rule (tenant headers, exit codes, output shap
 
 ## Repository state
 
-The repo is at **v0.5.0** with a full working Go CLI binary (`capigo`). All commands documented in the README are implemented and ship in production. New milestone plans are added under `docs/tasks/` over time; treat the highest-numbered plan as the current scope of work.
+The repo ships a full working Go CLI binary (`capigo`). All commands documented in the README are implemented and ship in production. **Do not trust any hardcoded version number in prose — the current version is the latest tag (`git tag --sort=-creatordate | head -1`) and the top dated entry in `CHANGELOG.md`.** New milestone plans are added under `docs/tasks/` over time; treat the highest-numbered plan as the current scope of work.
+
+## Agent ergonomics — output design rule
+
+The primary consumer of this CLI is an AI agent (Tấm, DeepSeek-based) that reads **stdout** and routinely forgets its instruction skill. Settled principle: **truth must be salient on stdout** — totals, the resolved tenant, deleted state, partial/incomplete results, and missing-ID reconciliation are printed where the agent actually looks (table-mode stdout footers/lines, plus additive JSON `meta` fields), never only on stderr, in an exit code, or in documentation. When changing any command's output, ask: *if an agent read only stdout, could it reach a confidently wrong conclusion?* If yes, fix the output, not the manual. (Background: a stderr-only pagination nudge made the agent report a 43-brand tenant as "20" — see CHANGELOG v0.11.0–v0.13.0.)
+
+## Bundled skill stays in sync
+
+`skills/capigo-api/` is the agent-facing operating manual for this CLI and is distributed straight from this repo (`npx skills add vtech-com/capigo-api-sdk --skill capigo-api`). **Any PR that changes CLI behavior (flags, output, exit semantics) must update the skill in the same PR** — a skill that describes the binary wrongly is itself a bug, and no CI check catches the drift.
 
 ## Language
 
