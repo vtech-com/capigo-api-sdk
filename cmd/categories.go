@@ -96,10 +96,13 @@ Each category in the response has: id, name, parent_id (uuid or null for root).`
 		}
 
 		if outputMode == "table" {
-			if envelope.Meta.HasMore {
-				fmt.Fprintf(os.Stderr, "Showing %d of %d. Use --page / --limit to paginate.\n",
-					len(envelope.Data), envelope.Meta.Total)
-			}
+			output.WriteListSummary(os.Stdout, output.ListSummary{
+				Shown:   len(envelope.Data),
+				Page:    envelope.Meta.Page,
+				Limit:   envelope.Meta.Limit,
+				Total:   envelope.Meta.Total,
+				HasMore: envelope.Meta.HasMore,
+			})
 		}
 
 		return nil

@@ -173,10 +173,14 @@ Use --ids to fetch specific products by UUID (comma-separated, max 50).
 		}
 
 		if outputMode == "table" {
-			if envelope.Meta.HasMore {
-				fmt.Fprintf(os.Stderr, "Showing %d of %d. Use --page / --limit to paginate, or --all.\n",
-					len(envelope.Data), envelope.Meta.Total)
-			}
+			output.WriteListSummary(os.Stdout, output.ListSummary{
+				Shown:   len(envelope.Data),
+				Page:    envelope.Meta.Page,
+				Limit:   envelope.Meta.Limit,
+				Total:   envelope.Meta.Total,
+				HasMore: envelope.Meta.HasMore,
+				HintAll: true,
+			})
 		}
 
 		return nil
@@ -253,6 +257,16 @@ func productsListAll(ctx context.Context, client *api.Client, tenant *string) er
 		ResourceKind: "product",
 	}); err != nil {
 		return handleErr(err)
+	}
+
+	if outputMode == "table" {
+		output.WriteListSummary(os.Stdout, output.ListSummary{
+			Shown:   len(allProducts),
+			Page:    1,
+			Limit:   len(allProducts),
+			Total:   len(allProducts),
+			HasMore: false,
+		})
 	}
 
 	return nil
