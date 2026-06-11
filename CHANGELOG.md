@@ -11,6 +11,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- The bundled `capigo-api` skill is now scoped to **CLI mechanics only** — auth, tenant handling, exit codes, output modes, and the full command surface (`SKILL.md` + `references/cli_basics.md`). The organisation-specific catalogue policy it previously carried (Product Code / Barcode generation rules, brand decision trees, `coding_references` governance, and the manage_product / manage_brand / manage_product_type / sync_check workflows) moved to the internal `manage-capigo-product` skill in `vtech-com/agent-skills`, which layers on top of this skill. Rationale: the SDK skill is public and partner-facing; how a given organisation codes its catalogue is policy, not CLI usage.
 - Skill install is now solely via the [`skills`](https://github.com/vercel-labs/skills) CLI: `npx skills add vtech-com/capigo-api-sdk --skill capigo-api` pulls the skill straight from this repo into any supported agent (Claude Code, Cursor, Codex, OpenCode, …) with no extra infrastructure. Dropped the release-asset `curl`/`unzip` fallback and the release-workflow step that attached `capigo-api-skill.zip` to each release — the `skills` CLI reads the repo directly, so no published artifact is needed. `make skill-package` / `skill-install-tam` remain for the internal Tấm host and manual copies.
 
 ---
