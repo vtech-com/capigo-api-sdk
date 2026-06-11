@@ -11,7 +11,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- Skill install docs now lead with the [`skills`](https://github.com/vercel-labs/skills) CLI: `npx skills add vtech-com/capigo-api-sdk --skill capigo-api` pulls the skill straight from this repo into any supported agent (Claude Code, Cursor, Codex, OpenCode, …) with no extra infrastructure. The release-asset `curl`/`unzip` path is kept as a no-`skills`-CLI fallback.
+- Skill install is now solely via the [`skills`](https://github.com/vercel-labs/skills) CLI: `npx skills add vtech-com/capigo-api-sdk --skill capigo-api` pulls the skill straight from this repo into any supported agent (Claude Code, Cursor, Codex, OpenCode, …) with no extra infrastructure. Dropped the release-asset `curl`/`unzip` fallback and the release-workflow step that attached `capigo-api-skill.zip` to each release — the `skills` CLI reads the repo directly, so no published artifact is needed. `make skill-package` / `skill-install-tam` remain for the internal Tấm host and manual copies.
 
 ---
 

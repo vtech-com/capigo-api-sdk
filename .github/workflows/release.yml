@@ -36,13 +36,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
 
-      - name: Attach agent skill to release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          make skill-package
-          gh release upload "${GITHUB_REF_NAME}" dist/capigo-api-skill.zip --clobber
-
       - name: Remove stale Formula from tap (Cask is canonical)
         env:
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
