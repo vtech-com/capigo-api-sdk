@@ -480,9 +480,25 @@ CLI it documents, anyone with access to this repo (including partners using the 
 their own auth token) gets the same operating instructions the CLI author intended — no need to
 reverse-engineer raw API calls.
 
-**Install it** into your agent runtime. Set `SKILLS_DIR` to wherever that runtime loads skills
-from, then download the latest release asset and unzip it. The install is idempotent — it
-clears the old copy first so a removed reference file can't linger:
+**Install it** with the [`skills`](https://github.com/vercel-labs/skills) CLI, which pulls the
+skill straight from this repo and drops it into your agent's skills directory (Claude Code,
+Cursor, Codex, OpenCode, and many more):
+
+```bash
+npx skills add vtech-com/capigo-api-sdk --skill capigo-api
+```
+
+Add `-g` to install at user level (e.g. `~/.claude/skills/`) instead of per-project, `-a <agent>`
+to target a specific agent, or `--list` to see the available skills without installing. `--skill`
+matches the `name` in the skill's frontmatter; the tool discovers it under `skills/capigo-api/`
+automatically.
+
+<details>
+<summary>No <code>skills</code> CLI? Install from the release asset</summary>
+
+Set `SKILLS_DIR` to wherever your runtime loads skills from, then download the latest release
+asset and unzip it. Idempotent — clears the old copy first so a removed reference file can't
+linger:
 
 ```bash
 SKILLS_DIR=~/.openclaw/plugin-skills   # adjust to your runtime's skills directory
@@ -493,9 +509,10 @@ curl -fsSL -o capigo-api-skill.zip \
 rm -rf "$SKILLS_DIR/capigo-api"
 unzip -oq capigo-api-skill.zip -d "$SKILLS_DIR/"
 ```
+</details>
 
 The skill content is location-independent (all internal links are relative), so it works the
-same whether unzipped into an agent runtime, read in-repo, or browsed on GitHub. (Contributors:
+same whether installed into an agent runtime, read in-repo, or browsed on GitHub. (Contributors:
 see [CONTRIBUTING.md](CONTRIBUTING.md) for the `make skill-package` / `skill-install-tam`
 development targets.)
 
