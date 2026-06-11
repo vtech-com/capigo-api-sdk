@@ -16,6 +16,7 @@ need; `../SKILL.md` already covers the high-level rules.
 - [Config](#config)
 - [Tenants and tenant scoping](#tenants-and-tenant-scoping)
 - [Output modes and global flags](#output-modes-and-global-flags)
+- [Pagination](#pagination)
 - [Environment variables](#environment-variables)
 - [Passing JSON input (`--from-json`)](#passing-json-input---from-json)
 - [Command reference](#command-reference)
@@ -121,13 +122,49 @@ capigo tenants list --output json
 - **`table`** — human-readable, for display only. Don't parse it.
 - **`json`** — machine-readable. Use this for anything you'll read programmatically. **JSON
   contract (stable as of v0.6):** every `list` command emits `{"data":[…],"meta":{…}}` — read
-  the array at `.data[]`, not the top level. Single-item commands (`get`, `create`, `update`,
-  `replace`) emit the **bare object** (no array wrapper). So: `… products list -o json | jq
-  '.data[]'` but `… products get <id> -o json | jq '.name'`.
+  the array at `.data[]`, not the top level. The `meta` object carries pagination — see
+  [Pagination](#pagination) below; **one call is not the whole result set**. Single-item
+  commands (`get`, `create`, `update`, `replace`) emit the **bare object** (no array wrapper).
+  So: `… products list -o json | jq '.data[]'` but `… products get <id> -o json | jq '.name'`.
 - **`quiet`** — prints just the resource ID, handy for shell piping.
 
 `products list` also prints the server timestamp to **stderr** (`Server time: …`); feed it
 back as `--updated-since` for incremental delta sync.
+
+## Pagination
+
+**Every `list` command is paginated. A single call returns at most one page — by default 20
+rows (`--limit`, max 100), *not* the whole collection.** This is the single most common way an
+agent goes wrong: it runs `products list`, gets 20 rows, and concludes "that's everything" —
+so a record on page 2 looks like it doesn't exist, and a uniqueness/duplicate check passes
+when it shouldn't.
+
+Read the truth from the `meta` object every `list` returns:
+
+```json
+{ "data": [ … ], "meta": { "page": 1, "limit": 20, "total": 137, "has_more": true } }
+```
+
+- **`has_more`** — `true` means there are more pages. This is your signal to keep going.
+- **`total`** — the full count across all pages, regardless of the current page size.
+- **`page` / `limit`** — where you are and how many per page.
+
+How to get a complete result set:
+
+- **`products list` has `--all`** — it auto-paginates internally and streams every row.
+  Prefer it whenever you need the full catalogue (e.g. alias/Product-Code checks):
+  `capigo --tenant acme products list --all --output json | jq '.data[]'`.
+- **Every other `list`** (`tasks`, `boards`, `members`, `brands`, `categories`,
+  `product-types`, `units`, `variants`) has **no `--all`** — page manually: start at
+  `--page 1`, and while `meta.has_more` is `true`, request the next `--page`. Raising
+  `--limit` to 100 cuts the number of round-trips.
+
+> **In table mode** the CLI nudges you on stderr — `Showing 20 of 137. Use --page / --limit to
+> paginate.` (and `, or --all` for products). **In JSON mode there is no such nudge** — the
+> agent path is JSON, so *you* must inspect `meta.has_more` yourself. Never treat a first page
+> as complete when the answer depends on the full set (does X exist? is this code/alias/barcode
+> already taken? how many of Y are there?). Either narrow with `--query`/`--ids` until the
+> result fits one page, or page to the end.
 
 ## Environment variables
 

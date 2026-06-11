@@ -9,6 +9,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `capigo-api` skill now documents pagination explicitly. Previously it mentioned `--page`/`--limit`/`--all` only in passing, so an agent could run a `list`, see the first 20 rows, and treat them as the complete set — silently breaking uniqueness/existence checks. Added a **Pagination** section to `cli_basics.md` (the `meta.has_more`/`total` signal, `--all` is `products`-only, and the key caveat that JSON mode gives no stderr "Showing N of M" nudge so the agent must check `meta` itself), plus a fundamentals bullet in `SKILL.md` and a pagination caveat on the collision-check write-hygiene rule.
+
 ---
 
 ## [0.10.0] — 2026-06-11
