@@ -480,37 +480,24 @@ CLI it documents, anyone with access to this repo (including partners using the 
 their own auth token) gets the same operating instructions the CLI author intended — no need to
 reverse-engineer raw API calls.
 
-**Get the skill** one of three ways:
+**Install it** into your agent runtime. Set `SKILLS_DIR` to wherever that runtime loads skills
+from, then download the latest release asset and unzip it. The install is idempotent — it
+clears the old copy first so a removed reference file can't linger:
 
 ```bash
-# 1. Build the zip locally from a checkout
-make skill-package          # → dist/capigo-api-skill.zip
+SKILLS_DIR=~/.openclaw/plugin-skills   # adjust to your runtime's skills directory
 
-# 2. Download the per-version asset attached to a GitHub release (no clone needed)
 curl -fsSL -o capigo-api-skill.zip \
   https://github.com/vtech-com/capigo-api-sdk/releases/latest/download/capigo-api-skill.zip
 
-# 3. Just read it in the repo — skills/capigo-api/SKILL.md
-```
-
-**Install into a skill-aware runtime** (idempotent — clears the old copy first so a removed
-reference file can't linger):
-
-```bash
-rm -rf ~/.openclaw/plugin-skills/capigo-api
-unzip -oq capigo-api-skill.zip -d ~/.openclaw/plugin-skills/
-```
-
-For the internal Tấm openclaw host this is wrapped in one command (packages, copies over SSH,
-and reinstalls idempotently):
-
-```bash
-make skill-install-tam                      # uses TAM_HOST=vtech:tam by default
-make skill-install-tam TAM_HOST=other-host  # override target host
+rm -rf "$SKILLS_DIR/capigo-api"
+unzip -oq capigo-api-skill.zip -d "$SKILLS_DIR/"
 ```
 
 The skill content is location-independent (all internal links are relative), so it works the
-same whether read in-repo, unzipped into an agent runtime, or browsed on GitHub.
+same whether unzipped into an agent runtime, read in-repo, or browsed on GitHub. (Contributors:
+see [CONTRIBUTING.md](CONTRIBUTING.md) for the `make skill-package` / `skill-install-tam`
+development targets.)
 
 ## API Reference
 

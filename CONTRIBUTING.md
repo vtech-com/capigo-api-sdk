@@ -52,12 +52,14 @@ make build
 ### Common make targets
 
 ```bash
-make build       # Build binary to ./dist/capigo
-make test        # Run unit tests
-make lint        # Run golangci-lint
-make fmt         # Format code (gofmt + goimports)
-make check       # lint + test (run before pushing)
-make clean       # Remove build artifacts
+make build           # Build binary to ./dist/capigo
+make test            # Run unit tests
+make lint            # Run golangci-lint
+make fmt             # Format code (gofmt + goimports)
+make check           # lint + test (run before pushing)
+make clean           # Remove build artifacts
+make skill-package   # Zip the bundled agent skill to ./dist/capigo-api-skill.zip
+make skill-install-tam  # Package + install the skill onto the Tấm openclaw host over SSH
 ```
 
 ### Running against a local API
@@ -65,6 +67,19 @@ make clean       # Remove build artifacts
 ```bash
 CAPIGO_API_URL=http://localhost:3999 ./dist/capigo tasks list
 ```
+
+### Working on the bundled agent skill
+
+The `skills/capigo-api/` skill ships with every release. End users install it from the release
+asset (see the README's **Bundled agent skill** section) — these targets are for development:
+
+- `make skill-package` zips the skill to `dist/capigo-api-skill.zip` (idempotent).
+- `make skill-install-tam` packages and installs it onto the internal Tấm openclaw host over
+  SSH, idempotently. Override the target with `TAM_HOST` / `TAM_SKILLS_DIR`, e.g.
+  `make skill-install-tam TAM_HOST=other-host`.
+
+Publishing is automatic: the release workflow attaches `capigo-api-skill.zip` to each GitHub
+release, so there's no manual upload step.
 
 ---
 
