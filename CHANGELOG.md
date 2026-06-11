@@ -9,6 +9,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+---
+
+## [0.10.0] — 2026-06-11
+
 ### Changed
 
 - The bundled `capigo-api` skill is now scoped to **CLI mechanics only** — auth, tenant handling, exit codes, output modes, and the full command surface (`SKILL.md` + `references/cli_basics.md`). The organisation-specific catalogue policy it previously carried (Product Code / Barcode generation rules, brand decision trees, `coding_references` governance, and the manage_product / manage_brand / manage_product_type / sync_check workflows) moved to the internal `manage-capigo-product` skill in `vtech-com/agent-skills`, which layers on top of this skill. Rationale: the SDK skill is public and partner-facing; how a given organisation codes its catalogue is policy, not CLI usage.
