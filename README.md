@@ -480,9 +480,18 @@ CLI it documents, anyone with access to this repo (including partners using the 
 their own auth token) gets the same operating instructions the CLI author intended — no need to
 reverse-engineer raw API calls.
 
-**Install it** into your agent runtime. Set `SKILLS_DIR` to wherever that runtime loads skills
-from, then download the latest release asset and unzip it. The install is idempotent — it
-clears the old copy first so a removed reference file can't linger:
+**Install it** into your agent runtime. Point `--dir` at wherever that runtime loads skills from;
+the skill lands at `<dir>/capigo-api`. The install is idempotent — it replaces any existing copy
+so a removed reference file can't linger.
+
+```bash
+npx @vtech-com/capigo-skill@latest --dir ~/.openclaw/plugin-skills
+```
+
+Pin a version (`@0.9.0`) to match a specific CLI release. Requires Node ≥ 16.7.
+
+<details>
+<summary>No Node? Install from the release asset instead</summary>
 
 ```bash
 SKILLS_DIR=~/.openclaw/plugin-skills   # adjust to your runtime's skills directory
@@ -493,9 +502,10 @@ curl -fsSL -o capigo-api-skill.zip \
 rm -rf "$SKILLS_DIR/capigo-api"
 unzip -oq capigo-api-skill.zip -d "$SKILLS_DIR/"
 ```
+</details>
 
 The skill content is location-independent (all internal links are relative), so it works the
-same whether unzipped into an agent runtime, read in-repo, or browsed on GitHub. (Contributors:
+same whether installed into an agent runtime, read in-repo, or browsed on GitHub. (Contributors:
 see [CONTRIBUTING.md](CONTRIBUTING.md) for the `make skill-package` / `skill-install-tam`
 development targets.)
 

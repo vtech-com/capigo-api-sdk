@@ -1,0 +1,32 @@
+{
+  "name": "@vtech-com/capigo-skill",
+  "version": "0.0.0",
+  "description": "One-command installer for the capigo-api agent skill — teaches an AI agent to drive the Capigo CLI (auth, tenants, PCMS catalogue, Product Code / Barcode generation).",
+  "bin": {
+    "capigo-skill": "bin/install.js"
+  },
+  "files": [
+    "bin",
+    "skill"
+  ],
+  "engines": {
+    "node": ">=16.7"
+  },
+  "keywords": [
+    "capigo",
+    "agent",
+    "skill",
+    "ai",
+    "cli"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/vtech-com/capigo-api-sdk/tree/main/skills/capigo-api",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vtech-com/capigo-api-sdk.git",
+    "directory": "npm"
+  },
+  "bugs": {
+    "url": "https://github.com/vtech-com/capigo-api-sdk/issues"
+  }
+}

@@ -79,7 +79,11 @@ asset (see the README's **Bundled agent skill** section) — these targets are f
   `make skill-install-tam TAM_HOST=other-host`.
 
 Publishing is automatic: the release workflow attaches `capigo-api-skill.zip` to each GitHub
-release, so there's no manual upload step.
+release, and (when the `NPM_TOKEN` secret is set) publishes the `npm/` installer package
+`@vtech-com/capigo-skill` so end users can run `npx @vtech-com/capigo-skill --dir <path>`. The
+skill markdown is copied into `npm/skill/` at publish time — `npm/skill/` is gitignored, and
+`skills/capigo-api/` stays the single canonical source. Bump nothing by hand: the package
+version is derived from the release tag.
 
 ---
 

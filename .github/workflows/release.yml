@@ -60,3 +60,34 @@ jobs:
           else
             echo "capigo.rb not found in tap, nothing to delete"
           fi
+
+  publish-skill-npm:
+    name: Publish skill to npm
+    runs-on: ubuntu-latest
+    needs: release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Build payload, version, and publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "NPM_TOKEN secret not set — skipping npm publish."
+            exit 0
+          fi
+          # Copy the canonical skill into the npm package payload (gitignored).
+          rm -rf npm/skill
+          mkdir -p npm/skill
+          cp -r skills/capigo-api npm/skill/capigo-api
+          # Version the package to match the release tag (strip leading "v").
+          cd npm
+          npm version --no-git-tag-version --allow-same-version "${GITHUB_REF_NAME#v}"
+          npm publish --access public

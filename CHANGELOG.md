@@ -9,6 +9,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- npm installer for the bundled skill: `npx @vtech-com/capigo-skill --dir <path>` installs the `capigo-api` skill into a runtime's skills directory in one command (idempotent — replaces any existing copy). The package (`npm/`) is a dependency-free Node bin script; the skill markdown is copied in from the canonical `skills/capigo-api/` at publish time. The release workflow publishes it to npm when the `NPM_TOKEN` secret is set, versioned to match the release tag. README documents `npx` as the primary install, with the release-asset `curl`/`unzip` path kept as a no-Node fallback.
+
 ---
 
 ## [0.9.0] — 2026-06-10

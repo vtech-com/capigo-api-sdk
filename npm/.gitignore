@@ -1,0 +1,3 @@
+# The skill payload is copied in from ../skills/capigo-api at publish time
+# (see the release workflow). The canonical source lives in skills/capigo-api/.
+/skill/
