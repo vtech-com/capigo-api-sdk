@@ -194,7 +194,7 @@ exclusive. Requested IDs the server does not return are reported explicitly
 				HintAll:    true,
 			})
 			if len(missing) > 0 {
-				fmt.Fprintf(os.Stdout, "Requested %d ids · %d found · missing: %s\n",
+				_, _ = fmt.Fprintf(os.Stdout, "Requested %d ids · %d found · missing: %s\n",
 					requested, len(envelope.Data), strings.Join(missing, ", "))
 			}
 		}
