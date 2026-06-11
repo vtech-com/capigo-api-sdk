@@ -23,6 +23,11 @@ type ListSummary struct {
 	// TenantNote explains an implicitly resolved tenant (e.g. "from
 	// CAPIGO_TENANT"); empty when the tenant came from --tenant.
 	TenantNote string
+	// Incomplete, when non-empty, marks the result set as PARTIAL (e.g. an
+	// --all run that failed mid-pagination) and says why. It overrides the
+	// usual completeness phrasing so a truncated result can never read as
+	// "all rows shown".
+	Incomplete string
 }
 
 // WriteListSummary prints a one-line pagination summary to w. It is meant for
@@ -54,6 +59,11 @@ func WriteListSummary(w io.Writer, s ListSummary) {
 	total := s.Total
 	if total < s.Shown {
 		total = s.Shown
+	}
+
+	if s.Incomplete != "" {
+		_, _ = fmt.Fprintf(w, "%sTotal: %d · showing %d · INCOMPLETE — %s\n", prefix, total, s.Shown, s.Incomplete)
+		return
 	}
 
 	if total == 0 {
