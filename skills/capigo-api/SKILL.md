@@ -53,8 +53,10 @@ repo builds exactly that layer on top of this skill.)
   return the bare object.
 - **Pagination.** Every `list` returns at most one page (default 20 rows, max 100) — **not the
   whole collection**. Check `meta.has_more` in the JSON and keep paging (`--page`) until it's
-  `false`, or use `products list --all`. In JSON mode there is no stderr nudge, so this is on
-  you. See `references/cli_basics.md` → Pagination.
+  `false`, or use `products list --all`. **To count "how many X", read `meta.total` — never
+  count the rows you see** (that's one page). Table mode prints a `Total: N · …` footer with the
+  same number; JSON mode has no footer, so read `meta` yourself. See
+  `references/cli_basics.md` → Pagination.
 - **Tenant scoping.** `--tenant <code>` is a **per-command** flag, not global. Every PCMS
   command (products, variants, brands, categories, product-types, units — read *and* write)
   **requires** a tenant; only `tasks`/`boards`/`members` reads may omit it to span tenants.

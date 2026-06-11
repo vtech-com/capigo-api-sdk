@@ -11,6 +11,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.11.0] — 2026-06-11
+
+### Changed
+
+- Every `list` command now prints a pagination **summary footer to stdout** in table mode — e.g. `Total: 43 · showing 20 (page 1/3) · more rows — use --page/--limit (max 100)`, or `Total: 12 (all rows shown)` when the page is complete. Previously the only signal that more rows existed was a `Showing N of M` nudge on **stderr**, which an agent reading stdout never saw: it would render a 20-row page of a 43-row collection and report "20". Surfacing the total on the same stream the agent reads — on every list, not just when more pages exist — removes that trap. JSON mode is unchanged (`meta.total`/`meta.has_more` already carried this). New `output.WriteListSummary` helper centralises the footer; `products list` advertises `--all` in its hint and prints `Total: N (all rows shown)` after `--all` fetches the full set.
+- `capigo-api` skill updated to match: a new **"Counting how many X are there?"** recipe in `cli_basics.md` (read `meta.total`, never count visible rows), the pagination note rewritten around the stdout footer, and a counting reminder added to the `SKILL.md` fundamentals.
+
+---
+
 ## [0.10.1] — 2026-06-11
 
 ### Fixed

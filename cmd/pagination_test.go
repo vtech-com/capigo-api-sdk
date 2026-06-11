@@ -9,13 +9,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// paginationHint is the exact string list commands print when more results
-// exist. Any file that prints it is promising the user --page/--limit.
-const paginationHint = "Use --page / --limit to paginate"
+// paginationMarker is the call list commands emit to render their pagination
+// footer (via output.WriteListSummary). Any file that calls it is a paginated
+// list advertising --page/--limit, so it MUST register those flags.
+const paginationMarker = "output.WriteListSummary"
 
-// paginatedListCommands are every list command that prints the
-// "Use --page / --limit to paginate." hint. Because they advertise those
-// flags to the user, each one MUST register --page and --limit. This guards
+// paginatedListCommands are every list command that renders a pagination
+// footer. Because they advertise --page/--limit to the user, each one MUST
+// register those flags. This guards
 // against the boards list regression where the hint was printed but the flags
 // were never registered (the command rejected --page with "unknown flag").
 //
@@ -45,9 +46,9 @@ func TestPaginatedListCommandsRegisterPaginationFlags(t *testing.T) {
 }
 
 // TestPaginationHintImpliesFlags scans every command source file: if a file
-// prints the pagination hint, it must also register the --page and --limit
+// renders the pagination footer, it must also register the --page and --limit
 // flags it advertises. This is the dynamic backstop that catches a new list
-// command that prints the hint but is forgotten from paginatedListCommands
+// command that prints the footer but is forgotten from paginatedListCommands
 // above — the exact way the boards list bug shipped.
 func TestPaginationHintImpliesFlags(t *testing.T) {
 	files, err := filepath.Glob("*.go")
@@ -63,12 +64,12 @@ func TestPaginationHintImpliesFlags(t *testing.T) {
 			t.Fatalf("read %s: %v", f, err)
 		}
 		body := string(src)
-		if !strings.Contains(body, paginationHint) {
+		if !strings.Contains(body, paginationMarker) {
 			continue
 		}
 		for _, flag := range []string{`"page"`, `"limit"`} {
 			if !strings.Contains(body, flag) {
-				t.Errorf("%s prints the pagination hint but never registers a %s flag", f, flag)
+				t.Errorf("%s renders the pagination footer but never registers a %s flag", f, flag)
 			}
 		}
 	}

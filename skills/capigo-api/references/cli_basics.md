@@ -159,12 +159,27 @@ How to get a complete result set:
   `--page 1`, and while `meta.has_more` is `true`, request the next `--page`. Raising
   `--limit` to 100 cuts the number of round-trips.
 
-> **In table mode** the CLI nudges you on stderr — `Showing 20 of 137. Use --page / --limit to
-> paginate.` (and `, or --all` for products). **In JSON mode there is no such nudge** — the
-> agent path is JSON, so *you* must inspect `meta.has_more` yourself. Never treat a first page
-> as complete when the answer depends on the full set (does X exist? is this code/alias/barcode
-> already taken? how many of Y are there?). Either narrow with `--query`/`--ids` until the
-> result fits one page, or page to the end.
+> **In table mode** every `list` prints a summary **footer on stdout**, after the table:
+> `Total: 137 · showing 20 (page 1/7) · more rows — use --page/--limit (max 100)` (with
+> `or --all` for products), or `Total: 12 (all rows shown)` when the page is complete. So even
+> a glance at the table tells you the real total — don't count the rows. **In JSON mode there is
+> no footer** — the agent path is JSON, so inspect `meta.total` / `meta.has_more` yourself.
+> Never treat a first page as complete when the answer depends on the full set (does X exist? is
+> this code/alias/barcode already taken? how many of Y are there?). Either narrow with
+> `--query`/`--ids` until the result fits one page, or page to the end.
+
+### Counting "how many X are there?"
+
+**Never answer a count by counting the rows you see — that's one page (≤20 by default).** The
+authoritative count is `meta.total`. Read it directly with a 1-row page so you don't pull the
+whole collection:
+
+```bash
+capigo --tenant acme brands list --limit 1 --output json | jq '.meta.total'
+```
+
+In table mode the same number is on the footer line (`Total: 43 · …`). Either way: trust
+`total`, not the visible row count.
 
 ## Environment variables
 
