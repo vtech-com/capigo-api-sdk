@@ -51,6 +51,10 @@ repo builds exactly that layer on top of this skill.)
   scrape the table. **JSON contract:** every `list` command returns
   `{"data":[…],"meta":{…}}` (read `.data[]`); single-item commands (`get`/`create`/`update`)
   return the bare object.
+- **Pagination.** Every `list` returns at most one page (default 20 rows, max 100) — **not the
+  whole collection**. Check `meta.has_more` in the JSON and keep paging (`--page`) until it's
+  `false`, or use `products list --all`. In JSON mode there is no stderr nudge, so this is on
+  you. See `references/cli_basics.md` → Pagination.
 - **Tenant scoping.** `--tenant <code>` is a **per-command** flag, not global. Every PCMS
   command (products, variants, brands, categories, product-types, units — read *and* write)
   **requires** a tenant; only `tasks`/`boards`/`members` reads may omit it to span tenants.
@@ -110,7 +114,9 @@ catalogue-policy skill, not here.)
   confirmation → execute**. A wrong write is far more expensive than a clarifying question.
 - **Check for collisions first.** A new `sku`, alias, or `barcode` must be unique within the
   tenant — search before you insert, and treat **exit 8** (conflict) as "it already exists",
-  not as a retryable error.
+  not as a retryable error. When that search is a `list`, remember it's paginated: a clean
+  first page does **not** prove uniqueness — page to the end (or `products list --all`, or a
+  `--query`/`--ids` narrow enough to fit one page) before concluding "no collision".
 - **Don't silently change identifiers.** Changing an existing `sku`, `barcode`, or alias on a
   live record breaks whatever references it — only do so when the user explicitly asks.
 
