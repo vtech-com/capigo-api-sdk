@@ -97,11 +97,13 @@ Each category in the response has: id, name, parent_id (uuid or null for root).`
 
 		if outputMode == "table" {
 			output.WriteListSummary(os.Stdout, output.ListSummary{
-				Shown:   len(envelope.Data),
-				Page:    envelope.Meta.Page,
-				Limit:   envelope.Meta.Limit,
-				Total:   envelope.Meta.Total,
-				HasMore: envelope.Meta.HasMore,
+				Tenant:     derefTenant(tenant),
+				TenantNote: tenantNote(tenant, categoryListTenant),
+				Shown:      len(envelope.Data),
+				Page:       envelope.Meta.Page,
+				Limit:      envelope.Meta.Limit,
+				Total:      envelope.Meta.Total,
+				HasMore:    envelope.Meta.HasMore,
 			})
 		}
 
@@ -149,6 +151,7 @@ Response: { "data": { "id": "uuid", "name": "string", "parent_id": "uuid|null" }
 		}
 
 		tenant := resolveTenant(categoryCreateTenant, profile)
+		defer echoTenant(tenant, categoryCreateTenant)
 		if tenant == nil {
 			e := &api.APIError{
 				Code:       "VALIDATION_ERROR",
@@ -264,6 +267,7 @@ Response: { "data": { "id": "uuid", "name": "string", "parent_id": "uuid|null" }
 		}
 
 		tenant := resolveTenant(categoryUpdateTenant, profile)
+		defer echoTenant(tenant, categoryUpdateTenant)
 		if tenant == nil {
 			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "categories commands require a tenant; pass --tenant <code> or set default", "")
 			os.Exit(5)
@@ -429,6 +433,7 @@ Response: { "data": { "id": "uuid", "name": "string", "parent_id": "uuid|null" }
 		}
 
 		tenant := resolveTenant(categoryReplaceTenant, profile)
+		defer echoTenant(tenant, categoryReplaceTenant)
 		if tenant == nil {
 			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "categories commands require a tenant; pass --tenant <code> or set default", "")
 			os.Exit(5)

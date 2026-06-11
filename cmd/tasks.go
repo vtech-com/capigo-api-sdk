@@ -102,11 +102,13 @@ var tasksListCmd = &cobra.Command{
 
 		if outputMode == "table" {
 			output.WriteListSummary(os.Stdout, output.ListSummary{
-				Shown:   len(envelope.Data),
-				Page:    envelope.Meta.Page,
-				Limit:   envelope.Meta.Limit,
-				Total:   envelope.Meta.Total,
-				HasMore: envelope.Meta.HasMore,
+				Tenant:     derefTenant(tenant),
+				TenantNote: tenantNote(tenant, taskListTenant),
+				Shown:      len(envelope.Data),
+				Page:       envelope.Meta.Page,
+				Limit:      envelope.Meta.Limit,
+				Total:      envelope.Meta.Total,
+				HasMore:    envelope.Meta.HasMore,
 			})
 		}
 
@@ -248,11 +250,13 @@ error. The authoritative current status of a task lives on the task itself
 
 		if outputMode == "table" {
 			output.WriteListSummary(os.Stdout, output.ListSummary{
-				Shown:   len(envelope.Data),
-				Page:    envelope.Meta.Page,
-				Limit:   envelope.Meta.Limit,
-				Total:   envelope.Meta.Total,
-				HasMore: envelope.Meta.HasMore,
+				Tenant:     derefTenant(tenant),
+				TenantNote: tenantNote(tenant, taskCommentsTenant),
+				Shown:      len(envelope.Data),
+				Page:       envelope.Meta.Page,
+				Limit:      envelope.Meta.Limit,
+				Total:      envelope.Meta.Total,
+				HasMore:    envelope.Meta.HasMore,
 			})
 		}
 
@@ -305,6 +309,7 @@ removing followers is not supported by this endpoint.`,
 		}
 
 		tenant := resolveTenant(taskUpdateTenant, profile)
+		defer echoTenant(tenant, taskUpdateTenant)
 
 		// Build the PATCH body as a map so we can express the tri-state the
 		// API needs: a field is absent (omitted), set to a value, or explicitly
@@ -420,6 +425,7 @@ var tasksCreateCmd = &cobra.Command{
 		}
 
 		tenant := resolveTenant(taskCreateTenant, profile)
+		defer echoTenant(tenant, taskCreateTenant)
 
 		// POST /mission/tasks requires a tenant; reject if nil.
 		_ = api.CreateTaskUsesBodyField

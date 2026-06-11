@@ -55,6 +55,8 @@ type TaskComment struct {
 // Product is the display model for a Capigo PCMS product.
 // SKU and Price are derived from the first variant for table display.
 // VariantCount holds the total number of variants for the Variants column.
+// Status carries a " (DELETED)" suffix when the product is soft-deleted, and
+// Aliases joins the product's alias codes so both stay visible in table mode.
 type Product struct {
 	ID           string `json:"id"`
 	Name         string `json:"name"`
@@ -62,6 +64,7 @@ type Product struct {
 	SKU          string `json:"sku,omitempty"`
 	Price        string `json:"price,omitempty"`
 	VariantCount int    `json:"variant_count"`
+	Aliases      string `json:"aliases,omitempty"`
 	TenantCode   string `json:"tenant_code,omitempty"`
 }
 

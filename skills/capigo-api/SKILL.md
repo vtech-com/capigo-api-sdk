@@ -112,6 +112,10 @@ catalogue-policy skill, not here.)
 
 - **Writes always name a tenant.** No PCMS write without `--tenant <code>`; the CLI rejects
   it (exit 5) anyway.
+- **Check the echoed tenant.** Every table-mode write prints `Tenant: <code>` after the
+  result (with `(from CAPIGO_TENANT)` / `(from config default_tenant)` when it was resolved
+  implicitly), and every list footer starts with the same prefix. If that tenant is not the
+  one the user meant, the write landed in the wrong tenant — surface it immediately.
 - **Confirm before you write.** The safe rhythm is **propose → wait for the user's
   confirmation → execute**. A wrong write is far more expensive than a clarifying question.
 - **Check for collisions first.** A new `sku`, alias, or `barcode` must be unique within the
