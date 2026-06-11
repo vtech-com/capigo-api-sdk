@@ -472,13 +472,17 @@ capigo tasks list --output json
 
 This repo ships an agent **skill** under [`skills/capigo-api/`](./skills/capigo-api/) — a
 self-contained guide (`SKILL.md` + `references/`) that teaches an AI agent how to drive the
-`capigo` CLI correctly: auth, tenant handling, exit codes, output modes, and the PCMS
-catalogue workflows (Product Code / Barcode generation, Brands, Product Types, sync checks).
+`capigo` CLI correctly: auth, tenant handling, exit codes, output modes, and the full command
+surface (Tasks, Boards, Members, Products, Variants, and reference data).
 
 It is meant to be consumed by skill-aware agent runtimes. Because the skill lives next to the
 CLI it documents, anyone with access to this repo (including partners using the public API with
 their own auth token) gets the same operating instructions the CLI author intended — no need to
 reverse-engineer raw API calls.
+
+The skill deliberately covers **CLI mechanics only**. How your organisation assigns product
+codes, allocates barcodes, or governs its reference data is policy that belongs in your own
+catalogue skill, layered on top of this one.
 
 **Install it** with the [`skills`](https://github.com/vercel-labs/skills) CLI, which pulls the
 skill straight from this repo and drops it into your agent's skills directory (Claude Code,

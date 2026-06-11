@@ -2,7 +2,7 @@
 
 How the `capigo` command-line tool works: authentication, tenants, output, the full command
 surface, and how to self-diagnose when a call behaves unexpectedly. Read the section you
-need; the dispatcher in `../SKILL.md` already covers the high-level rules.
+need; `../SKILL.md` already covers the high-level rules.
 
 > Everything here describes the binary the agent actually runs. If a command's real `--help`
 > output disagrees with this file, the binary wins — and the OpenAPI document
@@ -262,15 +262,15 @@ Tenant **required** on all subcommands.
 | `products update <id>` | `--tenant` (req); any of `--name`, `--description`, `--status`, `--currency`, `--brand-id`, `--category-id`, `--product-type-id`, `--unit-id`, `--aliases` (repeatable); or `--from-json -` (mutually exclusive with field flags). At least one field required. |
 | `products variants` | `--tenant` (req), `--product-id` (req), `--from-json -` (req) — a **JSON array** of variant objects |
 
-Key facts the workflows depend on:
+Key facts callers depend on:
 
-- **`products create` simple mode has no `--aliases` flag.** To attach a Product Code (which
-  lives in `aliases[]`), create via `--from-json` with `"aliases": [...]`, or set them after
-  creation with `products update <id> --aliases …`.
+- **`products create` simple mode has no `--aliases` flag.** To attach a product code alias
+  (codes conventionally live in `aliases[]`), create via `--from-json` with
+  `"aliases": [...]`, or set them after creation with `products update <id> --aliases …`.
 - **`products variants` takes a JSON array**, not an object. An item **with** `variant_id` is
   updated; **without** `variant_id` it is created (and `name` is required). One call upserts
   many variants at once.
-- The variant `sku` field carries the Variant Code; the variant `barcode` field carries the
+- The variant `sku` field carries the variant's code; the variant `barcode` field carries the
   numeric barcode.
 
 ```bash
@@ -287,8 +287,8 @@ echo '[{"name":"Đen","sku":"AP-BA-13PM-B","barcode":"63400700011"}]' \
 ### variants
 
 `variants list` — **tenant required**. Lists PCMS variants filtered by barcode prefix; its
-main job is finding the highest barcode in a namespace for auto-increment (see
-`barcode_algorithm.md`).
+main job is finding the highest barcode under a prefix (e.g. for an allocation scheme that
+auto-increments within a namespace).
 
 | Flag | Notes |
 |---|---|
@@ -347,7 +347,7 @@ record first, then act on its `id`:
 
 - Product by name / SKU / variant name / barcode → `products list --query "<term>"`, read
   `.data[].id`.
-- Product by Product Code (alias) → `products list --all` and filter `.data[].aliases[]`
+- Product by code alias → `products list --all` and filter `.data[].aliases[]`
   locally (`--query` does not index aliases).
 - Variant barcode lookups → `variants list --barcode-prefix …`.
 
