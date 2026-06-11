@@ -17,6 +17,12 @@ type ListSummary struct {
 	HasMore bool
 	// HintAll advertises --all in the "more rows" hint (products list only).
 	HintAll bool
+	// Tenant is the resolved tenant code the call was scoped to; "" means the
+	// call was cross-tenant (tasks/boards/members reads) and no prefix is shown.
+	Tenant string
+	// TenantNote explains an implicitly resolved tenant (e.g. "from
+	// CAPIGO_TENANT"); empty when the tenant came from --tenant.
+	TenantNote string
 }
 
 // WriteListSummary prints a one-line pagination summary to w. It is meant for
@@ -32,6 +38,17 @@ type ListSummary struct {
 //	Total: 12 (all rows shown)
 //	Total: 0 (no matching rows)
 func WriteListSummary(w io.Writer, s ListSummary) {
+	// Tenant prefix: make the scope of the answer visible on the same line as
+	// the count, so a silently defaulted tenant can't go unnoticed.
+	prefix := ""
+	if s.Tenant != "" {
+		prefix = "Tenant: " + s.Tenant
+		if s.TenantNote != "" {
+			prefix += " (" + s.TenantNote + ")"
+		}
+		prefix += " · "
+	}
+
 	// Guard against endpoints that don't populate Total: never claim fewer
 	// rows than we actually rendered.
 	total := s.Total
@@ -40,15 +57,15 @@ func WriteListSummary(w io.Writer, s ListSummary) {
 	}
 
 	if total == 0 {
-		_, _ = fmt.Fprintln(w, "Total: 0 (no matching rows)")
+		_, _ = fmt.Fprintf(w, "%sTotal: 0 (no matching rows)\n", prefix)
 		return
 	}
 	if s.Shown >= total {
-		_, _ = fmt.Fprintf(w, "Total: %d (all rows shown)\n", total)
+		_, _ = fmt.Fprintf(w, "%sTotal: %d (all rows shown)\n", prefix, total)
 		return
 	}
 
-	line := fmt.Sprintf("Total: %d · showing %d", total, s.Shown)
+	line := fmt.Sprintf("%sTotal: %d · showing %d", prefix, total, s.Shown)
 	if s.Page > 0 {
 		if pages := pageCount(total, s.Limit); pages > 0 {
 			line += fmt.Sprintf(" (page %d/%d)", s.Page, pages)
@@ -73,4 +90,19 @@ func pageCount(total, limit int) int {
 		return 0
 	}
 	return (total + limit - 1) / limit
+}
+
+// WriteTenantLine prints the resolved tenant scope as a one-line stdout footer
+// for single-item (write) commands, mirroring the list footer's "Tenant:"
+// prefix. note explains an implicit source (e.g. "from CAPIGO_TENANT"); pass
+// "" when the tenant was given explicitly via --tenant.
+func WriteTenantLine(w io.Writer, tenant, note string) {
+	if tenant == "" {
+		return
+	}
+	if note != "" {
+		_, _ = fmt.Fprintf(w, "Tenant: %s (%s)\n", tenant, note)
+		return
+	}
+	_, _ = fmt.Fprintf(w, "Tenant: %s\n", tenant)
 }

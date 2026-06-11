@@ -97,11 +97,13 @@ Each unit in the response has: id, name, abbreviation.`,
 
 		if outputMode == "table" {
 			output.WriteListSummary(os.Stdout, output.ListSummary{
-				Shown:   len(envelope.Data),
-				Page:    envelope.Meta.Page,
-				Limit:   envelope.Meta.Limit,
-				Total:   envelope.Meta.Total,
-				HasMore: envelope.Meta.HasMore,
+				Tenant:     derefTenant(tenant),
+				TenantNote: tenantNote(tenant, unitListTenant),
+				Shown:      len(envelope.Data),
+				Page:       envelope.Meta.Page,
+				Limit:      envelope.Meta.Limit,
+				Total:      envelope.Meta.Total,
+				HasMore:    envelope.Meta.HasMore,
 			})
 		}
 
@@ -149,6 +151,7 @@ Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" }
 		}
 
 		tenant := resolveTenant(unitCreateTenant, profile)
+		defer echoTenant(tenant, unitCreateTenant)
 		if tenant == nil {
 			e := &api.APIError{
 				Code:       "VALIDATION_ERROR",
@@ -266,6 +269,7 @@ Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" }
 		}
 
 		tenant := resolveTenant(unitUpdateTenant, profile)
+		defer echoTenant(tenant, unitUpdateTenant)
 		if tenant == nil {
 			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "units commands require a tenant; pass --tenant <code> or set default", "")
 			os.Exit(5)
@@ -425,6 +429,7 @@ Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" }
 		}
 
 		tenant := resolveTenant(unitReplaceTenant, profile)
+		defer echoTenant(tenant, unitReplaceTenant)
 		if tenant == nil {
 			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "units commands require a tenant; pass --tenant <code> or set default", "")
 			os.Exit(5)

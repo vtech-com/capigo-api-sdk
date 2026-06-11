@@ -97,11 +97,13 @@ Each product type in the response has: id, name, description (string or null).`,
 
 		if outputMode == "table" {
 			output.WriteListSummary(os.Stdout, output.ListSummary{
-				Shown:   len(envelope.Data),
-				Page:    envelope.Meta.Page,
-				Limit:   envelope.Meta.Limit,
-				Total:   envelope.Meta.Total,
-				HasMore: envelope.Meta.HasMore,
+				Tenant:     derefTenant(tenant),
+				TenantNote: tenantNote(tenant, productTypeListTenant),
+				Shown:      len(envelope.Data),
+				Page:       envelope.Meta.Page,
+				Limit:      envelope.Meta.Limit,
+				Total:      envelope.Meta.Total,
+				HasMore:    envelope.Meta.HasMore,
 			})
 		}
 
@@ -148,6 +150,7 @@ Response: { "data": { "id": "uuid", "name": "string", "description": "string|nul
 		}
 
 		tenant := resolveTenant(productTypeCreateTenant, profile)
+		defer echoTenant(tenant, productTypeCreateTenant)
 		if tenant == nil {
 			e := &api.APIError{
 				Code:       "VALIDATION_ERROR",
@@ -263,6 +266,7 @@ Response: { "data": { "id": "uuid", "name": "string", "description": "string|nul
 		}
 
 		tenant := resolveTenant(productTypeUpdateTenant, profile)
+		defer echoTenant(tenant, productTypeUpdateTenant)
 		if tenant == nil {
 			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "product-types commands require a tenant; pass --tenant <code> or set default", "")
 			os.Exit(5)
@@ -427,6 +431,7 @@ Response: { "data": { "id": "uuid", "name": "string", "description": "string|nul
 		}
 
 		tenant := resolveTenant(productTypeReplaceTenant, profile)
+		defer echoTenant(tenant, productTypeReplaceTenant)
 		if tenant == nil {
 			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "product-types commands require a tenant; pass --tenant <code> or set default", "")
 			os.Exit(5)

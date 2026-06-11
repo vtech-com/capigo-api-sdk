@@ -105,6 +105,13 @@ Config shape:
   `--tenant` and then return rows across every tenant you can access (a "Tenant" column is
   added in table mode). `tasks create` requires a tenant.
 
+**The CLI echoes the tenant it actually used.** In table mode, every tenant-scoped list
+footer starts with `Tenant: <code>` and every successful write prints a `Tenant: <code>` line
+after the result. When the tenant was resolved implicitly the line names the source —
+`Tenant: acme (from CAPIGO_TENANT)` or `Tenant: acme (from config default_tenant)`. **Read
+that line**: if the echoed tenant is not the one the user meant, the data you just read — or
+worse, wrote — belongs to the wrong tenant. Stop and redo with an explicit `--tenant`.
+
 List the tenants you can reach:
 
 ```bash
@@ -160,9 +167,11 @@ How to get a complete result set:
   `--limit` to 100 cuts the number of round-trips.
 
 > **In table mode** every `list` prints a summary **footer on stdout**, after the table:
-> `Total: 137 · showing 20 (page 1/7) · more rows — use --page/--limit (max 100)` (with
-> `or --all` for products), or `Total: 12 (all rows shown)` when the page is complete. So even
-> a glance at the table tells you the real total — don't count the rows. **In JSON mode there is
+> `Tenant: acme · Total: 137 · showing 20 (page 1/7) · more rows — use --page/--limit (max 100)`
+> (with `or --all` for products), or `Tenant: acme · Total: 12 (all rows shown)` when the page
+> is complete. So even a glance at the table tells you the real total — don't count the rows.
+> The `Tenant:` prefix names the tenant the answer is scoped to (omitted on cross-tenant
+> reads); see [Tenants and tenant scoping](#tenants-and-tenant-scoping). **In JSON mode there is
 > no footer** — the agent path is JSON, so inspect `meta.total` / `meta.has_more` yourself.
 > Never treat a first page as complete when the answer depends on the full set (does X exist? is
 > this code/alias/barcode already taken? how many of Y are there?). Either narrow with
@@ -324,6 +333,12 @@ Key facts callers depend on:
   many variants at once.
 - The variant `sku` field carries the variant's code; the variant `barcode` field carries the
   numeric barcode.
+- **Soft-deleted products still appear in list results.** In table mode the Status cell marks
+  them — e.g. `ACTIVE (DELETED)`; in JSON check the `is_deleted` field (the `status` field
+  alone does NOT reveal deletion). Never report a `(DELETED)` product as available, and never
+  update or upsert variants onto one unless the user explicitly asks to restore it.
+- The product table includes an **Aliases** column (joined with `, `), so alias/Product-Code
+  checks are visible in table mode too — but completeness still requires paging (`--all`).
 
 ```bash
 # Create a simple product with a Product Code alias

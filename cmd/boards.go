@@ -97,11 +97,13 @@ var boardsListCmd = &cobra.Command{
 
 		if outputMode == "table" {
 			output.WriteListSummary(os.Stdout, output.ListSummary{
-				Shown:   len(envelope.Data),
-				Page:    envelope.Meta.Page,
-				Limit:   envelope.Meta.Limit,
-				Total:   envelope.Meta.Total,
-				HasMore: envelope.Meta.HasMore,
+				Tenant:     derefTenant(tenant),
+				TenantNote: tenantNote(tenant, boardListTenant),
+				Shown:      len(envelope.Data),
+				Page:       envelope.Meta.Page,
+				Limit:      envelope.Meta.Limit,
+				Total:      envelope.Meta.Total,
+				HasMore:    envelope.Meta.HasMore,
 			})
 		}
 

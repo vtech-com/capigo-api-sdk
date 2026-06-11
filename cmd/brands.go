@@ -97,11 +97,13 @@ Each brand in the response has: id, name, logo_url (string or null).`,
 
 		if outputMode == "table" {
 			output.WriteListSummary(os.Stdout, output.ListSummary{
-				Shown:   len(envelope.Data),
-				Page:    envelope.Meta.Page,
-				Limit:   envelope.Meta.Limit,
-				Total:   envelope.Meta.Total,
-				HasMore: envelope.Meta.HasMore,
+				Tenant:     derefTenant(tenant),
+				TenantNote: tenantNote(tenant, brandListTenant),
+				Shown:      len(envelope.Data),
+				Page:       envelope.Meta.Page,
+				Limit:      envelope.Meta.Limit,
+				Total:      envelope.Meta.Total,
+				HasMore:    envelope.Meta.HasMore,
 			})
 		}
 
@@ -148,6 +150,7 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 		}
 
 		tenant := resolveTenant(brandCreateTenant, profile)
+		defer echoTenant(tenant, brandCreateTenant)
 		if tenant == nil {
 			e := &api.APIError{
 				Code:       "VALIDATION_ERROR",
@@ -263,6 +266,7 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 		}
 
 		tenant := resolveTenant(brandUpdateTenant, profile)
+		defer echoTenant(tenant, brandUpdateTenant)
 		if tenant == nil {
 			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "brands commands require a tenant; pass --tenant <code> or set default", "")
 			os.Exit(5)
@@ -427,6 +431,7 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 		}
 
 		tenant := resolveTenant(brandReplaceTenant, profile)
+		defer echoTenant(tenant, brandReplaceTenant)
 		if tenant == nil {
 			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "brands commands require a tenant; pass --tenant <code> or set default", "")
 			os.Exit(5)

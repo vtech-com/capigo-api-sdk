@@ -11,6 +11,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.12.0] — 2026-06-11
+
+### Changed
+
+- **Soft-deleted products are now visibly dead in table mode.** The Status cell carries a tombstone — `ACTIVE (DELETED)` — whenever `is_deleted` is true. Previously the table dropped `is_deleted` entirely and a soft-deleted product rendered exactly like a live one, so an agent could report deleted stock as available or write to a tombstoned record. JSON already carried `is_deleted` and is unchanged.
+- **Product tables now show an `Aliases` column** (alias codes joined with `, `). Aliases were previously JSON-only, which silently broke alias-uniqueness checks done from table output — the column the dedup workflow depends on simply didn't exist.
+- **Every tenant-scoped command now echoes the tenant it actually used on stdout.** List footers gain a `Tenant: acme · …` prefix and successful table-mode writes print a `Tenant: acme` line after the result. When the tenant was resolved implicitly, the echo names the source — `Tenant: acme (from CAPIGO_TENANT)` or `(from config default_tenant)` — so a silently defaulted tenant can no longer route a read or write to the wrong tenant without it being visible. New `output.WriteTenantLine` helper; `ListSummary` gains `Tenant`/`TenantNote`.
+- `capigo-api` skill updated to match all three: the tenant-echo rule ("read that line; wrong tenant → stop"), the `(DELETED)` / `is_deleted` caveat on products, and the `Aliases` column note.
+
+---
+
 ## [0.11.0] — 2026-06-11
 
 ### Changed

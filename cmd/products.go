@@ -174,12 +174,14 @@ Use --ids to fetch specific products by UUID (comma-separated, max 50).
 
 		if outputMode == "table" {
 			output.WriteListSummary(os.Stdout, output.ListSummary{
-				Shown:   len(envelope.Data),
-				Page:    envelope.Meta.Page,
-				Limit:   envelope.Meta.Limit,
-				Total:   envelope.Meta.Total,
-				HasMore: envelope.Meta.HasMore,
-				HintAll: true,
+				Tenant:     derefTenant(tenant),
+				TenantNote: tenantNote(tenant, productListTenant),
+				Shown:      len(envelope.Data),
+				Page:       envelope.Meta.Page,
+				Limit:      envelope.Meta.Limit,
+				Total:      envelope.Meta.Total,
+				HasMore:    envelope.Meta.HasMore,
+				HintAll:    true,
 			})
 		}
 
@@ -261,11 +263,13 @@ func productsListAll(ctx context.Context, client *api.Client, tenant *string) er
 
 	if outputMode == "table" {
 		output.WriteListSummary(os.Stdout, output.ListSummary{
-			Shown:   len(allProducts),
-			Page:    1,
-			Limit:   len(allProducts),
-			Total:   len(allProducts),
-			HasMore: false,
+			Tenant:     derefTenant(tenant),
+			TenantNote: tenantNote(tenant, productListTenant),
+			Shown:      len(allProducts),
+			Page:       1,
+			Limit:      len(allProducts),
+			Total:      len(allProducts),
+			HasMore:    false,
 		})
 	}
 
@@ -423,6 +427,7 @@ When --from-json is provided, all other flags are ignored.`,
 		}
 
 		tenant := resolveTenant(productCreateTenant, profile)
+		defer echoTenant(tenant, productCreateTenant)
 
 		// /pcms/* requires a tenant.
 		if tenant == nil {
@@ -563,6 +568,7 @@ When --from-json is set, all individual field flags are ignored.`,
 		}
 
 		tenant := resolveTenant(productUpdateTenant, profile)
+		defer echoTenant(tenant, productUpdateTenant)
 
 		if tenant == nil {
 			e := &api.APIError{
@@ -731,6 +737,7 @@ Example JSON input:
 		}
 
 		tenant := resolveTenant(productVariantsTenant, profile)
+		defer echoTenant(tenant, productVariantsTenant)
 
 		if tenant == nil {
 			e := &api.APIError{
@@ -861,12 +868,19 @@ func toOutputProduct(p api.Product) output.Product {
 			price = strconv.FormatFloat(*v.Price, 'f', -1, 64)
 		}
 	}
+	// Soft-deleted products must never look live: surface the tombstone in
+	// the Status cell, the one column every reader scans.
+	status := p.Status
+	if p.IsDeleted {
+		status += " (DELETED)"
+	}
 	return output.Product{
 		ID:           p.ID,
 		Name:         p.Name,
-		Status:       p.Status,
+		Status:       status,
 		SKU:          sku,
 		Price:        price,
 		VariantCount: len(p.Variants),
+		Aliases:      strings.Join(p.Aliases, ", "),
 	}
 }

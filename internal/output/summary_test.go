@@ -45,6 +45,26 @@ func TestWriteListSummary(t *testing.T) {
 			in:      ListSummary{Shown: 20, Page: 1, Limit: 20, Total: 43, HasMore: true},
 			notWant: "all rows shown",
 		},
+		{
+			name: "explicit tenant prefixes the footer without a source note",
+			in:   ListSummary{Shown: 20, Page: 1, Limit: 20, Total: 43, HasMore: true, Tenant: "acme"},
+			want: "Tenant: acme · Total: 43",
+		},
+		{
+			name: "implicitly resolved tenant carries its source",
+			in:   ListSummary{Shown: 12, Page: 1, Limit: 20, Total: 12, Tenant: "acme", TenantNote: "from CAPIGO_TENANT"},
+			want: "Tenant: acme (from CAPIGO_TENANT) · Total: 12 (all rows shown)",
+		},
+		{
+			name: "empty result still names the tenant it searched",
+			in:   ListSummary{Shown: 0, Page: 1, Limit: 20, Total: 0, Tenant: "acme"},
+			want: "Tenant: acme · Total: 0 (no matching rows)",
+		},
+		{
+			name:    "cross-tenant list has no tenant prefix",
+			in:      ListSummary{Shown: 5, Page: 1, Limit: 20, Total: 5},
+			notWant: "Tenant:",
+		},
 	}
 
 	for _, tc := range tests {
@@ -57,6 +77,28 @@ func TestWriteListSummary(t *testing.T) {
 			}
 			if tc.notWant != "" && strings.Contains(got, tc.notWant) {
 				t.Errorf("WriteListSummary = %q, must not contain %q", got, tc.notWant)
+			}
+		})
+	}
+}
+
+func TestWriteTenantLine(t *testing.T) {
+	tests := []struct {
+		name   string
+		tenant string
+		note   string
+		want   string
+	}{
+		{"explicit tenant", "acme", "", "Tenant: acme\n"},
+		{"implicit tenant names its source", "acme", "from config default_tenant", "Tenant: acme (from config default_tenant)\n"},
+		{"no tenant prints nothing", "", "", ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			WriteTenantLine(&buf, tc.tenant, tc.note)
+			if got := buf.String(); got != tc.want {
+				t.Errorf("WriteTenantLine(%q, %q) = %q, want %q", tc.tenant, tc.note, got, tc.want)
 			}
 		})
 	}
