@@ -11,6 +11,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.13.0] — 2026-06-11
+
+### Changed
+
+- **`products list --all` no longer discards everything on a mid-pagination failure.** Previously a rate-limit or network blip at page N exited with empty stdout, so a partial catalogue read looked like an empty one (and an agent could conclude "0 products — the alias is free"). Now the rows already fetched are still rendered, the table footer reads `… · INCOMPLETE — aborted at page N — results are PARTIAL`, JSON meta carries `"complete": false` (with the server's real `total` and `has_more: true`), and the command still exits with the underlying error's code.
+- **`products list --ids` now reports requested IDs the server did not return.** Asking for 5 UUIDs and getting 3 rows was a clean exit 0 with `Total: 3 (all rows shown)` — the two missing products simply vanished. Table mode now prints `Requested 5 ids · 3 found · missing: <id>, <id>`; JSON meta carries `missing_ids`.
+- **`Server time:` (the delta-sync cursor) moved to stdout in table mode** — the same stderr-salience trap as the v0.11.0 pagination fix. json/quiet modes keep it on stderr so stdout stays machine-parseable, and products list JSON now also carries it as `meta.server_time`. Applied via a shared `emitServerTime` helper across all 20 emit sites.
+- `capigo-api` skill updated to match: `--all` partial semantics ("check `complete` / the footer"), the `--ids` missing-IDs rule, and the new server-time placement.
+
+---
+
 ## [0.12.0] — 2026-06-11
 
 ### Changed

@@ -369,9 +369,7 @@ removing followers is not supported by this endpoint.`,
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if resp.ServerTime != "" {
-			fmt.Fprintf(os.Stderr, "Server time: %s\n", resp.ServerTime)
-		}
+		emitServerTime(resp.ServerTime, "")
 
 		if outputMode == "json" {
 			return output.WriteJSONObject(os.Stdout, envelope.Data)

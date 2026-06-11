@@ -46,10 +46,13 @@ var productsListCmd = &cobra.Command{
 
 Supports delta sync: pass --updated-since with an ISO 8601 timestamp returned
 in the X-Server-Time header from a previous call. The server timestamp is
-always printed to stderr when available regardless of output mode.
+printed to stdout in table mode (stderr in json/quiet modes) and carried as
+meta.server_time in JSON list output.
 
 Use --ids to fetch specific products by UUID (comma-separated, max 50).
---ids and --updated-since may be combined. --ids and --all are mutually exclusive.`,
+--ids and --updated-since may be combined. --ids and --all are mutually
+exclusive. Requested IDs the server does not return are reported explicitly
+(a "missing:" line in table mode, meta.missing_ids in JSON).`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -150,14 +153,21 @@ Use --ids to fetch specific products by UUID (comma-separated, max 50).
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		// M2: always emit X-Server-Time to stderr regardless of output mode.
-		if resp.ServerTime != "" {
-			fmt.Fprintf(os.Stderr, "Server time: %s (use as --updated-since for next delta sync)\n", resp.ServerTime)
-		}
+		// Delta-sync cursor: stdout in table mode, stderr otherwise.
+		emitServerTime(resp.ServerTime, serverTimeHint)
+
+		// --ids: surface any requested IDs the server did not return — a
+		// clean exit 0 with fewer rows than requested must not read as
+		// "the missing products are fine".
+		missing, requested := missingProductIDs(productListIDs, envelope.Data)
 
 		if outputMode == "json" {
 			// C1 + M1: render full api.Product with meta envelope in JSON mode.
-			return output.WriteJSONList(os.Stdout, envelope.Data, envelope.Meta)
+			return output.WriteJSONList(os.Stdout, envelope.Data, listMetaExtras{
+				Meta:       envelope.Meta,
+				ServerTime: resp.ServerTime,
+				MissingIDs: missing,
+			})
 		}
 
 		items := make([]output.Product, len(envelope.Data))
@@ -183,18 +193,27 @@ Use --ids to fetch specific products by UUID (comma-separated, max 50).
 				HasMore:    envelope.Meta.HasMore,
 				HintAll:    true,
 			})
+			if len(missing) > 0 {
+				fmt.Fprintf(os.Stdout, "Requested %d ids · %d found · missing: %s\n",
+					requested, len(envelope.Data), strings.Join(missing, ", "))
+			}
 		}
 
 		return nil
 	},
 }
 
-// productsListAll auto-paginates until has_more is false.
+// productsListAll auto-paginates until has_more is false. A mid-pagination
+// failure does not discard what was already fetched: the partial result is
+// still rendered, marked INCOMPLETE (table footer) / "complete": false (JSON
+// meta), and the command still exits with the underlying error's code —
+// empty stdout must never masquerade as an empty catalogue.
 func productsListAll(ctx context.Context, client *api.Client, tenant *string) error {
 	page := 1
 	var allProducts []api.Product
 	var lastMeta api.Meta
 	var lastServerTime string
+	var fetchErr error
 
 	for {
 		params := url.Values{}
@@ -211,42 +230,59 @@ func productsListAll(ctx context.Context, client *api.Client, tenant *string) er
 
 		path := "/pcms/products?" + params.Encode()
 		resp, err := client.Do(ctx, "GET", path, nil, tenant)
-		if err != nil {
+		if err == nil {
+			var envelope api.Envelope[[]api.Product]
+			if uerr := json.Unmarshal(resp.Body, &envelope); uerr != nil {
+				err = fmt.Errorf("decode response: %w", uerr)
+			} else {
+				if resp.ServerTime != "" {
+					lastServerTime = resp.ServerTime
+				}
+				allProducts = append(allProducts, envelope.Data...)
+				lastMeta = envelope.Meta
+				if !envelope.Meta.HasMore {
+					break
+				}
+				page++
+				continue
+			}
+		}
+		// A failed page: with nothing fetched yet this is a plain error;
+		// with rows already in hand, render the partial set first.
+		if len(allProducts) == 0 {
 			return handleErr(err)
 		}
-
-		var envelope api.Envelope[[]api.Product]
-		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
-			return handleErr(fmt.Errorf("decode response: %w", err))
-		}
-
-		if resp.ServerTime != "" {
-			lastServerTime = resp.ServerTime
-		}
-
-		allProducts = append(allProducts, envelope.Data...)
-		lastMeta = envelope.Meta
-
-		if !envelope.Meta.HasMore {
-			break
-		}
-		page++
+		fetchErr = err
+		break
 	}
 
-	// M2: always emit X-Server-Time to stderr.
-	if lastServerTime != "" {
-		fmt.Fprintf(os.Stderr, "Server time: %s (use as --updated-since for next delta sync)\n", lastServerTime)
+	emitServerTime(lastServerTime, serverTimeHint)
+
+	complete := fetchErr == nil
+	total := len(allProducts)
+	if !complete && lastMeta.Total > total {
+		total = lastMeta.Total
 	}
 
 	if outputMode == "json" {
-		// C1 + M1: render full api.Product with synthetic meta for --all.
-		syntheticMeta := api.Meta{
-			Page:    1,
-			Limit:   lastMeta.Limit,
-			Total:   len(allProducts),
-			HasMore: false,
+		// C1 + M1: render full api.Product with synthetic meta for --all;
+		// complete reports whether pagination reached the last page.
+		if err := output.WriteJSONList(os.Stdout, allProducts, allMeta{
+			Meta: api.Meta{
+				Page:    1,
+				Limit:   lastMeta.Limit,
+				Total:   total,
+				HasMore: !complete,
+			},
+			ServerTime: lastServerTime,
+			Complete:   complete,
+		}); err != nil {
+			return handleErr(err)
 		}
-		return output.WriteJSONList(os.Stdout, allProducts, syntheticMeta)
+		if fetchErr != nil {
+			return handleErr(fetchErr)
+		}
+		return nil
 	}
 
 	items := make([]output.Product, len(allProducts))
@@ -262,17 +298,24 @@ func productsListAll(ctx context.Context, client *api.Client, tenant *string) er
 	}
 
 	if outputMode == "table" {
-		output.WriteListSummary(os.Stdout, output.ListSummary{
+		s := output.ListSummary{
 			Tenant:     derefTenant(tenant),
 			TenantNote: tenantNote(tenant, productListTenant),
 			Shown:      len(allProducts),
 			Page:       1,
 			Limit:      len(allProducts),
-			Total:      len(allProducts),
-			HasMore:    false,
-		})
+			Total:      total,
+			HasMore:    !complete,
+		}
+		if !complete {
+			s.Incomplete = fmt.Sprintf("aborted at page %d — results are PARTIAL", page)
+		}
+		output.WriteListSummary(os.Stdout, s)
 	}
 
+	if fetchErr != nil {
+		return handleErr(fetchErr)
+	}
 	return nil
 }
 
@@ -332,9 +375,7 @@ Response: { "data": { ... } } — same shape as products list items.`,
 		}
 
 		// M2: emit X-Server-Time to stderr.
-		if resp.ServerTime != "" {
-			fmt.Fprintf(os.Stderr, "Server time: %s\n", resp.ServerTime)
-		}
+		emitServerTime(resp.ServerTime, "")
 
 		if outputMode == "json" {
 			return output.WriteJSONObject(os.Stdout, envelope.Data)
@@ -503,9 +544,7 @@ When --from-json is provided, all other flags are ignored.`,
 		}
 
 		// M2: emit X-Server-Time to stderr.
-		if resp.ServerTime != "" {
-			fmt.Fprintf(os.Stderr, "Server time: %s\n", resp.ServerTime)
-		}
+		emitServerTime(resp.ServerTime, "")
 
 		if outputMode == "json" {
 			// C1: render full api.Product in JSON mode.
@@ -668,9 +707,7 @@ When --from-json is set, all individual field flags are ignored.`,
 		}
 
 		// M2: emit X-Server-Time to stderr.
-		if resp.ServerTime != "" {
-			fmt.Fprintf(os.Stderr, "Server time: %s\n", resp.ServerTime)
-		}
+		emitServerTime(resp.ServerTime, "")
 
 		if outputMode == "json" {
 			// C1: render full api.Product in JSON mode.
@@ -775,9 +812,7 @@ Example JSON input:
 		}
 
 		// M2: emit X-Server-Time to stderr.
-		if resp.ServerTime != "" {
-			fmt.Fprintf(os.Stderr, "Server time: %s\n", resp.ServerTime)
-		}
+		emitServerTime(resp.ServerTime, "")
 
 		if outputMode == "json" {
 			// C1: render full api.Product in JSON mode.
@@ -852,6 +887,47 @@ func init() {
 // --------------------------------------------------------------------------
 // helpers
 // --------------------------------------------------------------------------
+
+// listMetaExtras decorates the server's pagination meta on the JSON path with
+// the delta-sync cursor and, when --ids was used, any requested IDs the
+// server did not return.
+type listMetaExtras struct {
+	api.Meta
+	ServerTime string   `json:"server_time,omitempty"`
+	MissingIDs []string `json:"missing_ids,omitempty"`
+}
+
+// allMeta is the synthetic meta for --all. Complete reports whether the
+// pagination loop reached the last page; false means the result is PARTIAL.
+type allMeta struct {
+	api.Meta
+	ServerTime string `json:"server_time,omitempty"`
+	Complete   bool   `json:"complete"`
+}
+
+// missingProductIDs reports which of the comma-separated requested IDs are
+// absent from the returned rows, plus how many IDs were requested. Matching
+// is case-insensitive since UUIDs compare equal regardless of case.
+func missingProductIDs(idsFlag string, got []api.Product) (missing []string, requested int) {
+	if idsFlag == "" {
+		return nil, 0
+	}
+	have := make(map[string]bool, len(got))
+	for _, p := range got {
+		have[strings.ToLower(p.ID)] = true
+	}
+	for _, raw := range strings.Split(idsFlag, ",") {
+		id := strings.TrimSpace(raw)
+		if id == "" {
+			continue
+		}
+		requested++
+		if !have[strings.ToLower(id)] {
+			missing = append(missing, id)
+		}
+	}
+	return missing, requested
+}
 
 // toOutputProduct converts an api.Product to the display model.
 // SKU and Price are derived from the first non-nil variant fields.

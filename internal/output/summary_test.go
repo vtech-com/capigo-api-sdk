@@ -65,6 +65,17 @@ func TestWriteListSummary(t *testing.T) {
 			in:      ListSummary{Shown: 5, Page: 1, Limit: 20, Total: 5},
 			notWant: "Tenant:",
 		},
+		{
+			name: "incomplete --all run is marked PARTIAL with the server total",
+			in:   ListSummary{Shown: 240, Page: 1, Limit: 240, Total: 3549, Tenant: "acme", Incomplete: "aborted at page 13 — results are PARTIAL"},
+			want: "Tenant: acme · Total: 3549 · showing 240 · INCOMPLETE — aborted at page 13 — results are PARTIAL",
+		},
+		{
+			// A truncated result must never borrow the completeness phrasing.
+			name:    "incomplete never reads as all rows shown",
+			in:      ListSummary{Shown: 240, Page: 1, Limit: 240, Total: 240, Incomplete: "aborted at page 13 — results are PARTIAL"},
+			notWant: "all rows shown",
+		},
 	}
 
 	for _, tc := range tests {

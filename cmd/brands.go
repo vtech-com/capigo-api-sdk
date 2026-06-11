@@ -204,9 +204,7 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if resp.ServerTime != "" {
-			fmt.Fprintf(os.Stderr, "Server time: %s\n", resp.ServerTime)
-		}
+		emitServerTime(resp.ServerTime, "")
 
 		if outputMode == "json" {
 			return output.WriteJSONObject(os.Stdout, envelope.Data)
@@ -314,9 +312,7 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if resp.ServerTime != "" {
-			fmt.Fprintf(os.Stderr, "Server time: %s\n", resp.ServerTime)
-		}
+		emitServerTime(resp.ServerTime, "")
 
 		if outputMode == "json" {
 			return output.WriteJSONObject(os.Stdout, envelope.Data)
@@ -483,9 +479,7 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if resp.ServerTime != "" {
-			fmt.Fprintf(os.Stderr, "Server time: %s\n", resp.ServerTime)
-		}
+		emitServerTime(resp.ServerTime, "")
 
 		if outputMode == "json" {
 			return output.WriteJSONObject(os.Stdout, envelope.Data)

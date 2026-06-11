@@ -135,7 +135,8 @@ capigo tenants list --output json
   So: `… products list -o json | jq '.data[]'` but `… products get <id> -o json | jq '.name'`.
 - **`quiet`** — prints just the resource ID, handy for shell piping.
 
-`products list` also prints the server timestamp to **stderr** (`Server time: …`); feed it
+`products list` also reports the server timestamp (`Server time: …`) — on **stdout** in table
+mode, on stderr in json/quiet modes, and as `meta.server_time` in JSON list output; feed it
 back as `--updated-since` for incremental delta sync.
 
 ## Pagination
@@ -161,6 +162,11 @@ How to get a complete result set:
 - **`products list` has `--all`** — it auto-paginates internally and streams every row.
   Prefer it whenever you need the full catalogue (e.g. alias/Product-Code checks):
   `capigo --tenant acme products list --all --output json | jq '.data[]'`.
+  **If `--all` fails mid-pagination** (rate limit, network), the rows already fetched are
+  still printed, the table footer says `INCOMPLETE — aborted at page N — results are
+  PARTIAL`, JSON meta carries `"complete": false`, and the command exits non-zero. **Check
+  `complete` / the footer before treating an `--all` result as the whole catalogue** — and
+  never treat it as complete when the exit code is non-zero.
 - **Every other `list`** (`tasks`, `boards`, `members`, `brands`, `categories`,
   `product-types`, `units`, `variants`) has **no `--all`** — page manually: start at
   `--page 1`, and while `meta.has_more` is `true`, request the next `--page`. Raising
@@ -339,6 +345,10 @@ Key facts callers depend on:
   update or upsert variants onto one unless the user explicitly asks to restore it.
 - The product table includes an **Aliases** column (joined with `, `), so alias/Product-Code
   checks are visible in table mode too — but completeness still requires paging (`--all`).
+- **`--ids` reports what it could NOT find.** Asking for 5 UUIDs and getting 3 rows back is
+  still exit 0, but the missing IDs are named — `Requested 5 ids · 3 found · missing: <id>,
+  <id>` in table mode, `meta.missing_ids` in JSON. Treat a missing ID as "deleted or
+  wrong-tenant", not as something to silently skip in your answer.
 
 ```bash
 # Create a simple product with a Product Code alias
