@@ -9,6 +9,21 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Self-diagnosing errors.** Every command failure now prints a diagnosis block on **stdout** (where an AI agent reads), not just a one-line `Error:` on stderr. The block resolves the error code to a meaning, a concrete next step, and the verbatim server response — so a caller no longer has to re-run with `--verbose` or recall the skill to understand what failed. JSON mode carries the same as `error.meaning` / `error.next` / `error.capability_note` / `error.raw`; quiet mode is unchanged. (Origin: Tấm hit `E9426` ("create product variant failed"), misread the opaque code as "the API does not support adding variants," and proposed a destructive recreate-and-archive workaround — when the operation is fully supported and the failure was about the request.)
+- **Capability brake.** Server-side write failures (validation/conflict/business codes) print `Note: a failed write does NOT mean this operation is unsupported.` It is scoped to real server round-trips — never shown for client-side or cobra arg-validation errors.
+- **A hand-maintained error catalog** (`internal/api/error_catalog.go`) mapping the common PCMS codes (E9426, E9445, E9446, E9425, E9443/4, E9447, E9417/8/9, E9463, and the shared auth/tenant/validation codes) to meaning + next step. Sourced from the backend `error-codes.ts`; to be replaced by an OpenAPI-published catalog once available.
+
+### Fixed
+
+- **`--verbose` now works.** The flag was declared but never wired, so the skill's "re-run with `--verbose`" advice was a no-op. It now traces the redacted HTTP request and response.
+- **Corrected stale error-code comments** in `internal/api/errors.go` (`E9445` is SKU-exists, `E9446` is duplicate-option-combination — not "currency" / "options pairing").
+
+### Changed
+
+- `capigo-api` skill updated in lockstep: the self-diagnosis section now leads with "a failed write is not a missing capability," points at the on-stdout diagnosis block, and warns against destructive workarounds.
+
 ---
 
 ## [0.13.0] — 2026-06-11

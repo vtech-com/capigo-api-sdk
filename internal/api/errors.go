@@ -9,16 +9,20 @@ import (
 
 // Product-domain error codes returned by /pcms/* endpoints.
 // These are informational constants; ExitCodeFor() maps HTTP status → exit code.
+// Meanings are sourced from the backend error-codes.ts — keep them in sync there
+// and in error_catalog.go (the user-facing interpretation), never guess.
 const (
 	ErrProductNotFound     = "E9417" // product not found (404)
-	ErrProductCreateFailed = "E9418" // create failed (500)
-	ErrProductUpdateFailed = "E9419" // update failed (500)
-	ErrVariantNotFound     = "E9425" // variant not found (404)
-	ErrProductValidation1  = "E9443" // validation: name
-	ErrProductValidation2  = "E9444" // validation: status
-	ErrProductValidation3  = "E9445" // validation: currency
-	ErrProductValidation4  = "E9446" // validation: options/variants pairing
-	ErrProductVariantLimit = "E9447" // validation: variant limit exceeded (max 50)
+	ErrProductCreateFailed = "E9418" // product create failed
+	ErrProductUpdateFailed = "E9419" // product update failed
+	ErrVariantNotFound     = "E9425" // variant not found / wrong tenant (404)
+	ErrVariantCreateFailed = "E9426" // variant create failed
+	ErrVariantUpdateFailed = "E9427" // variant update failed
+	ErrOptionInvalidName   = "E9443" // product option: invalid name
+	ErrOptionInvalidValues = "E9444" // product option: invalid values
+	ErrVariantSKUExists    = "E9445" // variant SKU already exists in tenant
+	ErrVariantDupCombo     = "E9446" // variant: duplicate option combination
+	ErrProductVariantLimit = "E9447" // variant limit exceeded (max 50)
 	ErrTenantDenied        = "E9103" // tenant access denied (403)
 	ErrAuthRequired        = "E0004" // auth required (401)
 	ErrInsufficientPerms   = "E0102" // insufficient permissions (403)
@@ -30,6 +34,10 @@ type APIError struct {
 	Message    string
 	RequestID  string
 	HTTPStatus int
+	// RawBody is the verbatim response body from the server, when available.
+	// It is surfaced on error so callers (especially AI agents) see the real
+	// server response without having to re-run with --verbose.
+	RawBody []byte
 }
 
 func (e *APIError) Error() string {

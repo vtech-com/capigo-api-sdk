@@ -453,12 +453,20 @@ Branch on the code, not the message text.
 
 ## Self-diagnosis
 
-When a command errors in a way you don't understand, or the JSON doesn't match what a
-reference doc here describes, look it up instead of guessing:
+**A failed command is never proof a feature is missing** — a write failure is about your
+request (a bad or conflicting field), not a missing capability. Don't conclude "the API can't
+do this" and don't build a destructive workaround around it.
+
+On any error the CLI prints a diagnosis block on **stdout** — `Means:` (what the code
+signifies), `Note:` (the reminder above, on write failures), `Next:` (the fix to try), and
+`Response:` (the verbatim server body). Read that first. In `json` mode the same fields appear
+as `error.meaning` / `error.next` / `error.capability_note` / `error.raw`.
+
+If that is not enough, look it up instead of guessing:
 
 1. **`capigo <command> --help`** — exact flags/args/defaults from the running binary.
-2. **`capigo … --verbose`** — re-run the failing call to see the real HTTP request and
-   response body (auth header redacted); this usually shows the offending field directly.
+2. **`capigo … --verbose`** — re-run to see the full HTTP request/response trace (auth header
+   redacted). The error response body is already shown without it; this adds the request line.
 3. **OpenAPI document** — the source of truth for endpoints, schemas, fields, and tenant
    requirements:
 

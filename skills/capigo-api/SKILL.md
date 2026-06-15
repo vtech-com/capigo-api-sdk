@@ -84,19 +84,34 @@ codes will not.
 
 ## When something looks wrong — self-diagnose before guessing
 
-If a command errors in a way you don't understand, or the JSON you get back doesn't match
-what this skill describes, **don't invent a workaround** — go look it up. Three sources, from
-cheapest to most authoritative:
+**A failed command never means a feature is missing.** If a write fails, that is about *your
+request* (a bad field, a conflicting value), not about the API lacking the capability — the
+capability exists if the command exists. Never conclude "the API doesn't support X" from an
+error, and never invent a destructive workaround (e.g. recreating and archiving a record) to
+route around one.
 
-1. **`capigo <command> --help`** — exact flags, arguments, and defaults for that command,
-   straight from the binary you're actually running. Start here.
-2. **`capigo … --verbose`** (or `-v`) — re-run the failing command with this flag to see the
-   real HTTP request and response (the Authorization header is redacted). This shows you the
-   exact payload sent and the error body returned, which usually pinpoints a bad field.
+On any error, the CLI already prints a diagnosis **on stdout** — read it before doing anything
+else. It contains:
+
+- `Means:` what the error code actually signifies.
+- `Note:` the reminder above (shown for write failures).
+- `Next:` the concrete fix to try.
+- `Response:` the verbatim server response body.
+
+If that is still not enough, go look it up — three sources, cheapest to most authoritative:
+
+1. **`capigo <command> --help`** — exact flags, arguments, and defaults, straight from the
+   binary you're running.
+2. **`capigo … --verbose`** (or `-v`) — re-run to see the full HTTP request/response trace
+   (Authorization redacted). The error response body is already shown without it, but this
+   adds the request line and the success-path trace.
 3. **The OpenAPI document** — the source of truth for every endpoint, schema, field, and
    tenant requirement: `https://platform.capigo.app/api/openapi`. It sits on the same host
    the CLI already talks to, so you can fetch and inspect it, e.g.
    `curl -s https://platform.capigo.app/api/openapi | jq '.paths."/pcms/products"'`.
+
+If you genuinely cannot tell why a write failed after this, surface the `Response:` block to a
+human and ask — do not guess.
 
 **Precedence when sources disagree:** a reference file in this skill describes the *intended*
 behaviour, but the live system is what actually runs. So trust order is: this skill's
