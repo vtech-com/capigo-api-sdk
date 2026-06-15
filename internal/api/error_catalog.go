@@ -1,17 +1,18 @@
 package api
 
 // ErrorInfo is a human- and agent-actionable interpretation of a Capigo error
-// code. It turns an opaque EXXXX/code string into a meaning, a concrete next
-// step, and a flag for whether the "a failed write is not a missing capability"
-// brake applies.
+// code. The server already returns a descriptive `message` for most codes (shown
+// as the `Server:` line); this catalog adds only what that message lacks:
+//
+//   - Next: the concrete action to take (never part of the server message).
+//   - CapabilityNote: the "a failed write is not a missing capability" brake.
+//   - Meaning: an interpretation, populated ONLY for codes whose server message
+//     is a generic fallback (E9426/E9427 — see product-write-errors.ts). For
+//     every other code the server message is descriptive enough, so Meaning is
+//     left empty to avoid maintaining a second, drift-prone copy of it.
 type ErrorInfo struct {
-	// Meaning explains what the code actually signifies.
-	Meaning string
-	// Next is the concrete action the caller should take.
-	Next string
-	// CapabilityNote is true when the failure could be misread as "the API does
-	// not support this operation" — i.e. write-side validation/conflict/business
-	// errors. When true, callers print the capability brake.
+	Meaning        string
+	Next           string
 	CapabilityNote bool
 }
 
@@ -27,88 +28,74 @@ func LookupError(code string) (ErrorInfo, bool) {
 }
 
 var errorCatalog = map[string]ErrorInfo{
-	// ----- Product variant write errors -----
+	// ----- Generic-fallback codes: the server message is uninformative
+	// ("Failed to update product variants"), so Meaning fills the void. -----
 	"E9426": {
-		Meaning:        "The server rejected creating a product variant.",
-		Next:           "Check the new variant's fields (name, sku, option1/2/3) in your payload, fix the offending value, and retry.",
+		Meaning:        "The server rejected creating a product variant for an unclassified reason (not a known SKU/option conflict — those have their own codes).",
+		Next:           "Re-check the new variant's fields (name, sku, option1/2/3). If nothing is obviously wrong, the cause is server-side only (DB constraint) — surface the Response below to a human; do not guess.",
 		CapabilityNote: true,
 	},
 	"E9427": {
-		Meaning:        "The server failed to update a product variant.",
-		Next:           "Re-check the variant fields; if it persists, surface the response below to a human.",
+		Meaning:        "The server failed to update a product variant for an unclassified reason.",
+		Next:           "Re-check the variant fields; if it persists, surface the Response below to a human.",
 		CapabilityNote: true,
 	},
+
+	// ----- Codes with a descriptive server message: Meaning omitted, the
+	// `Server:` line carries it. We add only Next + the capability brake. -----
 	"E9445": {
-		Meaning:        "A variant with this SKU already exists in the tenant.",
 		Next:           "Change the sku on the new variant, or update the existing one by passing its variant_id.",
 		CapabilityNote: true,
 	},
 	"E9446": {
-		Meaning:        "A variant with this option combination already exists on the product.",
 		Next:           "Change option1/option2/option3 so the combination is unique.",
 		CapabilityNote: true,
 	},
 	"E9447": {
-		Meaning:        "Variant limit exceeded (max 50 items per request).",
-		Next:           "Split the variants into batches of 50 or fewer.",
+		Next:           "Keep at least one variant on a variant-mode product.",
 		CapabilityNote: true,
 	},
 	"E9463": {
-		Meaning:        "Invalid compare-at-price for the variant.",
-		Next:           "compare_at_price must be greater than price; fix the value and retry.",
-		CapabilityNote: true,
-	},
-	"E9425": {
-		Meaning:        "The product or variant was not found, or does not belong to this tenant.",
-		Next:           "Re-check the product/variant ID and the tenant.",
-		CapabilityNote: false,
-	},
-
-	// ----- Product write errors -----
-	"E9417": {
-		Meaning:        "Product not found.",
-		Next:           "Re-check the product ID and tenant.",
-		CapabilityNote: false,
-	},
-	"E9418": {
-		Meaning:        "The server failed to create the product.",
-		Next:           "Re-check the payload; if it persists, surface the response below to a human.",
-		CapabilityNote: true,
-	},
-	"E9419": {
-		Meaning:        "The server failed to update the product.",
-		Next:           "Re-check the payload; if it persists, surface the response below to a human.",
+		Next:           "compare_at_price must be greater than price (or null); fix the value and retry.",
 		CapabilityNote: true,
 	},
 	"E9443": {
-		Meaning:        "Invalid product option name.",
 		Next:           "Fix the option name and retry.",
 		CapabilityNote: true,
 	},
 	"E9444": {
-		Meaning:        "Invalid product option values.",
 		Next:           "Fix the option values and retry.",
 		CapabilityNote: true,
 	},
-
-	// ----- Generic / shared -----
+	"E9425": {
+		Next:           "Re-check the product/variant ID and the tenant.",
+		CapabilityNote: false,
+	},
+	"E9417": {
+		Next:           "Re-check the product ID and tenant.",
+		CapabilityNote: false,
+	},
+	"E9418": {
+		Next:           "Re-check the payload; if it persists, surface the Response below to a human.",
+		CapabilityNote: true,
+	},
+	"E9419": {
+		Next:           "Re-check the payload; if it persists, surface the Response below to a human.",
+		CapabilityNote: true,
+	},
 	"VALIDATION_ERROR": {
-		Meaning:        "The request payload failed validation.",
 		Next:           "Read the server message above, fix the offending field, and retry.",
 		CapabilityNote: true,
 	},
 	"E0102": {
-		Meaning:        "You lack permission to perform this operation in this tenant.",
 		Next:           "Owner or admin role is required; surface this to a human.",
 		CapabilityNote: false,
 	},
 	"E9103": {
-		Meaning:        "Access to this tenant is denied.",
 		Next:           "Verify the tenant code and your access to it.",
 		CapabilityNote: false,
 	},
 	"E0004": {
-		Meaning:        "Authentication is required (missing or invalid API key).",
 		Next:           "Run: capigo auth login --key csk_...",
 		CapabilityNote: false,
 	},

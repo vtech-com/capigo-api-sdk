@@ -93,7 +93,9 @@ route around one.
 On any error, the CLI already prints a diagnosis **on stdout** — read it before doing anything
 else. It contains:
 
-- `Means:` what the error code actually signifies.
+- `Server:` the API's own error message — usually the most specific account of what went wrong.
+- `Means:` an added interpretation, shown only when the server message is a generic fallback
+  (e.g. E9426) and needs explaining.
 - `Note:` the reminder above (shown for write failures).
 - `Next:` the concrete fix to try.
 - `Response:` the verbatim server response body.
