@@ -32,6 +32,15 @@ type Client struct {
 	http    *http.Client
 	baseURL string
 	apiKey  string
+	// verboseW, when non-nil, receives a redacted trace of every request and
+	// response. Enabled via EnableVerbose (the --verbose flag).
+	verboseW io.Writer
+}
+
+// EnableVerbose turns on request/response tracing to w. The Authorization
+// header is always redacted. Pass nil to disable.
+func (c *Client) EnableVerbose(w io.Writer) {
+	c.verboseW = w
 }
 
 // NewClient creates a Client. baseURL must use HTTPS unless host is localhost or 127.0.0.1.
@@ -87,6 +96,14 @@ func (c *Client) Do(ctx context.Context, method, path string, body any, tenant *
 		req.Header.Set("X-Tenant-Code", *tenant)
 	}
 
+	if c.verboseW != nil {
+		_, _ = fmt.Fprintf(c.verboseW, "> %s %s\n", method, c.baseURL+path)
+		_, _ = fmt.Fprintf(c.verboseW, "> Authorization: %s\n", RedactedAuthorization(c.apiKey))
+		if tenant != nil {
+			_, _ = fmt.Fprintf(c.verboseW, "> X-Tenant-Code: %s\n", *tenant)
+		}
+	}
+
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("http: %w", err)
@@ -105,6 +122,13 @@ func (c *Client) Do(ctx context.Context, method, path string, body any, tenant *
 		Body:       rawBody,
 		RequestID:  resp.Header.Get("X-Request-Id"),
 		ServerTime: resp.Header.Get("X-Server-Time"),
+	}
+
+	if c.verboseW != nil {
+		_, _ = fmt.Fprintf(c.verboseW, "< HTTP %d\n", resp.StatusCode)
+		if len(rawBody) > 0 {
+			_, _ = fmt.Fprintf(c.verboseW, "< %s\n", string(rawBody))
+		}
 	}
 
 	if resp.StatusCode >= 400 {
@@ -134,6 +158,7 @@ func parseAPIError(body []byte, status int, requestID string) *APIError {
 			Message:    envelope.Error.Message,
 			RequestID:  rid,
 			HTTPStatus: status,
+			RawBody:    body,
 		}
 	}
 	return &APIError{
@@ -141,6 +166,7 @@ func parseAPIError(body []byte, status int, requestID string) *APIError {
 		Message:    string(body),
 		RequestID:  requestID,
 		HTTPStatus: status,
+		RawBody:    body,
 	}
 }
 

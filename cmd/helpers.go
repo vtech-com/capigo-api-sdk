@@ -49,20 +49,52 @@ func buildClient() (*api.Client, *config.Config, error) {
 		return nil, nil, err
 	}
 
+	if verbose {
+		client.EnableVerbose(os.Stderr)
+	}
+
 	return client, cfg, nil
 }
 
-// handleErr renders the error to stderr and exits with the appropriate exit code.
-// Returns nil so RunE callers do not trigger cobra's double-print.
-func handleErr(err error) error {
-	code, message, requestID := "ERROR", err.Error(), ""
+// renderCLIError renders err as a self-diagnosing error: the full diagnostic
+// block (meaning, capability brake, next step, raw response) goes to stdout
+// where an AI agent reads, and a concise line goes to stderr. It enriches the
+// error with the catalog interpretation when the code is known. It does not exit.
+func renderCLIError(err error) {
+	detail := output.ErrorDetail{Code: "ERROR", Message: err.Error()}
+	serverResponded := false
 	var apiErr *api.APIError
 	if errors.As(err, &apiErr) {
-		code = apiErr.Code
-		message = apiErr.Message
-		requestID = apiErr.RequestID
+		detail.Code = apiErr.Code
+		detail.Message = apiErr.Message
+		detail.RequestID = apiErr.RequestID
+		detail.HTTPStatus = apiErr.HTTPStatus
+		detail.RawBody = string(apiErr.RawBody)
+		serverResponded = len(apiErr.RawBody) > 0
 	}
-	output.RenderError(os.Stderr, outputMode, code, message, requestID)
+	// Only enrich with the catalog interpretation (meaning, next step, capability
+	// brake) when the server actually responded. Locally-constructed and cobra
+	// arg-validation errors never round-tripped, so the brake — "a failed write
+	// is not a missing capability" — would be misleading noise there.
+	if serverResponded {
+		if info, ok := api.LookupError(detail.Code); ok {
+			detail.Meaning = info.Meaning
+			detail.Next = info.Next
+			detail.CapabilityNote = info.CapabilityNote
+		}
+	}
+	// Avoid printing the raw body twice when it is identical to the parsed message
+	// (non-enveloped error responses set both to the same bytes).
+	if detail.RawBody == detail.Message {
+		detail.RawBody = ""
+	}
+	output.RenderErrorRich(os.Stdout, os.Stderr, outputMode, detail)
+}
+
+// handleErr renders the error and exits with the appropriate exit code.
+// Returns nil so RunE callers do not trigger cobra's double-print.
+func handleErr(err error) error {
+	renderCLIError(err)
 	os.Exit(api.ExitCodeFor(err))
 	return nil
 }

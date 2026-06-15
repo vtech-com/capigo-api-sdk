@@ -6,7 +6,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
-	"github.com/vtech-com/capigo-api-sdk/internal/output"
 )
 
 var (
@@ -37,7 +36,7 @@ func Execute() {
 			Message:    err.Error(),
 			HTTPStatus: 400,
 		}
-		output.RenderError(os.Stderr, outputMode, wrapped.Code, wrapped.Message, "")
+		renderCLIError(wrapped)
 		os.Exit(api.ExitCodeFor(wrapped))
 	}
 }

@@ -245,6 +245,87 @@ func RenderError(w io.Writer, mode, code, message, requestID string) {
 	_, _ = fmt.Fprintf(w, "Error: %s (code=%s, request_id=%s)\n", message, code, requestID)
 }
 
+// ErrorDetail carries everything needed to render a self-diagnosing error: the
+// raw API fields plus the catalog interpretation (meaning, next step, and the
+// capability brake). Meaning/Next/RawBody may be empty when no catalog entry
+// matched.
+type ErrorDetail struct {
+	Code           string
+	Message        string
+	RequestID      string
+	HTTPStatus     int
+	Meaning        string
+	Next           string
+	CapabilityNote bool
+	RawBody        string
+}
+
+const capabilityBrake = "a failed write does NOT mean this operation is unsupported."
+
+// RenderErrorRich writes a self-diagnosing error. The full diagnostic block goes
+// to stdout (where an AI agent reads), and a concise one-line summary goes to
+// stderr (for humans and scripts). Exit-code handling stays with the caller.
+//
+//   - table mode: human-readable block on stdout + one line on stderr.
+//   - json mode:  enriched JSON error object on stdout + one line on stderr.
+//   - quiet mode: nothing on stdout; one line on stderr (unchanged behaviour).
+func RenderErrorRich(stdout, stderr io.Writer, mode string, d ErrorDetail) {
+	stderrLine := func() {
+		_, _ = fmt.Fprintf(stderr, "Error: %s (code=%s, request_id=%s)\n", d.Message, d.Code, d.RequestID)
+	}
+
+	switch mode {
+	case "quiet":
+		stderrLine()
+		return
+
+	case "json":
+		obj := map[string]any{
+			"error": map[string]any{
+				"code":            d.Code,
+				"message":         d.Message,
+				"request_id":      d.RequestID,
+				"meaning":         d.Meaning,
+				"next":            d.Next,
+				"capability_note": d.CapabilityNote,
+				"raw":             d.RawBody,
+			},
+		}
+		enc := json.NewEncoder(stdout)
+		enc.SetIndent("", "  ")
+		_ = enc.Encode(obj)
+		stderrLine()
+		return
+
+	default: // table / text
+		_, _ = fmt.Fprintf(stdout, "✗ Failed · %s", d.Code)
+		if d.HTTPStatus > 0 {
+			_, _ = fmt.Fprintf(stdout, " · HTTP %d", d.HTTPStatus)
+		}
+		_, _ = fmt.Fprintln(stdout)
+		if d.Message != "" {
+			_, _ = fmt.Fprintf(stdout, "  Server:   %s\n", d.Message)
+		}
+		if d.Meaning != "" {
+			_, _ = fmt.Fprintf(stdout, "  Means:    %s\n", d.Meaning)
+		}
+		if d.CapabilityNote {
+			_, _ = fmt.Fprintf(stdout, "  Note:     %s\n", capabilityBrake)
+		}
+		if d.Next != "" {
+			_, _ = fmt.Fprintf(stdout, "  Next:     %s\n", d.Next)
+		}
+		if d.RawBody != "" {
+			_, _ = fmt.Fprintf(stdout, "  Response: %s\n", d.RawBody)
+		}
+		if d.RequestID != "" {
+			_, _ = fmt.Fprintf(stdout, "  request_id=%s\n", d.RequestID)
+		}
+		stderrLine()
+		return
+	}
+}
+
 // toSlice normalises data into []any regardless of whether it arrives as a
 // single struct or a slice of structs.
 func toSlice(data any) []any {
