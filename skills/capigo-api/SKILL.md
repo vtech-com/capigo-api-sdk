@@ -46,11 +46,17 @@ repo builds exactly that layer on top of this skill.)
   `capigo health` as a one-shot preflight (exit 0 = API reachable and key accepted). An auth
   failure surfaces as **exit code 2** — when you see it, ask the user to run
   `capigo auth login --key csk_…` rather than retrying blindly.
-- **Output format.** Add `--output json` (or `-o json`) to anything you intend to parse;
-  `table` (default) is for humans, `quiet` prints only an ID. Always parse `json`, never
-  scrape the table. **JSON contract:** every `list` command returns
-  `{"data":[…],"meta":{…}}` (read `.data[]`); single-item commands (`get`/`create`/`update`)
-  return the bare object.
+- **Output format — pick the mode before you act.** `table` (default) is human prose for
+  reading on screen; `-o json` (`--output json`) is for anything you will parse, store, or
+  pipe; `quiet` prints only an ID. **The moment you put `>` or `|` after a `capigo` command,
+  you must also pass `-o json`.** `table` output is text, not JSON, so redirecting it into a
+  file and running `json.load()` / `jq` on it fails — the fix is always `-o json`, never
+  stripping or skipping lines. **`Server time:` is on stdout only in `table` mode; under
+  `-o json` it moves to stderr and stdout is pure JSON** — a `-o json` stream therefore never
+  carries a `Server time:` prefix to strip, and a file that does contain one was captured
+  without `-o json` (re-run with the flag rather than post-processing it). **JSON contract:**
+  every `list` command returns `{"data":[…],"meta":{…}}` (read `.data[]`); single-item
+  commands (`get`/`create`/`update`) return the bare object.
 - **Pagination.** Every `list` returns at most one page (default 20 rows, max 100) — **not the
   whole collection**. Check `meta.has_more` in the JSON and keep paging (`--page`) until it's
   `false`, or use `products list --all`. **To count "how many X", read `meta.total` — never

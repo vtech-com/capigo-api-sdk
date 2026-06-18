@@ -126,8 +126,10 @@ capigo tenants list --output json
 | `--api-url <url>` | Override the API base URL (staging / local dev). |
 | `-v, --verbose` | Print the HTTP request/response (Authorization header redacted). |
 
-- **`table`** — human-readable, for display only. Don't parse it.
-- **`json`** — machine-readable. Use this for anything you'll read programmatically. **JSON
+- **`table`** — human-readable prose, for reading on screen only. **Never redirect (`>`) or
+  pipe (`|`) table output** — it is text, not JSON, so feeding it to `json.load()` / `jq`
+  fails. If you will process the output at all, pick `json` *before* you run the command.
+- **`json`** — machine-readable. Use this for anything you'll parse, store in a file, or pipe. **JSON
   contract (stable as of v0.6):** every `list` command emits `{"data":[…],"meta":{…}}` — read
   the array at `.data[]`, not the top level. The `meta` object carries pagination — see
   [Pagination](#pagination) below; **one call is not the whole result set**. Single-item
@@ -137,7 +139,23 @@ capigo tenants list --output json
 
 `products list` also reports the server timestamp (`Server time: …`) — on **stdout** in table
 mode, on stderr in json/quiet modes, and as `meta.server_time` in JSON list output; feed it
-back as `--updated-since` for incremental delta sync.
+back as `--updated-since` for incremental delta sync. **Consequence:** a `-o json` stdout
+stream is pure JSON with no `Server time:` prefix to strip. If a file or string you are
+parsing contains a `Server time:` line, it was captured without `-o json` — re-run the
+command with the flag, never post-process the table text (e.g. dropping the first line).
+
+### Picking a mode: are you reading, or processing?
+
+Decide before every command:
+
+- **Reading** (showing a user, narrating a finding, eyeballing a count): use the default
+  `table`. Read totals and the resolved tenant from the stdout footer. Do not redirect or pipe.
+- **Processing** (into a variable, a file, `jq`, or `json.load()`): pass `-o json`. Save with
+  `capigo … -o json > out.json` (the file is pure JSON); count with `… -o json | jq
+  '.meta.total'` (never `jq '.data | length'`, which is one page).
+
+One-line rule: **if you write `>` or `|` after a `capigo` command, you must also write
+`-o json`.**
 
 ## Pagination
 
