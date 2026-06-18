@@ -9,6 +9,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+---
+
+## [0.16.0] — 2026-06-18
+
 ### Added
 
 - **Non-TTY `-o json` nudge.** When stdout is not a terminal (output was redirected or piped)
