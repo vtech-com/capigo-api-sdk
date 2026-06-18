@@ -11,6 +11,22 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.14.1] — 2026-06-18
+
+### Changed
+
+- **`capigo-api` skill — output-mode rules sharpened.** Converted the passive "use json to
+  parse" guidance into an active prohibition stated at the point of action: *the moment you
+  put `>` or `|` after a command, you must also pass `-o json`*. Added the `Server time:`
+  placement invariant (stdout in table mode, stderr under `-o json`) as the direct antidote to
+  a fabricated "strip the first line" (`lines[1:]`) workaround, plus a short reading-vs-
+  processing decision guide in `references/cli_basics.md`. (Origin: Tấm redirected default
+  *table* output into a `.json` file, hit `JSONDecodeError`, then invented a scene — a JSON
+  body *with* a `Server time:` prefix, which cannot co-occur — and proposed stripping the
+  first line, which would corrupt real `-o json` output.) No CLI behavior change.
+
+---
+
 ## [0.14.0] — 2026-06-15
 
 ### Added
