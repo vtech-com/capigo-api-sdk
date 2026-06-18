@@ -96,7 +96,37 @@ var errorCatalog = map[string]ErrorInfo{
 		CapabilityNote: false,
 	},
 	"E0004": {
-		Next:           "Run: capigo auth login --key csk_...",
+		Next:           "Not authenticated — ask the user to re-authenticate: capigo auth login --key <their csk_… key>.",
 		CapabilityNote: false,
+	},
+
+	// ----- Public API auth codes (apps/platform: auth-guard.ts / proxy.ts). These
+	// are what THIS CLI sees on an auth failure — distinct from the internal web
+	// app's E0004 family. The server message is descriptive, so Meaning stays
+	// empty; Next carries the action plus the brake against the most common
+	// agent misread: treating a rejected key as a transient, retryable hiccup.
+	// CapabilityNote stays false — an auth failure is never a missing feature.
+	//
+	// The key distinction encoded here: only AUTH_INTERNAL_ERROR (a 500 from the
+	// auth service) is genuinely transient and worth a retry. A rejected/malformed
+	// key or a tenant mismatch is deterministic — the CLI sends a fixed key every
+	// call, so the same key will be rejected the same way; retrying changes nothing.
+	"AUTH_INVALID_KEY": {
+		Next: "The API key was rejected — this is auth (exit 2), not a rate limit, so retrying the same key will NOT help. Ask the user to re-authenticate: capigo auth login --key <their csk_… key>. If a freshly provided key still returns 401, the cause is server-side, not the key — surface it; do not loop.",
+	},
+	"AUTH_INVALID_KEY_PREFIX": {
+		Next: "The API key is malformed (it must look like csk_…). Ask the user for the complete key and re-run: capigo auth login --key <their csk_… key>. Retrying the same value will not help.",
+	},
+	"AUTH_MISSING_HEADER": {
+		Next: "No API key was sent — the CLI is not logged in. Ask the user to run: capigo auth login --key <their csk_… key> (or set CAPIGO_API_KEY). Do not retry until a key is configured.",
+	},
+	"AUTH_INVALID_FORMAT": {
+		Next: "The Authorization header was malformed. Re-authenticate with a clean key: capigo auth login --key <their csk_… key>. Retrying the same value will not help.",
+	},
+	"AUTH_TENANT_MISMATCH": {
+		Next: "This API key is scoped to a different tenant (exit 3) — retrying or re-authenticating will not change that. Use a --tenant the key can access, or ask the user for a key scoped to this tenant.",
+	},
+	"AUTH_INTERNAL_ERROR": {
+		Next: "The auth service itself errored (server-side, HTTP 500). Unlike a rejected key, this one IS transient — retry once after a short backoff. If it persists, surface it; it is not your key.",
 	},
 }

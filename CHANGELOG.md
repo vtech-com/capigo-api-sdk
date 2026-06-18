@@ -9,6 +9,24 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Self-diagnosis for auth errors.** The on-error diagnosis block now carries a `Next:` line
+  for the public API's auth codes (`AUTH_INVALID_KEY`, `AUTH_INVALID_KEY_PREFIX`,
+  `AUTH_MISSING_HEADER`, `AUTH_INVALID_FORMAT`, `AUTH_TENANT_MISMATCH`, `AUTH_INTERNAL_ERROR`),
+  sourced from `apps/platform` `auth-guard.ts` / `proxy.ts`. The guidance distinguishes the
+  **deterministic** failures (a rejected/malformed key or tenant mismatch — the CLI sends the
+  same key every call, so retrying is futile) from the one genuinely **transient** case
+  (`AUTH_INTERNAL_ERROR`, a 500 from the auth service, worth one retry). Phrasing directs the
+  agent to **ask the user to re-authenticate**, never to source or echo a secret itself. The
+  `capigo-api` skill's Authentication note is updated in lockstep. (Origin: Tấm read
+  `AUTH_INVALID_KEY` as "token expired temporarily, just retry" — wrong on both counts.)
+
+### Changed
+
+- Corrected the stale `E0004` catalog entry (it is the internal web app's auth code, not a
+  code this public-API CLI sees) and softened its `Next:` to the "ask the user" phrasing.
+
 ---
 
 ## [0.14.1] — 2026-06-18

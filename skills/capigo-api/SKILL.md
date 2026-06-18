@@ -45,7 +45,11 @@ repo builds exactly that layer on top of this skill.)
   `CAPIGO_API_KEY` env var. Confirm the agent is logged in with `capigo auth whoami`, or run
   `capigo health` as a one-shot preflight (exit 0 = API reachable and key accepted). An auth
   failure surfaces as **exit code 2** — when you see it, ask the user to run
-  `capigo auth login --key csk_…` rather than retrying blindly.
+  `capigo auth login --key csk_…` rather than retrying blindly. A rejected or malformed key
+  (`AUTH_INVALID_KEY`, exit 2) and a tenant mismatch (`AUTH_TENANT_MISMATCH`, exit 3) are
+  **deterministic** — the CLI sends the same key every call, so retrying changes nothing; only
+  an auth-*service* error (`AUTH_INTERNAL_ERROR`, HTTP 500) is transient and worth one retry.
+  The on-error diagnosis block spells this out in its `Next:` line — read it.
 - **Output format — pick the mode before you act.** `table` (default) is human prose for
   reading on screen; `-o json` (`--output json`) is for anything you will parse, store, or
   pipe; `quiet` prints only an ID. **The moment you put `>` or `|` after a `capigo` command,
