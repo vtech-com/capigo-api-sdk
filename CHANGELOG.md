@@ -9,6 +9,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+---
+
+## [0.15.0] — 2026-06-18
+
 ### Added
 
 - **Self-diagnosis for auth errors.** The on-error diagnosis block now carries a `Next:` line
