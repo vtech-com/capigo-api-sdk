@@ -9,6 +9,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+---
+
+## [0.14.1] — 2026-06-18
+
 ### Changed
 
 - **`capigo-api` skill — output-mode rules sharpened.** Converted the passive "use json to
