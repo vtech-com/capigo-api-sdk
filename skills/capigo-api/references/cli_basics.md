@@ -129,6 +129,10 @@ capigo tenants list --output json
 - **`table`** — human-readable prose, for reading on screen only. **Never redirect (`>`) or
   pipe (`|`) table output** — it is text, not JSON, so feeding it to `json.load()` / `jq`
   fails. If you will process the output at all, pick `json` *before* you run the command.
+  When stdout is not a terminal (you redirected or piped) and you did not set `--output`, the
+  CLI prints a one-line reminder to **stderr** nudging you to `-o json` — heed it rather than
+  trying to clean up the table text. (Silence with `CAPIGO_NO_HINTS=1` if you really want
+  table output piped.)
 - **`json`** — machine-readable. Use this for anything you'll parse, store in a file, or pipe. **JSON
   contract (stable as of v0.6):** every `list` command emits `{"data":[…],"meta":{…}}` — read
   the array at `.data[]`, not the top level. The `meta` object carries pagination — see

@@ -25,6 +25,13 @@ Configuration is stored in ~/.capigo/config.json.
 API keys must start with csk_. Use 'capigo auth login --key <key>' to authenticate.`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
+	// Nudge toward -o json when output is being captured but table is still in
+	// effect (see maybeWarnNonTTYTable). No child command defines its own
+	// PersistentPreRunE, so cobra runs this for every command.
+	PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+		maybeWarnNonTTYTable(cmd)
+		return nil
+	},
 }
 
 func Execute() {

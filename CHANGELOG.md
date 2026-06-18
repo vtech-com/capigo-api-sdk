@@ -11,6 +11,24 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.16.0] — 2026-06-18
+
+### Added
+
+- **Non-TTY `-o json` nudge.** When stdout is not a terminal (output was redirected or piped)
+  and `--output` was not set, the CLI now prints a one-line reminder to **stderr** that table
+  output is text, not JSON, and to re-run with `-o json` if it will be parsed. This is the only
+  guard for the redirect-table-as-JSON mistake, which exits 0 (a valid table was printed) so
+  the on-error diagnosis block never fires. The hint goes to stderr only — it never pollutes
+  the captured stdout stream — is silenced by `CAPIGO_NO_HINTS=1`, and is suppressed for an
+  explicit `--output`, on a real terminal, and for command groups that ignore `-o json`
+  (`version`, `config`). Skill (`cli_basics.md`) updated in lockstep. Design note:
+  `docs/tty-output-guard.md`. (Origin: Tấm redirected default table output into a `.json` file
+  and hit JSONDecodeError; the v0.14.1 skill rule addressed it by instruction, this adds a
+  tool-level backstop.)
+
+---
+
 ## [0.15.0] — 2026-06-18
 
 ### Added
