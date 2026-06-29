@@ -11,6 +11,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.17.0] — 2026-06-29
+
+### Added
+
+- `boards list --query/-q` flag for case-insensitive board name search, matching the `q`
+  parameter now served by `GET /mission/boards` (#TBD).
+
+---
+
 ## [0.16.0] — 2026-06-18
 
 ### Added
