@@ -326,7 +326,7 @@ Tenant **optional** for reads.
 
 | Command | Key flags |
 |---|---|
-| `boards list` | `--tenant`, `--page`, `--limit` (default 20) |
+| `boards list` | `--tenant`, `--query/-q` (case-insensitive name search), `--page`, `--limit` (default 20) |
 | `boards get <id>` | `--tenant` — returns the board with its `lists` array |
 
 ### members

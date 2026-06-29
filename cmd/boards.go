@@ -21,13 +21,14 @@ var boardCmd = &cobra.Command{
 
 var (
 	boardListTenant string
+	boardListQuery  string
 	boardListPage   int
 	boardListLimit  int
 )
 
 var boardsListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List boards",
+	Short: "List boards (supports --query for name search)",
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -44,6 +45,9 @@ var boardsListCmd = &cobra.Command{
 		tenant := resolveTenant(boardListTenant, profile)
 
 		params := url.Values{}
+		if boardListQuery != "" {
+			params.Set("q", boardListQuery)
+		}
 		if boardListPage > 0 {
 			params.Set("page", strconv.Itoa(boardListPage))
 		}
@@ -171,6 +175,7 @@ tenant; if omitted, the API uses your active tenant context.`,
 
 func init() {
 	boardsListCmd.Flags().StringVar(&boardListTenant, "tenant", "", "scope to this tenant code")
+	boardsListCmd.Flags().StringVarP(&boardListQuery, "query", "q", "", "case-insensitive search against board name")
 	boardsListCmd.Flags().IntVar(&boardListPage, "page", 0, "page number")
 	boardsListCmd.Flags().IntVar(&boardListLimit, "limit", 20, "items per page")
 
