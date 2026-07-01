@@ -147,9 +147,13 @@ catalogue-policy skill, not here.)
   confirmation → execute**. A wrong write is far more expensive than a clarifying question.
 - **Check for collisions first.** A new `sku`, alias, or `barcode` must be unique within the
   tenant — search before you insert, and treat **exit 8** (conflict) as "it already exists",
-  not as a retryable error. When that search is a `list`, remember it's paginated: a clean
-  first page does **not** prove uniqueness — page to the end (or `products list --all`, or a
-  `--query`/`--ids` narrow enough to fit one page) before concluding "no collision".
+  not as a retryable error. Make `products list --query "<value>"` your **first pass**: it
+  matches name, aliases, tags, SKU and barcode server-side (`ILIKE` substring), so a specific
+  value normally lands on one page — no need to pull the whole catalogue. Only when a `list`
+  genuinely spans pages does a clean first page **fail** to prove uniqueness — then page to the
+  end or use `products list --all`. One caveat: alias matching is a substring on the *stored*
+  value, so a shortened stored alias (e.g. `VVD013`) won't be found by the full code
+  (`SLM-DS-VVD013`) — search the short fragment, or fall back to `--all` (see `cli_basics.md`).
 - **Don't silently change identifiers.** Changing an existing `sku`, `barcode`, or alias on a
   live record breaks whatever references it — only do so when the user explicitly asks.
 
