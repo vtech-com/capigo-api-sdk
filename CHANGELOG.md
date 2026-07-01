@@ -9,6 +9,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+---
+
+## [0.18.0] — 2026-07-01
+
 ### Added
 
 - **Product tags.** Products now carry a free-form `tags` string array alongside `aliases`
@@ -27,7 +31,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
     `--from-json -` (a JSON array of subtask items).
   - `tasks create --subtasks-json <file>` — create a parent task **and** its subtasks in one
     atomic call (`POST /mission/tasks/with-subtasks`); the parent is built from the existing
-    create flags. Both are all-or-nothing (max 25 subtasks/request).
+    create flags. Both are all-or-nothing (max 25 subtasks/request). These endpoints are
+    **pre-staged**: they exist on `develop` but may ship ahead of production, so a call can
+    return 404 until `develop` reaches prod (consistent with prior pre-staged CLI releases).
 - **OpenAPI spec: three mission-task endpoints documented.** `api/openapi.json` now includes
   `GET /mission/tasks/{id}/comments` (already implemented by `tasks comments`, previously
   undocumented in the bundled spec), plus the two new subtask endpoints and their schemas
