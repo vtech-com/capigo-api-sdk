@@ -423,7 +423,10 @@
               "type": "string"
             },
             "description": "Free-form string tags for product organization and filtering.",
-            "example": ["organic", "premium"]
+            "example": [
+              "organic",
+              "premium"
+            ]
           },
           "is_deleted": {
             "type": "boolean",
@@ -692,6 +695,270 @@
           },
           "abbreviation": {
             "type": "string"
+          }
+        }
+      },
+      "CreateSubtasksRequest": {
+        "type": "object",
+        "required": [
+          "tenant_code",
+          "subtasks"
+        ],
+        "properties": {
+          "tenant_code": {
+            "type": "string",
+            "description": "The tenant/workspace code."
+          },
+          "subtasks": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 25,
+            "description": "List of subtask items to create (1-25 items).",
+            "items": {
+              "$ref": "#/components/schemas/SubtaskItem"
+            }
+          }
+        }
+      },
+      "CreateTaskWithSubtasksRequest": {
+        "type": "object",
+        "required": [
+          "tenant_code",
+          "task",
+          "subtasks"
+        ],
+        "properties": {
+          "tenant_code": {
+            "type": "string",
+            "description": "The tenant/workspace code."
+          },
+          "task": {
+            "$ref": "#/components/schemas/CreateTaskWithSubtasksTask"
+          },
+          "subtasks": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 25,
+            "description": "List of subtask items to create (1-25 items).",
+            "items": {
+              "$ref": "#/components/schemas/SubtaskItem"
+            }
+          }
+        }
+      },
+      "CreateTaskWithSubtasksTask": {
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 10000,
+            "nullable": true
+          },
+          "assignee_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "assigned_agent_key": {
+            "type": "string",
+            "nullable": true,
+            "description": "AI agent key. Cannot be provided together with assignee_id."
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "board_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "board_list_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "follower_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "Low",
+              "Normal",
+              "High",
+              "Urgent"
+            ],
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "Pending",
+              "To-Do",
+              "Doing",
+              "Done",
+              "Closed",
+              "Cancelled"
+            ]
+          }
+        }
+      },
+      "PublicTaskCommentResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "author",
+          "kind",
+          "content",
+          "ui_data",
+          "attachments",
+          "parent_id",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "author": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "type"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string",
+                "description": "display_name → agent name → 'System'. Never the member email."
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "agent"
+                ]
+              }
+            }
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "comment",
+              "activity",
+              "card",
+              "artifact"
+            ]
+          },
+          "content": {
+            "type": "string",
+            "nullable": true
+          },
+          "ui_data": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true,
+            "description": "Raw structured event data for activity messages; not pre-rendered."
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "file_name",
+                "mime_type",
+                "size_bytes"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "file_name": {
+                  "type": "string"
+                },
+                "mime_type": {
+                  "type": "string"
+                },
+                "size_bytes": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "parent_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "SubtaskItem": {
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 10000,
+            "nullable": true
+          },
+          "assignee_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "Low",
+              "Normal",
+              "High",
+              "Urgent"
+            ],
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "Pending",
+              "To-Do",
+              "Doing",
+              "Done",
+              "Closed",
+              "Cancelled"
+            ],
+            "nullable": true
           }
         }
       }
@@ -1235,6 +1502,293 @@
         }
       }
     },
+    "/mission/tasks/with-subtasks": {
+      "post": {
+        "summary": "Create Task with Subtasks",
+        "tags": [
+          "Tasks"
+        ],
+        "description": "Create a task together with its subtasks in a single atomic request. All-or-nothing validation: if any part fails, nothing is created. Max 25 subtasks per request.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTaskWithSubtasksRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Task and subtasks created successfully",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "task": {
+                          "$ref": "#/components/schemas/PublicTaskResponse"
+                        },
+                        "subtasks": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/PublicTaskResponse"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (all-or-nothing) — nothing was created. Possible codes: VALIDATION_ERROR, MISSING_TENANT, INVALID_ASSIGNEE, INVALID_FOLLOWERS, BOARD_NOT_FOUND, SUBTASK_VALIDATION_ERROR.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied — not a tenant member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mission/tasks/{id}/subtasks": {
+      "post": {
+        "summary": "Create Subtasks in Existing Task",
+        "tags": [
+          "Tasks"
+        ],
+        "description": "Create batch subtasks under an existing parent task. All-or-nothing validation: if any subtask fails validation, nothing is created. Max 25 subtasks per request.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Parent task UUID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSubtasksRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Subtasks created successfully",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "parent_task": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "code": {
+                              "type": "string"
+                            },
+                            "title": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "subtasks": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/PublicTaskResponse"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (all-or-nothing) — nothing was created. Possible codes: SUBTASK_VALIDATION_ERROR, PARENT_TASK_NOT_FOUND, SUBTASK_INVALID, PARENT_TASK_ARCHIVED, INVALID_ASSIGNEE.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied — not parent task owner or tenant owner, or not a tenant member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mission/tasks/{id}/comments": {
+      "get": {
+        "summary": "Retrieve Task Comments & Activity",
+        "description": "Read-only chronological timeline of a task's conversation (human comments) and activity (status/assignment/etc. system messages). Returns 200 with an empty list when the task has no thread yet.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "description": "Filter the timeline. Omit to return both.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "comment",
+                "activity"
+              ]
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Order by created_at. Default desc (newest first).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size. Values > 50 are rejected with 400 (not clamped).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task comment / activity timeline",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicTaskCommentResponse"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/MetaPagination"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameter (type, sort, page, or limit)"
+          },
+          "404": {
+            "description": "Task not found"
+          }
+        }
+      }
+    },
     "/pcms/products": {
       "get": {
         "summary": "List Products (Catalog Sync)",
@@ -1459,7 +2013,10 @@
                       "type": "string"
                     },
                     "description": "Alternative names / search aliases for this product.",
-                    "example": ["áo thun", "t-shirt"]
+                    "example": [
+                      "áo thun",
+                      "t-shirt"
+                    ]
                   },
                   "tags": {
                     "type": "array",
@@ -1467,7 +2024,10 @@
                       "type": "string"
                     },
                     "description": "Free-form string tags for product organization and filtering.",
-                    "example": ["organic", "premium"]
+                    "example": [
+                      "organic",
+                      "premium"
+                    ]
                   },
                   "options": {
                     "type": "array",

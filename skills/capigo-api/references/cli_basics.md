@@ -279,12 +279,38 @@ Tenant is **optional** for reads, **required** for `create`.
 | `tasks list` | `--tenant`, `--query/-q`, `--status`, `--parent-task-id` (use `null` for top-level only), `--page`, `--limit` |
 | `tasks get <id>` | `--tenant` |
 | `tasks comments <id>` | `--tenant` (optional); `--type comment\|activity` (default both), `--sort asc\|desc` (default `desc` = newest first), `--page`, `--limit` (max 50). UUID-addressed only. |
-| `tasks create` | `--title` (required), `--tenant` (required), `--description`, `--priority`, `--status`, `--due-date` (RFC3339), `--assignee` (user id), `--board` (id), `--list` (board list id), `--follower-id` (repeatable) |
+| `tasks create` | `--title` (required), `--tenant` (required), `--description`, `--priority`, `--status`, `--due-date` (RFC3339), `--assignee` (user id), `--board` (id), `--list` (board list id), `--follower-id` (repeatable), `--subtasks-json` (array of subtask items → creates task + subtasks atomically) |
 | `tasks update <id>` | `--tenant` (optional); any of `--title`, `--description` (empty string clears), `--status`, `--assignee` (UUID; `--assignee ""` unassigns), `--board` + `--list` (sent together; `--board "" --list ""` removes from board), `--follower-id` (repeatable, additive — removal not supported). At least one flag required. UUID-addressed only. |
+| `tasks subtasks <parent-id>` | `--tenant` (required); single subtask via `--title` (+ `--description`, `--assignee`, `--due-date` `YYYY-MM-DD`, `--priority`, `--status`), or a batch via `--from-json -` (array of subtask items). Max 25 per request. |
 
 ```bash
 capigo tasks list --status To-Do --output json
 capigo tasks create --tenant acme --title "Fix login bug" --priority high --output quiet
+```
+
+#### Creating subtasks (`tasks subtasks`, `tasks create --subtasks-json`)
+
+A task can have subtasks (child tasks). Two ways to create them, both **all-or-nothing**
+(if any item is invalid, nothing is created; max 25 subtasks per request):
+
+- **Under an existing parent** → `tasks subtasks <parent-id>`. One subtask via `--title`, or a
+  batch via `--from-json -` (a JSON **array** of subtask items).
+- **A new parent plus its subtasks in one atomic call** → `tasks create … --subtasks-json <file>`.
+  The parent is built from the normal `tasks create` flags; `--subtasks-json` is the subtasks array.
+
+A subtask item is `{title (required), description?, assignee_id?, due_date? (YYYY-MM-DD),
+priority? (Low/Normal/High/Urgent), status? (Pending/To-Do/Doing/Done/Closed/Cancelled)}`.
+Note `due_date` here is a calendar **date** (`YYYY-MM-DD`), unlike `tasks create --due-date`
+which is an RFC3339 datetime.
+
+```bash
+# Add two subtasks under an existing task
+echo '[{"title":"Design"},{"title":"Build","priority":"High"}]' \
+  | capigo tasks subtasks <parent-uuid> --tenant acme --from-json -
+
+# Create a parent task and its subtasks atomically
+echo '[{"title":"Subtask A"},{"title":"Subtask B"}]' \
+  | capigo tasks create --tenant acme --title "Epic X" --subtasks-json -
 ```
 
 #### Reading a task's discussion + history (`tasks comments`)

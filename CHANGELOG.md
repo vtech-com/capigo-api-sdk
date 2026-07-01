@@ -20,6 +20,20 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - **`products create --aliases` flag.** Aliases were previously settable on create only via
   `--from-json`; a repeatable `--aliases` flag now matches `products update` and the new
   `--tags`, removing the create/update asymmetry.
+- **Subtasks.** Two new endpoints from the mission API are now wrapped:
+  - `tasks subtasks <parent-id>` — batch-create subtasks under an existing task
+    (`POST /mission/tasks/{id}/subtasks`). One subtask via `--title` (+ `--description`,
+    `--assignee`, `--due-date` `YYYY-MM-DD`, `--priority`, `--status`), or a batch via
+    `--from-json -` (a JSON array of subtask items).
+  - `tasks create --subtasks-json <file>` — create a parent task **and** its subtasks in one
+    atomic call (`POST /mission/tasks/with-subtasks`); the parent is built from the existing
+    create flags. Both are all-or-nothing (max 25 subtasks/request).
+- **OpenAPI spec: three mission-task endpoints documented.** `api/openapi.json` now includes
+  `GET /mission/tasks/{id}/comments` (already implemented by `tasks comments`, previously
+  undocumented in the bundled spec), plus the two new subtask endpoints and their schemas
+  (`SubtaskItem`, `CreateSubtasksRequest`, `CreateTaskWithSubtasksRequest`,
+  `CreateTaskWithSubtasksTask`, `PublicTaskCommentResponse`), spliced from the platform spec.
+  Path/body coverage guards updated in lockstep.
 
 ### Changed
 
