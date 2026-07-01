@@ -124,6 +124,50 @@ type CreateTaskRequest struct {
 	DueDate     *string  `json:"due_date,omitempty"`
 }
 
+// SubtaskItem is one entry in a batch subtask create (max 25 per request).
+// Only Title is required. DueDate is a calendar date (YYYY-MM-DD), not a datetime.
+type SubtaskItem struct {
+	Title       string  `json:"title"`
+	Description *string `json:"description,omitempty"`
+	AssigneeID  *string `json:"assignee_id,omitempty"`
+	DueDate     *string `json:"due_date,omitempty"`
+	Priority    *string `json:"priority,omitempty"`
+	Status      *string `json:"status,omitempty"`
+}
+
+// CreateSubtasksRequest is the body for POST /mission/tasks/{id}/subtasks.
+// tenant_code is a required body field. Validation is all-or-nothing: if any
+// subtask is invalid, nothing is created.
+type CreateSubtasksRequest struct {
+	TenantCode string        `json:"tenant_code"`
+	Subtasks   []SubtaskItem `json:"subtasks"`
+}
+
+// CreateTaskWithSubtasksTask is the parent-task portion of a with-subtasks
+// create. It mirrors CreateTaskRequest minus tenant_code (which lives at the
+// envelope level), plus assigned_agent_key (assign the parent to an AI agent;
+// cannot be combined with assignee_id).
+type CreateTaskWithSubtasksTask struct {
+	Title            string   `json:"title"`
+	Description      *string  `json:"description,omitempty"`
+	AssigneeID       *string  `json:"assignee_id,omitempty"`
+	AssignedAgentKey *string  `json:"assigned_agent_key,omitempty"`
+	DueDate          *string  `json:"due_date,omitempty"`
+	BoardID          *string  `json:"board_id,omitempty"`
+	BoardListID      *string  `json:"board_list_id,omitempty"`
+	FollowerIDs      []string `json:"follower_ids,omitempty"`
+	Priority         *string  `json:"priority,omitempty"`
+	Status           *string  `json:"status,omitempty"`
+}
+
+// CreateTaskWithSubtasksRequest is the body for POST /mission/tasks/with-subtasks.
+// Creates a parent task and its subtasks atomically (all-or-nothing).
+type CreateTaskWithSubtasksRequest struct {
+	TenantCode string                     `json:"tenant_code"`
+	Task       CreateTaskWithSubtasksTask `json:"task"`
+	Subtasks   []SubtaskItem              `json:"subtasks"`
+}
+
 // ProductVariantDimensions holds physical dimensions of a variant.
 type ProductVariantDimensions struct {
 	L *float64 `json:"l"`
@@ -181,6 +225,7 @@ type Product struct {
 	Status      string           `json:"status"`
 	Currency    string           `json:"currency"`
 	Aliases     []string         `json:"aliases"`
+	Tags        []string         `json:"tags"`
 	IsDeleted   bool             `json:"is_deleted"`
 	CreatedAt   string           `json:"created_at"`
 	UpdatedAt   string           `json:"updated_at"`
@@ -241,6 +286,8 @@ type CreateProductRequest struct {
 	SKU           *string                    `json:"sku,omitempty"`
 	Barcode       *string                    `json:"barcode,omitempty"`
 	Price         *float64                   `json:"price,omitempty"`
+	Aliases       []string                   `json:"aliases,omitempty"`
+	Tags          []string                   `json:"tags,omitempty"`
 	Options       []CreateProductOptionItem  `json:"options,omitempty"`
 	Variants      []CreateProductVariantItem `json:"variants,omitempty"`
 }
@@ -258,6 +305,7 @@ type UpdateProductRequest struct {
 	Status        *string  `json:"status,omitempty"`
 	Currency      *string  `json:"currency,omitempty"`
 	Aliases       []string `json:"aliases,omitempty"`
+	Tags          []string `json:"tags,omitempty"`
 }
 
 // UpsertVariantItem is one element of the PUT /pcms/products/{id}/variants array.

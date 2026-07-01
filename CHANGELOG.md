@@ -9,6 +9,40 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Product tags.** Products now carry a free-form `tags` string array alongside `aliases`
+  (backend `feature/pcms-tags`, platform v1.25.x). `tags` is returned by `products get`/`list`
+  and accepted on `products create`/`update` via a repeatable `--tags` flag or inside
+  `--from-json` (`"tags": [...]`). The product table gains a **Tags** column (joined with
+  `, `), mirroring Aliases, so tag values are visible where an agent reads. OpenAPI spec, the
+  bundled `capigo-api` skill, and tests updated in lockstep.
+- **`products create --aliases` flag.** Aliases were previously settable on create only via
+  `--from-json`; a repeatable `--aliases` flag now matches `products update` and the new
+  `--tags`, removing the create/update asymmetry.
+- **Subtasks.** Two new endpoints from the mission API are now wrapped:
+  - `tasks subtasks <parent-id>` — batch-create subtasks under an existing task
+    (`POST /mission/tasks/{id}/subtasks`). One subtask via `--title` (+ `--description`,
+    `--assignee`, `--due-date` `YYYY-MM-DD`, `--priority`, `--status`), or a batch via
+    `--from-json -` (a JSON array of subtask items).
+  - `tasks create --subtasks-json <file>` — create a parent task **and** its subtasks in one
+    atomic call (`POST /mission/tasks/with-subtasks`); the parent is built from the existing
+    create flags. Both are all-or-nothing (max 25 subtasks/request).
+- **OpenAPI spec: three mission-task endpoints documented.** `api/openapi.json` now includes
+  `GET /mission/tasks/{id}/comments` (already implemented by `tasks comments`, previously
+  undocumented in the bundled spec), plus the two new subtask endpoints and their schemas
+  (`SubtaskItem`, `CreateSubtasksRequest`, `CreateTaskWithSubtasksRequest`,
+  `CreateTaskWithSubtasksTask`, `PublicTaskCommentResponse`), spliced from the platform spec.
+  Path/body coverage guards updated in lockstep.
+
+### Changed
+
+- **`products list --query` help + skill now list all matched columns.** The search matches
+  product name, aliases, tags, variant name, SKU, and barcode (per the merged `pcms_search_products`
+  RPC). The CLI `-q` help text previously omitted aliases, and the skill wrongly claimed
+  `--query` "does not index aliases" (aliases have been searchable since 2026-06-13) — both
+  corrected, and the tombstone-only-matches-name/aliases caveat documented.
+
 ---
 
 ## [0.17.0] — 2026-06-29

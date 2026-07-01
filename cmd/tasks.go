@@ -388,16 +388,29 @@ removing followers is not supported by this endpoint.`,
 
 // tasks create flags
 var (
-	taskCreateTenant      string
-	taskCreateTitle       string
-	taskCreateDescription string
-	taskCreatePriority    string
-	taskCreateStatus      string
-	taskCreateDueDate     string
-	taskCreateAssignee    string
-	taskCreateBoard       string
-	taskCreateList        string
-	taskCreateFollowerIDs []string
+	taskCreateTenant       string
+	taskCreateTitle        string
+	taskCreateDescription  string
+	taskCreatePriority     string
+	taskCreateStatus       string
+	taskCreateDueDate      string
+	taskCreateAssignee     string
+	taskCreateBoard        string
+	taskCreateList         string
+	taskCreateFollowerIDs  []string
+	taskCreateSubtasksJSON string
+)
+
+// tasks subtasks flags
+var (
+	taskSubtasksTenant      string
+	taskSubtasksFromJSON    string
+	taskSubtasksTitle       string
+	taskSubtasksDescription string
+	taskSubtasksAssignee    string
+	taskSubtasksDueDate     string
+	taskSubtasksPriority    string
+	taskSubtasksStatus      string
 )
 
 var tasksCreateCmd = &cobra.Command{
@@ -435,6 +448,70 @@ var tasksCreateCmd = &cobra.Command{
 			}
 			output.RenderError(os.Stderr, outputMode, err.Code, err.Message, "")
 			os.Exit(api.ExitCodeFor(err))
+		}
+
+		// --subtasks-json routes to the atomic parent+subtasks endpoint. The
+		// parent task is built from the same create flags; the JSON payload is
+		// the subtasks array. All-or-nothing: nothing is created if any part fails.
+		if taskCreateSubtasksJSON != "" {
+			raw, err := readJSONInput(taskCreateSubtasksJSON)
+			if err != nil {
+				return handleErr(fmt.Errorf("read --subtasks-json: %w", err))
+			}
+			var subtasks []api.SubtaskItem
+			if err := json.Unmarshal(raw, &subtasks); err != nil {
+				return handleErr(fmt.Errorf("--subtasks-json must be a JSON array of subtask items: %w", err))
+			}
+
+			task := api.CreateTaskWithSubtasksTask{Title: taskCreateTitle}
+			if taskCreateDescription != "" {
+				task.Description = &taskCreateDescription
+			}
+			if taskCreatePriority != "" {
+				task.Priority = &taskCreatePriority
+			}
+			if taskCreateStatus != "" {
+				task.Status = &taskCreateStatus
+			}
+			if taskCreateDueDate != "" {
+				task.DueDate = &taskCreateDueDate
+			}
+			if taskCreateAssignee != "" {
+				task.AssigneeID = &taskCreateAssignee
+			}
+			if taskCreateBoard != "" {
+				task.BoardID = &taskCreateBoard
+			}
+			if taskCreateList != "" {
+				task.BoardListID = &taskCreateList
+			}
+			if len(taskCreateFollowerIDs) > 0 {
+				task.FollowerIDs = taskCreateFollowerIDs
+			}
+
+			resp, err := client.Do(ctx, "POST", "/mission/tasks/with-subtasks", api.CreateTaskWithSubtasksRequest{
+				TenantCode: *tenant,
+				Task:       task,
+				Subtasks:   subtasks,
+			}, tenant)
+			if err != nil {
+				return handleErr(err)
+			}
+
+			var envelope struct {
+				Data struct {
+					Task     api.Task   `json:"task"`
+					Subtasks []api.Task `json:"subtasks"`
+				} `json:"data"`
+			}
+			if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+				return handleErr(fmt.Errorf("decode response: %w", err))
+			}
+
+			if outputMode == "json" {
+				return output.WriteJSONObject(os.Stdout, envelope.Data)
+			}
+			return renderTaskList(append([]api.Task{envelope.Data.Task}, envelope.Data.Subtasks...), tenant)
 		}
 
 		body := api.CreateTaskRequest{
@@ -494,6 +571,130 @@ var tasksCreateCmd = &cobra.Command{
 	},
 }
 
+var tasksSubtasksCmd = &cobra.Command{
+	Use:   "subtasks <parent-task-id>",
+	Short: "Create subtasks under an existing task",
+	Long: `Batch-create subtasks under an existing parent task (1–25 per request).
+
+Validation is all-or-nothing: if any subtask is invalid, nothing is created.
+
+Single subtask via flags:
+
+  capigo tasks subtasks <parent-id> --tenant acme --title "Design mockups"
+
+Batch via JSON (an array of subtask items; use - for stdin):
+
+  echo '[{"title":"A"},{"title":"B","priority":"High","assignee_id":"<uuid>"}]' \
+    | capigo tasks subtasks <parent-id> --tenant acme --from-json -
+
+Each subtask item: title (required), description, assignee_id, due_date
+(YYYY-MM-DD), priority (Low/Normal/High/Urgent), status (Pending/To-Do/Doing/
+Done/Closed/Cancelled). When --from-json is set, the single-item flags are ignored.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(taskSubtasksTenant, profile)
+		defer echoTenant(tenant, taskSubtasksTenant)
+
+		if tenant == nil {
+			e := &api.APIError{
+				Code:       "VALIDATION_ERROR",
+				Message:    "tasks subtasks requires a tenant; pass --tenant <code> or set default",
+				HTTPStatus: 400,
+			}
+			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
+			os.Exit(api.ExitCodeFor(e))
+		}
+
+		var subtasks []api.SubtaskItem
+		if taskSubtasksFromJSON != "" {
+			raw, err := readJSONInput(taskSubtasksFromJSON)
+			if err != nil {
+				return handleErr(fmt.Errorf("read --from-json: %w", err))
+			}
+			if err := json.Unmarshal(raw, &subtasks); err != nil {
+				return handleErr(fmt.Errorf("--from-json must be a JSON array of subtask items: %w", err))
+			}
+		} else {
+			if taskSubtasksTitle == "" {
+				e := &api.APIError{Code: "VALIDATION_ERROR", Message: "--title is required (or use --from-json for a batch)", HTTPStatus: 400}
+				output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
+				os.Exit(api.ExitCodeFor(e))
+			}
+			item := api.SubtaskItem{Title: taskSubtasksTitle}
+			if taskSubtasksDescription != "" {
+				item.Description = &taskSubtasksDescription
+			}
+			if taskSubtasksAssignee != "" {
+				item.AssigneeID = &taskSubtasksAssignee
+			}
+			if taskSubtasksDueDate != "" {
+				item.DueDate = &taskSubtasksDueDate
+			}
+			if taskSubtasksPriority != "" {
+				item.Priority = &taskSubtasksPriority
+			}
+			if taskSubtasksStatus != "" {
+				item.Status = &taskSubtasksStatus
+			}
+			subtasks = []api.SubtaskItem{item}
+		}
+
+		resp, err := client.Do(ctx, "POST", "/mission/tasks/"+args[0]+"/subtasks", api.CreateSubtasksRequest{
+			TenantCode: *tenant,
+			Subtasks:   subtasks,
+		}, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope struct {
+			Data struct {
+				ParentTask struct {
+					ID    string `json:"id"`
+					Code  string `json:"code"`
+					Title string `json:"title"`
+				} `json:"parent_task"`
+				Subtasks []api.Task `json:"subtasks"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		if outputMode == "json" {
+			return output.WriteJSONObject(os.Stdout, envelope.Data)
+		}
+		return renderTaskList(envelope.Data.Subtasks, tenant)
+	},
+}
+
+// renderTaskList renders a slice of tasks as the standard task table.
+func renderTaskList(tasks []api.Task, tenant *string) error {
+	items := make([]output.Task, len(tasks))
+	for i, t := range tasks {
+		items[i] = toOutputTask(t)
+	}
+	if err := output.Render(os.Stdout, outputMode, items, output.RenderOpts{
+		GlobalMode:   tenant == nil,
+		ResourceKind: "task",
+	}); err != nil {
+		return handleErr(err)
+	}
+	return nil
+}
+
 func init() {
 	// tasks list flags
 	tasksListCmd.Flags().StringVar(&taskListTenant, "tenant", "", "scope to this tenant code")
@@ -534,8 +735,19 @@ func init() {
 	tasksCreateCmd.Flags().StringVar(&taskCreateBoard, "board", "", "board ID")
 	tasksCreateCmd.Flags().StringVar(&taskCreateList, "list", "", "board list ID")
 	tasksCreateCmd.Flags().StringArrayVar(&taskCreateFollowerIDs, "follower-id", nil, "follower user ID (repeatable: --follower-id <uuid> --follower-id <uuid>)")
+	tasksCreateCmd.Flags().StringVar(&taskCreateSubtasksJSON, "subtasks-json", "", "path to a JSON array of subtask items (use - for stdin); creates the task and its subtasks atomically via POST /mission/tasks/with-subtasks")
 
-	taskCmd.AddCommand(tasksListCmd, tasksGetCmd, tasksCommentsCmd, tasksUpdateCmd, tasksCreateCmd)
+	// tasks subtasks flags
+	tasksSubtasksCmd.Flags().StringVar(&taskSubtasksTenant, "tenant", "", "tenant code (required)")
+	tasksSubtasksCmd.Flags().StringVar(&taskSubtasksFromJSON, "from-json", "", "path to a JSON array of subtask items (use - for stdin); mutually exclusive with the single-item flags")
+	tasksSubtasksCmd.Flags().StringVar(&taskSubtasksTitle, "title", "", "subtask title (required unless --from-json is used)")
+	tasksSubtasksCmd.Flags().StringVar(&taskSubtasksDescription, "description", "", "subtask description")
+	tasksSubtasksCmd.Flags().StringVar(&taskSubtasksAssignee, "assignee", "", "assignee user UUID")
+	tasksSubtasksCmd.Flags().StringVar(&taskSubtasksDueDate, "due-date", "", "due date (YYYY-MM-DD)")
+	tasksSubtasksCmd.Flags().StringVar(&taskSubtasksPriority, "priority", "", "priority (Low, Normal, High, Urgent)")
+	tasksSubtasksCmd.Flags().StringVar(&taskSubtasksStatus, "status", "", "status (Pending, To-Do, Doing, Done, Closed, Cancelled)")
+
+	taskCmd.AddCommand(tasksListCmd, tasksGetCmd, tasksCommentsCmd, tasksUpdateCmd, tasksCreateCmd, tasksSubtasksCmd)
 	rootCmd.AddCommand(taskCmd)
 }
 

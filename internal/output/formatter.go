@@ -135,10 +135,10 @@ func init() {
 			idFn: func(v any) string { return v.(TaskComment).ID },
 		},
 		"product": {
-			headers: []string{"ID", "Name", "Status", "SKU", "Price", "Variants", "Aliases"},
+			headers: []string{"ID", "Name", "Status", "SKU", "Price", "Variants", "Aliases", "Tags"},
 			rowFn: func(v any) []any {
 				p := v.(Product)
-				return []any{p.ID, p.Name, p.Status, p.SKU, p.Price, p.VariantCount, p.Aliases}
+				return []any{p.ID, p.Name, p.Status, p.SKU, p.Price, p.VariantCount, p.Aliases, p.Tags}
 			},
 			idFn: func(v any) string { return v.(Product).ID },
 		},

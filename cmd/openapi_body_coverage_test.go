@@ -74,6 +74,9 @@ var bodyFieldAliasMap = map[string]string{
 	"board_list_id": "list",
 	// assignee_id → assignee: the _id suffix dropped for usability.
 	"assignee_id": "assignee",
+	// POST /mission/tasks/with-subtasks: the subtasks array is supplied as a JSON
+	// file via --subtasks-json on `tasks create`.
+	"subtasks": "subtasks-json",
 }
 
 // intentionallyUnexposedBodyFields lists body fields that the CLI deliberately
@@ -84,7 +87,14 @@ var bodyFieldAliasMap = map[string]string{
 // others use the --from-json escape hatch) exposes a flag for every body field.
 // Add an entry here only for a field that is genuinely server-managed/derived on a
 // command that does NOT use --from-json.
-var intentionallyUnexposedBodyFields = map[string]map[string]string{}
+var intentionallyUnexposedBodyFields = map[string]map[string]string{
+	// POST /mission/tasks/with-subtasks is driven by `tasks create --subtasks-json`:
+	// the nested `task` object is built from the existing per-field create flags
+	// (--title, --description, --priority, …), so there is no single `--task` flag.
+	"POST /mission/tasks/with-subtasks": {
+		"task": "parent-task fields come from the individual tasks-create flags, not a single --task flag",
+	},
+}
 
 // writeCommandMapping maps each write cobra command to its OpenAPI path + method.
 // The path must match exactly what appears as a key in openapi.json "paths".
@@ -108,6 +118,23 @@ func buildWriteCommandMapping() []writeCommandEntry {
 		{
 			humanName: "tasks create",
 			path:      "/mission/tasks",
+			method:    "post",
+			hasFlag:   func(n string) bool { return tasksCreateCmd.Flags().Lookup(n) != nil },
+		},
+		// tasks subtasks: registers --from-json (batch array), so per-field assertion
+		// is skipped; --tenant covers tenant_code.
+		{
+			humanName: "tasks subtasks",
+			path:      "/mission/tasks/{id}/subtasks",
+			method:    "post",
+			hasFlag:   func(n string) bool { return tasksSubtasksCmd.Flags().Lookup(n) != nil },
+		},
+		// tasks create --subtasks-json drives with-subtasks: tenant_code→--tenant,
+		// subtasks→--subtasks-json (alias), and the nested task object is built from
+		// the individual create flags (task is intentionallyUnexposed).
+		{
+			humanName: "tasks create --subtasks-json",
+			path:      "/mission/tasks/with-subtasks",
 			method:    "post",
 			hasFlag:   func(n string) bool { return tasksCreateCmd.Flags().Lookup(n) != nil },
 		},

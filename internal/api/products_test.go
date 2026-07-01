@@ -419,3 +419,33 @@ func TestUpdateProductRequest_OmitsUnsetFields(t *testing.T) {
 		t.Errorf("name = %v, want Updated", m["name"])
 	}
 }
+
+// TestProductRequests_TagsSerialization ensures tags reach the wire when set
+// (create + update) and are omitted when unset, matching the aliases behavior.
+func TestProductRequests_TagsSerialization(t *testing.T) {
+	create, err := json.Marshal(CreateProductRequest{Name: "P", Tags: []string{"organic", "premium"}})
+	if err != nil {
+		t.Fatalf("marshal create: %v", err)
+	}
+	if !strings.Contains(string(create), `"tags":["organic","premium"]`) {
+		t.Errorf("create body missing tags: %s", create)
+	}
+
+	update, err := json.Marshal(UpdateProductRequest{Tags: []string{"sale"}})
+	if err != nil {
+		t.Fatalf("marshal update: %v", err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(update, &m); err != nil {
+		t.Fatalf("unmarshal update: %v", err)
+	}
+	if len(m) != 1 || m["tags"] == nil {
+		t.Errorf("update body should carry only tags, got %v", m)
+	}
+
+	// Unset tags must not appear (omitempty).
+	bare, _ := json.Marshal(CreateProductRequest{Name: "P"})
+	if strings.Contains(string(bare), "tags") {
+		t.Errorf("unset tags must be omitted: %s", bare)
+	}
+}
