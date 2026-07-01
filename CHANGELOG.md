@@ -9,6 +9,19 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Skill (`capigo-api`): `--query` is now taught as the first pass for finding products.**
+  Removed the remaining steer toward `--all` for "alias/Product-Code checks" in
+  `cli_basics.md` (which pushed the agent into full-catalogue scans + local filtering on
+  4000+ product tenants) and reframed both `cli_basics.md` and `SKILL.md` to reach for
+  `products list --query` first — it matches name, aliases, tags, SKU and barcode server-side.
+  Documented the substring direction gotcha: the match is `stored ILIKE '%term%'`, so a
+  shortened stored alias (`VVD013`) is **not** found by the full code (`SLM-DS-VVD013`) —
+  search the short fragment or fall back to `--all`. Doc-only; no CLI behavior change.
+  (Follow-up to v0.18.0, which removed the outright-wrong "`--query` does not index aliases"
+  line but left the `--all`-first steer and lacked the substring caveat.)
+
 ---
 
 ## [0.18.0] — 2026-07-01

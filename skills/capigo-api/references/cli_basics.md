@@ -181,9 +181,15 @@ Read the truth from the `meta` object every `list` returns:
 
 How to get a complete result set:
 
-- **`products list` has `--all`** — it auto-paginates internally and streams every row.
-  Prefer it whenever you need the full catalogue (e.g. alias/Product-Code checks):
-  `capigo --tenant acme products list --all --output json | jq '.data[]'`.
+- **To *find* a specific product (by name / alias / Product-Code / SKU / barcode), reach for
+  `--query` FIRST.** It searches those fields server-side (`ILIKE` substring; see the lookup
+  section below) and a specific value usually lands on a single page — far cheaper than pulling
+  the whole catalogue. Only fall back to `--all` + local filtering when a substring `--query`
+  can't match the stored form (e.g. shortened aliases — see the caveat below) or you genuinely
+  need every row.
+- **`products list` has `--all`** — it auto-paginates internally and streams every row. Use it
+  when you truly need the **whole catalogue** (a full export, or an exhaustive scan `--query`
+  can't express): `capigo --tenant acme products list --all --output json | jq '.data[]'`.
   **If `--all` fails mid-pagination** (rate limit, network), the rows already fetched are
   still printed, the table footer says `INCOMPLETE — aborted at page N — results are
   PARTIAL`, JSON meta carries `"complete": false`, and the command exits non-zero. **Check
@@ -474,10 +480,17 @@ SKU / barcode / task code" yet. So when you have a human key rather than a UUID,
 record first, then act on its `id`:
 
 - Product by name / alias / tag / SKU / variant name / barcode → `products list --query "<term>"`,
-  read `.data[].id`. `--query` matches all six (case-insensitive substring, `ILIKE %q%`).
-  Note: for **soft-deleted** (tombstone) products, `--query` only matches name and aliases —
-  variant fields (name/SKU/barcode) are not indexed for deleted products, so to sweep tombstones
-  use `--all` / `--updated-since` instead of `--query`.
+  read `.data[].id`. `--query` matches all six (case-insensitive substring, `ILIKE %q%`). This
+  is the **first pass** for any human-key lookup — do not jump to `--all` + local filtering.
+  - **Substring direction matters.** The match is `stored_value ILIKE '%your-term%'` — the
+    *stored* value must **contain** your term. So searching a term that is *longer* than the
+    stored value finds nothing: if an alias is stored shortened as `VVD013`, querying the full
+    code `SLM-DS-VVD013` returns **zero** rows. Search the shortest distinctive fragment
+    (`VVD013`) instead. When you can't predict the stored form, fall back to `--all` + local
+    filter over `.data[].aliases[]`.
+  - For **soft-deleted** (tombstone) products, `--query` only matches name and aliases —
+    variant fields (name/SKU/barcode) are not indexed for deleted products, so to sweep
+    tombstones use `--all` / `--updated-since` instead of `--query`.
 - Variant barcode lookups → `variants list --barcode-prefix …`.
 
 **Pre-staged commands:** some commands were shipped in the CLI ahead of the matching API
