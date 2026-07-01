@@ -417,6 +417,14 @@
             },
             "example": []
           },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Free-form string tags for product organization and filtering.",
+            "example": ["organic", "premium"]
+          },
           "is_deleted": {
             "type": "boolean",
             "example": false
@@ -1445,6 +1453,22 @@
                     "nullable": true,
                     "description": "Simple mode only: price for the auto-created default variant."
                   },
+                  "aliases": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Alternative names / search aliases for this product.",
+                    "example": ["áo thun", "t-shirt"]
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Free-form string tags for product organization and filtering.",
+                    "example": ["organic", "premium"]
+                  },
                   "options": {
                     "type": "array",
                     "maxItems": 3,
@@ -1630,6 +1654,13 @@
                     "items": {
                       "type": "string"
                     }
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Free-form string tags for product organization and filtering."
                   }
                 }
               }

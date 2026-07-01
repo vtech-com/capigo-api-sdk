@@ -6,15 +6,17 @@ import (
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
 )
 
-// TestToOutputProduct_SoftDeleteAndAliases guards the two table-visibility
+// TestToOutputProduct_SoftDeleteAndAliases guards the table-visibility
 // fixes: a soft-deleted product must never render as plainly live, and the
-// aliases the dedup workflow depends on must reach the display model.
+// aliases and tags the dedup/collision workflow depends on (both matched by
+// --query) must reach the display model.
 func TestToOutputProduct_SoftDeleteAndAliases(t *testing.T) {
 	p := api.Product{
 		ID:        "p1",
 		Name:      "Pin iPhone 13",
 		Status:    "ACTIVE",
 		Aliases:   []string{"AP-BA-13", "PIN-IP13"},
+		Tags:      []string{"organic", "premium"},
 		IsDeleted: true,
 	}
 
@@ -25,6 +27,9 @@ func TestToOutputProduct_SoftDeleteAndAliases(t *testing.T) {
 	}
 	if got.Aliases != "AP-BA-13, PIN-IP13" {
 		t.Errorf("Aliases = %q, want joined alias list", got.Aliases)
+	}
+	if got.Tags != "organic, premium" {
+		t.Errorf("Tags = %q, want joined tag list", got.Tags)
 	}
 
 	p.IsDeleted = false

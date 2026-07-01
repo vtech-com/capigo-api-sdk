@@ -9,6 +9,26 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Product tags.** Products now carry a free-form `tags` string array alongside `aliases`
+  (backend `feature/pcms-tags`, platform v1.25.x). `tags` is returned by `products get`/`list`
+  and accepted on `products create`/`update` via a repeatable `--tags` flag or inside
+  `--from-json` (`"tags": [...]`). The product table gains a **Tags** column (joined with
+  `, `), mirroring Aliases, so tag values are visible where an agent reads. OpenAPI spec, the
+  bundled `capigo-api` skill, and tests updated in lockstep.
+- **`products create --aliases` flag.** Aliases were previously settable on create only via
+  `--from-json`; a repeatable `--aliases` flag now matches `products update` and the new
+  `--tags`, removing the create/update asymmetry.
+
+### Changed
+
+- **`products list --query` help + skill now list all matched columns.** The search matches
+  product name, aliases, tags, variant name, SKU, and barcode (per the merged `pcms_search_products`
+  RPC). The CLI `-q` help text previously omitted aliases, and the skill wrongly claimed
+  `--query` "does not index aliases" (aliases have been searchable since 2026-06-13) — both
+  corrected, and the tombstone-only-matches-name/aliases caveat documented.
+
 ---
 
 ## [0.17.0] — 2026-06-29

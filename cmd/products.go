@@ -409,6 +409,8 @@ var (
 	productCreateCategoryID    string
 	productCreateProductTypeID string
 	productCreateUnitID        string
+	productCreateAliases       []string
+	productCreateTags          []string
 	productCreateFromJSON      string
 )
 
@@ -528,6 +530,12 @@ When --from-json is provided, all other flags are ignored.`,
 			if productCreateUnitID != "" {
 				req.UnitID = &productCreateUnitID
 			}
+			if len(productCreateAliases) > 0 {
+				req.Aliases = productCreateAliases
+			}
+			if len(productCreateTags) > 0 {
+				req.Tags = productCreateTags
+			}
 			body = req
 		}
 
@@ -577,6 +585,7 @@ var (
 	productUpdateProductTypeID string
 	productUpdateUnitID        string
 	productUpdateAliases       []string
+	productUpdateTags          []string
 	productUpdateFromJSON      string
 )
 
@@ -624,7 +633,7 @@ When --from-json is set, all individual field flags are ignored.`,
 		if productUpdateFromJSON != "" {
 			// Check that no individual field flags were also set.
 			individualFlags := []string{"name", "description", "status", "currency",
-				"brand-id", "category-id", "product-type-id", "unit-id", "aliases"}
+				"brand-id", "category-id", "product-type-id", "unit-id", "aliases", "tags"}
 			for _, f := range individualFlags {
 				if cmd.Flags().Changed(f) {
 					e := &api.APIError{
@@ -679,6 +688,10 @@ When --from-json is set, all individual field flags are ignored.`,
 			}
 			if len(productUpdateAliases) > 0 {
 				req.Aliases = productUpdateAliases
+				fieldCount++
+			}
+			if len(productUpdateTags) > 0 {
+				req.Tags = productUpdateTags
 				fieldCount++
 			}
 
@@ -840,7 +853,7 @@ func init() {
 
 	// products list flags
 	productsListCmd.Flags().StringVar(&productListTenant, "tenant", "", "tenant code (required)")
-	productsListCmd.Flags().StringVarP(&productListQuery, "query", "q", "", "free-text search (2–500 chars): matches product name, variant name, SKU, and barcode")
+	productsListCmd.Flags().StringVarP(&productListQuery, "query", "q", "", "free-text search (2–500 chars): matches product name, aliases, tags, variant name, SKU, and barcode")
 	productsListCmd.Flags().StringVar(&productListUpdatedSince, "updated-since", "", "ISO 8601 timestamp for delta sync (from previous X-Server-Time header)")
 	productsListCmd.Flags().IntVar(&productListPage, "page", 0, "page number (0 = server default)")
 	productsListCmd.Flags().IntVar(&productListLimit, "limit", 0, "items per page (1–100, default 20)")
@@ -860,6 +873,8 @@ func init() {
 	productsCreateCmd.Flags().StringVar(&productCreateCategoryID, "category-id", "", "category UUID")
 	productsCreateCmd.Flags().StringVar(&productCreateProductTypeID, "product-type-id", "", "product type UUID")
 	productsCreateCmd.Flags().StringVar(&productCreateUnitID, "unit-id", "", "unit UUID")
+	productsCreateCmd.Flags().StringArrayVar(&productCreateAliases, "aliases", nil, "product aliases / alternative search names (repeatable: --aliases foo --aliases bar)")
+	productsCreateCmd.Flags().StringArrayVar(&productCreateTags, "tags", nil, "free-form product tags (repeatable: --tags foo --tags bar)")
 	productsCreateCmd.Flags().StringVar(&productCreateFromJSON, "from-json", "", "path to JSON file with full request body (use - for stdin)")
 
 	// products update flags
@@ -873,6 +888,7 @@ func init() {
 	productsUpdateCmd.Flags().StringVar(&productUpdateProductTypeID, "product-type-id", "", "new product type UUID")
 	productsUpdateCmd.Flags().StringVar(&productUpdateUnitID, "unit-id", "", "new unit UUID")
 	productsUpdateCmd.Flags().StringArrayVar(&productUpdateAliases, "aliases", nil, "product aliases (repeatable: --aliases foo --aliases bar)")
+	productsUpdateCmd.Flags().StringArrayVar(&productUpdateTags, "tags", nil, "free-form product tags (repeatable: --tags foo --tags bar)")
 	productsUpdateCmd.Flags().StringVar(&productUpdateFromJSON, "from-json", "", "path to JSON file with update body (use - for stdin); mutually exclusive with individual field flags")
 
 	// products variants flags
@@ -958,5 +974,6 @@ func toOutputProduct(p api.Product) output.Product {
 		Price:        price,
 		VariantCount: len(p.Variants),
 		Aliases:      strings.Join(p.Aliases, ", "),
+		Tags:         strings.Join(p.Tags, ", "),
 	}
 }

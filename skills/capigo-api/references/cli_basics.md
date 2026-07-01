@@ -345,17 +345,19 @@ Tenant **required** on all subcommands.
 
 | Command | Key flags |
 |---|---|
-| `products list` | `--tenant` (req), `--query/-q` (2–500 chars; matches name, variant name, SKU, barcode), `--updated-since` (ISO 8601 delta sync), `--ids` (comma UUIDs, max 50; mutually exclusive with `--all`), `--all` (auto-paginate), `--page`, `--limit` (1–100, default 20) |
+| `products list` | `--tenant` (req), `--query/-q` (2–500 chars; matches name, aliases, tags, variant name, SKU, barcode), `--updated-since` (ISO 8601 delta sync), `--ids` (comma UUIDs, max 50; mutually exclusive with `--all`), `--all` (auto-paginate), `--page`, `--limit` (1–100, default 20) |
 | `products get <id>` | `--tenant` (req) — full single product (variants, options, brand, category, type, unit). UUID-addressed only. |
-| `products create` | `--tenant` (req); simple mode: `--name` (req), `--sku`, `--barcode`, `--price`, `--status` (DRAFT/ACTIVE/ARCHIVED), `--currency`, `--description`, `--brand-id`, `--category-id`, `--product-type-id`, `--unit-id`; or `--from-json -` for options+variants |
-| `products update <id>` | `--tenant` (req); any of `--name`, `--description`, `--status`, `--currency`, `--brand-id`, `--category-id`, `--product-type-id`, `--unit-id`, `--aliases` (repeatable); or `--from-json -` (mutually exclusive with field flags). At least one field required. |
+| `products create` | `--tenant` (req); simple mode: `--name` (req), `--sku`, `--barcode`, `--price`, `--status` (DRAFT/ACTIVE/ARCHIVED), `--currency`, `--description`, `--brand-id`, `--category-id`, `--product-type-id`, `--unit-id`, `--aliases` (repeatable), `--tags` (repeatable); or `--from-json -` for options+variants |
+| `products update <id>` | `--tenant` (req); any of `--name`, `--description`, `--status`, `--currency`, `--brand-id`, `--category-id`, `--product-type-id`, `--unit-id`, `--aliases` (repeatable), `--tags` (repeatable); or `--from-json -` (mutually exclusive with field flags). At least one field required. |
 | `products variants` | `--tenant` (req), `--product-id` (req), `--from-json -` (req) — a **JSON array** of variant objects |
 
 Key facts callers depend on:
 
-- **`products create` simple mode has no `--aliases` flag.** To attach a product code alias
-  (codes conventionally live in `aliases[]`), create via `--from-json` with
-  `"aliases": [...]`, or set them after creation with `products update <id> --aliases …`.
+- **`aliases[]` and `tags[]` are two separate string-array fields on a product.** Aliases are
+  alternative names / product codes (codes conventionally live here); tags are free-form labels
+  for organization and filtering. Both are settable on `create` and `update` via `--aliases` /
+  `--tags` (each repeatable), or inside `--from-json` as `"aliases": [...]` / `"tags": [...]`.
+  Both are matched by `--query` (see search note below).
 - **`products variants` takes a JSON array**, not an object. An item **with** `variant_id` is
   updated; **without** `variant_id` it is created (and `name` is required). One call upserts
   many variants at once.
@@ -365,8 +367,9 @@ Key facts callers depend on:
   them — e.g. `ACTIVE (DELETED)`; in JSON check the `is_deleted` field (the `status` field
   alone does NOT reveal deletion). Never report a `(DELETED)` product as available, and never
   update or upsert variants onto one unless the user explicitly asks to restore it.
-- The product table includes an **Aliases** column (joined with `, `), so alias/Product-Code
-  checks are visible in table mode too — but completeness still requires paging (`--all`).
+- The product table includes **Aliases** and **Tags** columns (each joined with `, `), so
+  alias/Product-Code and tag checks are visible in table mode too — but completeness still
+  requires paging (`--all`).
 - **`--ids` reports what it could NOT find.** Asking for 5 UUIDs and getting 3 rows back is
   still exit 0, but the missing IDs are named — `Requested 5 ids · 3 found · missing: <id>,
   <id>` in table mode, `meta.missing_ids` in JSON. Treat a missing ID as "deleted or
@@ -444,10 +447,11 @@ The single-item `get` commands (`products get`, `variants get`, `members get`,
 SKU / barcode / task code" yet. So when you have a human key rather than a UUID, find the
 record first, then act on its `id`:
 
-- Product by name / SKU / variant name / barcode → `products list --query "<term>"`, read
-  `.data[].id`.
-- Product by code alias → `products list --all` and filter `.data[].aliases[]`
-  locally (`--query` does not index aliases).
+- Product by name / alias / tag / SKU / variant name / barcode → `products list --query "<term>"`,
+  read `.data[].id`. `--query` matches all six (case-insensitive substring, `ILIKE %q%`).
+  Note: for **soft-deleted** (tombstone) products, `--query` only matches name and aliases —
+  variant fields (name/SKU/barcode) are not indexed for deleted products, so to sweep tombstones
+  use `--all` / `--updated-since` instead of `--query`.
 - Variant barcode lookups → `variants list --barcode-prefix …`.
 
 **Pre-staged commands:** some commands were shipped in the CLI ahead of the matching API

@@ -181,6 +181,7 @@ type Product struct {
 	Status      string           `json:"status"`
 	Currency    string           `json:"currency"`
 	Aliases     []string         `json:"aliases"`
+	Tags        []string         `json:"tags"`
 	IsDeleted   bool             `json:"is_deleted"`
 	CreatedAt   string           `json:"created_at"`
 	UpdatedAt   string           `json:"updated_at"`
@@ -241,6 +242,8 @@ type CreateProductRequest struct {
 	SKU           *string                    `json:"sku,omitempty"`
 	Barcode       *string                    `json:"barcode,omitempty"`
 	Price         *float64                   `json:"price,omitempty"`
+	Aliases       []string                   `json:"aliases,omitempty"`
+	Tags          []string                   `json:"tags,omitempty"`
 	Options       []CreateProductOptionItem  `json:"options,omitempty"`
 	Variants      []CreateProductVariantItem `json:"variants,omitempty"`
 }
@@ -258,6 +261,7 @@ type UpdateProductRequest struct {
 	Status        *string  `json:"status,omitempty"`
 	Currency      *string  `json:"currency,omitempty"`
 	Aliases       []string `json:"aliases,omitempty"`
+	Tags          []string `json:"tags,omitempty"`
 }
 
 // UpsertVariantItem is one element of the PUT /pcms/products/{id}/variants array.
