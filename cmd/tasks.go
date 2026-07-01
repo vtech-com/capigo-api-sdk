@@ -22,12 +22,21 @@ var taskCmd = &cobra.Command{
 
 // tasks list flags
 var (
-	taskListTenant       string
-	taskListQuery        string
-	taskListStatus       string
-	taskListParentTaskID string
-	taskListPage         int
-	taskListLimit        int
+	taskListTenant        string
+	taskListQuery         string
+	taskListStatus        string
+	taskListPriority      string
+	taskListAssigneeID    string
+	taskListOwnerID       string
+	taskListBoardID       string
+	taskListBoardListID   string
+	taskListDueAfter      string
+	taskListDueBefore     string
+	taskListCreatedAfter  string
+	taskListCreatedBefore string
+	taskListParentTaskID  string
+	taskListPage          int
+	taskListLimit         int
 )
 
 var tasksListCmd = &cobra.Command{
@@ -48,27 +57,22 @@ var tasksListCmd = &cobra.Command{
 
 		tenant := resolveTenant(taskListTenant, profile)
 
-		params := url.Values{}
-		if taskListQuery != "" {
-			params.Set("q", taskListQuery)
-		}
-		if taskListStatus != "" {
-			params.Set("filters[status][$eq]", taskListStatus)
-		}
-		if taskListParentTaskID != "" {
-			params.Set("parent_task_id", taskListParentTaskID)
-		}
-		if taskListPage > 0 {
-			params.Set("page", strconv.Itoa(taskListPage))
-		}
-		if taskListLimit > 0 {
-			params.Set("limit", strconv.Itoa(taskListLimit))
-		}
-
-		path := "/mission/tasks"
-		if len(params) > 0 {
-			path += "?" + params.Encode()
-		}
+		path := tasksListPath(taskListFilters{
+			query:         taskListQuery,
+			status:        taskListStatus,
+			priority:      taskListPriority,
+			assigneeID:    taskListAssigneeID,
+			ownerID:       taskListOwnerID,
+			boardID:       taskListBoardID,
+			boardListID:   taskListBoardListID,
+			dueAfter:      taskListDueAfter,
+			dueBefore:     taskListDueBefore,
+			createdAfter:  taskListCreatedAfter,
+			createdBefore: taskListCreatedBefore,
+			parentTaskID:  taskListParentTaskID,
+			page:          taskListPage,
+			limit:         taskListLimit,
+		})
 
 		resp, err := client.Do(ctx, "GET", path, nil, tenant)
 		if err != nil {
@@ -700,6 +704,15 @@ func init() {
 	tasksListCmd.Flags().StringVar(&taskListTenant, "tenant", "", "scope to this tenant code")
 	tasksListCmd.Flags().StringVarP(&taskListQuery, "query", "q", "", "search by task title")
 	tasksListCmd.Flags().StringVar(&taskListStatus, "status", "", "filter by status")
+	tasksListCmd.Flags().StringVar(&taskListPriority, "priority", "", "filter by priority (e.g. low, medium, high)")
+	tasksListCmd.Flags().StringVar(&taskListAssigneeID, "assignee-id", "", "filter by assignee user UUID")
+	tasksListCmd.Flags().StringVar(&taskListOwnerID, "owner-id", "", "filter by owner user UUID")
+	tasksListCmd.Flags().StringVar(&taskListBoardID, "board-id", "", "filter by board UUID")
+	tasksListCmd.Flags().StringVar(&taskListBoardListID, "board-list-id", "", "filter by board list UUID")
+	tasksListCmd.Flags().StringVar(&taskListDueAfter, "due-after", "", "filter to tasks due on/after this ISO 8601 date")
+	tasksListCmd.Flags().StringVar(&taskListDueBefore, "due-before", "", "filter to tasks due on/before this ISO 8601 date")
+	tasksListCmd.Flags().StringVar(&taskListCreatedAfter, "created-after", "", "filter to tasks created on/after this ISO 8601 timestamp")
+	tasksListCmd.Flags().StringVar(&taskListCreatedBefore, "created-before", "", "filter to tasks created on/before this ISO 8601 timestamp")
 	tasksListCmd.Flags().StringVar(&taskListParentTaskID, "parent-task-id", "", "filter by parent task ID (use 'null' for top-level only)")
 	tasksListCmd.Flags().IntVar(&taskListPage, "page", 0, "page number")
 	tasksListCmd.Flags().IntVar(&taskListLimit, "limit", 0, "items per page")
@@ -827,6 +840,81 @@ func validateCommentParams(typeFlag, sortFlag string, limit int) *api.APIError {
 		}
 	}
 	return nil
+}
+
+// taskListFilters holds the `tasks list` flag values used to build the
+// request query string. See apps/platform/src/lib/api/query-parser.ts
+// ALLOWED_FILTER_COLUMNS on the capigo API for the full set of columns this
+// endpoint accepts.
+type taskListFilters struct {
+	query         string
+	status        string
+	priority      string
+	assigneeID    string
+	ownerID       string
+	boardID       string
+	boardListID   string
+	dueAfter      string
+	dueBefore     string
+	createdAfter  string
+	createdBefore string
+	parentTaskID  string
+	page          int
+	limit         int
+}
+
+// tasksListPath builds the request path + query string for `tasks list`.
+// Empty/zero flag values are omitted so the server applies its own defaults.
+func tasksListPath(f taskListFilters) string {
+	params := url.Values{}
+	if f.query != "" {
+		params.Set("q", f.query)
+	}
+	if f.status != "" {
+		params.Set("filters[status][$eq]", f.status)
+	}
+	if f.priority != "" {
+		params.Set("filters[priority][$eq]", f.priority)
+	}
+	if f.assigneeID != "" {
+		params.Set("filters[assignee_id][$eq]", f.assigneeID)
+	}
+	if f.ownerID != "" {
+		params.Set("filters[owner_id][$eq]", f.ownerID)
+	}
+	if f.boardID != "" {
+		params.Set("filters[board_id][$eq]", f.boardID)
+	}
+	if f.boardListID != "" {
+		params.Set("filters[board_list_id][$eq]", f.boardListID)
+	}
+	if f.dueAfter != "" {
+		params.Set("filters[due_date][$gte]", f.dueAfter)
+	}
+	if f.dueBefore != "" {
+		params.Set("filters[due_date][$lte]", f.dueBefore)
+	}
+	if f.createdAfter != "" {
+		params.Set("filters[created_at][$gte]", f.createdAfter)
+	}
+	if f.createdBefore != "" {
+		params.Set("filters[created_at][$lte]", f.createdBefore)
+	}
+	if f.parentTaskID != "" {
+		params.Set("parent_task_id", f.parentTaskID)
+	}
+	if f.page > 0 {
+		params.Set("page", strconv.Itoa(f.page))
+	}
+	if f.limit > 0 {
+		params.Set("limit", strconv.Itoa(f.limit))
+	}
+
+	path := "/mission/tasks"
+	if len(params) > 0 {
+		path += "?" + params.Encode()
+	}
+	return path
 }
 
 // commentsPath builds the request path + query string for `tasks comments`.

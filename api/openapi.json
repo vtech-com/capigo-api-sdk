@@ -67,6 +67,183 @@
           }
         }
       },
+      "PublicTaskCommentResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "author",
+          "kind",
+          "content",
+          "ui_data",
+          "attachments",
+          "parent_id",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "author": {
+            "type": "object",
+            "required": [
+              "id",
+              "name",
+              "type"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string",
+                "description": "display_name → agent name → 'System'. Never the member email."
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "user",
+                  "agent"
+                ]
+              }
+            }
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "comment",
+              "activity",
+              "card",
+              "artifact"
+            ]
+          },
+          "content": {
+            "type": "string",
+            "nullable": true
+          },
+          "ui_data": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true,
+            "description": "Raw structured event data for activity messages; not pre-rendered."
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "file_name",
+                "mime_type",
+                "size_bytes"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "file_name": {
+                  "type": "string"
+                },
+                "mime_type": {
+                  "type": "string"
+                },
+                "size_bytes": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
+          "parent_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PublicBrandResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "logo_url"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "logo_url": {
+            "type": "string",
+            "format": "uri",
+            "nullable": true
+          }
+        }
+      },
+      "PublicCategoryResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "parent_id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parent_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        }
+      },
+      "PublicProductTypeResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "PublicUnitResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "abbreviation"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "abbreviation": {
+            "type": "string"
+          }
+        }
+      },
       "PublicTenantResponse": {
         "type": "object",
         "required": [
@@ -375,6 +552,22 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "manufacturer_code": {
+            "type": "string",
+            "nullable": true,
+            "description": "Manufacturer-assigned code for this variant."
+          },
+          "legacy_code": {
+            "type": "string",
+            "nullable": true,
+            "description": "Code carried over from a legacy system (e.g. ERP migration)."
+          },
+          "extra_data": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true,
+            "description": "Arbitrary key-value metadata for this variant."
           }
         }
       },
@@ -614,90 +807,6 @@
           }
         }
       },
-      "PublicBrandResponse": {
-        "type": "object",
-        "required": [
-          "id",
-          "name",
-          "logo_url"
-        ],
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "name": {
-            "type": "string"
-          },
-          "logo_url": {
-            "type": "string",
-            "format": "uri",
-            "nullable": true
-          }
-        }
-      },
-      "PublicCategoryResponse": {
-        "type": "object",
-        "required": [
-          "id",
-          "name",
-          "parent_id"
-        ],
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "name": {
-            "type": "string"
-          },
-          "parent_id": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true
-          }
-        }
-      },
-      "PublicProductTypeResponse": {
-        "type": "object",
-        "required": [
-          "id",
-          "name"
-        ],
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "name": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string",
-            "nullable": true
-          }
-        }
-      },
-      "PublicUnitResponse": {
-        "type": "object",
-        "required": [
-          "id",
-          "name",
-          "abbreviation"
-        ],
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "name": {
-            "type": "string"
-          },
-          "abbreviation": {
-            "type": "string"
-          }
-        }
-      },
       "CreateSubtasksRequest": {
         "type": "object",
         "required": [
@@ -720,29 +829,52 @@
           }
         }
       },
-      "CreateTaskWithSubtasksRequest": {
+      "SubtaskItem": {
         "type": "object",
         "required": [
-          "tenant_code",
-          "task",
-          "subtasks"
+          "title"
         ],
         "properties": {
-          "tenant_code": {
+          "title": {
             "type": "string",
-            "description": "The tenant/workspace code."
+            "maxLength": 500
           },
-          "task": {
-            "$ref": "#/components/schemas/CreateTaskWithSubtasksTask"
+          "description": {
+            "type": "string",
+            "maxLength": 10000,
+            "nullable": true
           },
-          "subtasks": {
-            "type": "array",
-            "minItems": 1,
-            "maxItems": 25,
-            "description": "List of subtask items to create (1-25 items).",
-            "items": {
-              "$ref": "#/components/schemas/SubtaskItem"
-            }
+          "assignee_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "due_date": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "priority": {
+            "type": "string",
+            "enum": [
+              "Low",
+              "Normal",
+              "High",
+              "Urgent"
+            ],
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "Pending",
+              "To-Do",
+              "Doing",
+              "Done",
+              "Closed",
+              "Cancelled"
+            ],
+            "nullable": true
           }
         }
       },
@@ -816,149 +948,29 @@
           }
         }
       },
-      "PublicTaskCommentResponse": {
+      "CreateTaskWithSubtasksRequest": {
         "type": "object",
         "required": [
-          "id",
-          "author",
-          "kind",
-          "content",
-          "ui_data",
-          "attachments",
-          "parent_id",
-          "created_at"
+          "tenant_code",
+          "task",
+          "subtasks"
         ],
         "properties": {
-          "id": {
+          "tenant_code": {
             "type": "string",
-            "format": "uuid"
+            "description": "The tenant/workspace code."
           },
-          "author": {
-            "type": "object",
-            "required": [
-              "id",
-              "name",
-              "type"
-            ],
-            "properties": {
-              "id": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string",
-                "description": "display_name → agent name → 'System'. Never the member email."
-              },
-              "type": {
-                "type": "string",
-                "enum": [
-                  "user",
-                  "agent"
-                ]
-              }
-            }
+          "task": {
+            "$ref": "#/components/schemas/CreateTaskWithSubtasksTask"
           },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "comment",
-              "activity",
-              "card",
-              "artifact"
-            ]
-          },
-          "content": {
-            "type": "string",
-            "nullable": true
-          },
-          "ui_data": {
-            "type": "object",
-            "nullable": true,
-            "additionalProperties": true,
-            "description": "Raw structured event data for activity messages; not pre-rendered."
-          },
-          "attachments": {
+          "subtasks": {
             "type": "array",
+            "minItems": 1,
+            "maxItems": 25,
+            "description": "List of subtask items to create (1-25 items).",
             "items": {
-              "type": "object",
-              "required": [
-                "id",
-                "file_name",
-                "mime_type",
-                "size_bytes"
-              ],
-              "properties": {
-                "id": {
-                  "type": "string"
-                },
-                "file_name": {
-                  "type": "string"
-                },
-                "mime_type": {
-                  "type": "string"
-                },
-                "size_bytes": {
-                  "type": "integer"
-                }
-              }
+              "$ref": "#/components/schemas/SubtaskItem"
             }
-          },
-          "parent_id": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          }
-        }
-      },
-      "SubtaskItem": {
-        "type": "object",
-        "required": [
-          "title"
-        ],
-        "properties": {
-          "title": {
-            "type": "string",
-            "maxLength": 500
-          },
-          "description": {
-            "type": "string",
-            "maxLength": 10000,
-            "nullable": true
-          },
-          "assignee_id": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true
-          },
-          "due_date": {
-            "type": "string",
-            "format": "date",
-            "nullable": true
-          },
-          "priority": {
-            "type": "string",
-            "enum": [
-              "Low",
-              "Normal",
-              "High",
-              "Urgent"
-            ],
-            "nullable": true
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "Pending",
-              "To-Do",
-              "Doing",
-              "Done",
-              "Closed",
-              "Cancelled"
-            ],
-            "nullable": true
           }
         }
       }
@@ -1068,6 +1080,63 @@
         }
       }
     },
+    "/members/{id}": {
+      "get": {
+        "summary": "Get Member by ID",
+        "tags": [
+          "Members"
+        ],
+        "description": "Fetch a single tenant member by their user id, scoped to the tenants the caller belongs to. Sensitive PII is excluded. Returns 404 if the member is not in any accessible tenant.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The member's user id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "description": "Scope to a tenant. If omitted, resolved across all tenants the caller belongs to.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Member detail",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicMemberResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Member not found"
+          }
+        }
+      }
+    },
     "/mission/boards": {
       "get": {
         "summary": "List Boards",
@@ -1080,6 +1149,14 @@
             "name": "X-Tenant-Code",
             "in": "header",
             "description": "Code of the tenant to scope the request to. If omitted, returns boards from all accessible tenants (where user is a member).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Case-insensitive partial search against board name. Values shorter than 2 characters are ignored. Characters `%` and `_` are treated as literals, not wildcards. Maximum 500 characters.",
             "schema": {
               "type": "string"
             }
@@ -1502,180 +1579,6 @@
         }
       }
     },
-    "/mission/tasks/with-subtasks": {
-      "post": {
-        "summary": "Create Task with Subtasks",
-        "tags": [
-          "Tasks"
-        ],
-        "description": "Create a task together with its subtasks in a single atomic request. All-or-nothing validation: if any part fails, nothing is created. Max 25 subtasks per request.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateTaskWithSubtasksRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Task and subtasks created successfully",
-            "headers": {
-              "X-Server-Time": {
-                "schema": {
-                  "type": "string",
-                  "format": "date-time"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "task": {
-                          "$ref": "#/components/schemas/PublicTaskResponse"
-                        },
-                        "subtasks": {
-                          "type": "array",
-                          "items": {
-                            "$ref": "#/components/schemas/PublicTaskResponse"
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error (all-or-nothing) — nothing was created. Possible codes: VALIDATION_ERROR, MISSING_TENANT, INVALID_ASSIGNEE, INVALID_FOLLOWERS, BOARD_NOT_FOUND, SUBTASK_VALIDATION_ERROR.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Permission denied — not a tenant member.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/mission/tasks/{id}/subtasks": {
-      "post": {
-        "summary": "Create Subtasks in Existing Task",
-        "tags": [
-          "Tasks"
-        ],
-        "description": "Create batch subtasks under an existing parent task. All-or-nothing validation: if any subtask fails validation, nothing is created. Max 25 subtasks per request.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "description": "Parent task UUID"
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateSubtasksRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Subtasks created successfully",
-            "headers": {
-              "X-Server-Time": {
-                "schema": {
-                  "type": "string",
-                  "format": "date-time"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "parent_task": {
-                          "type": "object",
-                          "properties": {
-                            "id": {
-                              "type": "string",
-                              "format": "uuid"
-                            },
-                            "code": {
-                              "type": "string"
-                            },
-                            "title": {
-                              "type": "string"
-                            }
-                          }
-                        },
-                        "subtasks": {
-                          "type": "array",
-                          "items": {
-                            "$ref": "#/components/schemas/PublicTaskResponse"
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error (all-or-nothing) — nothing was created. Possible codes: SUBTASK_VALIDATION_ERROR, PARENT_TASK_NOT_FOUND, SUBTASK_INVALID, PARENT_TASK_ARCHIVED, INVALID_ASSIGNEE.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Permission denied — not parent task owner or tenant owner, or not a tenant member.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/mission/tasks/{id}/comments": {
       "get": {
         "summary": "Retrieve Task Comments & Activity",
@@ -1789,13 +1692,187 @@
         }
       }
     },
+    "/mission/tasks/{id}/subtasks": {
+      "post": {
+        "summary": "Create Subtasks in Existing Task",
+        "tags": [
+          "Tasks"
+        ],
+        "description": "Create batch subtasks under an existing parent task. All-or-nothing validation: if any subtask fails validation, nothing is created. Max 25 subtasks per request.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Parent task UUID"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSubtasksRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Subtasks created successfully",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "parent_task": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "code": {
+                              "type": "string"
+                            },
+                            "title": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "subtasks": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/PublicTaskResponse"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (all-or-nothing) — nothing was created. Possible codes: SUBTASK_VALIDATION_ERROR, PARENT_TASK_NOT_FOUND, SUBTASK_INVALID, PARENT_TASK_ARCHIVED, INVALID_ASSIGNEE.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied — not parent task owner or tenant owner, or not a tenant member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mission/tasks/with-subtasks": {
+      "post": {
+        "summary": "Create Task with Subtasks",
+        "tags": [
+          "Tasks"
+        ],
+        "description": "Create a task together with its subtasks in a single atomic request. All-or-nothing validation: if any part fails, nothing is created. Max 25 subtasks per request.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTaskWithSubtasksRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Task and subtasks created successfully",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "task": {
+                          "$ref": "#/components/schemas/PublicTaskResponse"
+                        },
+                        "subtasks": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/PublicTaskResponse"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (all-or-nothing) — nothing was created. Possible codes: VALIDATION_ERROR, MISSING_TENANT, INVALID_ASSIGNEE, INVALID_FOLLOWERS, BOARD_NOT_FOUND, SUBTASK_VALIDATION_ERROR.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied — not a tenant member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/pcms/products": {
       "get": {
         "summary": "List Products (Catalog Sync)",
         "tags": [
           "PCMS"
         ],
-        "description": "Paginated product feed for external catalog synchronization.\n\nSupports delta sync: pass `updated_since` (ISO 8601 UTC) to receive only products changed after that timestamp; omit for a full sync. Results are ordered by `updated_at` ascending so clients can checkpoint progress reliably.\n\nAlternatively, pass `ids` (comma-separated UUIDs, max 50) to fetch a specific subset of products by ID — useful after `POST`/`PUT` or to refresh a local cache for known items. `ids` AND-composes with `updated_since` and pagination, and is tenant-scoped (foreign IDs are silently filtered, never leaked).\n\nDeleted products are included with `is_deleted: true` so consumers can remove them from their local catalog. Each product's `variants` array contains only active variants.\n\nInternal fields (cost, audit metadata, tenancy identifiers) are omitted from the response.",
+        "description": "Paginated product feed for external catalog synchronization.\n\nSupports three composable modes: full/delta sync via `updated_since` (ISO 8601 UTC) for incremental pulls, explicit fetch via `ids` (comma-separated UUIDs, max 50) for known subsets, and free-text search via `q` for substring matches against product name, variant name, SKU, or barcode. All three AND-compose with each other and with pagination; results remain ordered by `updated_at` ascending for stable cursor checkpointing.\n\nWhen `q` matches against a variant field, the full parent product is returned with all non-orphaned variants — parity with `updated_since` semantics. All modes are tenant-scoped (foreign IDs and foreign-tenant matches are silently filtered, never leaked).\n\nDeleted products are included with `is_deleted: true` so consumers can remove them from their local catalog. Each product's `variants` array contains only active variants.\n\nInternal fields (cost, audit metadata, tenancy identifiers) are omitted from the response.",
         "parameters": [
           {
             "name": "X-Tenant-Code",
@@ -1833,6 +1910,18 @@
             "example": "11111111-1111-4111-8111-111111111111,22222222-2222-4222-8222-222222222222"
           },
           {
+            "name": "q",
+            "in": "query",
+            "description": "Free-text search fragment (2–500 characters). Matches case-insensitive substring (`ILIKE %q%`) against six columns for active (non-deleted) products: product name, product aliases, product tags, variant name, variant SKU, and variant barcode. When a variant matches, the full parent product is returned with all non-orphaned variants. For soft-deleted (tombstone) products, search is limited to product name, aliases, and tags only — variant fields (name, SKU, barcode) are not searchable because variant data for deleted products is not indexed. To retrieve all tombstones, omit `q` and use `updated_since` or a full sync instead. Composes with `ids` (which is independently capped at 50 UUIDs) and `updated_since` as a strict intersection — supplying all three narrows the result. Special characters `%` and `_` inside `q` are treated literally (escaped), not as wildcards. Control characters and Unicode-whitespace-only values are rejected with `INVALID_SEARCH`.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 500,
+              "example": "iphone"
+            }
+          },
+          {
             "name": "page",
             "in": "query",
             "schema": {
@@ -1849,18 +1938,6 @@
               "default": 20,
               "minimum": 1,
               "maximum": 100
-            }
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "description": "Free-text search fragment (2-500 characters). Matches case-insensitive substring against product name, variant name, variant SKU, and variant barcode.",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "minLength": 2,
-              "maxLength": 500,
-              "example": "iphone"
             }
           }
         ],
@@ -2007,6 +2084,22 @@
                     "nullable": true,
                     "description": "Simple mode only: price for the auto-created default variant."
                   },
+                  "manufacturer_code": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Simple mode only: manufacturer-assigned code for the auto-created default variant. Ignored when `options`/`variants` are provided."
+                  },
+                  "legacy_code": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Simple mode only: code carried over from a legacy system for the auto-created default variant."
+                  },
+                  "extra_data": {
+                    "type": "object",
+                    "nullable": true,
+                    "additionalProperties": true,
+                    "description": "Simple mode only: arbitrary key-value metadata for the auto-created default variant."
+                  },
                   "aliases": {
                     "type": "array",
                     "items": {
@@ -2090,6 +2183,22 @@
                           "type": "string",
                           "nullable": true,
                           "description": "Value for `options[2]`."
+                        },
+                        "manufacturer_code": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Manufacturer-assigned code for this variant. Optional."
+                        },
+                        "legacy_code": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Code carried over from a legacy system (e.g. ERP migration). Optional."
+                        },
+                        "extra_data": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true,
+                          "description": "Arbitrary key-value metadata for this variant."
                         }
                       }
                     }
@@ -2134,7 +2243,261 @@
         }
       }
     },
+    "/pcms/variants": {
+      "get": {
+        "summary": "List Variants by Barcode Prefix",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Paginated flat list of product variants. Accepts an optional `barcode_prefix` to filter variants whose barcode starts with the given string (ilike prefix-match with `%` and `_` escaped). Useful for finding the highest barcode already assigned in a prefix namespace to auto-increment without collisions.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Code of the tenant to scope the request to.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "barcode_prefix",
+            "in": "query",
+            "required": false,
+            "description": "Optional barcode prefix to filter variants. Only variants whose barcode starts with this value are returned. Special characters `%` and `_` are treated literally.",
+            "schema": {
+              "type": "string",
+              "example": "620111"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Sort order. Use `-barcode` for descending barcode order (to find highest barcode in a prefix range) or `barcode` for ascending. Defaults to `created_at` descending when omitted.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "barcode",
+                "-barcode"
+              ],
+              "example": "-barcode"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp at query execution.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "barcode": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "sku": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "product_id": {
+                            "type": "string",
+                            "format": "uuid"
+                          }
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/MetaPagination"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameters (e.g. invalid barcode_prefix, unsupported sort column, or out-of-range limit)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied"
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pcms/variants/{id}": {
+      "get": {
+        "summary": "Get Variant Detail",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Fetch a single product variant by id (full variant shape), tenant-scoped. Orphaned, soft-deleted, and cross-tenant variants return 404.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "description": "Scope to a tenant. If omitted, the variant is resolved across all tenants the caller belongs to.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Variant detail",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicProductVariantResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Variant not found"
+          }
+        }
+      }
+    },
     "/pcms/products/{id}": {
+      "get": {
+        "summary": "Get Product Detail",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Fetch a single product by id (same shape as the catalog sync feed), tenant-scoped. Returns 404 if the product does not exist or belongs to another tenant.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "description": "Scope to a tenant. If omitted, the product is resolved across all tenants the caller belongs to.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product detail",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicProductResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Product not found"
+          }
+        }
+      },
       "put": {
         "summary": "Update product details",
         "tags": [
@@ -2263,60 +2626,6 @@
             "description": "Product not found in the specified tenant"
           }
         }
-      },
-      "get": {
-        "summary": "Get Product Detail",
-        "tags": [
-          "PCMS"
-        ],
-        "description": "Fetch a single product by id (same shape as the catalog sync feed), tenant-scoped. Returns 404 if the product does not exist or belongs to another tenant.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "X-Tenant-Code",
-            "in": "header",
-            "description": "Scope to a tenant. If omitted, the product is resolved across all tenants the caller belongs to.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Product detail",
-            "headers": {
-              "X-Server-Time": {
-                "schema": {
-                  "type": "string",
-                  "format": "date-time"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/PublicProductResponse"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Product not found"
-          }
-        }
       }
     },
     "/pcms/products/{id}/variants": {
@@ -2389,6 +2698,22 @@
                     "option3": {
                       "type": "string",
                       "nullable": true
+                    },
+                    "manufacturer_code": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "Manufacturer-assigned code for this variant. Optional."
+                    },
+                    "legacy_code": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "Code carried over from a legacy system (e.g. ERP migration). Optional."
+                    },
+                    "extra_data": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": true,
+                      "description": "Arbitrary key-value metadata for this variant."
                     }
                   }
                 }
@@ -2435,6 +2760,88 @@
       }
     },
     "/pcms/brands": {
+      "post": {
+        "summary": "Create Brand",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Create a new brand in the tenant's catalog. A URL-safe slug is auto-generated from the name.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to scope the request to. Required.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500,
+                    "example": "Nike"
+                  },
+                  "logo_url": {
+                    "type": "string",
+                    "format": "uri",
+                    "nullable": true,
+                    "example": "https://example.com/logo.png"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Brand created successfully",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicBrandResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid request body"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient permissions"
+          },
+          "409": {
+            "description": "A brand with this name (slug) already exists in the tenant"
+          }
+        }
+      },
       "get": {
         "summary": "List Brands",
         "tags": [
@@ -2521,19 +2928,91 @@
             "description": "Tenant access denied"
           }
         }
-      },
-      "post": {
-        "summary": "Create Brand",
+      }
+    },
+    "/pcms/brands/{id}": {
+      "get": {
+        "summary": "Get Brand by ID",
         "tags": [
           "PCMS"
         ],
-        "description": "Create a new brand in the tenant's catalog. A URL-safe slug is auto-generated from the name.",
+        "description": "Fetch a single brand by id, tenant-scoped. Returns 404 if the brand does not exist or belongs to another tenant.",
         "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Brand UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
           {
             "name": "X-Tenant-Code",
             "in": "header",
             "required": true,
-            "description": "Tenant to scope the request to. Required.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Brand detail",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicBrandResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient permissions"
+          },
+          "404": {
+            "description": "Brand not found or does not belong to this tenant"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Partial Update Brand",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Partially update a brand (PATCH). All fields are optional; at least one must be provided. Fields not supplied are left unchanged. Use PUT to fully replace.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Brand UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
             "schema": {
               "type": "string"
             }
@@ -2545,9 +3024,6 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "name"
-                ],
                 "properties": {
                   "name": {
                     "type": "string",
@@ -2558,17 +3034,17 @@
                   "logo_url": {
                     "type": "string",
                     "format": "uri",
-                    "nullable": true,
-                    "example": "https://example.com/logo.png"
+                    "nullable": true
                   }
-                }
+                },
+                "description": "Partial update — only the provided fields are changed; at least one field is required."
               }
             }
           }
         },
         "responses": {
-          "201": {
-            "description": "Brand created successfully",
+          "200": {
+            "description": "Brand updated successfully",
             "headers": {
               "X-Server-Time": {
                 "schema": {
@@ -2591,7 +3067,7 @@
             }
           },
           "400": {
-            "description": "Missing or invalid request body"
+            "description": "Empty or invalid request body"
           },
           "401": {
             "description": "Missing or invalid API key"
@@ -2599,20 +3075,31 @@
           "403": {
             "description": "Tenant access denied or insufficient permissions"
           },
+          "404": {
+            "description": "Brand not found or does not belong to this tenant"
+          },
           "409": {
             "description": "A brand with this name (slug) already exists in the tenant"
           }
         }
-      }
-    },
-    "/pcms/categories": {
-      "get": {
-        "summary": "List Categories",
+      },
+      "put": {
+        "summary": "Update Brand",
         "tags": [
           "PCMS"
         ],
-        "description": "Paginated, name-sorted list of categories for a tenant. Use `?q=` for name-contains search.",
+        "description": "Update an existing brand. At least one field must be provided. Updating `name` automatically recomputes the slug.",
         "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Brand UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
           {
             "name": "X-Tenant-Code",
             "in": "header",
@@ -2620,38 +3107,34 @@
             "schema": {
               "type": "string"
             }
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "schema": {
-              "type": "string",
-              "maxLength": 200
-            }
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "default": 1,
-              "minimum": 1
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "default": 20,
-              "minimum": 1,
-              "maximum": 100
-            }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500,
+                    "example": "Nike"
+                  },
+                  "logo_url": {
+                    "type": "string",
+                    "format": "uri",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "Paginated list of categories sorted by name ascending",
+            "description": "Brand updated successfully",
             "headers": {
               "X-Server-Time": {
                 "schema": {
@@ -2666,13 +3149,7 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/PublicCategoryResponse"
-                      }
-                    },
-                    "meta": {
-                      "$ref": "#/components/schemas/MetaPagination"
+                      "$ref": "#/components/schemas/PublicBrandResponse"
                     }
                   }
                 }
@@ -2680,16 +3157,24 @@
             }
           },
           "400": {
-            "description": "Missing X-Tenant-Code or invalid query parameters"
+            "description": "Empty or invalid request body"
           },
           "401": {
             "description": "Missing or invalid API key"
           },
           "403": {
-            "description": "Tenant access denied"
+            "description": "Tenant access denied or insufficient permissions"
+          },
+          "404": {
+            "description": "Brand not found or does not belong to this tenant"
+          },
+          "409": {
+            "description": "A brand with this name (slug) already exists in the tenant"
           }
         }
-      },
+      }
+    },
+    "/pcms/categories": {
       "post": {
         "summary": "Create Category",
         "tags": [
@@ -2773,9 +3258,423 @@
             "description": "Invalid parent_id (not found or cross-tenant)"
           }
         }
+      },
+      "get": {
+        "summary": "List Categories",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Paginated, name-sorted list of categories for a tenant. Use `?q=` for name-contains search.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of categories sorted by name ascending",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicCategoryResponse"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/MetaPagination"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing X-Tenant-Code or invalid query parameters"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied"
+          }
+        }
+      }
+    },
+    "/pcms/categories/{id}": {
+      "get": {
+        "summary": "Get Category by ID",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Fetch a single category by id, tenant-scoped. Returns 404 if the category does not exist or belongs to another tenant.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Category UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Category detail",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicCategoryResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient permissions"
+          },
+          "404": {
+            "description": "Category not found or does not belong to this tenant"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Partial Update Category",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Partially update a category (PATCH). All fields are optional; at least one must be provided. Fields not supplied are left unchanged. Use PUT to fully replace.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Category UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "parent_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true,
+                    "description": "Pass null to promote to root. Omit to leave unchanged."
+                  }
+                },
+                "description": "Partial update — only the provided fields are changed; at least one field is required."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Category updated successfully",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicCategoryResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Empty or invalid request body"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient permissions"
+          },
+          "404": {
+            "description": "Category not found or does not belong to this tenant"
+          },
+          "409": {
+            "description": "A category with this name (slug) already exists in the tenant"
+          },
+          "422": {
+            "description": "Circular reference or invalid parent_id"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update Category",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Update an existing category. Pass `parent_id: null` to promote to root. Updating `name` recomputes the slug.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Category UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "parent_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true,
+                    "description": "Pass null to promote to root. Omit to leave unchanged."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Category updated successfully",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicCategoryResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Empty or invalid request body"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient permissions"
+          },
+          "404": {
+            "description": "Category not found or does not belong to this tenant"
+          },
+          "409": {
+            "description": "A category with this name (slug) already exists in the tenant"
+          },
+          "422": {
+            "description": "Circular reference or invalid parent_id"
+          }
+        }
       }
     },
     "/pcms/product-types": {
+      "post": {
+        "summary": "Create Product Type",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Create a new product type in the tenant's catalog. Name must be unique within the tenant (case-insensitive).",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500,
+                    "example": "Smartphone"
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Product type created successfully",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicProductTypeResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or invalid request body"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient permissions"
+          },
+          "409": {
+            "description": "A product type with this name already exists in the tenant"
+          }
+        }
+      },
       "get": {
         "summary": "List Product Types",
         "tags": [
@@ -2859,14 +3758,87 @@
             "description": "Tenant access denied"
           }
         }
-      },
-      "post": {
-        "summary": "Create Product Type",
+      }
+    },
+    "/pcms/product-types/{id}": {
+      "get": {
+        "summary": "Get Product Type by ID",
         "tags": [
           "PCMS"
         ],
-        "description": "Create a new product type in the tenant's catalog. Name must be unique within the tenant (case-insensitive).",
+        "description": "Fetch a single product type by id, tenant-scoped. Returns 404 if the product type does not exist or belongs to another tenant.",
         "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Product type UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product Type detail",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicProductTypeResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient permissions"
+          },
+          "404": {
+            "description": "Product type not found or does not belong to this tenant"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Partial Update Product Type",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Partially update a product type (PATCH). All fields are optional; at least one must be provided. Fields not supplied are left unchanged. Use PUT to fully replace.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Product type UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
           {
             "name": "X-Tenant-Code",
             "in": "header",
@@ -2882,29 +3854,26 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "name"
-                ],
                 "properties": {
                   "name": {
                     "type": "string",
                     "minLength": 1,
-                    "maxLength": 500,
-                    "example": "Smartphone"
+                    "maxLength": 500
                   },
                   "description": {
                     "type": "string",
                     "maxLength": 2000,
                     "nullable": true
                   }
-                }
+                },
+                "description": "Partial update — only the provided fields are changed; at least one field is required."
               }
             }
           }
         },
         "responses": {
-          "201": {
-            "description": "Product type created successfully",
+          "200": {
+            "description": "Product type updated successfully",
             "headers": {
               "X-Server-Time": {
                 "schema": {
@@ -2927,13 +3896,105 @@
             }
           },
           "400": {
-            "description": "Missing or invalid request body"
+            "description": "Empty or invalid request body"
           },
           "401": {
             "description": "Missing or invalid API key"
           },
           "403": {
             "description": "Tenant access denied or insufficient permissions"
+          },
+          "404": {
+            "description": "Product type not found or does not belong to this tenant"
+          },
+          "409": {
+            "description": "A product type with this name already exists in the tenant"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update Product Type",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Update an existing product type. At least one field must be provided. Name must be unique (case-insensitive) within the tenant.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Product type UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Product type updated successfully",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicProductTypeResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Empty or invalid request body"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient permissions"
+          },
+          "404": {
+            "description": "Product type not found or does not belong to this tenant"
           },
           "409": {
             "description": "A product type with this name already exists in the tenant"
@@ -3112,878 +4173,19 @@
         }
       }
     },
-    "/pcms/variants": {
-      "get": {
-        "summary": "List Variants by Barcode Prefix",
-        "tags": [
-          "PCMS"
-        ],
-        "description": "Paginated flat list of product variants. Accepts an optional `barcode_prefix` to filter variants whose barcode starts with the given string. Useful for finding the highest barcode already assigned in a prefix namespace to auto-increment without collisions.",
-        "parameters": [
-          {
-            "name": "X-Tenant-Code",
-            "in": "header",
-            "required": true,
-            "description": "Code of the tenant to scope the request to.",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "barcode_prefix",
-            "in": "query",
-            "required": false,
-            "description": "Optional barcode prefix to filter variants. Only variants whose barcode starts with this value are returned.",
-            "schema": {
-              "type": "string",
-              "example": "620111"
-            }
-          },
-          {
-            "name": "sort",
-            "in": "query",
-            "required": false,
-            "description": "Sort order. Use `-barcode` for descending (to find highest barcode in a prefix range) or `barcode` for ascending.",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "barcode",
-                "-barcode"
-              ],
-              "example": "-barcode"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "default": 20,
-              "minimum": 1,
-              "maximum": 100
-            }
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "default": 1,
-              "minimum": 1
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "headers": {
-              "X-Server-Time": {
-                "description": "ISO 8601 server timestamp at query execution.",
-                "schema": {
-                  "type": "string",
-                  "format": "date-time"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "id": {
-                            "type": "string",
-                            "format": "uuid"
-                          },
-                          "barcode": {
-                            "type": "string",
-                            "nullable": true
-                          },
-                          "sku": {
-                            "type": "string",
-                            "nullable": true
-                          },
-                          "name": {
-                            "type": "string"
-                          },
-                          "product_id": {
-                            "type": "string",
-                            "format": "uuid"
-                          }
-                        }
-                      }
-                    },
-                    "meta": {
-                      "$ref": "#/components/schemas/MetaPagination"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid query parameters",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid API key"
-          },
-          "403": {
-            "description": "Tenant access denied"
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/pcms/brands/{id}": {
-      "get": {
-        "summary": "Get Brand by ID",
-        "tags": [
-          "PCMS"
-        ],
-        "description": "Get a single brand by ID. Returns 404 for both not-found and cross-tenant resources (no info leakage). Tenant is required.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "Brand UUID",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "X-Tenant-Code",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Brand found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/PublicBrandResponse"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid API key"
-          },
-          "403": {
-            "description": "Tenant access denied or insufficient permissions"
-          },
-          "404": {
-            "description": "Brand not found or does not belong to this tenant"
-          }
-        }
-      },
-      "patch": {
-        "summary": "Partial Update Brand",
-        "tags": [
-          "PCMS"
-        ],
-        "description": "Partial update (PATCH) of an existing brand. At least one field must be provided. Fields not provided are left unchanged.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "Brand UUID",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "X-Tenant-Code",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 500,
-                    "example": "Nike"
-                  },
-                  "logo_url": {
-                    "type": "string",
-                    "format": "uri",
-                    "nullable": true
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Brand updated successfully",
-            "headers": {
-              "X-Server-Time": {
-                "schema": {
-                  "type": "string",
-                  "format": "date-time"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/PublicBrandResponse"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Empty or invalid request body"
-          },
-          "401": {
-            "description": "Missing or invalid API key"
-          },
-          "403": {
-            "description": "Tenant access denied or insufficient permissions"
-          },
-          "404": {
-            "description": "Brand not found or does not belong to this tenant"
-          },
-          "409": {
-            "description": "A brand with this name (slug) already exists in the tenant"
-          }
-        }
-      },
-      "put": {
-        "summary": "Replace Brand",
-        "tags": [
-          "PCMS"
-        ],
-        "description": "Full replace (PUT) of an existing brand. All fields are required; the server enforces this with Zod.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "Brand UUID",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "X-Tenant-Code",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "name",
-                  "logo_url"
-                ],
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 500,
-                    "example": "Nike"
-                  },
-                  "logo_url": {
-                    "type": "string",
-                    "format": "uri",
-                    "nullable": true
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Brand replaced successfully",
-            "headers": {
-              "X-Server-Time": {
-                "schema": {
-                  "type": "string",
-                  "format": "date-time"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/PublicBrandResponse"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Missing required field(s) or invalid request body"
-          },
-          "401": {
-            "description": "Missing or invalid API key"
-          },
-          "403": {
-            "description": "Tenant access denied or insufficient permissions"
-          },
-          "404": {
-            "description": "Brand not found or does not belong to this tenant"
-          },
-          "409": {
-            "description": "A brand with this name (slug) already exists in the tenant"
-          }
-        }
-      }
-    },
-    "/pcms/categories/{id}": {
-      "get": {
-        "summary": "Get Category by ID",
-        "tags": [
-          "PCMS"
-        ],
-        "description": "Get a single category by ID. Returns 404 for both not-found and cross-tenant resources (no info leakage). Tenant is required.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "Category UUID",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "X-Tenant-Code",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Category found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/PublicCategoryResponse"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid API key"
-          },
-          "403": {
-            "description": "Tenant access denied or insufficient permissions"
-          },
-          "404": {
-            "description": "Category not found or does not belong to this tenant"
-          }
-        }
-      },
-      "patch": {
-        "summary": "Partial Update Category",
-        "tags": [
-          "PCMS"
-        ],
-        "description": "Partial update (PATCH) of an existing category. At least one field must be provided. Use parent_id: null to promote to root.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "Category UUID",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "X-Tenant-Code",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 500
-                  },
-                  "parent_id": {
-                    "type": "string",
-                    "format": "uuid",
-                    "nullable": true,
-                    "description": "Pass null to promote to root. Omit to leave unchanged."
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Category updated successfully",
-            "headers": {
-              "X-Server-Time": {
-                "schema": {
-                  "type": "string",
-                  "format": "date-time"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/PublicCategoryResponse"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Empty or invalid request body"
-          },
-          "401": {
-            "description": "Missing or invalid API key"
-          },
-          "403": {
-            "description": "Tenant access denied or insufficient permissions"
-          },
-          "404": {
-            "description": "Category not found or does not belong to this tenant"
-          },
-          "409": {
-            "description": "A category with this name (slug) already exists in the tenant"
-          }
-        }
-      },
-      "put": {
-        "summary": "Replace Category",
-        "tags": [
-          "PCMS"
-        ],
-        "description": "Full replace (PUT) of an existing category. All fields are required; the server enforces this with Zod. Pass parent_id: null to promote to root.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "Category UUID",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "X-Tenant-Code",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "name",
-                  "parent_id"
-                ],
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 500
-                  },
-                  "parent_id": {
-                    "type": "string",
-                    "format": "uuid",
-                    "nullable": true,
-                    "description": "Pass null to promote to root."
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Category replaced successfully",
-            "headers": {
-              "X-Server-Time": {
-                "schema": {
-                  "type": "string",
-                  "format": "date-time"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/PublicCategoryResponse"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Missing required field(s) or invalid request body"
-          },
-          "401": {
-            "description": "Missing or invalid API key"
-          },
-          "403": {
-            "description": "Tenant access denied or insufficient permissions"
-          },
-          "404": {
-            "description": "Category not found or does not belong to this tenant"
-          },
-          "409": {
-            "description": "A category with this name (slug) already exists in the tenant"
-          }
-        }
-      }
-    },
-    "/pcms/product-types/{id}": {
-      "get": {
-        "summary": "Get Product Type by ID",
-        "tags": [
-          "PCMS"
-        ],
-        "description": "Get a single product type by ID. Returns 404 for both not-found and cross-tenant resources (no info leakage). Tenant is required.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "ProductType UUID",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "X-Tenant-Code",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "ProductType found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/PublicProductTypeResponse"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid API key"
-          },
-          "403": {
-            "description": "Tenant access denied or insufficient permissions"
-          },
-          "404": {
-            "description": "ProductType not found or does not belong to this tenant"
-          }
-        }
-      },
-      "patch": {
-        "summary": "Partial Update Product Type",
-        "tags": [
-          "PCMS"
-        ],
-        "description": "Partial update (PATCH) of an existing product type. At least one field must be provided.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "ProductType UUID",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "X-Tenant-Code",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 500
-                  },
-                  "description": {
-                    "type": "string",
-                    "maxLength": 2000,
-                    "nullable": true
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "ProductType updated successfully",
-            "headers": {
-              "X-Server-Time": {
-                "schema": {
-                  "type": "string",
-                  "format": "date-time"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/PublicProductTypeResponse"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Empty or invalid request body"
-          },
-          "401": {
-            "description": "Missing or invalid API key"
-          },
-          "403": {
-            "description": "Tenant access denied or insufficient permissions"
-          },
-          "404": {
-            "description": "ProductType not found or does not belong to this tenant"
-          },
-          "409": {
-            "description": "A producttype with this name (slug) already exists in the tenant"
-          }
-        }
-      },
-      "put": {
-        "summary": "Replace Product Type",
-        "tags": [
-          "PCMS"
-        ],
-        "description": "Full replace (PUT) of an existing product type. All fields are required; the server enforces this with Zod.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "ProductType UUID",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "X-Tenant-Code",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "name",
-                  "description"
-                ],
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 500
-                  },
-                  "description": {
-                    "type": "string",
-                    "maxLength": 2000,
-                    "nullable": true
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "ProductType replaced successfully",
-            "headers": {
-              "X-Server-Time": {
-                "schema": {
-                  "type": "string",
-                  "format": "date-time"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/PublicProductTypeResponse"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Missing required field(s) or invalid request body"
-          },
-          "401": {
-            "description": "Missing or invalid API key"
-          },
-          "403": {
-            "description": "Tenant access denied or insufficient permissions"
-          },
-          "404": {
-            "description": "ProductType not found or does not belong to this tenant"
-          },
-          "409": {
-            "description": "A producttype with this name (slug) already exists in the tenant"
-          }
-        }
-      }
-    },
     "/pcms/units/{id}": {
       "get": {
         "summary": "Get Unit by ID",
         "tags": [
           "PCMS"
         ],
-        "description": "Get a single unit by ID. Returns 404 for both not-found and cross-tenant resources (no info leakage). Tenant is required.",
+        "description": "Fetch a single unit by id, tenant-scoped. Returns 404 if the unit does not exist or belongs to another tenant.",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "Unit UUID",
+            "description": "Product unit UUID",
             "schema": {
               "type": "string",
               "format": "uuid"
@@ -3993,6 +4195,7 @@
             "name": "X-Tenant-Code",
             "in": "header",
             "required": true,
+            "description": "Tenant to scope the request to. Required.",
             "schema": {
               "type": "string"
             }
@@ -4000,7 +4203,15 @@
         ],
         "responses": {
           "200": {
-            "description": "Unit found",
+            "description": "Unit detail",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -4030,13 +4241,13 @@
         "tags": [
           "PCMS"
         ],
-        "description": "Partial update (PATCH) of an existing unit. At least one field must be provided.",
+        "description": "Partially update a unit (PATCH). All fields are optional; at least one must be provided. Fields not supplied are left unchanged. Use PUT to fully replace.",
         "parameters": [
           {
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "Unit UUID",
+            "description": "Product unit UUID",
             "schema": {
               "type": "string",
               "format": "uuid"
@@ -4046,6 +4257,102 @@
             "name": "X-Tenant-Code",
             "in": "header",
             "required": true,
+            "description": "Tenant to scope the request to. Required.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500,
+                    "example": "Kilogram"
+                  },
+                  "abbreviation": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20,
+                    "example": "kg",
+                    "description": "Normalized to lowercase automatically."
+                  }
+                },
+                "description": "Partial update — only the provided fields are changed; at least one field is required."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Unit updated successfully",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicUnitResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Empty or invalid request body"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient permissions"
+          },
+          "404": {
+            "description": "Unit not found or does not belong to this tenant"
+          },
+          "409": {
+            "description": "A unit with this abbreviation already exists in the tenant"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update Product Unit",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Update an existing product unit. At least one field must be provided. The `abbreviation` is normalized to lowercase automatically.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Product unit UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to scope the request to. Required.",
             "schema": {
               "type": "string"
             }
@@ -4081,6 +4388,7 @@
             "description": "Unit updated successfully",
             "headers": {
               "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
                 "schema": {
                   "type": "string",
                   "format": "date-time"
@@ -4113,216 +4421,7 @@
             "description": "Unit not found or does not belong to this tenant"
           },
           "409": {
-            "description": "A unit with this name (slug) already exists in the tenant"
-          }
-        }
-      },
-      "put": {
-        "summary": "Replace Unit",
-        "tags": [
-          "PCMS"
-        ],
-        "description": "Full replace (PUT) of an existing unit. All fields are required; the server enforces this with Zod.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "Unit UUID",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "X-Tenant-Code",
-            "in": "header",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "name",
-                  "abbreviation"
-                ],
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 500,
-                    "example": "Kilogram"
-                  },
-                  "abbreviation": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 20,
-                    "example": "kg",
-                    "description": "Normalized to lowercase automatically."
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Unit replaced successfully",
-            "headers": {
-              "X-Server-Time": {
-                "schema": {
-                  "type": "string",
-                  "format": "date-time"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/PublicUnitResponse"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Missing required field(s) or invalid request body"
-          },
-          "401": {
-            "description": "Missing or invalid API key"
-          },
-          "403": {
-            "description": "Tenant access denied or insufficient permissions"
-          },
-          "404": {
-            "description": "Unit not found or does not belong to this tenant"
-          },
-          "409": {
-            "description": "A unit with this name (slug) already exists in the tenant"
-          }
-        }
-      }
-    },
-    "/members/{id}": {
-      "get": {
-        "summary": "Get Member by ID",
-        "tags": [
-          "Members"
-        ],
-        "description": "Fetch a single tenant member by their user id, scoped to the tenants the caller belongs to. Sensitive PII is excluded. Returns 404 if the member is not in any accessible tenant.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "The member's user id.",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "X-Tenant-Code",
-            "in": "header",
-            "description": "Scope to a tenant. If omitted, resolved across all tenants the caller belongs to.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Member detail",
-            "headers": {
-              "X-Server-Time": {
-                "schema": {
-                  "type": "string",
-                  "format": "date-time"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/PublicMemberResponse"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Member not found"
-          }
-        }
-      }
-    },
-    "/pcms/variants/{id}": {
-      "get": {
-        "summary": "Get Variant Detail",
-        "tags": [
-          "PCMS"
-        ],
-        "description": "Fetch a single product variant by id (full variant shape), tenant-scoped. Orphaned, soft-deleted, and cross-tenant variants return 404.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "X-Tenant-Code",
-            "in": "header",
-            "description": "Scope to a tenant. If omitted, the variant is resolved across all tenants the caller belongs to.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Variant detail",
-            "headers": {
-              "X-Server-Time": {
-                "schema": {
-                  "type": "string",
-                  "format": "date-time"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/PublicProductVariantResponse"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Variant not found"
+            "description": "A unit with this abbreviation already exists in the tenant"
           }
         }
       }

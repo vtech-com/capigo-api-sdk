@@ -282,7 +282,7 @@ Tenant is **optional** for reads, **required** for `create`.
 
 | Command | Key flags |
 |---|---|
-| `tasks list` | `--tenant`, `--query/-q`, `--status`, `--parent-task-id` (use `null` for top-level only), `--page`, `--limit` |
+| `tasks list` | `--tenant`, `--query/-q`, `--status`, `--priority`, `--assignee-id`, `--owner-id`, `--board-id`, `--board-list-id`, `--due-after`/`--due-before` (ISO 8601 date), `--created-after`/`--created-before` (ISO 8601 timestamp), `--parent-task-id` (use `null` for top-level only), `--page`, `--limit` |
 | `tasks get <id>` | `--tenant` |
 | `tasks comments <id>` | `--tenant` (optional); `--type comment\|activity` (default both), `--sort asc\|desc` (default `desc` = newest first), `--page`, `--limit` (max 50). UUID-addressed only. |
 | `tasks create` | `--title` (required), `--tenant` (required), `--description`, `--priority`, `--status`, `--due-date` (RFC3339), `--assignee` (user id), `--board` (id), `--list` (board list id), `--follower-id` (repeatable), `--subtasks-json` (array of subtask items → creates task + subtasks atomically) |
@@ -395,6 +395,10 @@ Key facts callers depend on:
   many variants at once.
 - The variant `sku` field carries the variant's code; the variant `barcode` field carries the
   numeric barcode.
+- A variant item also accepts `manufacturer_code`, `legacy_code`, and `extra_data` (arbitrary
+  key-value metadata) — pass them inside `--from-json` like any other field. `variants get`,
+  `products get`, and `products variants` echo them back in JSON output (empty/omitted table
+  columns for now).
 - **Soft-deleted products still appear in list results.** In table mode the Status cell marks
   them — e.g. `ACTIVE (DELETED)`; in JSON check the `is_deleted` field (the `status` field
   alone does NOT reveal deletion). Never report a `(DELETED)` product as available, and never

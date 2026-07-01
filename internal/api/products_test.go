@@ -341,6 +341,93 @@ func TestProductsVariants_UpsertSemantics(t *testing.T) {
 	}
 }
 
+// TestUpsertVariantItem_ManufacturerLegacyExtraData verifies the write struct
+// serializes manufacturer_code, legacy_code, and extra_data when set.
+func TestUpsertVariantItem_ManufacturerLegacyExtraData(t *testing.T) {
+	mfrCode := "MFR-123"
+	legacy := "ERP-9"
+	item := UpsertVariantItem{
+		Name:             strPtr("Blue / L"),
+		ManufacturerCode: &mfrCode,
+		LegacyCode:       &legacy,
+		ExtraData:        map[string]any{"warranty_months": float64(12)},
+	}
+
+	b, err := json.Marshal(item)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	if v, ok := m["manufacturer_code"]; !ok || v != mfrCode {
+		t.Errorf("manufacturer_code = %v, want %q", v, mfrCode)
+	}
+	if v, ok := m["legacy_code"]; !ok || v != legacy {
+		t.Errorf("legacy_code = %v, want %q", v, legacy)
+	}
+	extra, ok := m["extra_data"].(map[string]any)
+	if !ok || extra["warranty_months"] != float64(12) {
+		t.Errorf("extra_data = %v, want map with warranty_months=12", m["extra_data"])
+	}
+}
+
+// TestProductsVariants_FromJSONRawPassthroughPreservesUnknownFields is a
+// regression test for a silent data-loss bug: cmd/products.go used to decode
+// --from-json into []UpsertVariantItem and re-marshal that struct as the
+// request body, which dropped any field the struct didn't declare (e.g.
+// manufacturer_code/legacy_code/extra_data before those fields were added,
+// or any future field the API adds ahead of the SDK). The fix sends the raw
+// bytes untouched — this test pins that behavior at the transport layer by
+// sending json.RawMessage the same way cmd/products.go now does.
+func TestProductsVariants_FromJSONRawPassthroughPreservesUnknownFields(t *testing.T) {
+	productID := "550e8400-e29b-41d4-a716-446655440005"
+	rawInput := json.RawMessage(`[{"name":"Blue / L","manufacturer_code":"MFR-1","legacy_code":"ERP-1","extra_data":{"warranty_months":12},"some_future_field":"xyz"}]`)
+
+	var receivedBody map[string]any
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var items []map[string]any
+		if err := json.NewDecoder(r.Body).Decode(&items); err != nil {
+			t.Fatalf("decode body: %v", err)
+		}
+		if len(items) != 1 {
+			t.Fatalf("expected 1 item, got %d", len(items))
+		}
+		receivedBody = items[0]
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(productFixture(productID, "My Product", "ACTIVE"))
+	}))
+	defer srv.Close()
+
+	tenant := "acme"
+	c := newTestClient(t, srv)
+
+	_, err := c.Do(context.Background(), "PUT",
+		"/pcms/products/"+productID+"/variants", rawInput, &tenant)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+
+	for field, want := range map[string]any{
+		"manufacturer_code": "MFR-1",
+		"legacy_code":       "ERP-1",
+		"some_future_field": "xyz",
+	} {
+		if got := receivedBody[field]; got != want {
+			t.Errorf("received body[%q] = %v, want %v (field was dropped)", field, got, want)
+		}
+	}
+	extra, ok := receivedBody["extra_data"].(map[string]any)
+	if !ok || extra["warranty_months"] != float64(12) {
+		t.Errorf("received body[extra_data] = %v, want map with warranty_months=12", receivedBody["extra_data"])
+	}
+}
+
 // TestUpsertVariantItem_OptionalVariantID verifies that UpsertVariantItem
 // with a nil VariantID omits the field from JSON (CREATE semantics).
 func TestUpsertVariantItem_OptionalVariantID(t *testing.T) {
