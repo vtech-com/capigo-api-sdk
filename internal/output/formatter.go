@@ -116,10 +116,13 @@ func init() {
 		"task": {
 			// Code (e.g. "TASK-123") is the primary human/agent-facing reference;
 			// it appears first so it is immediately visible in table output.
-			headers: []string{"Code", "ID", "Title", "Status", "Assignee"},
+			// Files mirrors the task_comment renderer's attachment-count column
+			// (agent-ergonomics: attachment existence must be visible on stdout
+			// without switching to -o json).
+			headers: []string{"Code", "ID", "Title", "Status", "Assignee", "Files"},
 			rowFn: func(v any) []any {
 				t := v.(Task)
-				return []any{t.Code, t.ID, t.Title, t.Status, t.Assignee}
+				return []any{t.Code, t.ID, t.Title, t.Status, t.Assignee, t.Attachments}
 			},
 			idFn: func(v any) string { return v.(Task).ID },
 		},

@@ -32,13 +32,17 @@ type BoardDetail struct {
 }
 
 // Task is the display model for a Capigo mission task.
+// Attachments is the count of the task's own attachments (not comment
+// attachments) — surfaced in table mode so an agent reading only stdout can
+// tell attachments exist without switching to -o json.
 type Task struct {
-	ID         string `json:"id"`
-	Code       string `json:"code,omitempty"`
-	Title      string `json:"title"`
-	Status     string `json:"status"`
-	Assignee   string `json:"assignee,omitempty"`
-	TenantCode string `json:"tenant_code,omitempty"`
+	ID          string `json:"id"`
+	Code        string `json:"code,omitempty"`
+	Title       string `json:"title"`
+	Status      string `json:"status"`
+	Assignee    string `json:"assignee,omitempty"`
+	Attachments int    `json:"attachments,omitempty"`
+	TenantCode  string `json:"tenant_code,omitempty"`
 }
 
 // TaskComment is the display model for a single task comment / activity entry.

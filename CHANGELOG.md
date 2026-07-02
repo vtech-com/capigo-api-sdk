@@ -9,6 +9,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **`tasks attachments download <task-id> <attachment-id>`** and **`tasks comments attachments download <task-id> <attachment-id>`** — download a task's own attachment, or an attachment posted on its comment/activity timeline, to a local file. Fetches a fresh, short-lived (5 minute) signed URL and downloads the bytes immediately; the URL is never printed or reusable across invocations. `--dest`/`-d` names a destination file or directory (default: original file name in the current directory). `tasks get`/`tasks list` table mode now show a `Files` attachment-count column (mirroring the existing `tasks comments` `Files` column), and `tasks get -o json` now includes the task's `attachments[]` array. **Depends on two new public API endpoints pre-staged on `develop`, not yet on prod** — see `api/openapi.json` entries marked "pre-staged from develop"; these commands will 404 until the backend release ships.
+
 ### Changed
 
 - **Skill (`capigo-api`): `--query` is now taught as the first pass for finding products.**

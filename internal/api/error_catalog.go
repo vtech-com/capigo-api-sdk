@@ -129,4 +129,11 @@ var errorCatalog = map[string]ErrorInfo{
 	"AUTH_INTERNAL_ERROR": {
 		Next: "The auth service itself errored (server-side, HTTP 500). Unlike a rejected key, this one IS transient — retry once after a short backoff. If it persists, surface it; it is not your key.",
 	},
+
+	// ----- Local, CLI-detected condition (not a Capigo API error code): the
+	// storage host rejected the byte fetch for a just-minted signed URL. -----
+	"ATTACHMENT_URL_EXPIRED": {
+		Meaning: "The signed download URL (5-minute TTL) was rejected by storage when the CLI tried to fetch the bytes, immediately after requesting it.",
+		Next:    "Re-run the same `tasks attachments download` / `tasks comments attachments download` command — it mints a fresh URL on every call. Do not reuse a URL or metadata from a previous invocation.",
+	},
 }
