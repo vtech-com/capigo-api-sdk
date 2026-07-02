@@ -61,21 +61,22 @@ type TaskUser struct {
 
 // Task represents a PublicTaskResponse from GET /mission/tasks and related endpoints.
 type Task struct {
-	ID           string    `json:"id"`
-	Code         string    `json:"code"`
-	Title        string    `json:"title"`
-	Description  *string   `json:"description"`
-	Status       string    `json:"status"`
-	Priority     *string   `json:"priority"`
-	Assignee     *TaskUser `json:"assignee"`
-	Owner        *TaskUser `json:"owner"`
-	BoardID      *string   `json:"board_id"`
-	BoardListID  *string   `json:"board_list_id"`
-	DueDate      *string   `json:"due_date"`
-	ParentTaskID *string   `json:"parent_task_id"`
-	HasSubtasks  bool      `json:"has_subtasks"`
-	CreatedAt    string    `json:"created_at"`
-	UpdatedAt    string    `json:"updated_at"`
+	ID           string           `json:"id"`
+	Code         string           `json:"code"`
+	Title        string           `json:"title"`
+	Description  *string          `json:"description"`
+	Status       string           `json:"status"`
+	Priority     *string          `json:"priority"`
+	Assignee     *TaskUser        `json:"assignee"`
+	Owner        *TaskUser        `json:"owner"`
+	BoardID      *string          `json:"board_id"`
+	BoardListID  *string          `json:"board_list_id"`
+	DueDate      *string          `json:"due_date"`
+	ParentTaskID *string          `json:"parent_task_id"`
+	HasSubtasks  bool             `json:"has_subtasks"`
+	Attachments  []TaskAttachment `json:"attachments"`
+	CreatedAt    string           `json:"created_at"`
+	UpdatedAt    string           `json:"updated_at"`
 }
 
 // CommentAuthor is the resolved author of a task comment / activity entry.
@@ -93,6 +94,30 @@ type CommentAttachment struct {
 	FileName  string `json:"file_name"`
 	MimeType  string `json:"mime_type"`
 	SizeBytes int64  `json:"size_bytes"`
+}
+
+// TaskAttachment is flat attachment metadata on a task itself (as opposed to
+// a comment attachment — same shape, different source). No download URL;
+// fetch one via GET /mission/tasks/{id}/attachments/{attachmentId}/download.
+type TaskAttachment struct {
+	ID        string `json:"id"`
+	FileName  string `json:"file_name"`
+	MimeType  string `json:"mime_type"`
+	SizeBytes int64  `json:"size_bytes"`
+}
+
+// AttachmentDownload is the response of both attachment download endpoints:
+// GET /mission/tasks/{id}/attachments/{attachmentId}/download and
+// GET /mission/tasks/{id}/comments/attachments/{attachmentId}/download.
+// URL is a short-lived (5 minute) signed URL — fetch it immediately; do not
+// persist or hand it off, and never assume you can retry against a URL from
+// a previous command invocation.
+type AttachmentDownload struct {
+	URL       string `json:"url"`
+	FileName  string `json:"file_name"`
+	MimeType  string `json:"mime_type"`
+	SizeBytes int64  `json:"size_bytes"`
+	ExpiresAt string `json:"expires_at"`
 }
 
 // TaskComment represents a PublicTaskCommentResponse from

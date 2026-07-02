@@ -283,6 +283,28 @@
             "type": "boolean",
             "description": "True if this task has one or more non-archived subtasks. Fetch them via GET /v1/mission/tasks?parent_task_id={thisTaskId}."
           },
+          "attachments": {
+            "type": "array",
+            "description": "Flat metadata for this task's own attachments (not comment attachments — see the comments endpoint for those). No download URL is included; fetch one via GET /mission/tasks/{id}/attachments/{attachmentId}/download. Pre-staged from develop; not yet on prod.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "file_name": {
+                  "type": "string"
+                },
+                "mime_type": {
+                  "type": "string"
+                },
+                "size_bytes": {
+                  "type": "integer"
+                }
+              }
+            }
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -290,6 +312,38 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "PublicAttachmentDownloadResponse": {
+        "type": "object",
+        "description": "Pre-staged from develop; not yet on prod. See docs/tasks/*-implementation-plan.md for status.",
+        "required": [
+          "url",
+          "file_name",
+          "mime_type",
+          "size_bytes",
+          "expires_at"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Short-lived signed download URL. Forces Content-Disposition: attachment with the original file name."
+          },
+          "file_name": {
+            "type": "string"
+          },
+          "mime_type": {
+            "type": "string"
+          },
+          "size_bytes": {
+            "type": "integer"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the signed URL expires (5 minutes from response time)."
           }
         }
       },
@@ -1785,6 +1839,118 @@
           },
           "404": {
             "description": "Task not found"
+          }
+        }
+      }
+    },
+    "/mission/tasks/{id}/attachments/{attachmentId}/download": {
+      "get": {
+        "summary": "Download a Task Attachment",
+        "description": "Pre-staged from develop; not yet on prod. Returns a short-lived (5 minute) signed URL for a task-level attachment as JSON data, never an HTTP redirect. Task-scoped: only members of the task's own tenant, for attachments that belong to that task, can download.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Task ID.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "attachmentId",
+            "in": "path",
+            "required": true,
+            "description": "Attachment ID.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Signed download URL and file metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicAttachmentDownloadResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Task or attachment not found"
+          },
+          "500": {
+            "description": "Signed URL generation failed"
+          }
+        }
+      }
+    },
+    "/mission/tasks/{id}/comments/attachments/{attachmentId}/download": {
+      "get": {
+        "summary": "Download a Task Comment Attachment",
+        "description": "Pre-staged from develop; not yet on prod. Returns a short-lived (5 minute) signed URL for a comment/message-level attachment as JSON data, never an HTTP redirect. Tenant-scoped, NOT task-scoped: any active member of this task's tenant can download this attachment, regardless of whether they have visibility into the specific task or thread it was posted to. Cross-tenant access is not possible — this is a tenant-scope, not task-scope, guarantee.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Task ID (anchors the tenant-isolation gate).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "attachmentId",
+            "in": "path",
+            "required": true,
+            "description": "Attachment ID.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Signed download URL and file metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicAttachmentDownloadResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Task or attachment not found"
+          },
+          "500": {
+            "description": "Signed URL generation failed"
           }
         }
       }
