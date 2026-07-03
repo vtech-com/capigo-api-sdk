@@ -11,11 +11,20 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **`tasks attachments download <task-id> <attachment-id>`** and **`tasks comments attachments download <task-id> <attachment-id>`** — download a task's own attachment, or an attachment posted on its comment/activity timeline, to a local file. Fetches a fresh, short-lived (5 minute) signed URL and downloads the bytes immediately; the URL is never printed or reusable across invocations. `--dest`/`-d` names a destination file or directory (default: original file name in the current directory). `tasks get`/`tasks list` table mode now show a `Files` attachment-count column (mirroring the existing `tasks comments` `Files` column), and `tasks get -o json` now includes the task's `attachments[]` array. **Depends on two new public API endpoints pre-staged on `develop`, not yet on prod** — see `api/openapi.json` entries marked "pre-staged from develop"; these commands will 404 until the backend release ships.
+- **`tasks attachments download <task-id> <attachment-id>`** and **`tasks comments attachments download <task-id> <attachment-id>`** — download a task's own attachment, or an attachment posted on its comment/activity timeline, to a local file. Fetches a fresh, short-lived (5 minute) signed URL and downloads the bytes immediately; the URL is never printed or reusable across invocations. `--dest`/`-d` names a destination file or directory (default: original file name in the current directory). `tasks get`/`tasks list` table mode now show a `Files` attachment-count column (mirroring the existing `tasks comments` `Files` column), and `tasks get -o json` now includes the task's `attachments[]` array. The backing public API endpoints are live on prod as of 2026-07-03.
 
 ### Changed
 
-- **Skill (`capigo-api`): `--query` is now taught as the first pass for finding products.**
+- **Synced `api/openapi.json` to production via `make update-spec`.** Pulls PCMS drift the
+  repo was behind on: `PublicProductVariantResponse` and the product-create / variants-upsert
+  request bodies now document `extra_data`, `legacy_code`, and `manufacturer_code`; ref-data
+  `{id}` endpoints document their `X-Server-Time` response headers and `422` responses;
+  `/pcms/products` query params are aligned with prod. The attachment-download endpoints
+  (shipped pre-staged in the previous entry) are now confirmed on prod, so their provisional
+  "pre-staged" annotations are dropped. **`make update-spec` now pretty-prints** the fetched
+  spec (prod serves minified JSON on one line) so the committed file stays reviewable and
+  successive runs produce stable diffs. Spec-only sync; wiring the new variant fields into
+  the CLI's output model / a `boards list --query` flag is tracked separately (issue #53).
   Removed the remaining steer toward `--all` for "alias/Product-Code checks" in
   `cli_basics.md` (which pushed the agent into full-catalogue scans + local filtering on
   4000+ product tenants) and reframed both `cli_basics.md` and `SKILL.md` to reach for

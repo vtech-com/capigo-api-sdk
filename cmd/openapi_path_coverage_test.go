@@ -50,8 +50,8 @@ var implementedPaths = map[string]string{
 	"/mission/tasks/{id}/comments":                            "tasks comments — GET /mission/tasks/{id}/comments",
 	"/mission/tasks/{id}/subtasks":                            "tasks subtasks — POST /mission/tasks/{id}/subtasks (batch create subtasks)",
 	"/mission/tasks/with-subtasks":                            "tasks create --subtasks-json — POST /mission/tasks/with-subtasks (atomic parent+subtasks)",
-	"/mission/tasks/{id}/attachments/{attachmentId}/download": "tasks attachments download — GET /mission/tasks/{id}/attachments/{attachmentId}/download (pre-staged from develop; not yet on prod)",
-	"/mission/tasks/{id}/comments/attachments/{attachmentId}/download": "tasks comments attachments download — GET /mission/tasks/{id}/comments/attachments/{attachmentId}/download (pre-staged from develop; not yet on prod)",
+	"/mission/tasks/{id}/attachments/{attachmentId}/download": "tasks attachments download — GET /mission/tasks/{id}/attachments/{attachmentId}/download",
+	"/mission/tasks/{id}/comments/attachments/{attachmentId}/download": "tasks comments attachments download — GET /mission/tasks/{id}/comments/attachments/{attachmentId}/download",
 
 	// PCMS products
 	"/pcms/products":               "products list + products create — GET + POST /pcms/products",
