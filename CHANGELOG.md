@@ -9,6 +9,25 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Skill `capigo-api` restructured into a decision harness (docs only, no CLI behavior change).**
+  Rewrote `SKILL.md` around a command→intent **capability map** (a complete, domain-grouped
+  inventory the agent scans by what it wants to do) plus two explicit gates: **Gate 1** (a
+  command you can't find is a *CLI gap to report*, never a reason to hand-roll raw HTTP — and you
+  may not conclude "unsupported" until `capigo <group> --help` shows nothing), and **Gate 2**
+  (self-diagnose on error before guessing). Motivation: a production agent transcript showed the
+  agent guess a nonexistent `variants update`, wrongly conclude the API couldn't update variants,
+  and fall back to raw `curl` — the map + gates close that path. Added a "Common wrong turns"
+  section (variant writes go through `products variants`, no get-by-code, count via `meta.total`).
+  Fixed two facts across the skill: `auth whoami` (GET `/me`) is not a reliable preflight (can
+  404) — use `capigo health`; and `products update` is a single PUT write with no `products
+  replace`. Rewrote `references/cli_basics.md` into a lean flag-level reference the map points
+  into: removed OpenAPI as an agent-facing tool (the agent acts only through the CLI and never
+  looks up endpoints), de-duplicated the exit-code table and self-diagnosis flow (now single-
+  sourced in `SKILL.md`), reordered the command reference to match the map, and de-staled the
+  pre-staged-commands notes.
+
 ### Fixed
 
 - **`products variants --from-json` silently dropped unknown fields (data loss on write).**
