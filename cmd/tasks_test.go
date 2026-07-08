@@ -126,3 +126,67 @@ func TestCommentsPath(t *testing.T) {
 		t.Errorf("zero/empty flags should be omitted, got %q", got)
 	}
 }
+
+// TestTasksListPath is a regression test for the tasks list filter gap: the
+// backend (query-parser.ts ALLOWED_FILTER_COLUMNS) accepts filters on status,
+// priority, assignee_id, owner_id, board_id, board_list_id, due_date, and
+// created_at, but the CLI used to expose only --status. It now covers every
+// allowed column.
+func TestTasksListPath(t *testing.T) {
+	// No flags → bare path, no query string.
+	if got := tasksListPath(taskListFilters{}); got != "/mission/tasks" {
+		t.Errorf("bare path = %q", got)
+	}
+
+	got := tasksListPath(taskListFilters{
+		query:         "invoice",
+		status:        "Doing",
+		priority:      "high",
+		assigneeID:    "u1",
+		ownerID:       "u2",
+		boardID:       "b1",
+		boardListID:   "bl1",
+		dueAfter:      "2026-07-01",
+		dueBefore:     "2026-07-31",
+		createdAfter:  "2026-06-01T00:00:00Z",
+		createdBefore: "2026-06-30T00:00:00Z",
+		parentTaskID:  "p1",
+		page:          2,
+		limit:         30,
+	})
+	base, query, found := strings.Cut(got, "?")
+	if !found || base != "/mission/tasks" {
+		t.Fatalf("path = %q, want base + query", got)
+	}
+	q, err := url.ParseQuery(query)
+	if err != nil {
+		t.Fatalf("parse query %q: %v", query, err)
+	}
+	want := map[string]string{
+		"q":                           "invoice",
+		"filters[status][$eq]":        "Doing",
+		"filters[priority][$eq]":      "high",
+		"filters[assignee_id][$eq]":   "u1",
+		"filters[owner_id][$eq]":      "u2",
+		"filters[board_id][$eq]":      "b1",
+		"filters[board_list_id][$eq]": "bl1",
+		"filters[due_date][$gte]":     "2026-07-01",
+		"filters[due_date][$lte]":     "2026-07-31",
+		"filters[created_at][$gte]":   "2026-06-01T00:00:00Z",
+		"filters[created_at][$lte]":   "2026-06-30T00:00:00Z",
+		"parent_task_id":              "p1",
+		"page":                        "2",
+		"limit":                       "30",
+	}
+	for k, wantVal := range want {
+		if got := q.Get(k); got != wantVal {
+			t.Errorf("query %s = %q, want %q", k, got, wantVal)
+		}
+	}
+
+	// Zero/empty values are omitted from the query.
+	if got := tasksListPath(taskListFilters{status: "Doing"}); strings.Contains(got, "priority") ||
+		strings.Contains(got, "assignee_id") || strings.Contains(got, "page=") {
+		t.Errorf("zero/empty flags should be omitted, got %q", got)
+	}
+}

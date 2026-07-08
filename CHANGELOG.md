@@ -9,6 +9,27 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`products variants --from-json` silently dropped unknown fields (data loss on write).**
+  The command decoded `--from-json` into `[]api.UpsertVariantItem` and re-marshaled that
+  struct as the request body — any field the struct didn't declare (e.g.
+  `manufacturer_code`/`legacy_code`/`extra_data`) was stripped before the request left the
+  machine, with no error or warning. Fixed by validating the input is a JSON array and then
+  sending the raw bytes untouched (the same raw-passthrough pattern already used by
+  `brands`/`categories`/`product-types`/`units` create/update/replace). `UpsertVariantItem`
+  and `ProductVariant` also gained `manufacturer_code`, `legacy_code`, and `extra_data` fields
+  so typed API consumers and JSON output (`variants get`, `products get`, `products variants`)
+  see them too.
+
+### Added
+
+- **`tasks list` filter flags.** The backend (`query-parser.ts` `ALLOWED_FILTER_COLUMNS`)
+  accepts filtering on 8 columns, but the CLI only exposed `--status`. Added `--priority`,
+  `--assignee-id`, `--owner-id`, `--board-id`, `--board-list-id`, `--due-after`/`--due-before`,
+  and `--created-after`/`--created-before` so every backend-supported filter is reachable
+  without pulling the full list and filtering client-side.
+
 ---
 
 ## [0.19.0] — 2026-07-03
