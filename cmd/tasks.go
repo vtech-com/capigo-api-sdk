@@ -771,11 +771,12 @@ func toOutputTask(t api.Task) output.Task {
 		assignee = t.Assignee.DisplayName
 	}
 	return output.Task{
-		ID:       t.ID,
-		Code:     t.Code,
-		Title:    t.Title,
-		Status:   t.Status,
-		Assignee: assignee,
+		ID:          t.ID,
+		Code:        t.Code,
+		Title:       t.Title,
+		Status:      t.Status,
+		Assignee:    assignee,
+		Attachments: len(t.Attachments),
 	}
 }
 

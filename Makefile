@@ -22,9 +22,12 @@ TAM_SKILLS_DIR ?= ~/.openclaw/plugin-skills
 .PHONY: build test lint release-snapshot install clean update-spec skill-package skill-install-tam
 
 ## update-spec: Fetch latest OpenAPI spec from Capigo platform
+## Prod serves minified JSON on one line; pretty-print it to 2-space indent so
+## the committed spec stays reviewable and successive runs produce stable diffs.
 update-spec:
-	curl -fsSL https://platform.capigo.app/api/openapi -o api/openapi.json
-	@echo "Updated api/openapi.json from https://platform.capigo.app/api/openapi"
+	curl -fsSL https://platform.capigo.app/api/openapi | \
+		python3 -c "import json,sys; json.dump(json.load(sys.stdin), open('api/openapi.json','w'), indent=2, ensure_ascii=False); open('api/openapi.json','a').write(chr(10))"
+	@echo "Updated api/openapi.json from https://platform.capigo.app/api/openapi (pretty-printed)"
 
 ## skill-package: Zip the bundled agent skill for distribution (openclaw / other hosts)
 skill-package:

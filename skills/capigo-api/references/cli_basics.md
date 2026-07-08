@@ -285,6 +285,8 @@ Tenant is **optional** for reads, **required** for `create`.
 | `tasks list` | `--tenant`, `--query/-q`, `--status`, `--priority`, `--assignee-id`, `--owner-id`, `--board-id`, `--board-list-id`, `--due-after`/`--due-before` (ISO 8601 date), `--created-after`/`--created-before` (ISO 8601 timestamp), `--parent-task-id` (use `null` for top-level only), `--page`, `--limit` |
 | `tasks get <id>` | `--tenant` |
 | `tasks comments <id>` | `--tenant` (optional); `--type comment\|activity` (default both), `--sort asc\|desc` (default `desc` = newest first), `--page`, `--limit` (max 50). UUID-addressed only. |
+| `tasks attachments download <task-id> <attachment-id>` | `--tenant` (optional); `--dest/-d` (file or directory; default: original file name in the current directory). Downloads a **task-level** attachment. |
+| `tasks comments attachments download <task-id> <attachment-id>` | Same flags as above. Downloads an attachment posted on a **comment/activity** entry. |
 | `tasks create` | `--title` (required), `--tenant` (required), `--description`, `--priority`, `--status`, `--due-date` (RFC3339), `--assignee` (user id), `--board` (id), `--list` (board list id), `--follower-id` (repeatable), `--subtasks-json` (array of subtask items → creates task + subtasks atomically) |
 | `tasks update <id>` | `--tenant` (optional); any of `--title`, `--description` (empty string clears), `--status`, `--assignee` (UUID; `--assignee ""` unassigns), `--board` + `--list` (sent together; `--board "" --list ""` removes from board), `--follower-id` (repeatable, additive — removal not supported). At least one flag required. UUID-addressed only. |
 | `tasks subtasks <parent-id>` | `--tenant` (required); single subtask via `--title` (+ `--description`, `--assignee`, `--due-date` `YYYY-MM-DD`, `--priority`, `--status`), or a batch via `--from-json -` (array of subtask items). Max 25 per request. |
@@ -334,7 +336,8 @@ Parse `--output json` and read `.data[]`. Each entry tells you what it is via `k
   (`"Trâm changed status from Doing to Done"`) and `ui_data` holds the structured before/after.
 
 Other fields per entry: `author {id, name, type}` (who did it), `attachments[]`
-(`file_name`/`mime_type`/`size_bytes`), `parent_id`, `created_at`.
+(`id`/`file_name`/`mime_type`/`size_bytes` — no download URL; see below), `parent_id`,
+`created_at`.
 
 ```bash
 # Whole timeline, newest first
@@ -351,6 +354,40 @@ Two things to keep honest:
   events are written asynchronously and can lag by a moment, so the authoritative state is the
   task itself (`tasks get`). Treat `tasks comments` as the history/narrative, not the source of
   truth for the live status/assignee.
+
+#### Downloading an attachment
+
+Both `tasks get` and `tasks comments` report attachment metadata (`id`, `file_name`,
+`mime_type`, `size_bytes`) but **never a download URL** — fetch one on demand with a
+dedicated command, right before you need the file, not ahead of time:
+
+```bash
+# Task-level attachment (from `tasks get <id>`, field .attachments[].id)
+capigo tasks attachments download <task-uuid> <attachment-uuid>
+
+# Comment/activity attachment (from `tasks comments <id>`, field .attachments[].id
+# on the relevant timeline entry)
+capigo tasks comments attachments download <task-uuid> <attachment-uuid>
+
+# Choose where it lands
+capigo tasks attachments download <task-uuid> <attachment-uuid> --dest ./downloads/
+```
+
+Both commands fetch a signed URL and download the bytes to disk in the same call — there
+is no separate "get the URL" step and the CLI never prints the raw URL. Reasons that matter
+for how you use this:
+
+- **The URL is single-use and short-lived (5 minutes).** Do not try to extract or reuse a
+  URL from a previous invocation, and do not queue this command to run "later" — run it right
+  when you need the file.
+- **Without `--dest`, the file lands in the current directory** under its original name;
+  an existing file at the destination is overwritten.
+- **A rejected/expired-URL error is `ATTACHMENT_URL_EXPIRED`** (self-diagnosing — the
+  block tells you to just re-run the command; it mints a fresh URL every time).
+- **Comment attachments are tenant-scoped, not task-scoped** — the download will succeed
+  for any attachment in the caller's tenant, even one from a different task's thread than the
+  `<task-uuid>` you passed. That `<task-uuid>` only establishes tenant context; it is not a
+  membership check on the specific attachment.
 
 ### boards
 
@@ -499,10 +536,13 @@ record first, then act on its `id`:
 
 **Pre-staged commands:** some commands were shipped in the CLI ahead of the matching API
 reaching production — the v0.7 set (`products get`, `tasks update`, `members get`,
-`variants get`) and `tasks comments` (v0.8). If one returns a not-found / unimplemented error
-on a tenant whose API hasn't deployed yet, that's expected — fall back to the `list`-based path
-above (or, for `tasks comments`, just tell the user the timeline endpoint isn't live yet) and
-confirm against the OpenAPI doc (see [Self-diagnosis](#self-diagnosis)).
+`variants get`), `tasks comments` (v0.8), and `tasks attachments download` /
+`tasks comments attachments download` (both endpoints, plus `tasks get`/`tasks list`
+exposing task-level `attachments[]` at all — pre-staged together). If one returns a
+not-found / unimplemented error on a tenant whose API hasn't deployed yet, that's expected —
+fall back to the `list`-based path above (or, for `tasks comments`/attachment downloads, just
+tell the user that endpoint isn't live yet) and confirm against the OpenAPI doc (see
+[Self-diagnosis](#self-diagnosis)).
 
 ## Exit codes
 
