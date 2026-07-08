@@ -29,6 +29,23 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   `--assignee-id`, `--owner-id`, `--board-id`, `--board-list-id`, `--due-after`/`--due-before`,
   and `--created-after`/`--created-before` so every backend-supported filter is reachable
   without pulling the full list and filtering client-side.
+- **Unknown-command hints, two layers.** Running a plausible-but-wrong (sub)command now
+  points at the right one instead of silently doing nothing. **Layer 1:** group commands
+  (`variants`, `products`, `brands`, …) previously weren't "runnable" in cobra's terms, so an
+  unmatched subcommand like `variants update foo` fell through to `flag.ErrHelp` and printed
+  the group's help with exit 0 — no error, no suggestion; cobra's built-in Levenshtein
+  "Did you mean…?" suggestions never fired below the root. Every such group now gets a `RunE`
+  that raises cobra's own `unknown command %q for %q` error (reusing cobra's real
+  `SuggestionsFor`), so both the error and cobra's own suggestions now reach stdout via the
+  existing self-diagnosing error block. **Layer 2:** a small curated registry
+  (`cmd/unknown_command.go`) redirects the two evidence-backed conceptual misfires cobra's
+  edit-distance can't catch — `variants update/create/replace` → "upsert through
+  `products variants --product-id <id> --from-json -`", and `products delete/remove/destroy`
+  → "archive via `products update <id> --from-json -` with `{"status":"ARCHIVED"}`" — via
+  `ErrorDetail.Next` (exit code stays 5; no `CapabilityNote`, since this is a client-side
+  redirect, not a server-side write failure). An anti-rot test asserts every registry entry's
+  target command still exists in the live cobra command tree, so a rename/removal fails CI
+  instead of silently pointing at a dead command.
 
 ---
 
