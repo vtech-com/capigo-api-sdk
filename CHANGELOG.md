@@ -9,6 +9,19 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.20.1] — 2026-07-08
+
+### Fixed
+
+- **Skill (`capigo-api`): corrected the alias/barcode uniqueness claim.** Write-hygiene and the
+  exit-8 row previously implied `sku`, `alias`, and `barcode` are all server-enforced unique. Only
+  **`sku`** is — a duplicate fails with `E9445` (exit 8). The platform allows duplicate `alias`
+  and `barcode` **by design** (no DB constraint, no error code; PCMS Story 5.4 AC3), so the server
+  will not reject them and an agent must not expect an exit-8 conflict for them. The skill now
+  says so: alias/barcode dedup is a client-side policy concern, not server-enforced. Doc-only.
+
+## [0.20.0] — 2026-07-08
+
 ### Changed
 
 - **Skill `capigo-api` restructured into a decision harness (docs only, no CLI behavior change).**
