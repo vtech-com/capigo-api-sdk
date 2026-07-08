@@ -36,7 +36,7 @@ Capigo exposes a stable Public API, but integrating it today requires implementi
 go install github.com/vtech-com/capigo-api-sdk@latest
 ```
 
-The binary is named `capigo`. Requires Go 1.26.3+.
+The binary is named `capigo`. Requires Go 1.26.4+.
 
 ### GitHub Releases (recommended for most users)
 
@@ -56,18 +56,22 @@ make build
 # binary at ./dist/capigo
 ```
 
-Requires Go 1.26.3+.
+Requires Go 1.26.4+.
 
 ### Homebrew (macOS / Linux)
 
+The tap ships a **cask** (not a formula):
+
 ```bash
-brew install vtech-com/tap/capigo
+brew install --cask vtech-com/tap/capigo
 ```
 
-### Docker
+If you previously installed `capigo` as a formula (pre-cask migration), remove it first or the
+cask install will conflict:
 
 ```bash
-docker run --rm -e CAPIGO_API_KEY=csk_... ghcr.io/vtech-com/capigo-api-sdk:latest tasks list
+brew uninstall --formula capigo
+brew install --cask vtech-com/tap/capigo
 ```
 
 ## Quick Start
@@ -76,25 +80,32 @@ docker run --rm -e CAPIGO_API_KEY=csk_... ghcr.io/vtech-com/capigo-api-sdk:lates
 # 1. Login with your API key (generated at platform.capigo.app)
 capigo auth login --key csk_abc123...
 
-# 2. List your tenants
+# 2. Preflight: confirm the API is reachable and the key is accepted
+capigo health
+
+# 3. List your tenants
 capigo tenants list
 
-# 3. List tasks scoped to a tenant
+# 4. List tasks scoped to a tenant
 capigo tasks list --tenant acme
 
-# 4. (Optional) Set a default tenant so you don't need --tenant every time
+# 5. (Optional) Set a default tenant so you don't need --tenant every time
 capigo config set-default-tenant acme
 
-# 5. Use JSON output for AI agent or script consumption
+# 6. Use JSON output for AI agent or script consumption
 capigo tasks list --output json | jq '.data[] | select(.status=="To-Do")'
 ```
+
+> **Preflight tip:** `capigo auth whoami` (`GET /me`) is not guaranteed to be live on every
+> deployment and can 404 even with a valid key. `capigo health` is the reliable preflight —
+> exit `0` means the API is reachable *and* the key is accepted.
 
 ## Commands
 
 ```
 capigo auth login        Login with a csk_ API key
 capigo auth logout       Remove credentials from config
-capigo auth whoami       Show current user
+capigo auth whoami       Show current user (GET /me — may 404; use `health` as preflight)
 capigo health            Preflight: check API connectivity + key (exit 2 if auth fails)
 
 capigo config set <key> <value>           Set a config value
@@ -104,22 +115,29 @@ capigo config unset-default-tenant        Clear the default tenant
 
 capigo tenants list      List tenants you can access
 
-capigo tasks list           List tasks (supports --query/-q, --status, --page, --limit)
-capigo tasks get <id>       Get task by ID
-capigo tasks comments <id>  List a task's comment + activity timeline (--type comment|activity, --sort asc|desc, --page, --limit)
-capigo tasks update <id>    Partial update a task (PATCH; --tenant optional; at least one field required)
-capigo tasks create         Create a new task (--title required; --tenant required; --follower-id repeatable)
+capigo tasks list                    List tasks (--query/-q, --status, --priority, --assignee-id,
+                                      --owner-id, --board-id, --board-list-id, --due-after/--due-before,
+                                      --created-after/--created-before, --parent-task-id, --page, --limit)
+capigo tasks get <id>                 Get task by ID
+capigo tasks comments <id>            List a task's comment + activity timeline (--type comment|activity,
+                                       --sort asc|desc, --page, --limit)
+capigo tasks attachments download <task-id> <attachment-id>          Download a task-level attachment
+capigo tasks comments attachments download <task-id> <attachment-id> Download a comment/activity attachment
+capigo tasks update <id>              Partial update a task (PATCH; --tenant optional; at least one field required)
+capigo tasks create                   Create a new task (--title + --tenant required; --follower-id repeatable;
+                                       --subtasks-json to create subtasks atomically)
+capigo tasks subtasks <parent-id>     Add subtask(s) to an existing task (--title, or --from-json for a batch)
 
-capigo boards list       List boards (supports --page, --limit)
-capigo boards get <id>   Get board by ID
+capigo boards list       List boards (supports --query/-q, --page, --limit)
+capigo boards get <id>   Get board by ID (includes its `lists` array)
 
 capigo members list      List workspace members (supports --query/-q, --page, --limit)
 capigo members get <id>  Get a member by ID
 
 capigo products list     List products (supports --query, --updated-since, --ids, --all)
 capigo products get <id> Get a product by ID
-capigo products create   Create a product (--name required, or --from-json)
-capigo products update   Update a product
+capigo products create   Create a product (--name required, or --from-json; --aliases/--tags repeatable)
+capigo products update   Update a product (partial; --aliases/--tags repeatable, or --from-json)
 capigo products variants Upsert product variants
 
 capigo brands list           List reference brands (supports --query)
@@ -152,15 +170,23 @@ capigo variants get <id>     Get a variant by ID
 capigo version           Print version info
 ```
 
+Run `capigo <group> <command> --help` for the complete, authoritative flag list from your binary.
+
+> **Pre-staged commands:** `tasks subtasks` and `tasks create --subtasks-json` ship in the CLI
+> ahead of the matching API reaching production on every tenant — they may 404 on a tenant whose
+> backend hasn't deployed that endpoint yet. See `CHANGELOG.md` for the current pre-staged set.
+
 **Global flags** available on every command:
 
 | Flag | Description |
 |------|-------------|
-| `--output table\|json\|quiet` | Output format (unknown values are rejected with an error) |
+| `-o, --output table\|json\|quiet` | Output format (unknown values are rejected with an error) |
 | `--api-url <url>` | Override API base URL (staging / local dev) |
-| `--verbose` | Print HTTP request/response details (Authorization header is redacted) |
+| `-v, --verbose` | Print HTTP request/response details (Authorization header is redacted) |
 
 `--tenant <code>` appears as a local flag on commands that require or accept a tenant scope (e.g. `capigo products list --tenant acme`). It is not a global flag. The active config profile is always read from `~/.capigo/config.json` and cannot be overridden at runtime.
+
+Every PCMS command (`products`, `variants`, `brands`, `categories`, `product-types`, `units`) **requires** a tenant on every verb. `tasks list`/`get`, `boards list`/`get`, and `members list`/`get` accept an *optional* `--tenant` — omit it to read across every tenant you can access (a "Tenant" column is added in table mode for these cross-tenant reads). `tasks create` and `tasks subtasks` always require a tenant.
 
 ## Products
 
@@ -168,7 +194,7 @@ capigo version           Print version info
 # List products
 capigo products list --tenant acme
 
-# Search products by name, variant name, SKU, or barcode
+# Search products by name, alias, tag, variant name, SKU, or barcode
 capigo products list --tenant acme --query iphone
 
 # Delta sync — only products updated since a previous call
@@ -177,22 +203,36 @@ capigo products list --tenant acme --updated-since 2026-01-01T00:00:00Z
 # Fetch all pages into a single JSON stream
 capigo products list --tenant acme --all --output json
 
-# Create a simple product
-capigo products create --tenant acme --name "Blue T-Shirt" --sku "SKU-001" --price 299000
+# Create a simple product with aliases and tags
+capigo products create --tenant acme --name "Blue T-Shirt" --sku "SKU-001" --price 299000 \
+  --aliases "BT-001" --tags "summer" --tags "sale"
+
+# Partial update — this is products' one write verb for updates (there is no `products replace`)
+capigo products update <id> --tenant acme --tags "clearance"
 ```
 
 | Flag | Description |
 |------|-------------|
-| `--query`/`-q` | Free-text search (2–500 chars): product name, variant name, SKU, barcode |
+| `--query`/`-q` | Free-text search (2–500 chars): product name, aliases, tags, variant name, SKU, barcode |
 | `--updated-since` | ISO 8601 timestamp for delta sync |
 | `--ids` | Comma-separated product UUIDs (max 50); mutually exclusive with `--all` |
 | `--all` | Auto-paginate the full catalog |
+| `--aliases` | Alternative names / product codes (repeatable: `--aliases foo --aliases bar`) |
+| `--tags` | Free-form labels (repeatable: `--tags foo --tags bar`) |
 | `--page` | Page number (default 1) |
 | `--limit` | Items per page (1–100, default 20) |
 
+Notes:
+
+- `products create`/`update` also accept `--from-json -` for options + variants in one call (mutually exclusive with individual field flags).
+- `products update` is the **only** write verb for updates (PUT-style full replace of the provided fields) — unlike reference data, products has no separate `replace` command.
+- Soft-deleted products still appear in list results. Table mode marks them `ACTIVE (DELETED)`; JSON exposes `is_deleted` (the plain `status` field does not reveal deletion on its own).
+- `--all` streams every row it fetches even if it fails mid-pagination; the table footer then reads `INCOMPLETE — aborted at page N — results are PARTIAL` and JSON `meta.complete` is `false`. Check this before treating a result as the whole catalogue.
+- `--ids` reports what it could **not** find: `Requested 5 ids · 3 found · missing: <id>, <id>` (table) / `meta.missing_ids` (JSON).
+
 ## Reference data
 
-Reference endpoints manage lookup values (brands, categories, product types, units) used to resolve names to UUIDs when creating products.
+Reference endpoints manage lookup values (brands, categories, product types, units) used to resolve names to UUIDs when creating products. Tenant is **required** on every verb.
 
 ```bash
 # List brands with optional name search
@@ -243,7 +283,37 @@ capigo variants list --tenant acme --barcode-prefix 620111 --sort -barcode --lim
 | `units create` | `--name`, `--abbreviation` (both required) | Create unit |
 | `units update <id>` | `--name`, `--abbreviation` | Partial update (PATCH) |
 | `units replace <id>` | `--name`, `--abbreviation` (both required) | Full replace (PUT) |
-| `variants list` | `--barcode-prefix`, `--sort` | `--sort` accepts `barcode` or `-barcode` only |
+| `variants list` | `--barcode-prefix`, `--sort` | Read-only; `--sort` accepts `barcode` or `-barcode` only. All variant writes go through `products variants` — there is no `variants create`/`update`/`replace`. |
+
+## Tasks
+
+```bash
+# Filter tasks
+capigo tasks list --status To-Do --priority high --output json
+
+# Read a task's comment + activity timeline
+capigo tasks comments <task-uuid> --type comment --output json
+
+# Create a task
+capigo tasks create --tenant acme --title "Fix login bug" --priority high --output quiet
+
+# Create a task with subtasks in one atomic call
+echo '[{"title":"Subtask A"},{"title":"Subtask B"}]' \
+  | capigo tasks create --tenant acme --title "Epic X" --subtasks-json -
+
+# Add subtasks to an existing task
+echo '[{"title":"Design"},{"title":"Build","priority":"High"}]' \
+  | capigo tasks subtasks <parent-uuid> --tenant acme --from-json -
+
+# Download an attachment (task-level or from a comment/activity entry)
+capigo tasks attachments download <task-uuid> <attachment-uuid> --dest ./downloads/
+capigo tasks comments attachments download <task-uuid> <attachment-uuid>
+```
+
+Attachment downloads fetch a signed, single-use URL (5-minute lifetime) and write the bytes to
+disk in the same call — there's no separate "get the URL" step, and the CLI never prints the
+raw URL. Run the download command right before you need the file; without `--dest`, it lands in
+the current directory under its original name.
 
 ## Configuration
 
@@ -264,90 +334,9 @@ Credentials and settings are stored in `~/.capigo/config.json` (permissions `600
 }
 ```
 
-### Products
+There is exactly one active profile (`active_profile`); the CLI does not take a `--profile` flag.
 
-```bash
-# List products
-capigo products list --tenant acme
-
-# Search products by name, variant name, SKU, or barcode
-capigo products list --tenant acme --query iphone
-
-# Delta sync — only products updated since a previous call
-capigo products list --tenant acme --updated-since 2026-01-01T00:00:00Z
-
-# Fetch all pages into a single JSON stream
-capigo products list --tenant acme --all --output json
-
-# Create a simple product
-capigo products create --tenant acme --name "Blue T-Shirt" --sku "SKU-001" --price 299000
-```
-
-| Flag | Description |
-|------|-------------|
-| `--query`/`-q` | Free-text search (2–500 chars): product name, variant name, SKU, barcode |
-| `--updated-since` | ISO 8601 timestamp for delta sync |
-| `--ids` | Comma-separated product UUIDs (max 50); mutually exclusive with `--all` |
-| `--all` | Auto-paginate the full catalog |
-| `--page` | Page number (default 1) |
-| `--limit` | Items per page (1–100, default 20) |
-
-## Reference data
-
-Reference endpoints manage lookup values (brands, categories, product types, units) used to resolve names to UUIDs when creating products.
-
-```bash
-# List brands with optional name search
-capigo brands list --tenant acme --query nike
-
-# Get a specific brand by ID
-capigo brands get <id> --tenant acme
-
-# Create a brand
-capigo brands create --tenant acme --name "Nike" --logo-url "https://example.com/logo.png"
-
-# Partial update (PATCH) — only provided fields change
-capigo brands update <id> --tenant acme --name "Nike Inc"
-
-# Full replace (PUT) — all fields required
-capigo brands replace <id> --tenant acme --name "Nike" --no-logo
-
-# Categories: --clear-parent promotes to root; replace uses --root or --parent-id
-capigo categories update <id> --tenant acme --clear-parent
-capigo categories replace <id> --tenant acme --name "Electronics" --root
-
-# Product types: --clear-description removes description; replace uses --no-description
-capigo product-types replace <id> --tenant acme --name "Phone" --no-description
-
-# List variants by barcode prefix (top-1 highest barcode for auto-increment)
-capigo variants list --tenant acme --barcode-prefix 620111 --sort -barcode --limit 1
-```
-
-| Command | Key flags | Description |
-|---------|-----------|-------------|
-| `brands list` | `--query`/`-q` | Name-contains search (max 200 chars) |
-| `brands get <id>` | | Fetch single brand by UUID |
-| `brands create` | `--name` (required), `--logo-url` | Create brand |
-| `brands update <id>` | `--name`, `--logo-url`, `--clear-logo` | Partial update (PATCH) |
-| `brands replace <id>` | `--name` (required), `--logo-url`/`--no-logo` (one required) | Full replace (PUT) |
-| `categories list` | `--query`/`-q` | Name-contains search (max 200 chars) |
-| `categories get <id>` | | Fetch single category by UUID |
-| `categories create` | `--name` (required), `--parent-id` | Create category |
-| `categories update <id>` | `--name`, `--parent-id`, `--clear-parent` | Partial update (PATCH) |
-| `categories replace <id>` | `--name` (required), `--parent-id`/`--root` (one required) | Full replace (PUT) |
-| `product-types list` | `--query`/`-q` | Name-contains search (max 200 chars) |
-| `product-types get <id>` | | Fetch single product type by UUID |
-| `product-types create` | `--name` (required), `--description` | Create product type |
-| `product-types update <id>` | `--name`, `--description`, `--clear-description` | Partial update (PATCH) |
-| `product-types replace <id>` | `--name` (required), `--description`/`--no-description` (one required) | Full replace (PUT) |
-| `units list` | `--query`/`-q` | Name-contains search (max 200 chars) |
-| `units get <id>` | | Fetch single unit by UUID |
-| `units create` | `--name`, `--abbreviation` (both required) | Create unit |
-| `units update <id>` | `--name`, `--abbreviation` | Partial update (PATCH) |
-| `units replace <id>` | `--name`, `--abbreviation` (both required) | Full replace (PUT) |
-| `variants list` | `--barcode-prefix`, `--sort` | `--sort` accepts `barcode` or `-barcode` only |
-
-## Configuration precedence
+### Configuration precedence
 
 ```
 CLI flag (--api-url, --tenant, …)
@@ -378,8 +367,9 @@ capigo tasks list --tenant acme
 # │ task_abc123  │ Fix login bug     │ To-Do  │ Alice    │
 # └──────────────┴───────────────────┴────────┴──────────┘
 
-# Global mode (--no-tenant) adds a Tenant column automatically
-capigo tasks list --no-tenant
+# Omit --tenant on a spanning read to see tasks across every tenant you can access
+# (table mode adds a Tenant column automatically)
+capigo tasks list
 
 # JSON for AI agents and scripts
 capigo tasks list --output json
@@ -388,6 +378,15 @@ capigo tasks list --output json
 capigo tasks create --title "New task" --tenant acme --output quiet
 # task_def456
 ```
+
+Every `list` command prints a summary footer on stdout in table mode, e.g.
+`Tenant: acme · Total: 137 · showing 20 (page 1/7) · more rows — use --page/--limit (max 100)`.
+Trust that `Total:` (or `meta.total` in JSON) over counting visible rows — a single call is one
+page, not the whole collection.
+
+If stdout is redirected or piped and you didn't pass `--output`, the CLI prints a one-line
+reminder to **stderr** nudging you toward `-o json` (never to stdout, so it can't corrupt a
+piped table). Silence it with `CAPIGO_NO_HINTS=1` if you deliberately want piped table text.
 
 ### JSON output contract
 
@@ -513,12 +512,13 @@ View it interactively:
 - Paste into [editor.swagger.io](https://editor.swagger.io)
 - Or use the VS Code **Swagger Viewer** extension
 
-## Compatibility Matrix
+## Compatibility
 
-| CLI version | Capigo API | Status | Support until |
-|-------------|------------|--------|---------------|
-| v1.x | /api/v1 | ✅ Supported | TBD |
-| v0.x | /api/v1 | ⚠️ Beta, no SLA | v1.0 release |
+The CLI targets Capigo's `/api/v1` Public API. Don't rely on a hardcoded version number in this
+file to know what's current — check the [Release badge](#capigo-cli-sdk) at the top of this
+README or the [Releases page](https://github.com/vtech-com/capigo-api-sdk/releases) for the
+latest tag, and `CHANGELOG.md` for what shipped in it (including any pre-staged commands ahead
+of a given tenant's backend deployment).
 
 ## Contributing
 
