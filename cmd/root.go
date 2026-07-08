@@ -35,6 +35,13 @@ API keys must start with csk_. Use 'capigo auth login --key <key>' to authentica
 }
 
 func Execute() {
+	// Runs once, after every command file's init() has registered its
+	// subcommands (main.go calls Execute() only after package init completes).
+	// See unknown_command.go for why this is needed: without it, cobra silently
+	// swallows unmatched subcommand-like args below the root (exit 0, no
+	// suggestion, no error) instead of raising the "unknown command" error both
+	// Layer 1 (cobra's own suggestions) and Layer 2 (curated redirects) need.
+	enableUnknownSubcommandErrors(rootCmd)
 	if err := rootCmd.Execute(); err != nil {
 		// Wrap cobra arg-validation errors so they render through the output
 		// formatter (respecting --output json) and map to exit code 5.
