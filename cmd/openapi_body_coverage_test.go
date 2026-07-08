@@ -325,6 +325,7 @@ func TestOpenAPIBodyCoverage(t *testing.T) {
 			}
 			if op == nil {
 				t.Fatalf("path %q has no %s operation in openapi.json", entry.path, strings.ToUpper(entry.method))
+				return
 			}
 			if op.RequestBody == nil {
 				// No request body for this operation; nothing to check.

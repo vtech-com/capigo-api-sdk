@@ -159,6 +159,13 @@ and hand-rolls `curl` against a guessed endpoint. **Every step after the guess i
    the API directly with `curl` or a fetched key. You act only through the CLI; when the CLI
    can't, the answer is to report it — never to route around it.
 
+**The CLI now assists you here.** Running an unknown command errors (it no longer prints help
+and exits 0), and when there's a known redirect its `Next:` line names the right command — e.g.
+`variants update` points you to `products variants`, and `products delete` to archiving via
+`products update --status ARCHIVED` — plus cobra suggests near-typos, git-style. **Read the
+`Next:` line.** This doesn't replace the rule above: for a genuine gap the CLI can't redirect,
+still report it and stop.
+
 **Why:** a missing command feels like "the platform can't," but those are different things. The
 platform is capable; the CLI is your window onto it; the window occasionally lacks a pane.
 Reporting the missing pane gets it added. Climbing through the wall (raw HTTP) loses auth,
