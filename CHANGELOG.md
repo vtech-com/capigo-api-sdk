@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.20.0] — 2026-07-08
+
 ### Changed
 
 - **Skill `capigo-api` restructured into a decision harness (docs only, no CLI behavior change).**
