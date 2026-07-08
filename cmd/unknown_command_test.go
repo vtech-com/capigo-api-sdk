@@ -168,9 +168,11 @@ func TestGroupLevelTypoSuggestsSibling(t *testing.T) {
 	products := findCommandPath(rootCmd, "products")
 	if products == nil {
 		t.Fatal("products group not found in command tree")
+		return
 	}
 	if products.RunE == nil {
 		t.Fatal("enableUnknownSubcommandErrors did not install a RunE on the products group")
+		return
 	}
 
 	err := products.RunE(products, []string{"gett", "foo"})
