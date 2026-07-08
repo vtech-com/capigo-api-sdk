@@ -204,7 +204,7 @@ Branch on the **exit code**, not the message wording — the text may change, th
 | 5 | Validation error (400) | Read stderr, fix the payload, retry |
 | 6 | Network error | Retry once; if it persists, surface it |
 | 7 | Rate limit (429) | Back off, then retry |
-| 8 | Conflict (409) | SKU/alias/resource already exists — change the value or update the existing row |
+| 8 | Conflict (409) | A server-enforced unique value already exists (e.g. `sku` — but *not* alias/barcode, which allow duplicates) — change the value or update the existing row |
 
 ## Tenant handling
 
@@ -231,11 +231,15 @@ barcode allocation — live in your catalogue-policy skill, not here.)
 
 - **Confirm before you write.** The safe rhythm is **propose → wait for confirmation →
   execute**. A wrong write costs far more than a clarifying question.
-- **Check for collisions first.** A new `sku`, alias, or `barcode` must be unique within the
-  tenant. Make `products list --query "<value>"` your first pass — it matches name, aliases,
-  tags, SKU and barcode server-side. Treat **exit 8** as "it already exists", not as retryable.
-  (Caveat: `--query` is a substring on the *stored* value; a shortened stored alias won't be
-  found by the full code — search the fragment or use `products list --all`.)
+- **Check for collisions first — but know what the server actually enforces.** Only **`sku`** is
+  server-enforced unique per tenant: a duplicate SKU fails with **exit 8** (`E9445`), which you
+  treat as "it already exists", not as retryable. **`alias` and `barcode` are NOT enforced —
+  the platform allows duplicates by design**, so a duplicate alias/barcode will *not* error. If
+  your catalogue policy needs them unique, that's on you: search first with
+  `products list --query "<value>"` (matches name, aliases, tags, SKU, barcode server-side) and
+  decide before writing — don't expect the server to reject it. (Caveat: `--query` is a substring
+  on the *stored* value; a shortened stored alias won't be found by the full code — search the
+  fragment or use `products list --all`.)
 - **Don't silently change identifiers.** Changing an existing `sku`, `barcode`, or alias on a
   live record breaks whatever references it — only do so when the user explicitly asks.
 - **Never report a soft-deleted record as available.** In table mode Status shows e.g. `ACTIVE
