@@ -202,21 +202,24 @@ type ProductVariantDimensions struct {
 
 // ProductVariant represents a PublicProductVariantResponse.
 type ProductVariant struct {
-	ID             string                    `json:"id"`
-	Name           string                    `json:"name"`
-	SKU            *string                   `json:"sku"`
-	Barcode        *string                   `json:"barcode"`
-	Price          *float64                  `json:"price"`
-	CompareAtPrice *float64                  `json:"compare_at_price"`
-	Currency       string                    `json:"currency"`
-	Weight         *float64                  `json:"weight"`
-	Dimensions     *ProductVariantDimensions `json:"dimensions"`
-	Option1        *string                   `json:"option1"`
-	Option2        *string                   `json:"option2"`
-	Option3        *string                   `json:"option3"`
-	VariantType    string                    `json:"variant_type"`
-	CreatedAt      string                    `json:"created_at"`
-	UpdatedAt      string                    `json:"updated_at"`
+	ID               string                    `json:"id"`
+	Name             string                    `json:"name"`
+	SKU              *string                   `json:"sku"`
+	Barcode          *string                   `json:"barcode"`
+	Price            *float64                  `json:"price"`
+	CompareAtPrice   *float64                  `json:"compare_at_price"`
+	Currency         string                    `json:"currency"`
+	Weight           *float64                  `json:"weight"`
+	Dimensions       *ProductVariantDimensions `json:"dimensions"`
+	Option1          *string                   `json:"option1"`
+	Option2          *string                   `json:"option2"`
+	Option3          *string                   `json:"option3"`
+	VariantType      string                    `json:"variant_type"`
+	ManufacturerCode *string                   `json:"manufacturer_code"`
+	LegacyCode       *string                   `json:"legacy_code"`
+	ExtraData        map[string]any            `json:"extra_data"`
+	CreatedAt        string                    `json:"created_at"`
+	UpdatedAt        string                    `json:"updated_at"`
 }
 
 // ProductRef is a lightweight reference object (brand, category, product_type, unit).
@@ -337,14 +340,17 @@ type UpdateProductRequest struct {
 // VariantID present -> UPDATE the existing variant.
 // VariantID absent  -> CREATE a new variant (Name is required in that case).
 type UpsertVariantItem struct {
-	VariantID *string  `json:"variant_id,omitempty"`
-	Name      *string  `json:"name,omitempty"`
-	SKU       *string  `json:"sku,omitempty"`
-	Barcode   *string  `json:"barcode,omitempty"`
-	Price     *float64 `json:"price,omitempty"`
-	Option1   *string  `json:"option1,omitempty"`
-	Option2   *string  `json:"option2,omitempty"`
-	Option3   *string  `json:"option3,omitempty"`
+	VariantID        *string        `json:"variant_id,omitempty"`
+	Name             *string        `json:"name,omitempty"`
+	SKU              *string        `json:"sku,omitempty"`
+	Barcode          *string        `json:"barcode,omitempty"`
+	Price            *float64       `json:"price,omitempty"`
+	Option1          *string        `json:"option1,omitempty"`
+	Option2          *string        `json:"option2,omitempty"`
+	Option3          *string        `json:"option3,omitempty"`
+	ManufacturerCode *string        `json:"manufacturer_code,omitempty"`
+	LegacyCode       *string        `json:"legacy_code,omitempty"`
+	ExtraData        map[string]any `json:"extra_data,omitempty"`
 }
 
 // CreateBrandRequest is the body for POST /pcms/brands.

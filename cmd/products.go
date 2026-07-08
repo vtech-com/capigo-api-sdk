@@ -804,15 +804,20 @@ Example JSON input:
 			return handleErr(fmt.Errorf("read --from-json: %w", err))
 		}
 
-		// Validate it is a JSON array before sending.
-		var items []api.UpsertVariantItem
-		if err := json.Unmarshal(raw, &items); err != nil {
+		// Validate it is a JSON array, then send the raw bytes untouched (same
+		// raw-passthrough pattern as brands/categories/units --from-json).
+		// Decoding into api.UpsertVariantItem and re-marshaling it here would
+		// silently drop any field the struct doesn't know about (e.g.
+		// manufacturer_code/legacy_code/extra_data) before the request ever
+		// reaches the API.
+		var probe []json.RawMessage
+		if err := json.Unmarshal(raw, &probe); err != nil {
 			return handleErr(fmt.Errorf("--from-json must be a JSON array of variant objects: %w", err))
 		}
 
 		resp, err := client.Do(ctx, "PUT",
 			"/pcms/products/"+productVariantsProductID+"/variants",
-			items, tenant)
+			json.RawMessage(raw), tenant)
 		if err != nil {
 			return handleErr(err)
 		}

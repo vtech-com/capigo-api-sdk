@@ -82,6 +82,14 @@ func renderCLIError(err error) {
 			detail.Next = info.Next
 			detail.CapabilityNote = info.CapabilityNote
 		}
+	} else if next, ok := redirectForUnknownCommand(detail.Message); ok {
+		// Curated cross-group redirect (Layer 2, cmd/unknown_command.go) for a
+		// conceptual wrong-guess cobra's own distance-based suggestions can't
+		// express (the right command lives in a different group). Deliberately
+		// does NOT set CapabilityNote: the "a failed write is not a missing
+		// capability" brake is reserved for real server-side write failures,
+		// not client-side/cobra errors.
+		detail.Next = next
 	}
 	// Avoid printing the raw body twice when it is identical to the parsed message
 	// (non-enveloped error responses set both to the same bytes).

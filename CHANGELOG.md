@@ -9,6 +9,65 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.20.0] — 2026-07-08
+
+### Changed
+
+- **Skill `capigo-api` restructured into a decision harness (docs only, no CLI behavior change).**
+  Rewrote `SKILL.md` around a command→intent **capability map** (a complete, domain-grouped
+  inventory the agent scans by what it wants to do) plus two explicit gates: **Gate 1** (a
+  command you can't find is a *CLI gap to report*, never a reason to hand-roll raw HTTP — and you
+  may not conclude "unsupported" until `capigo <group> --help` shows nothing), and **Gate 2**
+  (self-diagnose on error before guessing). Motivation: a production agent transcript showed the
+  agent guess a nonexistent `variants update`, wrongly conclude the API couldn't update variants,
+  and fall back to raw `curl` — the map + gates close that path. Added a "Common wrong turns"
+  section (variant writes go through `products variants`, no get-by-code, count via `meta.total`).
+  Fixed two facts across the skill: `auth whoami` (GET `/me`) is not a reliable preflight (can
+  404) — use `capigo health`; and `products update` is a single PUT write with no `products
+  replace`. Rewrote `references/cli_basics.md` into a lean flag-level reference the map points
+  into: removed OpenAPI as an agent-facing tool (the agent acts only through the CLI and never
+  looks up endpoints), de-duplicated the exit-code table and self-diagnosis flow (now single-
+  sourced in `SKILL.md`), reordered the command reference to match the map, and de-staled the
+  pre-staged-commands notes.
+
+### Fixed
+
+- **`products variants --from-json` silently dropped unknown fields (data loss on write).**
+  The command decoded `--from-json` into `[]api.UpsertVariantItem` and re-marshaled that
+  struct as the request body — any field the struct didn't declare (e.g.
+  `manufacturer_code`/`legacy_code`/`extra_data`) was stripped before the request left the
+  machine, with no error or warning. Fixed by validating the input is a JSON array and then
+  sending the raw bytes untouched (the same raw-passthrough pattern already used by
+  `brands`/`categories`/`product-types`/`units` create/update/replace). `UpsertVariantItem`
+  and `ProductVariant` also gained `manufacturer_code`, `legacy_code`, and `extra_data` fields
+  so typed API consumers and JSON output (`variants get`, `products get`, `products variants`)
+  see them too.
+
+### Added
+
+- **`tasks list` filter flags.** The backend (`query-parser.ts` `ALLOWED_FILTER_COLUMNS`)
+  accepts filtering on 8 columns, but the CLI only exposed `--status`. Added `--priority`,
+  `--assignee-id`, `--owner-id`, `--board-id`, `--board-list-id`, `--due-after`/`--due-before`,
+  and `--created-after`/`--created-before` so every backend-supported filter is reachable
+  without pulling the full list and filtering client-side.
+- **Unknown-command hints, two layers.** Running a plausible-but-wrong (sub)command now
+  points at the right one instead of silently doing nothing. **Layer 1:** group commands
+  (`variants`, `products`, `brands`, …) previously weren't "runnable" in cobra's terms, so an
+  unmatched subcommand like `variants update foo` fell through to `flag.ErrHelp` and printed
+  the group's help with exit 0 — no error, no suggestion; cobra's built-in Levenshtein
+  "Did you mean…?" suggestions never fired below the root. Every such group now gets a `RunE`
+  that raises cobra's own `unknown command %q for %q` error (reusing cobra's real
+  `SuggestionsFor`), so both the error and cobra's own suggestions now reach stdout via the
+  existing self-diagnosing error block. **Layer 2:** a small curated registry
+  (`cmd/unknown_command.go`) redirects the two evidence-backed conceptual misfires cobra's
+  edit-distance can't catch — `variants update/create/replace` → "upsert through
+  `products variants --product-id <id> --from-json -`", and `products delete/remove/destroy`
+  → "archive via `products update <id> --from-json -` with `{"status":"ARCHIVED"}`" — via
+  `ErrorDetail.Next` (exit code stays 5; no `CapabilityNote`, since this is a client-side
+  redirect, not a server-side write failure). An anti-rot test asserts every registry entry's
+  target command still exists in the live cobra command tree, so a rename/removal fails CI
+  instead of silently pointing at a dead command.
+
 ---
 
 ## [0.19.0] — 2026-07-03
