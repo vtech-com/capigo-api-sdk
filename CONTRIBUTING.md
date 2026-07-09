@@ -159,8 +159,16 @@ hand-written file the platform serves statically; it has been wrong about PUT se
 own `RunE` says what the CLI sends. Only a running API says what the API does.
 
 `make verify-api` asks it. Point it at any server with a key and a tenant; it calls every GET the
-spec declares, reports fields the spec omits (`EXTRA`) or invents (`MISSING`), and checks that each
-help page's `OUTPUT` sample names every field the response actually carries. It is read-only.
+spec declares and checks that each help page's `OUTPUT` sample names every field the response
+actually carries. Forty-five of the forty-nine pages are covered.
+
+A field the server returns that the spec never declared is reported and does not fail the run — the
+document is hand-written and incomplete, and a target that is always red is a target nobody runs. A
+field the spec promises and the server never sends does fail: a page written from the document would
+describe something that never arrives.
+
+It writes nothing, except the two `attachments download` commands, which it drives into a throwaway
+directory because a page describing what a download prints cannot be checked without one.
 
     CAPIGO_API_URL=http://127.0.0.1:3999/api/v1 CAPIGO_API_KEY=csk_... \
     CAPIGO_TENANT=acme-corp make verify-api

@@ -222,14 +222,19 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   drift from it. The guard follows the pointer, because stating a fact once is this repo's rule and
   a guard that punishes it would teach the wrong lesson.
 
-  Forty-three of the forty-nine command pages are now checked against a real response. Three are
-  exempt: `config set`, `config set-default-tenant` and `config unset-default-tenant` print nothing
-  on success, so a sample there would be the lie. `auth login`, `auth logout` and `config get` run
-  under a throwaway `HOME` — a script that edited the operator's credentials to check a help page
-  would be a poor trade.
+  Forty-five of the forty-nine command pages are checked against a real response. Three are exempt:
+  `config set`, `config set-default-tenant` and `config unset-default-tenant` print nothing on
+  success, so a sample there would be the lie. `auth login`, `auth logout` and `config get` run under
+  a throwaway `HOME` — a script that edited the operator's credentials to check a help page would be
+  a poor trade. The two `attachments download` commands are driven for real, into a throwaway
+  directory.
 
-  The remaining three say why they are unchecked: `auth whoami` calls an endpoint that does not
-  exist, and `tasks subtasks create` and the two `attachments download` commands write.
+  One page is left: `auth whoami`, which calls an endpoint the API does not implement.
+
+  A field the server returns that the spec never declared is reported, and does not fail the run:
+  that is the document's defect, and a target that is always red is a target nobody runs. A field
+  the spec promises and the server never sends does fail — a page written from the document would
+  describe something that never arrives.
 
 - **`tasks subtasks create` said `parent_task` is "trimmed — id, code, and title only, not the full
   task shape".** It is the full task. The OpenAPI document declares the trimmed shape, and the page

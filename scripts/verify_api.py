@@ -147,7 +147,17 @@ def first_record(body):
 
 
 def compare(spec, op, status, body):
-    """One line of verdict, and whether it counts as a failure."""
+    """One line of verdict, and whether it is ours to fix.
+
+    EXTRA means the server returns a field the document never declared. That is
+    the document's defect, not this CLI's — and it is the normal state of a
+    hand-written spec. Reporting it as a failure would leave this target red
+    forever, and a target that is always red is a target nobody runs.
+
+    MISSING is different: the document promises a field the server does not
+    send, so a page written from the document describes something that never
+    arrives. That fails.
+    """
     if status != 200:
         return f"status {status}", True
     rec = first_record(body)
@@ -164,8 +174,8 @@ def compare(spec, op, status, body):
     if missing:
         note += "MISSING " + ",".join(missing) + "  "
     if extra:
-        note += "EXTRA " + ",".join(extra)
-    return note.strip(), True
+        note += "spec incomplete: EXTRA " + ",".join(extra)
+    return note.strip(), bool(missing)
 
 
 # Each endpoint whose response a help page shows. The page's OUTPUT section must
@@ -214,6 +224,9 @@ HELP_SAMPLES = [
     ("/mission/tasks/{id}", ["tasks", "create"]),
     ("/mission/tasks/{id}", ["tasks", "update"]),
     ("/pcms/products/{id}", ["products", "variants"]),
+    # Its response is a parent task and its children, both full tasks. The page
+    # says so by deferring to `tasks get`, which the check follows.
+    ("/mission/tasks/{id}", ["tasks", "subtasks", "create"]),
 ]
 
 # Sub-resources that need a parent which actually has rows, not merely a parent.
@@ -464,12 +477,17 @@ def main():
         status, _ = c.get(path, with_tenant=False)
         print(f"{path:<{width}}  {status:>3}  (absent from openapi.json)")
 
+    incomplete = sum(1 for _, _, note in rows if note.startswith("spec incomplete"))
+
     print()
+    if incomplete:
+        print(f"{incomplete} endpoint(s) return fields api/openapi.json never declares.")
+        print("That is the document's defect. Report it; do not let a help page inherit it.")
     if failures:
-        print(f"{failures} endpoint(s) disagree with api/openapi.json.")
-        print("A field the spec omits is a field the help pages omit. Fix the pages, or the spec.")
+        print(f"\n{failures} failure(s): a page, or the spec, describes something the server "
+              f"does not do.")
         return 1
-    print(f"{len(rows)} endpoints agree with api/openapi.json.")
+    print("\nEvery checked page and every declared schema agrees with the server.")
     return 0
 
 
