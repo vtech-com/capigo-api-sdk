@@ -136,7 +136,7 @@ JSON body (--from-json):
   { "name": "Smartphones", "parent_id": "uuid-of-parent" }
   { "name": "Root Category", "parent_id": null }
 
-Response: { "data": { "id": "uuid", "name": "string", "parent_id": "uuid|null" } }`,
+Output (-o json): { "id": "uuid", "name": "string", "parent_id": "uuid|null" }`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -248,7 +248,7 @@ JSON body (--from-json):
   { "parent_id": "uuid-of-new-parent" }
   { "parent_id": null }
 
-Response: { "data": { "id": "uuid", "name": "string", "parent_id": "uuid|null" } }`,
+Output (-o json): { "id": "uuid", "name": "string", "parent_id": "uuid|null" }`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -339,7 +339,7 @@ var categoriesGetCmd = &cobra.Command{
 	Long: `Get a single category by ID from PCMS. Tenant is required.
 
 Returns 404 for both not-found and cross-tenant resources (no info leakage).
-Response: { "data": { "id": "uuid", "name": "string", "parent_id": "uuid|null" } }`,
+Output (-o json): { "id": "uuid", "name": "string", "parent_id": "uuid|null" }`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -412,7 +412,7 @@ JSON body (--from-json):
   { "name": "Electronics", "parent_id": null }
   { "name": "Smartphones", "parent_id": "uuid-of-parent" }
 
-Response: { "data": { "id": "uuid", "name": "string", "parent_id": "uuid|null" } }`,
+Output (-o json): { "id": "uuid", "name": "string", "parent_id": "uuid|null" }`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()

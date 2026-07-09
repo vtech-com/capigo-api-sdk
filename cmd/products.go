@@ -334,7 +334,7 @@ Returns the full product detail including all variants, options, brand, category
 product type, and unit. Returns 404 if the product does not exist or belongs to
 another tenant.
 
-Response: { "data": { ... } } — same shape as products list items.`,
+Output (-o json): the bare product object — same shape as the items in products list .data[].`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()

@@ -121,8 +121,8 @@ var membersGetCmd = &cobra.Command{
 If --tenant is omitted the member is resolved across all tenants the caller belongs to.
 Returns 404 if the member is not found in any accessible tenant.
 
-Response: { "data": { "id": "uuid", "display_name": "string", "email": "string",
-  "role": "owner|member", "avatar_url": "string|null" } }`,
+Output (-o json): { "id": "uuid", "display_name": "string", "email": "string",
+  "role": "owner|member", "avatar_url": "string|null" }`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()

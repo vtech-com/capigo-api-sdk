@@ -9,6 +9,21 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Help text described the API's HTTP response instead of the CLI's stdout.** Nineteen
+  single-item commands (`get` / `create` / `update` / `replace` across `brands`, `categories`,
+  `product-types`, `units`, plus `members get`, `products get`, `variants get`) documented their
+  result as `Response: { "data": { … } }`. The CLI unwraps that envelope — every one of these
+  commands calls `output.WriteJSONObject(os.Stdout, envelope.Data)` and prints the **bare
+  object**. An agent that read the help and then reached for `.data.id` got `null`.
+  The lines now read `Output (-o json): { … }`, naming the stream that the reader actually sees
+  and dropping the wrapper. Doc-only; no behavior change.
+
+  Note the bundled skill was already correct on this point (`single-item commands return the bare
+  object`) — the drift was help-side, introduced by restating a cross-cutting contract inside
+  nineteen separate command pages instead of stating it once.
+
 ## [0.20.1] — 2026-07-08
 
 ### Fixed

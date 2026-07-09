@@ -151,7 +151,7 @@ Returns the full variant shape (id, name, sku, barcode, price, compare_at_price,
 currency, weight, dimensions, option1/2/3, variant_type, created_at, updated_at).
 Orphaned, soft-deleted, and cross-tenant variants return 404.
 
-Response: { "data": { ... } } — full PublicProductVariantResponse shape.`,
+Output (-o json): the bare variant object — full PublicProductVariantResponse shape.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()

@@ -136,7 +136,7 @@ JSON body (--from-json):
   { "name": "Kilogram", "abbreviation": "kg" }
   { "name": "Piece", "abbreviation": "pc" }
 
-Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" } }`,
+Output (-o json): { "id": "uuid", "name": "string", "abbreviation": "string" }`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -250,7 +250,7 @@ JSON body (--from-json):
   { "abbreviation": "kg" }
   { "name": "Kilogram", "abbreviation": "kg" }
 
-Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" } }`,
+Output (-o json): { "id": "uuid", "name": "string", "abbreviation": "string" }`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -339,7 +339,7 @@ var unitsGetCmd = &cobra.Command{
 	Long: `Get a single product unit by ID from PCMS. Tenant is required.
 
 Returns 404 for both not-found and cross-tenant resources (no info leakage).
-Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" } }`,
+Output (-o json): { "id": "uuid", "name": "string", "abbreviation": "string" }`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -408,7 +408,7 @@ stdin). When --from-json is set, all individual field flags are ignored.
 JSON body (--from-json):
   { "name": "Kilogram", "abbreviation": "kg" }
 
-Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" } }`,
+Output (-o json): { "id": "uuid", "name": "string", "abbreviation": "string" }`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()

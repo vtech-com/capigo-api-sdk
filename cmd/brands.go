@@ -135,7 +135,7 @@ JSON body (--from-json):
   { "name": "Nike", "logo_url": "https://example.com/logo.png" }
   { "name": "No Brand" }
 
-Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" } }`,
+Output (-o json): { "id": "uuid", "name": "string", "logo_url": "string|null" }`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -247,7 +247,7 @@ JSON body (--from-json):
   { "logo_url": "https://example.com/new-logo.png" }
   { "logo_url": null }
 
-Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" } }`,
+Output (-o json): { "id": "uuid", "name": "string", "logo_url": "string|null" }`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -338,7 +338,7 @@ var brandsGetCmd = &cobra.Command{
 	Long: `Get a single brand by ID from PCMS. Tenant is required.
 
 Returns 404 for both not-found and cross-tenant resources (no info leakage).
-Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" } }`,
+Output (-o json): { "id": "uuid", "name": "string", "logo_url": "string|null" }`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -410,7 +410,7 @@ JSON body (--from-json):
   { "name": "Nike", "logo_url": "https://example.com/logo.png" }
   { "name": "No Brand", "logo_url": null }
 
-Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" } }`,
+Output (-o json): { "id": "uuid", "name": "string", "logo_url": "string|null" }`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
