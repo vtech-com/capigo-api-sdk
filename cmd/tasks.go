@@ -209,12 +209,13 @@ OUTPUT
 
 var (
 	taskGetTenant string
+	taskGetCode   string
 )
 
 var tasksGetCmd = &cobra.Command{
-	Use:   "get <id>",
-	Short: "Get a task by id",
-	Long: `Get one task by id.
+	Use:   "get [<id>]",
+	Short: "Get a task by id or by code",
+	Long: `Get one task, addressed by id or by code.
 
 PURPOSE
   Read a single task in full. This is the authoritative source for a task's
@@ -222,15 +223,24 @@ PURPOSE
   activity entries are written asynchronously and can lag.
 
 USAGE
-  capigo tasks get <id> [--tenant <code>]
+  capigo tasks get (<id> | --code <code>) [--tenant <code>]
 
 FLAGS
   <id>
-      Task UUID. Positional, required.
+      Task UUID. Positional. Give this or --code, never both; giving neither
+      exits 5.
+
+  --code <code>
+      Address the task by its code — the key a person quotes, like ACMEC-68.
+      A code is unique within a tenant, not across them, so --code needs a
+      tenant: pass --tenant, or set a default. Give an id or --code, never
+      both; a bare argument is never guessed at.
+
+        capigo tasks get --code ACMEC-68 --tenant acme
 
   --tenant <code>
-      Tenant to scope the lookup to. Optional; the id alone finds the task
-      regardless of tenant.
+      Tenant to scope the lookup to. Optional with an id — the id alone finds
+      the task regardless of tenant. Required with --code.
 
         capigo tasks get 7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10 --tenant acme
 
@@ -257,9 +267,14 @@ OUTPUT
   the id alone found the task, independent of any one tenant.
 
   Exit 4 when no such task is reachable.`,
-	Args: cobra.ExactArgs(1),
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
+
+		var id string
+		if len(args) == 1 {
+			id = args[0]
+		}
 
 		client, cfg, err := buildClient()
 		if err != nil {
@@ -272,8 +287,9 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(taskGetTenant, profile)
+		requireOneTaskAddress(id, taskGetCode, tenant)
 
-		resp, err := client.Do(ctx, "GET", "/mission/tasks/"+args[0], nil, tenant)
+		resp, err := client.Do(ctx, "GET", taskPath(id, taskGetCode), nil, tenant)
 		if err != nil {
 			return handleErr(err)
 		}
@@ -292,6 +308,7 @@ OUTPUT
 // tasks comments flags
 var (
 	taskCommentsTenant string
+	taskCommentsCode   string
 	taskCommentsType   string
 	taskCommentsSort   string
 	taskCommentsPage   int
@@ -299,7 +316,7 @@ var (
 )
 
 var tasksCommentsCmd = &cobra.Command{
-	Use:   "comments <id>",
+	Use:   "comments [<id>]",
 	Short: "List a task's comments and activity timeline",
 	Long: `Read a task's discussion and activity timeline.
 
@@ -311,16 +328,25 @@ PURPOSE
   the source of truth for live state.
 
 USAGE
-  capigo tasks comments <id> [--tenant <code>] [--type comment|activity]
-                             [--sort asc|desc] [--page <n>] [--limit <n>]
+  capigo tasks comments (<id> | --code <code>) [--tenant <code>]
+                        [--type comment|activity] [--sort asc|desc]
+                        [--page <n>] [--limit <n>]
 
 FLAGS
   <id>
-      Task UUID. Positional, required.
+      Task UUID. Positional. Give this or --code, never both.
+
+  --code <code>
+      Address the task by its code — the key a person quotes, like ACMEC-68.
+      A code is unique within a tenant, not across them, so --code needs a
+      tenant: pass --tenant, or set a default. Give an id or --code, never
+      both; a bare argument is never guessed at.
+
+        capigo tasks comments --code ACMEC-68 --tenant acme
 
   --tenant <code>
-      Tenant to scope the lookup to. Optional; the id alone finds the task
-      regardless of tenant.
+      Tenant to scope the lookup to. Optional with an id; required with
+      --code.
 
   --type comment|activity
       Return only one kind. Omit to return both.
@@ -371,9 +397,14 @@ OUTPUT
   one task by id, not to a tenant.
 
   A task nobody has commented on returns an empty list and exit 0.`,
-	Args: cobra.ExactArgs(1),
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
+
+		var id string
+		if len(args) == 1 {
+			id = args[0]
+		}
 
 		// Validate flag values client-side so we fail fast (exit 5) before any
 		// network call.
@@ -392,8 +423,9 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(taskCommentsTenant, profile)
+		requireOneTaskAddress(id, taskCommentsCode, tenant)
 
-		path := commentsPath(args[0], taskCommentsType, taskCommentsSort, taskCommentsPage, taskCommentsLimit)
+		path := commentsPath(taskPath(id, taskCommentsCode), taskCommentsType, taskCommentsSort, taskCommentsPage, taskCommentsLimit)
 
 		resp, err := client.Do(ctx, "GET", path, nil, tenant)
 		if err != nil {
@@ -591,6 +623,7 @@ var (
 // tasks subtasks flags
 var (
 	taskSubtasksTenant      string
+	taskSubtasksCode        string
 	taskSubtasksFromJSON    string
 	taskSubtasksTitle       string
 	taskSubtasksDescription string
@@ -818,7 +851,7 @@ OUTPUT
 }
 
 var tasksSubtasksCmd = &cobra.Command{
-	Use:   "subtasks <parent-task-id>",
+	Use:   "subtasks [<parent-task-id>]",
 	Short: "Add subtasks to an existing task",
 	Long: `Add subtasks to a task that already exists.
 
@@ -829,7 +862,7 @@ PURPOSE
   invalid, nothing is created.
 
 USAGE
-  capigo tasks subtasks <parent-id> --tenant <code>
+  capigo tasks subtasks (<parent-id> | --code <code>) --tenant <code>
                          [--title <text> [--description <text>]
                           [--assignee <uuid>] [--due-date <date>]
                           [--priority <text>] [--status <text>]
@@ -837,10 +870,17 @@ USAGE
 
 FLAGS
   <parent-id>
-      Parent task UUID. Positional, required.
+      Parent task UUID. Positional. Give this or --code, never both.
+
+  --code <code>
+      Address the parent task by its code — the key a person quotes, like
+      ACMEC-68 — instead of by id. A bare argument is never guessed at.
+
+        capigo tasks subtasks --code ACMEC-68 --tenant acme --title Design
 
   --tenant <code>
-      Tenant the parent task belongs to. Required.
+      Tenant the parent task belongs to. Required either way — a code is
+      unique within a tenant, not across them.
 
   --title <text>
       Subtask title. Required unless --from-json is used.
@@ -888,9 +928,14 @@ OUTPUT
 
   meta.tenant is the tenant the subtasks were written to. Read it: a write
   that landed in the wrong tenant looks exactly like a write that succeeded.`,
-	Args: cobra.ExactArgs(1),
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
+
+		var id string
+		if len(args) == 1 {
+			id = args[0]
+		}
 
 		client, cfg, err := buildClient()
 		if err != nil {
@@ -904,6 +949,7 @@ OUTPUT
 
 		tenant := resolveTenant(taskSubtasksTenant, profile)
 		requireTenant(tenant, "tasks subtasks")
+		requireOneTaskAddress(id, taskSubtasksCode, tenant)
 
 		var subtasks []api.SubtaskItem
 		if taskSubtasksFromJSON != "" {
@@ -937,7 +983,7 @@ OUTPUT
 			subtasks = []api.SubtaskItem{item}
 		}
 
-		resp, err := client.Do(ctx, "POST", "/mission/tasks/"+args[0]+"/subtasks", api.CreateSubtasksRequest{
+		resp, err := client.Do(ctx, "POST", taskPath(id, taskSubtasksCode)+"/subtasks", api.CreateSubtasksRequest{
 			TenantCode: *tenant,
 			Subtasks:   subtasks,
 		}, tenant)
@@ -985,9 +1031,11 @@ func init() {
 
 	// tasks get flags
 	tasksGetCmd.Flags().StringVar(&taskGetTenant, "tenant", "", "scope to this tenant code")
+	tasksGetCmd.Flags().StringVar(&taskGetCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
 
 	// tasks comments flags
 	tasksCommentsCmd.Flags().StringVar(&taskCommentsTenant, "tenant", "", "scope to this tenant code")
+	tasksCommentsCmd.Flags().StringVar(&taskCommentsCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
 	tasksCommentsCmd.Flags().StringVar(&taskCommentsType, "type", "", "filter by kind: comment | activity (default: both)")
 	tasksCommentsCmd.Flags().StringVar(&taskCommentsSort, "sort", "", "order by created_at: asc | desc (default: desc — newest first)")
 	tasksCommentsCmd.Flags().IntVar(&taskCommentsPage, "page", 0, "page number (1-based)")
@@ -1018,6 +1066,7 @@ func init() {
 
 	// tasks subtasks flags
 	tasksSubtasksCmd.Flags().StringVar(&taskSubtasksTenant, "tenant", "", "tenant code (required)")
+	tasksSubtasksCmd.Flags().StringVar(&taskSubtasksCode, "code", "", "address the parent task by its code (e.g. ACMEC-68) instead of by id")
 	tasksSubtasksCmd.Flags().StringVar(&taskSubtasksFromJSON, "from-json", "", "path to a JSON array of subtask items (use - for stdin); mutually exclusive with the single-item flags")
 	tasksSubtasksCmd.Flags().StringVar(&taskSubtasksTitle, "title", "", "subtask title (required unless --from-json is used)")
 	tasksSubtasksCmd.Flags().StringVar(&taskSubtasksDescription, "description", "", "subtask description")
@@ -1142,7 +1191,7 @@ func tasksListPath(f taskListFilters) string {
 
 // commentsPath builds the request path + query string for `tasks comments`.
 // Empty/zero flag values are omitted so the server applies its own defaults.
-func commentsPath(id, typeFlag, sortFlag string, page, limit int) string {
+func commentsPath(base, typeFlag, sortFlag string, page, limit int) string {
 	params := url.Values{}
 	if typeFlag != "" {
 		params.Set("type", typeFlag)
@@ -1157,7 +1206,7 @@ func commentsPath(id, typeFlag, sortFlag string, page, limit int) string {
 		params.Set("limit", strconv.Itoa(limit))
 	}
 
-	path := "/mission/tasks/" + id + "/comments"
+	path := base + "/comments"
 	if len(params) > 0 {
 		path += "?" + params.Encode()
 	}

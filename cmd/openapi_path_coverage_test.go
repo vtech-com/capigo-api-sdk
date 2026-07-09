@@ -49,6 +49,14 @@ var implementedOps = map[string]string{
 	"GET /mission/tasks/{id}/attachments/{attachmentId}/download":          "tasks attachments download",
 	"GET /mission/tasks/{id}/comments/attachments/{attachmentId}/download": "tasks comments attachments download",
 
+	// The same five capabilities, addressed by a task's code instead of its id.
+	// One flag on each existing command, not five more commands.
+	"GET /mission/tasks/code/{code}":                                              "tasks get --code",
+	"GET /mission/tasks/code/{code}/comments":                                     "tasks comments --code",
+	"POST /mission/tasks/code/{code}/subtasks":                                    "tasks subtasks --code",
+	"GET /mission/tasks/code/{code}/attachments/{attachmentId}/download":          "tasks attachments download --code",
+	"GET /mission/tasks/code/{code}/comments/attachments/{attachmentId}/download": "tasks comments attachments download --code",
+
 	"GET /pcms/products":               "products list",
 	"POST /pcms/products":              "products create",
 	"GET /pcms/products/{id}":          "products get",
@@ -93,17 +101,12 @@ var unimplementedOps = map[string]string{
 	// "has no subtasks" and "is not a task" are the same answer through the filter
 	// and different answers through here. It also returns every subtask unpaginated,
 	// and stamps each row with a parent_task reference the filter does not add.
-	"GET /mission/tasks/{id}/subtasks": "unwrapped, pending a decision: it answers a question `tasks list --parent-task-id` cannot — 404 for a missing parent, versus an empty page",
+	"GET /mission/tasks/{id}/subtasks":        "unwrapped, pending a decision: it answers a question `tasks list --parent-task-id` cannot — 404 for a missing parent, versus an empty page",
+	"GET /mission/tasks/code/{code}/subtasks": "unwrapped, pending a decision: the by-code twin of the by-id GET above, and left with it",
 
-	// Tasks addressed by their human code (TASK-104) rather than a UUID. The set
-	// duplicates the by-id surface exactly, so the right shape is probably a flag
-	// on the existing commands, not five new ones. Decide before wrapping.
-	"GET /mission/tasks/code/{code}":                                              "unwrapped: by-code addressing duplicates the by-id surface; pending a design decision",
-	"GET /mission/tasks/code/{code}/comments":                                     "unwrapped: by-code addressing duplicates the by-id surface; pending a design decision",
-	"GET /mission/tasks/code/{code}/subtasks":                                     "unwrapped: by-code addressing duplicates the by-id surface; pending a design decision",
-	"POST /mission/tasks/code/{code}/subtasks":                                    "unwrapped: by-code addressing duplicates the by-id surface; pending a design decision",
-	"GET /mission/tasks/code/{code}/attachments/{attachmentId}/download":          "unwrapped: by-code addressing duplicates the by-id surface; pending a design decision",
-	"GET /mission/tasks/code/{code}/comments/attachments/{attachmentId}/download": "unwrapped: by-code addressing duplicates the by-id surface; pending a design decision",
+	// The by-code twin of the by-id GET above, and unwrapped for the same reason.
+	// Wrapping one without the other would make `--code` mean something different
+	// on one command than on the four where it is now supported.
 
 	// WMS: a new read-only module, addressed by code rather than by id. Wrapping
 	// it means a new command group, eight help pages, and a section in the skill.

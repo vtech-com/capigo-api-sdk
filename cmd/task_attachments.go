@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -13,15 +14,16 @@ import (
 )
 
 // taskAttachmentDownloadPath builds the request path for downloading a
-// task-level attachment.
-func taskAttachmentDownloadPath(taskID, attachmentID string) string {
-	return "/mission/tasks/" + taskID + "/attachments/" + attachmentID + "/download"
+// task-level attachment. base comes from taskPath: the task addressed by id or
+// by code.
+func taskAttachmentDownloadPath(base, attachmentID string) string {
+	return base + "/attachments/" + url.PathEscape(attachmentID) + "/download"
 }
 
 // commentAttachmentDownloadPath builds the request path for downloading a
 // comment/message-level attachment.
-func commentAttachmentDownloadPath(taskID, attachmentID string) string {
-	return "/mission/tasks/" + taskID + "/comments/attachments/" + attachmentID + "/download"
+func commentAttachmentDownloadPath(base, attachmentID string) string {
+	return base + "/comments/attachments/" + url.PathEscape(attachmentID) + "/download"
 }
 
 // runAttachmentDownload is the shared implementation behind both `tasks
@@ -59,6 +61,7 @@ func runAttachmentDownload(client *api.Client, tenant *string, tenantFlag, path,
 // tasks attachments (group) + download flags
 var (
 	taskAttachmentsDownloadTenant string
+	taskAttachmentsDownloadCode   string
 	taskAttachmentsDownloadDest   string
 )
 
@@ -124,8 +127,10 @@ OUTPUT
   is answered by running the command again.
 
   Exit 4 when no such task or attachment is reachable.`,
-	Args: cobra.ExactArgs(2),
+	Args: cobra.RangeArgs(1, 2),
 	RunE: func(_ *cobra.Command, args []string) error {
+		taskID, attachmentID := splitAttachmentArgs(args, taskAttachmentsDownloadCode)
+
 		client, cfg, err := buildClient()
 		if err != nil {
 			return handleErr(err)
@@ -135,14 +140,18 @@ OUTPUT
 			return handleErr(err)
 		}
 		tenant := resolveTenant(taskAttachmentsDownloadTenant, profile)
+		requireOneTaskAddress(taskID, taskAttachmentsDownloadCode, tenant)
+		requireAttachmentID(attachmentID)
 
-		return runAttachmentDownload(client, tenant, taskAttachmentsDownloadTenant, taskAttachmentDownloadPath(args[0], args[1]), taskAttachmentsDownloadDest)
+		path := taskAttachmentDownloadPath(taskPath(taskID, taskAttachmentsDownloadCode), attachmentID)
+		return runAttachmentDownload(client, tenant, taskAttachmentsDownloadTenant, path, taskAttachmentsDownloadDest)
 	},
 }
 
 // tasks comments attachments (group) + download flags
 var (
 	taskCommentsAttachmentsDownloadTenant string
+	taskCommentsAttachmentsDownloadCode   string
 	taskCommentsAttachmentsDownloadDest   string
 )
 
@@ -175,19 +184,27 @@ USAGE
 
 FLAGS
   <task-id>
-      Task UUID. Positional, required. Establishes the tenant this download
-      is scoped to (see --tenant below).
+      Task UUID. Positional. Give this or --code, never both. With --code the
+      only positional is the attachment id. Establishes the tenant this
+      download is scoped to (see --tenant below).
 
   <attachment-id>
       Attachment UUID, from tasks comments .data[].attachments[].id.
-      Positional, required.
+      Positional, required. Omitting it exits 5.
 
         capigo tasks comments attachments download <task-uuid> <att-uuid>
 
+  --code <code>
+      Address the task by its code — the key a person quotes, like ACMEC-68.
+      A code is unique within a tenant, so --code needs a tenant. A bare
+      argument is never guessed at.
+
+        capigo tasks comments attachments download --code ACMEC-68 <att-uuid>
+
   --tenant <code>
-      Optional; scopes the lookup. This endpoint is scoped to the task's
-      tenant, not to the task itself: the download succeeds for any
-      attachment id that exists in that tenant, including one posted on a
+      Optional with a task id; required with --code. This endpoint is scoped
+      to the task's tenant, not to the task itself: the download succeeds for
+      any attachment id that exists in that tenant, including one posted on a
       different task's thread.
 
   -d, --dest <path>
@@ -212,8 +229,10 @@ OUTPUT
   is answered by running the command again.
 
   Exit 4 when no such task or attachment is reachable.`,
-	Args: cobra.ExactArgs(2),
+	Args: cobra.RangeArgs(1, 2),
 	RunE: func(_ *cobra.Command, args []string) error {
+		taskID, attachmentID := splitAttachmentArgs(args, taskCommentsAttachmentsDownloadCode)
+
 		client, cfg, err := buildClient()
 		if err != nil {
 			return handleErr(err)
@@ -223,13 +242,17 @@ OUTPUT
 			return handleErr(err)
 		}
 		tenant := resolveTenant(taskCommentsAttachmentsDownloadTenant, profile)
+		requireOneTaskAddress(taskID, taskCommentsAttachmentsDownloadCode, tenant)
+		requireAttachmentID(attachmentID)
 
-		return runAttachmentDownload(client, tenant, taskCommentsAttachmentsDownloadTenant, commentAttachmentDownloadPath(args[0], args[1]), taskCommentsAttachmentsDownloadDest)
+		path := commentAttachmentDownloadPath(taskPath(taskID, taskCommentsAttachmentsDownloadCode), attachmentID)
+		return runAttachmentDownload(client, tenant, taskCommentsAttachmentsDownloadTenant, path, taskCommentsAttachmentsDownloadDest)
 	},
 }
 
 func init() {
 	tasksAttachmentsDownloadCmd.Flags().StringVar(&taskAttachmentsDownloadTenant, "tenant", "", "scope to this tenant code")
+	tasksAttachmentsDownloadCmd.Flags().StringVar(&taskAttachmentsDownloadCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
 	tasksAttachmentsDownloadCmd.Flags().StringVarP(&taskAttachmentsDownloadDest, "dest", "d", "", "destination file or directory (default: original file name in the current directory)")
 	tasksAttachmentsCmd.AddCommand(tasksAttachmentsDownloadCmd)
 	// tasksAttachmentsCmd is registered under `tasks` by tasks.go, not here.
@@ -237,6 +260,7 @@ func init() {
 	// init() runs in file-name order, which would put attachments above list.
 
 	tasksCommentsAttachmentsDownloadCmd.Flags().StringVar(&taskCommentsAttachmentsDownloadTenant, "tenant", "", "scope to this tenant code")
+	tasksCommentsAttachmentsDownloadCmd.Flags().StringVar(&taskCommentsAttachmentsDownloadCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
 	tasksCommentsAttachmentsDownloadCmd.Flags().StringVarP(&taskCommentsAttachmentsDownloadDest, "dest", "d", "", "destination file or directory (default: original file name in the current directory)")
 	tasksCommentsAttachmentsCmd.AddCommand(tasksCommentsAttachmentsDownloadCmd)
 	tasksCommentsCmd.AddCommand(tasksCommentsAttachmentsCmd)

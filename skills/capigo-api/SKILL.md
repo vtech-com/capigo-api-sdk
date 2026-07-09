@@ -109,8 +109,8 @@ command are in [`references/cli_basics.md`](./references/cli_basics.md); this ma
 | Command | Reach for it when you want to… |
 |---|---|
 | `tasks list [--status/--priority/--assignee-id/--board-id/--due-*…]` | list tasks, optionally filtered |
-| `tasks get <id>` | see one task in full. UUID only |
-| `tasks comments <id>` | read a task's timeline (comments + activity). For the **current** status trust `tasks get`, not the latest activity line |
+| `tasks get <id>` / `tasks get --code ACMEC-68` | see one task in full. Two addresses for the same task; `--code` needs `--tenant` (a code is unique **within** a tenant). Give one, never both |
+| `tasks comments <id>` (or `--code`) | read a task's timeline (comments + activity). For the **current** status trust `tasks get`, not the latest activity line |
 | `tasks create --title … --tenant …` | create a task; add `--subtasks-json -` to create it with subtasks atomically |
 | `tasks update <id>` | change status / assignee / board / title (≥1 flag; `--assignee ""` unassigns) |
 | `tasks subtasks <parent-id> --from-json -` | add subtasks under an existing task (all-or-nothing; max 25) |

@@ -178,6 +178,24 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Tasks addressed by their code: `--code` on five commands.** `tasks get`, `tasks comments`,
+  `tasks subtasks`, and both `attachments download` commands now take `--code ACMEC-68` in place of
+  a UUID, reaching the `/mission/tasks/code/{code}/…` routes.
+
+  One flag on each existing command, not five new commands — the same principle `variants get
+  --sku` set. A bare argument is never sniffed: give an id or `--code`, never both, and never
+  neither. Both addresses are path-escaped.
+
+  **`--code` requires a tenant, and the CLI says so rather than letting the server decide.** A task
+  code is unique within a tenant, not across them, and `loadAccessibleTaskByCode` rejects a lookup
+  that resolves to none. Whether it resolves depends on the API key: a *tenant-scoped* key carries
+  a tenant even with no header, a *global* key does not, and the CLI cannot see which it holds. So
+  the tenant is demanded up front, with a message that explains why, instead of a 400 that arrives
+  for some keys and not others.
+
+  `PATCH` by code is deliberately absent from the API, so `tasks update --code` does not exist.
+  `GET /mission/tasks/code/{code}/subtasks` stays unwrapped, alongside its by-id twin.
+
 - **`variants get --sku <sku>`.** A variant has two addresses — its id, and its sku, unique within
   a tenant — and `GET /pcms/variants/sku/{sku}` returns the same record as `GET /pcms/variants/{id}`,
   field for field, verified against a running API.
