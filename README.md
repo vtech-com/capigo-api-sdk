@@ -226,8 +226,8 @@ Notes:
 - `products create`/`update` also accept `--from-json -` for options + variants in one call (mutually exclusive with individual field flags).
 - `products update` is the **only** write verb for updates (PUT-style full replace of the provided fields) — unlike reference data, products has no separate `replace` command.
 - Soft-deleted products still appear in list results. Check `is_deleted` on the product object — the plain `status` field does not reveal deletion on its own.
-- `--all` streams every row it fetches even if it fails mid-pagination; `meta.complete` is `false` and the command exits non-zero. Check this before treating a result as the whole catalogue.
-- `--ids` reports what it could **not** find in `meta.missing_ids`.
+- `--all` streams every row it fetches even if it fails mid-pagination, and exits non-zero. A zero exit is what tells you the sweep finished.
+- `--ids` exits 4 when a requested id does not come back; the rows that did are still printed.
 
 ## Reference data
 
@@ -389,8 +389,12 @@ safe — stdout is JSON and nothing else is ever written to it.
 resolved to and where that came from; both are absent on a command that takes no tenant, and
 on a cross-tenant read that resolved none. A list also carries `page`/`limit`/`total`/
 `has_more`. `total` is the count across every page — count `meta.total`, never `data[]`. The
-CLI additionally adds `server_time` (delta-sync cursor), `missing_ids` (with `--ids`), and
-`complete` (`false` when an `--all` sweep aborted partway) where relevant.
+CLI additionally adds `server_time` (the delta-sync cursor, taken from a response header the
+caller never sees).
+
+`meta` carries only what a caller cannot work out for itself. Anything derivable from what you
+sent and what you got back — which of your `--ids` came home, whether an `--all` sweep finished
+— is left to you and to the exit code.
 
 A failing command prints `{"error": {...}}` — still JSON, still on stdout — plus a one-line
 summary on stderr. Parse stdout unconditionally; see [Exit Codes](#exit-codes).

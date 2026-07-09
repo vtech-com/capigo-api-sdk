@@ -105,12 +105,14 @@ META
   total is the count across every page, not the number of rows in data. Read
   it; do not count data[].
 
-  Three further fields are added by the CLI, not sent by the API. Each is
-  documented on the command that produces it:
+  One further field is added by the CLI, not sent by the API:
 
       server_time    the server clock at the time of the call, for delta sync
-      missing_ids    ids a --ids request asked for and did not get back
-      complete       false when a --all sweep aborted part-way
+
+  meta carries only what a caller cannot work out for itself. The tenant comes
+  from a resolution order internal to this CLI; the server clock comes from a
+  header the caller never sees. Anything a caller can compute from what it sent
+  and what it got back is not in meta.
 
 FAILURE
   A command that fails prints an object with an error key — still JSON, still
@@ -119,16 +121,26 @@ FAILURE
 
       { "error": { "code": …, "message": …, "next": …, "request_id": … } }
 
-  A one-line summary also goes to stderr. What the exit code means, and what
-  each field of the error object carries: capigo help exit-codes
+  A one-line summary also goes to stderr.
+
+  stdout carries ONE JSON document. When a command has already printed its
+  envelope and then fails — an --all sweep that aborts part-way, a --ids
+  request missing an id — the rows it fetched stand on stdout as a normal
+  envelope, and the diagnosis goes to stderr alone. The exit code carries the
+  failure. Nothing is ever appended to a printed envelope.
+
+  What the exit code means, and what each field of the error object carries:
+  capigo help exit-codes
 
 STREAMS
-  stdout    the envelope, or the error object. Nothing else, ever.
+  stdout    one JSON document: the envelope, or the error object. Never both,
+            and never anything else.
   stderr    the one-line error summary, and --verbose HTTP tracing.
 
-  Nothing the CLI knows is announced only on stderr. A fact worth acting on —
-  which tenant a write landed in, how many records exist, whether a sweep
-  finished — is in meta, on stdout, where it can be read rather than noticed.
+  Which tenant a write landed in, and how many records exist, are facts worth
+  acting on, so they are in meta on stdout rather than announced on a stream a
+  caller may not read. Whether a sweep finished is carried by the exit code,
+  which a caller cannot help but receive.
 
 SEE ALSO
   capigo help exit-codes   what a non-zero exit means

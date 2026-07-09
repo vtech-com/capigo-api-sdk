@@ -38,10 +38,25 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   it succeeded. The only defence is a caller that can *read* which tenant it hit, so the fact now
   lives in the shape a caller parses rather than in prose it might notice.
 
-- **`meta.server_time`, `meta.missing_ids` and `meta.complete`** replace the `Server time:` line,
-  the `Requested N ids · missing:` line, and the `INCOMPLETE — aborted at page N` footer. Each is
-  documented on the command that produces it. The API's own meta has four fields; these three are
-  the CLI's.
+- **`meta.server_time`** replaces the `Server time:` line. It is the CLI's, not the API's — the
+  value comes from a response header the caller never sees.
+
+  `meta` now carries only what a caller cannot work out for itself. The tenant comes from a
+  resolution order internal to this CLI; the server clock comes from that header. The old
+  `Requested N ids · missing:` line and the `INCOMPLETE — aborted at page N` footer became
+  `meta.missing_ids` and `meta.complete` for one release, and are gone: a caller holds the ids it
+  passed to `--ids` and the ids that came back, so the difference is its own subtraction, and a
+  sweep that aborted is already announced by a non-zero exit.
+
+- **`products list --ids` exits 4 when a requested id does not come back.** It used to exit 0 with
+  fewer rows, which answers a different question than the one asked. The rows that did come back
+  are printed first — they are real — and the exit code carries the shortfall.
+
+- **stdout carries exactly one JSON document.** A command that had already printed its envelope
+  and then failed — a `--all` sweep aborting part-way — appended an error object to it, so
+  `json.load` on the pair raised `Extra data`: the precise failure the single-shape contract
+  exists to remove. Once data is on stdout, the diagnosis goes to stderr alone and the exit code
+  carries the failure.
 
 - **A failure prints JSON on stdout** — `{"error": {…}}`, carrying `code`, `message`, `meaning`,
   `next`, `capability_note`, `raw`, `request_id` and `http_status` — plus the one-line summary on

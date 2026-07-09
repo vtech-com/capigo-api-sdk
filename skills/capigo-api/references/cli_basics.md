@@ -191,13 +191,13 @@ Key facts callers depend on:
   restore it.
 - The product object carries `aliases[]` and `tags[]`, so alias/Product-Code and tag checks
   don't need a second call — but completeness still requires paging (`--all`).
-- **`--ids` reports what it could NOT find** in `meta.missing_ids`. Asking for 5 UUIDs and
-  getting 3 rows back is still exit 0, but the missing IDs are named there. Treat a missing ID
-  as "deleted or wrong-tenant", not as something to silently skip in your answer.
+- **`--ids` exits 4 when an id does not come back.** The rows that did come back are printed
+  first, as a normal envelope; the exit code carries the shortfall. A missing id means "deleted
+  or wrong-tenant" — never silently skip it in your answer. **Check the exit code**, not the row
+  count.
 - **`--all` auto-paginates and streams every row.** If it fails mid-pagination (rate limit,
-  network), the rows already fetched are still printed, `meta.complete` is `false`, and the
-  command exits non-zero. Check `complete` before treating an `--all` result as the whole
-  catalogue.
+  network), the rows already fetched are still printed and the command exits non-zero. A zero
+  exit is what tells you the sweep finished; treat a non-zero exit as a partial catalogue.
 
 ```bash
 # Create a simple product with a Product Code alias
@@ -447,9 +447,9 @@ How to get a complete result set:
   when you truly need the **whole catalogue** (a full export, or an exhaustive scan `--query`
   can't express): `capigo --tenant acme products list --all | jq '.data[]'`.
   **If `--all` fails mid-pagination** (rate limit, network), the rows already fetched are
-  still printed, `meta.complete` is `false`, and the command exits non-zero. **Check
-  `complete` before treating an `--all` result as the whole catalogue** — and never treat it
-  as complete when the exit code is non-zero.
+  still printed and the command exits non-zero. **Never treat an `--all` result as the whole
+  catalogue when the exit code is non-zero** — the rows on stdout are a truthful prefix, not
+  the whole of it.
 - **Every other `list`** (`tasks`, `boards`, `members`, `brands`, `categories`,
   `product-types`, `units`, `variants`) has **no `--all`** — page manually: start at
   `--page 1`, and while `meta.has_more` is `true`, request the next `--page`. Raising

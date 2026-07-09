@@ -111,6 +111,25 @@ func handleErr(err error) error {
 	return nil
 }
 
+// failAfterOutput ends a command that has already written its envelope. The
+// diagnosis goes to stderr alone: stdout holds one JSON document, and appending
+// an error object to a printed envelope makes the pair unparseable.
+//
+// The exit code carries the failure. A caller that ignores it and parses stdout
+// reads a truthful, incomplete result — which is what it is.
+func failAfterOutput(err error) error {
+	detail := output.ErrorDetail{Code: "ERROR", Message: err.Error()}
+	var apiErr *api.APIError
+	if errors.As(err, &apiErr) {
+		detail.Code = apiErr.Code
+		detail.Message = apiErr.Message
+		detail.RequestID = apiErr.RequestID
+	}
+	output.RenderErrorSummary(os.Stderr, detail)
+	os.Exit(api.ExitCodeFor(err))
+	return nil
+}
+
 // fail renders a locally-detected error — a bad flag combination, an
 // unreadable config — and exits. The server was never called, so there is no
 // request id and no catalog entry to enrich it with.

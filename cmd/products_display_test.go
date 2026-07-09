@@ -6,9 +6,10 @@ import (
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
 )
 
-// TestMissingProductIDs guards the --ids reconciliation: a clean exit 0 with
-// fewer rows than requested must name the IDs that did not come back, via
-// meta.missing_ids.
+// TestMissingProductIDs guards the --ids reconciliation. The set difference is
+// not reported in meta — a caller holds both sides of it — but the command uses
+// it to decide its exit code: asking for ids and getting fewer rows must not
+// exit 0.
 func TestMissingProductIDs(t *testing.T) {
 	got := []api.Product{{ID: "aaa"}, {ID: "BBB"}}
 

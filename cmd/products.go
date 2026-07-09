@@ -80,9 +80,9 @@ FLAGS
         capigo products list --tenant acme -q "áo thun"
 
   --ids <uuid,...>
-      Fetch products by id, at most 50, comma-separated. Ids the server does
-      not return are reported in meta.missing_ids. Cannot be combined with
-      --all.
+      Fetch products by id, at most 50, comma-separated. If any id does not
+      come back — deleted, or in another tenant — the products that did are
+      printed and the command exits 4. Cannot be combined with --all.
 
         capigo products list --tenant acme --ids 7c1f2e88-...,9ab2c744-...
 
@@ -96,7 +96,8 @@ FLAGS
   --all
       Fetch every page. All pages are held in memory before anything prints, so
       page manually over a large catalogue. If a page fails mid-sweep, the rows
-      already fetched are printed and the command exits non-zero.
+      already fetched are printed and the command exits non-zero — a zero exit
+      is what tells you the sweep finished.
 
         capigo products list --tenant acme --all
 
@@ -134,17 +135,15 @@ OUTPUT
   Read meta.total rather than counting .data[]: a page never holds more than
   --limit, so a full count needs meta, not arithmetic.
 
-  The API's own list meta has only page/limit/total/has_more. The CLI adds:
+  The API's own list meta has only page/limit/total/has_more. The CLI adds
+  meta.server_time: the server clock at the time of the call, which no header
+  the caller can see would otherwise give them. Feed it to --updated-since on
+  the next call.
 
-      server_time    the server clock at the time of the call. Feed it to
-                     --updated-since on the next one.
-      missing_ids    with --ids only: the requested ids the server did not
-                     return (deleted, or in another tenant). Absent when
-                     every requested id was found.
-      complete       with --all only: false when the sweep aborted part-way,
-                     so .data[] is a prefix of the catalogue, not all of it.
-                     A partial --all result still prints and still exits
-                     non-zero.
+  Exit 4 when --ids asked for an id the server did not return, and non-zero
+  when an --all sweep aborted. In both cases the rows that were fetched are
+  printed first, on stdout, as a normal envelope; the diagnosis is on stderr.
+  stdout carries one JSON document, always.
 
   meta.tenant is the tenant this call actually ran against, and
   meta.tenant_source says whether that came from the flag, from CAPIGO_TENANT,
@@ -224,24 +223,36 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		// --ids: surface any requested IDs the server did not return — a
-		// clean exit 0 with fewer rows than requested must not read as
-		// "the missing products are fine".
-		missing, _ := missingProductIDs(productListIDs, envelope.Data)
-
 		meta := listMeta(tenant, productListTenant, envelope.Meta)
 		meta.ServerTime = resp.ServerTime
-		meta.MissingIDs = missing
 
-		return output.Write(os.Stdout, envelope.Data, meta)
+		if err := output.Write(os.Stdout, envelope.Data, meta); err != nil {
+			return handleErr(err)
+		}
+
+		// You asked for specific ids and did not get all of them. A clean exit 0
+		// with fewer rows than requested answers a different question than the
+		// one asked. The rows that did come back are printed first — they are
+		// real — and the exit code carries the shortfall.
+		if missing, _ := missingProductIDs(productListIDs, envelope.Data); len(missing) > 0 {
+			return failAfterOutput(&api.APIError{
+				Code:       "NOT_FOUND",
+				Message:    fmt.Sprintf("%d of the requested ids were not returned: %s", len(missing), strings.Join(missing, ", ")),
+				HTTPStatus: 404,
+			})
+		}
+		return nil
 	},
 }
 
 // productsListAll auto-paginates until has_more is false. A mid-pagination
 // failure does not discard what was already fetched: the partial result is
-// still written, with meta.complete: false, and the command still exits with
-// the underlying error's code — empty stdout must never masquerade as an
-// empty catalogue.
+// still written and the command still exits with the underlying error's code,
+// so empty stdout never masquerades as an empty catalogue.
+//
+// The diagnosis goes to stderr alone. stdout carries one JSON document, and a
+// caller that parses it reads a truthful prefix of the catalogue; the exit code
+// is what tells it the sweep did not finish.
 func productsListAll(ctx context.Context, client *api.Client, tenant *string) error {
 	page := 1
 	var allProducts []api.Product
@@ -303,14 +314,13 @@ func productsListAll(ctx context.Context, client *api.Client, tenant *string) er
 		HasMore: !complete,
 	})
 	meta.ServerTime = lastServerTime
-	meta.Complete = output.Ptr(complete)
 
 	if err := output.Write(os.Stdout, allProducts, meta); err != nil {
 		return handleErr(err)
 	}
 
 	if fetchErr != nil {
-		return handleErr(fetchErr)
+		return failAfterOutput(fetchErr)
 	}
 	return nil
 }

@@ -123,3 +123,30 @@ func TestRenderErrorOmitsTheBrakeWhenItDoesNotApply(t *testing.T) {
 		t.Errorf("client-side error carries the capability brake: %v", got.Error["capability_note"])
 	}
 }
+
+// stdout carries one JSON document. A command that has already printed its
+// envelope and then fails must not append an error object to it: json.load on
+// the pair raises "Extra data", which is precisely the failure the single-shape
+// contract exists to remove.
+func TestRenderErrorSummaryWritesNothingToStdout(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	_ = Write(&stdout, []brand{{ID: "a1"}}, Meta{Total: Ptr(5)})
+	before := stdout.Len()
+
+	RenderErrorSummary(&stderr, ErrorDetail{Code: "BOOM", Message: "page 2 failed"})
+
+	if stdout.Len() != before {
+		t.Errorf("stdout grew after the envelope was written:\n%s", stdout.String())
+	}
+	var one any
+	dec := json.NewDecoder(bytes.NewReader(stdout.Bytes()))
+	if err := dec.Decode(&one); err != nil {
+		t.Fatalf("envelope does not decode: %v", err)
+	}
+	if dec.More() {
+		t.Error("stdout holds more than one JSON document")
+	}
+	if !strings.Contains(stderr.String(), "page 2 failed") {
+		t.Errorf("stderr lost the diagnosis: %s", stderr.String())
+	}
+}

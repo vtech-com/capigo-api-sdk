@@ -41,19 +41,22 @@ type Meta struct {
 	Total   *int  `json:"total,omitempty"`
 	HasMore *bool `json:"has_more,omitempty"`
 
-	// ServerTime is the X-Server-Time header. Feed it back as --updated-since.
+	// ServerTime is the X-Server-Time header. The caller never sees that header,
+	// so this is the only place the value exists for them.
 	ServerTime string `json:"server_time,omitempty"`
-
-	// MissingIDs are the ids a --ids request asked for and did not get back.
-	// The key is absent when none are missing — including when --ids was never
-	// passed. A caller that asked for specific ids knows it did, so an absent
-	// key there means "all of them came back".
-	MissingIDs []string `json:"missing_ids,omitempty"`
-
-	// Complete is false when an --all sweep aborted part-way, so the rows in
-	// data are a prefix of the truth rather than all of it.
-	Complete *bool `json:"complete,omitempty"`
 }
+
+// meta carries only what the caller cannot work out for itself. The tenant and
+// its source come from a resolution order that is internal to this CLI; the
+// server timestamp comes from a header the caller never sees. Both are facts
+// only the tool holds.
+//
+// Two former fields failed that test and are gone. missing_ids was the set
+// difference between the ids the caller passed to --ids and the ids that came
+// back in data — the caller holds both, so it can subtract them. complete said
+// an --all sweep aborted, which the exit code already says. Neither told the
+// caller anything it could not compute, and both cost a field in the envelope,
+// a branch in the command, and a paragraph in the help.
 
 // envelope is the one shape this CLI emits on success.
 type envelope struct {
@@ -124,5 +127,17 @@ func RenderError(stdout, stderr io.Writer, d ErrorDetail) {
 	enc := json.NewEncoder(stdout)
 	enc.SetIndent("", "  ")
 	_ = enc.Encode(map[string]any{"error": e})
+	RenderErrorSummary(stderr, d)
+}
+
+// RenderErrorSummary writes only the stderr line.
+//
+// Use it when the command has already written its envelope to stdout — a
+// partial --all sweep, say. stdout must hold exactly one JSON document: a
+// caller running json.load on an envelope followed by an error object gets
+// "Extra data", which is the very failure the single-shape contract exists to
+// remove. When data has been printed, the failure is carried by the exit code
+// and by this line, and nothing more is added to stdout.
+func RenderErrorSummary(stderr io.Writer, d ErrorDetail) {
 	_, _ = fmt.Fprintf(stderr, "Error: %s (code=%s, request_id=%s)\n", d.Message, d.Code, d.RequestID)
 }
