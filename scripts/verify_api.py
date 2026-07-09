@@ -276,6 +276,63 @@ def check_local_samples(cli, env, key):
     return failures
 
 
+def check_downloads(c, cli, env):
+    """The two download commands, driven for real.
+
+    They write a file, so they write into a throwaway directory. They are the
+    only checked commands that touch the disk, and the only ones that need an
+    attachment to exist: a task with none proves nothing about a page that
+    describes what a download prints.
+    """
+    import subprocess
+    import tempfile
+
+    dest = tempfile.mkdtemp(prefix="capigo-verify-dl-")
+    failures = 0
+    cases = [
+        ("/comments", ["tasks", "comments", "attachments", "download"]),
+        ("", ["tasks", "attachments", "download"]),
+    ]
+    for suffix, cmd in cases:
+        tid = find_attachment_owner(c, suffix)
+        if not tid:
+            where = "a comment" if suffix else "a task"
+            print(f"  {' '.join(cmd):<22} skipped: no attachment on {where}")
+            continue
+        tid, aid = tid
+        run = subprocess.run([cli] + cmd + [tid, aid, "-d", dest],
+                             capture_output=True, text=True, env=env)
+        try:
+            rec = json.loads(run.stdout)["data"]
+        except Exception:
+            print(f"  {' '.join(cmd):<22} SKIPPED: command failed — {run.stderr.strip()[:60]}")
+            failures += 1
+            continue
+        page = subprocess.run([cli] + cmd + ["--help"], capture_output=True, text=True).stdout
+        missing = sorted(f for f in rec if f'"{f}"' not in page)
+        if missing:
+            print(f"  {' '.join(cmd):<22} SAMPLE OMITS " + ",".join(missing))
+            failures += 1
+        else:
+            print(f"  {' '.join(cmd):<22} names all {len(rec)} fields")
+    return failures
+
+
+def find_attachment_owner(c, suffix, limit=50):
+    """A (task_id, attachment_id) pair that actually exists."""
+    _, body = c.get(f"/mission/tasks?limit={limit}")
+    for row in (body.get("data") or []) if isinstance(body, dict) else []:
+        if not suffix:
+            for att in row.get("attachments") or []:
+                return row["id"], att["id"]
+            continue
+        _, thread = c.get(f"/mission/tasks/{row['id']}/comments")
+        for entry in (thread.get("data") or []) if isinstance(thread, dict) else []:
+            for att in entry.get("attachments") or []:
+                return row["id"], att["id"]
+    return None
+
+
 def find_task_with(c, suffix, limit=50):
     """A task whose sub-resource actually has rows.
 
@@ -382,6 +439,7 @@ def main():
         failures += check_help_samples(c, args.cli, ids)
         env = dict(os.environ, CAPIGO_API_URL=args.base_url, CAPIGO_API_KEY=args.key)
         failures += check_local_samples(args.cli, env, args.key)
+        failures += check_downloads(c, args.cli, env)
 
     if args.cli:
         import subprocess
