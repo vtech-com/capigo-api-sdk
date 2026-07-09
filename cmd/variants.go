@@ -81,15 +81,17 @@ FLAGS
       Rows per page, 1 to 100. Defaults to 20.
 
 OUTPUT
-  Each row here is a flat summary — id, barcode, sku, name, product_id — not
-  the full variant object; read that with variants get <id>. The rows are
-  at .data[]:
+  The rows are at .data[], exactly as the API sends them. They carry less
+  than variants get returns — no price, no options, no timestamps — but
+  everything this endpoint has:
 
       {
         "data": [
           { "id": "6f1c9a3d-8b2e-4f01-9c77-1a3d5e7f9b21", "barcode": "634007",
             "sku": "AT-001-S", "name": "Áo thun / S",
-            "product_id": "7c1f2e88-3a4b-4c5d-9e6f-1a2b3c4d5e6f" }
+            "product_id": "7c1f2e88-3a4b-4c5d-9e6f-1a2b3c4d5e6f",
+            "manufacturer_code": null, "legacy_code": null,
+            "extra_data": null }
         ],
         "meta": {
           "tenant": "acme",
@@ -132,12 +134,12 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		var envelope api.Envelope[[]api.VariantRecord]
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		return output.Write(os.Stdout, envelope.Data, listMeta(tenant, variantListTenant, envelope.Meta))
+		return output.Write(os.Stdout, rawList(envelope.Data), listMeta(tenant, variantListTenant, envelope.Meta))
 	},
 }
 
@@ -254,14 +256,12 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.ProductVariant `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		return output.Write(os.Stdout, envelope.Data, itemMeta(tenant, variantGetTenant))
+		return output.Write(os.Stdout, rawItem(envelope.Data), itemMeta(tenant, variantGetTenant))
 	},
 }
 

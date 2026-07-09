@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/vtech-com/capigo-api-sdk/internal/api"
 	"github.com/vtech-com/capigo-api-sdk/internal/output"
 )
 
@@ -46,12 +45,14 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		var health api.Health
-		if err := json.Unmarshal(resp.Body, &health); err != nil {
-			return handleErr(fmt.Errorf("decode response: %w", err))
+		// /health answers with a bare object, not an envelope. Passed through as
+		// it arrived: this command reports what the API said, not a Go struct's
+		// idea of it.
+		if !json.Valid(resp.Body) {
+			return handleErr(fmt.Errorf("decode response: not JSON"))
 		}
 
-		return output.Write(os.Stdout, health, output.Meta{})
+		return output.Write(os.Stdout, json.RawMessage(resp.Body), output.Meta{})
 	},
 }
 

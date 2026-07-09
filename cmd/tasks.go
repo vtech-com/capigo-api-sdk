@@ -140,7 +140,7 @@ OUTPUT
             "code": "TASK-104", "title": "Fix login bug", "description": "...",
             "status": "To-Do", "priority": "high", "assignee": {...},
             "owner": {...}, "board_id": "...", "board_list_id": "...",
-            "due_date": "...", "parent_task_id": null, "has_subtasks": false,
+            "due_date": "...", "parent": null, "has_subtasks": false,
             "attachments": [...], "created_at": "...", "updated_at": "..."
           }
         ],
@@ -198,12 +198,12 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		var envelope api.Envelope[[]api.Task]
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		return output.Write(os.Stdout, envelope.Data, listMeta(tenant, taskListTenant, envelope.Meta))
+		return output.Write(os.Stdout, rawList(envelope.Data), listMeta(tenant, taskListTenant, envelope.Meta))
 	},
 }
 
@@ -253,7 +253,7 @@ OUTPUT
           "code": "TASK-104", "title": "Fix login bug", "description": "...",
           "status": "To-Do", "priority": "high", "assignee": {...},
           "owner": {...}, "board_id": "...", "board_list_id": "...",
-          "due_date": "...", "parent_task_id": null, "has_subtasks": false,
+          "due_date": "...", "parent": null, "has_subtasks": false,
           "attachments": [...], "created_at": "...", "updated_at": "..."
         },
         "meta": { "tenant": "acme", "tenant_source": "flag" }
@@ -294,14 +294,12 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.Task `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		return output.Write(os.Stdout, envelope.Data, itemMeta(tenant, taskGetTenant))
+		return output.Write(os.Stdout, rawItem(envelope.Data), itemMeta(tenant, taskGetTenant))
 	},
 }
 
@@ -432,7 +430,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		var envelope api.Envelope[[]api.TaskComment]
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
@@ -445,7 +443,7 @@ OUTPUT
 			Total:   output.Ptr(envelope.Meta.Total),
 			HasMore: output.Ptr(envelope.Meta.HasMore),
 		}
-		return output.Write(os.Stdout, envelope.Data, meta)
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},
 }
 
@@ -592,16 +590,14 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.Task `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
 		meta := itemMeta(tenant, taskUpdateTenant)
 		meta.ServerTime = resp.ServerTime
-		return output.Write(os.Stdout, envelope.Data, meta)
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},
 }
 
@@ -787,19 +783,14 @@ OUTPUT
 				return handleErr(err)
 			}
 
-			var envelope struct {
-				Data struct {
-					Task     api.Task   `json:"task"`
-					Subtasks []api.Task `json:"subtasks"`
-				} `json:"data"`
-			}
+			var envelope api.RawEnvelope
 			if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 				return handleErr(fmt.Errorf("decode response: %w", err))
 			}
 
 			meta := itemMeta(tenant, taskCreateTenant)
 			meta.ServerTime = resp.ServerTime
-			return output.Write(os.Stdout, envelope.Data, meta)
+			return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 		}
 
 		body := api.CreateTaskRequest{
@@ -837,16 +828,14 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.Task `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
 		meta := itemMeta(tenant, taskCreateTenant)
 		meta.ServerTime = resp.ServerTime
-		return output.Write(os.Stdout, envelope.Data, meta)
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},
 }
 
@@ -991,23 +980,14 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data struct {
-				ParentTask struct {
-					ID    string `json:"id"`
-					Code  string `json:"code"`
-					Title string `json:"title"`
-				} `json:"parent_task"`
-				Subtasks []api.Task `json:"subtasks"`
-			} `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
 		meta := itemMeta(tenant, taskSubtasksTenant)
 		meta.ServerTime = resp.ServerTime
-		return output.Write(os.Stdout, envelope.Data, meta)
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},
 }
 

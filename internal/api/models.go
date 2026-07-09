@@ -1,5 +1,7 @@
 package api
 
+import "encoding/json"
+
 // Meta holds pagination metadata returned by list endpoints.
 type Meta struct {
 	Page    int  `json:"page"`
@@ -8,83 +10,24 @@ type Meta struct {
 	HasMore bool `json:"has_more"`
 }
 
-// Envelope is a generic response wrapper for paginated list endpoints.
-// Envelope is a generic response wrapper for list endpoints.
+// RawEnvelope keeps the API's `data` exactly as it arrived.
 //
-// Meta is a pointer because some list endpoints send none — GET /tenants is one,
-// and the OpenAPI document says so. Decoded into a value, an absent meta becomes
-// a meta of zeros, and `capigo tenants list` printed "total": 0 beside a row of
-// data. The CLI's own rule is to read meta.total rather than count data[], so
-// that zero was not a cosmetic defect: it was the wrong answer, stated
-// confidently, on the stream a caller parses.
-type Envelope[T any] struct {
-	Data T     `json:"data"`
-	Meta *Meta `json:"meta"`
-}
-
-// Tenant represents a PublicTenantResponse from GET /tenants.
-type Tenant struct {
-	TenantCode string `json:"tenant_code"`
-	Name       string `json:"name"`
-	Role       string `json:"role"`
-	JoinedAt   string `json:"joined_at"`
-}
-
-// Member represents a PublicMemberResponse from GET /members.
-type Member struct {
-	ID          string  `json:"id"`
-	DisplayName string  `json:"display_name"`
-	Email       string  `json:"email"`
-	Role        string  `json:"role"`
-	AvatarURL   *string `json:"avatar_url"`
-}
-
-// Board represents a PublicBoardResponse from GET /mission/boards.
-type Board struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	Description *string `json:"description"`
-	IsPublic    bool    `json:"is_public"`
-	CreatedAt   string  `json:"created_at"`
-}
-
-// BoardList represents a list column inside a board detail.
-type BoardList struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Position int    `json:"position"`
-}
-
-// BoardDetail represents a PublicBoardDetailResponse from GET /mission/boards/{id}.
-type BoardDetail struct {
-	Board
-	Lists []BoardList `json:"lists"`
-}
-
-// TaskUser is a lightweight user reference embedded in Task.
-type TaskUser struct {
-	ID          string `json:"id"`
-	DisplayName string `json:"display_name"`
-}
-
-// Task represents a PublicTaskResponse from GET /mission/tasks and related endpoints.
-type Task struct {
-	ID           string           `json:"id"`
-	Code         string           `json:"code"`
-	Title        string           `json:"title"`
-	Description  *string          `json:"description"`
-	Status       string           `json:"status"`
-	Priority     *string          `json:"priority"`
-	Assignee     *TaskUser        `json:"assignee"`
-	Owner        *TaskUser        `json:"owner"`
-	BoardID      *string          `json:"board_id"`
-	BoardListID  *string          `json:"board_list_id"`
-	DueDate      *string          `json:"due_date"`
-	ParentTaskID *string          `json:"parent_task_id"`
-	HasSubtasks  bool             `json:"has_subtasks"`
-	Attachments  []TaskAttachment `json:"attachments"`
-	CreatedAt    string           `json:"created_at"`
-	UpdatedAt    string           `json:"updated_at"`
+// The CLI is a transport, not a second definition of the platform's schemas.
+// Decoding a response into a Go struct and marshalling it again silently drops
+// every field the struct does not declare, and invents every field it declares
+// that the API did not send. Both happened: `tasks get` discarded `parent` and
+// emitted a `parent_task_id` no response ever carried, and `variants list`
+// truncated nineteen fields to five, so `manufacturer_code` was visible through
+// `variants get` and absent through `variants list`.
+//
+// Nothing announced either. A caller cannot see a field that was never printed.
+//
+// So commands decode into this, print Data verbatim, and reach for a typed view
+// only where they need to *read* something — an id, a page cursor — never to
+// decide what the caller may see.
+type RawEnvelope struct {
+	Data json.RawMessage `json:"data"`
+	Meta *Meta           `json:"meta"`
 }
 
 // CommentAuthor is the resolved author of a task comment / activity entry.
@@ -104,16 +47,6 @@ type CommentAttachment struct {
 	SizeBytes int64  `json:"size_bytes"`
 }
 
-// TaskAttachment is flat attachment metadata on a task itself (as opposed to
-// a comment attachment — same shape, different source). No download URL;
-// fetch one via GET /mission/tasks/{id}/attachments/{attachmentId}/download.
-type TaskAttachment struct {
-	ID        string `json:"id"`
-	FileName  string `json:"file_name"`
-	MimeType  string `json:"mime_type"`
-	SizeBytes int64  `json:"size_bytes"`
-}
-
 // AttachmentDownload is the response of both attachment download endpoints:
 // GET /mission/tasks/{id}/attachments/{attachmentId}/download and
 // GET /mission/tasks/{id}/comments/attachments/{attachmentId}/download.
@@ -126,20 +59,6 @@ type AttachmentDownload struct {
 	MimeType  string `json:"mime_type"`
 	SizeBytes int64  `json:"size_bytes"`
 	ExpiresAt string `json:"expires_at"`
-}
-
-// TaskComment represents a PublicTaskCommentResponse from
-// GET /mission/tasks/{id}/comments. It is a read-only projection of a thread
-// message: either a human "comment" or a system "activity" event.
-type TaskComment struct {
-	ID          string              `json:"id"`
-	Author      CommentAuthor       `json:"author"`
-	Kind        string              `json:"kind"` // comment | activity | card | artifact
-	Content     *string             `json:"content"`
-	UIData      map[string]any      `json:"ui_data"`
-	Attachments []CommentAttachment `json:"attachments"`
-	ParentID    *string             `json:"parent_id"`
-	CreatedAt   string              `json:"created_at"`
 }
 
 // CreateTaskRequest is the body for POST /mission/tasks.
@@ -228,64 +147,6 @@ type ProductVariant struct {
 	ExtraData        map[string]any            `json:"extra_data"`
 	CreatedAt        string                    `json:"created_at"`
 	UpdatedAt        string                    `json:"updated_at"`
-}
-
-// ProductRef is a lightweight reference object (brand, category, product_type, unit).
-type ProductRef struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}
-
-// ProductCategory extends ProductRef with optional parent info.
-type ProductCategory struct {
-	ID       string      `json:"id"`
-	Name     string      `json:"name"`
-	ParentID *string     `json:"parent_id"`
-	Parent   *ProductRef `json:"parent"`
-}
-
-// ProductOption describes a variant option axis (e.g. Color, Size).
-type ProductOption struct {
-	ID       string   `json:"id"`
-	Name     string   `json:"name"`
-	Position int      `json:"position"`
-	Values   []string `json:"values"`
-}
-
-// Product represents a PublicProductResponse from GET /pcms/products.
-type Product struct {
-	ID          string           `json:"id"`
-	Name        string           `json:"name"`
-	Slug        string           `json:"slug"`
-	Description *string          `json:"description"`
-	Status      string           `json:"status"`
-	Currency    string           `json:"currency"`
-	Aliases     []string         `json:"aliases"`
-	Tags        []string         `json:"tags"`
-	IsDeleted   bool             `json:"is_deleted"`
-	CreatedAt   string           `json:"created_at"`
-	UpdatedAt   string           `json:"updated_at"`
-	Brand       *ProductRef      `json:"brand"`
-	Category    *ProductCategory `json:"category"`
-	ProductType *ProductRef      `json:"product_type"`
-	Unit        *ProductRef      `json:"unit"`
-	Options     []ProductOption  `json:"options"`
-	Variants    []ProductVariant `json:"variants"`
-}
-
-// Health is the response from GET /health — a preflight that confirms
-// connectivity and that the API key is accepted.
-type Health struct {
-	OK        bool   `json:"ok"`
-	Timestamp string `json:"timestamp"`
-}
-
-// Me represents the authenticated user from GET /me.
-type Me struct {
-	ID          string  `json:"id"`
-	DisplayName string  `json:"display_name"`
-	Email       string  `json:"email"`
-	AvatarURL   *string `json:"avatar_url"`
 }
 
 // CreateProductOptionItem is one option axis in POST /pcms/products.
@@ -445,56 +306,3 @@ type ReplaceUnitRequest struct {
 	Name         string `json:"name"`
 	Abbreviation string `json:"abbreviation"`
 }
-
-// Brand represents a PublicBrandResponse from GET /pcms/brands.
-type Brand struct {
-	ID      string  `json:"id"`
-	Name    string  `json:"name"`
-	LogoURL *string `json:"logo_url"`
-}
-
-// Category represents a PublicCategoryResponse from GET /pcms/categories.
-type Category struct {
-	ID       string  `json:"id"`
-	Name     string  `json:"name"`
-	ParentID *string `json:"parent_id"`
-}
-
-// ProductType represents a PublicProductTypeResponse from GET /pcms/product-types.
-type ProductType struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	Description *string `json:"description"`
-}
-
-// Unit represents a PublicUnitResponse from GET /pcms/units.
-type Unit struct {
-	ID           string `json:"id"`
-	Name         string `json:"name"`
-	Abbreviation string `json:"abbreviation"`
-}
-
-// VariantRecord represents a flat variant entry from GET /pcms/variants.
-// Named VariantRecord to avoid collision with the existing ProductVariant type.
-type VariantRecord struct {
-	ID        string  `json:"id"`
-	Barcode   *string `json:"barcode"`
-	SKU       *string `json:"sku"`
-	Name      string  `json:"name"`
-	ProductID string  `json:"product_id"`
-}
-
-// ListBrandsResponse is an Envelope for paginated brand lists.
-type ListBrandsResponse = Envelope[[]Brand]
-
-// ListCategoriesResponse is an Envelope for paginated category lists.
-type ListCategoriesResponse = Envelope[[]Category]
-
-// ListProductTypesResponse is an Envelope for paginated product-type lists.
-type ListProductTypesResponse = Envelope[[]ProductType]
-
-// ListUnitsResponse is an Envelope for paginated unit lists.
-type ListUnitsResponse = Envelope[[]Unit]
-
-// ListVariantRecordsResponse is an Envelope for paginated variant-record lists.
-type ListVariantRecordsResponse = Envelope[[]VariantRecord]

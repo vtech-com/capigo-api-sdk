@@ -244,16 +244,15 @@ func runWhoami(_ *cobra.Command, _ []string) error {
 		return handleErr(err)
 	}
 
-	// Try envelope {"data": {...}} first; fall back to bare object.
-	var me api.Me
-	var envelope struct {
-		Data api.Me `json:"data"`
+	// Try the envelope {"data": {...}} first; fall back to a bare object. Either
+	// way the bytes pass through: this command has no business deciding which of
+	// a user's fields a caller may see.
+	var envelope api.RawEnvelope
+	if jerr := json.Unmarshal(resp.Body, &envelope); jerr == nil && len(envelope.Data) > 0 {
+		return output.Write(os.Stdout, rawItem(envelope.Data), output.Meta{})
 	}
-	if jerr := json.Unmarshal(resp.Body, &envelope); jerr == nil && envelope.Data.ID != "" {
-		me = envelope.Data
-	} else if jerr := json.Unmarshal(resp.Body, &me); jerr != nil {
-		return handleErr(fmt.Errorf("decode response: %w", jerr))
+	if !json.Valid(resp.Body) {
+		return handleErr(fmt.Errorf("decode response: not JSON"))
 	}
-
-	return output.Write(os.Stdout, me, output.Meta{})
+	return output.Write(os.Stdout, json.RawMessage(resp.Body), output.Meta{})
 }

@@ -113,12 +113,12 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		var envelope api.Envelope[[]api.Unit]
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		return output.Write(os.Stdout, envelope.Data, listMeta(tenant, unitListTenant, envelope.Meta))
+		return output.Write(os.Stdout, rawList(envelope.Data), listMeta(tenant, unitListTenant, envelope.Meta))
 	},
 }
 
@@ -188,14 +188,12 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.Unit `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		return output.Write(os.Stdout, envelope.Data, itemMeta(tenant, unitGetTenant))
+		return output.Write(os.Stdout, rawItem(envelope.Data), itemMeta(tenant, unitGetTenant))
 	},
 }
 
@@ -310,16 +308,14 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.Unit `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
 		meta := itemMeta(tenant, unitCreateTenant)
 		meta.ServerTime = resp.ServerTime
-		return output.Write(os.Stdout, envelope.Data, meta)
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},
 }
 
@@ -437,16 +433,14 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.Unit `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
 		meta := itemMeta(tenant, unitUpdateTenant)
 		meta.ServerTime = resp.ServerTime
-		return output.Write(os.Stdout, envelope.Data, meta)
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},
 }
 
@@ -564,16 +558,14 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.Unit `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
 		meta := itemMeta(tenant, unitReplaceTenant)
 		meta.ServerTime = resp.ServerTime
-		return output.Write(os.Stdout, envelope.Data, meta)
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},
 }
 

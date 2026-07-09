@@ -161,17 +161,17 @@ func TestProductsCreate_201(t *testing.T) {
 		t.Errorf("StatusCode = %d, want 201", resp.StatusCode)
 	}
 
-	var envelope struct {
-		Data Product `json:"data"`
-	}
+	// The client does not model a product. It hands the API's bytes on, and the
+	// caller sees every field the API sent — including ones this SDK has never
+	// heard of.
+	var envelope RawEnvelope
 	if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if envelope.Data.ID != productID {
-		t.Errorf("Product.ID = %q, want %q", envelope.Data.ID, productID)
-	}
-	if envelope.Data.Status != "DRAFT" {
-		t.Errorf("Product.Status = %q, want DRAFT", envelope.Data.Status)
+	for _, want := range []string{productID, `"DRAFT"`} {
+		if !strings.Contains(string(envelope.Data), want) {
+			t.Errorf("product body %s does not carry %s", envelope.Data, want)
+		}
 	}
 }
 

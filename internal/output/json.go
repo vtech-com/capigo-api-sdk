@@ -102,6 +102,15 @@ func WritePartial(stdout, stderr io.Writer, data any, meta Meta, d ErrorDetail) 
 // normalizeData turns a nil slice into an empty one. A nil slice marshals to
 // null, which reads as neither "no rows" nor "no such key".
 func normalizeData(data any) any {
+	// A raw message is the API's own bytes, passed through untouched. It is a
+	// []byte underneath, so the nil-slice rule below would rewrite it into an
+	// empty one, which is not valid JSON. An empty raw message is null.
+	if rm, ok := data.(json.RawMessage); ok {
+		if len(rm) == 0 {
+			return json.RawMessage("null")
+		}
+		return rm
+	}
 	rv := reflect.ValueOf(data)
 	if rv.Kind() == reflect.Slice && rv.IsNil() {
 		return reflect.MakeSlice(rv.Type(), 0, 0).Interface()

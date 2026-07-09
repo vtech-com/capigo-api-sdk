@@ -70,23 +70,20 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		var envelope api.Envelope[[]api.Tenant]
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		// Merge discovered tenants back into config.
-		codes := make([]string, len(envelope.Data))
-		for i, t := range envelope.Data {
-			codes[i] = t.TenantCode
-		}
-		if err := config.MergeKnownTenants(cfg, codes); err == nil {
+		// Merge discovered tenants back into config. Reading the codes is not the
+		// same as choosing what to print: the rows go out as they arrived.
+		if err := config.MergeKnownTenants(cfg, tenantCodesOf(envelope.Data)); err == nil {
 			_ = config.Save(cfg)
 		}
 
 		// No listMeta here: this endpoint neither paginates nor sends meta, and
 		// there is no tenant to name — a tenants list is how you learn the tenants.
-		return output.Write(os.Stdout, envelope.Data, output.Meta{})
+		return output.Write(os.Stdout, rawList(envelope.Data), output.Meta{})
 	},
 }
 

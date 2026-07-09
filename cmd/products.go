@@ -223,7 +223,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		var envelope api.Envelope[[]api.Product]
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
@@ -236,15 +236,15 @@ OUTPUT
 		// answer — the server reports total: 1, has_more: false, which is what
 		// success looks like. So the rows stand, and an error key stands over
 		// them.
-		if missing, _ := missingProductIDs(productListIDs, envelope.Data); len(missing) > 0 {
+		if missing, _ := missingProductIDs(productListIDs, idsOf(envelope.Data)); len(missing) > 0 {
 			return failWithData(&api.APIError{
 				Code:       "NOT_FOUND",
 				Message:    fmt.Sprintf("%d of the requested ids were not returned: %s", len(missing), strings.Join(missing, ", ")),
 				HTTPStatus: 404,
-			}, envelope.Data, meta)
+			}, rawList(envelope.Data), meta)
 		}
 
-		return output.Write(os.Stdout, envelope.Data, meta)
+		return output.Write(os.Stdout, rawList(envelope.Data), meta)
 	},
 }
 
@@ -258,8 +258,8 @@ OUTPUT
 // holds a prefix of the catalogue without having to consult the exit code.
 func productsListAll(ctx context.Context, client *api.Client, tenant *string) error {
 	page := 1
-	var allProducts []api.Product
-	var lastMeta api.Meta // zero until the first page decodes; /pcms/products always sends meta
+	var allProducts []json.RawMessage // each row exactly as the API sent it
+	var lastMeta api.Meta             // zero until the first page decodes; /pcms/products always sends meta
 	var lastServerTime string
 	var fetchErr error
 
@@ -279,14 +279,17 @@ func productsListAll(ctx context.Context, client *api.Client, tenant *string) er
 		path := "/pcms/products?" + params.Encode()
 		resp, err := client.Do(ctx, "GET", path, nil, tenant)
 		if err == nil {
-			var envelope api.Envelope[[]api.Product]
+			var envelope api.RawEnvelope
+			var rows []json.RawMessage
 			if uerr := json.Unmarshal(resp.Body, &envelope); uerr != nil {
 				err = fmt.Errorf("decode response: %w", uerr)
+			} else if uerr := json.Unmarshal(rawList(envelope.Data), &rows); uerr != nil {
+				err = fmt.Errorf("decode response: data is not an array: %w", uerr)
 			} else {
 				if resp.ServerTime != "" {
 					lastServerTime = resp.ServerTime
 				}
-				allProducts = append(allProducts, envelope.Data...)
+				allProducts = append(allProducts, rows...)
 				if envelope.Meta == nil {
 					return handleErr(fmt.Errorf("decode response: page %d carried no meta; --all cannot know whether more pages remain", page))
 				}
@@ -406,14 +409,12 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.Product `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		return output.Write(os.Stdout, envelope.Data, itemMeta(tenant, productGetTenant))
+		return output.Write(os.Stdout, rawItem(envelope.Data), itemMeta(tenant, productGetTenant))
 	},
 }
 
@@ -615,16 +616,14 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.Product `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
 		meta := itemMeta(tenant, productCreateTenant)
 		meta.ServerTime = resp.ServerTime
-		return output.Write(os.Stdout, envelope.Data, meta)
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},
 }
 
@@ -811,16 +810,14 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.Product `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
 		meta := itemMeta(tenant, productUpdateTenant)
 		meta.ServerTime = resp.ServerTime
-		return output.Write(os.Stdout, envelope.Data, meta)
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},
 }
 
@@ -966,16 +963,14 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.Product `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
 		meta := itemMeta(tenant, productVariantsTenant)
 		meta.ServerTime = resp.ServerTime
-		return output.Write(os.Stdout, envelope.Data, meta)
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},
 }
 
@@ -1043,13 +1038,13 @@ func init() {
 // missingProductIDs reports which of the comma-separated requested IDs are
 // absent from the returned rows, plus how many IDs were requested. Matching
 // is case-insensitive since UUIDs compare equal regardless of case.
-func missingProductIDs(idsFlag string, got []api.Product) (missing []string, requested int) {
+func missingProductIDs(idsFlag string, got []string) (missing []string, requested int) {
 	if idsFlag == "" {
 		return nil, 0
 	}
 	have := make(map[string]bool, len(got))
-	for _, p := range got {
-		have[strings.ToLower(p.ID)] = true
+	for _, id := range got {
+		have[strings.ToLower(id)] = true
 	}
 	for _, raw := range strings.Split(idsFlag, ",") {
 		id := strings.TrimSpace(raw)

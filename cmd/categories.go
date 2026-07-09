@@ -114,12 +114,12 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		var envelope api.Envelope[[]api.Category]
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		return output.Write(os.Stdout, envelope.Data, listMeta(tenant, categoryListTenant, envelope.Meta))
+		return output.Write(os.Stdout, rawList(envelope.Data), listMeta(tenant, categoryListTenant, envelope.Meta))
 	},
 }
 
@@ -189,14 +189,12 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.Category `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		return output.Write(os.Stdout, envelope.Data, itemMeta(tenant, categoryGetTenant))
+		return output.Write(os.Stdout, rawItem(envelope.Data), itemMeta(tenant, categoryGetTenant))
 	},
 }
 
@@ -312,16 +310,14 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.Category `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
 		meta := itemMeta(tenant, categoryCreateTenant)
 		meta.ServerTime = resp.ServerTime
-		return output.Write(os.Stdout, envelope.Data, meta)
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},
 }
 
@@ -455,16 +451,14 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.Category `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
 		meta := itemMeta(tenant, categoryUpdateTenant)
 		meta.ServerTime = resp.ServerTime
-		return output.Write(os.Stdout, envelope.Data, meta)
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},
 }
 
@@ -596,16 +590,14 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.Category `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
 		meta := itemMeta(tenant, categoryReplaceTenant)
 		meta.ServerTime = resp.ServerTime
-		return output.Write(os.Stdout, envelope.Data, meta)
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},
 }
 

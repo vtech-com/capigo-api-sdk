@@ -127,12 +127,12 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		var envelope api.Envelope[[]api.Member]
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		return output.Write(os.Stdout, envelope.Data, listMeta(tenant, memberListTenant, envelope.Meta))
+		return output.Write(os.Stdout, rawList(envelope.Data), listMeta(tenant, memberListTenant, envelope.Meta))
 	},
 }
 
@@ -195,14 +195,12 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.Member `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		return output.Write(os.Stdout, envelope.Data, itemMeta(tenant, memberGetTenant))
+		return output.Write(os.Stdout, rawItem(envelope.Data), itemMeta(tenant, memberGetTenant))
 	},
 }
 

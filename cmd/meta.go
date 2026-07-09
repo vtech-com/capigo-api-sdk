@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"encoding/json"
+
 	"github.com/spf13/viper"
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
 	"github.com/vtech-com/capigo-api-sdk/internal/output"
@@ -58,4 +60,54 @@ func listMeta(tenant *string, tenantFlag string, m *api.Meta) output.Meta {
 	out.Total = output.Ptr(m.Total)
 	out.HasMore = output.Ptr(m.HasMore)
 	return out
+}
+
+// rawList is the API's `data` array, passed through untouched. An absent array
+// becomes an empty one: a caller must not have to tell "no rows" apart from "no
+// such key".
+func rawList(data json.RawMessage) json.RawMessage {
+	if len(data) == 0 {
+		return json.RawMessage("[]")
+	}
+	return data
+}
+
+// rawItem is the API's `data` object, passed through untouched.
+func rawItem(data json.RawMessage) json.RawMessage {
+	if len(data) == 0 {
+		return json.RawMessage("null")
+	}
+	return data
+}
+
+// idsOf reads the `id` of every row, for logic that must reason about which
+// records came back. It never decides what the caller sees: the rows are still
+// printed verbatim.
+func idsOf(rows json.RawMessage) []string {
+	var out []struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(rows, &out); err != nil {
+		return nil
+	}
+	ids := make([]string, 0, len(out))
+	for _, r := range out {
+		ids = append(ids, r.ID)
+	}
+	return ids
+}
+
+// tenantCodesOf reads the `tenant_code` of every row, for the same reason.
+func tenantCodesOf(rows json.RawMessage) []string {
+	var out []struct {
+		TenantCode string `json:"tenant_code"`
+	}
+	if err := json.Unmarshal(rows, &out); err != nil {
+		return nil
+	}
+	codes := make([]string, 0, len(out))
+	for _, r := range out {
+		codes = append(codes, r.TenantCode)
+	}
+	return codes
 }

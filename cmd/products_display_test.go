@@ -2,8 +2,6 @@ package cmd
 
 import (
 	"testing"
-
-	"github.com/vtech-com/capigo-api-sdk/internal/api"
 )
 
 // TestMissingProductIDs guards the --ids reconciliation. The set difference is
@@ -11,7 +9,7 @@ import (
 // it to decide its exit code: asking for ids and getting fewer rows must not
 // exit 0.
 func TestMissingProductIDs(t *testing.T) {
-	got := []api.Product{{ID: "aaa"}, {ID: "BBB"}}
+	got := []string{"aaa", "BBB"}
 
 	tests := []struct {
 		name          string

@@ -11,6 +11,29 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed — BREAKING
 
+- **The CLI stops re-modelling the API's responses.** Every command decoded the body into a Go
+  struct and marshalled it again. That silently dropped every field the struct did not declare,
+  and invented every field it declared that the API did not send.
+
+  Both happened, and neither was announced. `tasks get` discarded `parent` and printed a
+  `parent_task_id` no response has ever carried. `variants list` truncated its rows to five
+  fields, so `manufacturer_code` was readable through `variants get` and absent through
+  `variants list` — an agent looking one up through the list would have concluded the product
+  had none.
+
+  `data` is now passed through byte for byte. Measured against a running API across nine
+  endpoints: zero fields lost, zero invented. Every field the platform adds from now on appears
+  in this CLI without a release.
+
+  This is the same defect the display models had, one layer down. Deleting `output.Product` and
+  friends removed the second copy of every resource; `internal/api/models.go` was the first.
+  Fifteen response types and the generic `Envelope[T]` are gone with it. Request bodies stay —
+  the CLI builds those, so it is entitled to a type for them.
+
+  A test now forbids `api.Envelope[` and `Data api.` in any command file. Reading a value the
+  command's own logic needs — an id, a tenant code — goes through a narrow local struct that
+  never decides what the caller sees.
+
 - **One output shape. Table and quiet output are gone, and so is `-o/--output`.** Every command
   that succeeds prints exactly one thing to stdout:
 
