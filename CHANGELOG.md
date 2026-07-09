@@ -30,15 +30,35 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   binary that printed it; it can, however, describe an older surface than the one deployed. The
   footer lets the reader tell which. A local `go build` omits the meaningless `(built unknown)`.
 
-- The root help now describes how help itself is organised, and points at the topics. The list of
-  command groups is left to cobra, which generates it from each command's `Short` — hand-writing
-  that list would be a second copy of it.
+- The root help lists the command groups, the global flags, and the topics. The group list and the
+  flag list are generated — from the tree and from the flag definitions — because hand-writing
+  either would be a second copy of it.
 
-- **`products` and `variants` help pages rebuilt to a fixed skeleton** —
-  `PURPOSE · INPUT · OUTPUT · CAVEATS · EXAMPLES · SEE ALSO`. Every page now states the shape it
-  returns, not only the flags it takes, so a call can be built without running one first.
+- **Every command page rebuilt on a four-section shape** — `PURPOSE · USAGE · FLAGS · OUTPUT`, in
+  that order, which is the order a caller needs them in: what is this for, how do I spell the
+  call, what does each flag do, what comes back.
+
+  `USAGE` is a git-style synopsis, so bracket grammar carries what a sentence used to:
+  `[--ids <uuid,...> | --all]` says the two cannot be combined. `FLAGS` absorbed the old `INPUT`
+  section, which was the flag list under another name, and each flag now carries its own examples
+  and its own traps — a caveat about `--query` is met while deciding whether to use `--query`.
+  `OUTPUT` shows the real table and the real JSON rather than describing them.
+
   Cross-cutting mechanics (the JSON envelope, list footers, stream placement, tenant resolution,
   exit codes, soft-delete) are referenced from the help topics rather than restated.
+
+- **Cobra no longer appends `Usage:` and `Flags:` blocks to a command page** (`cmd/help_render.go`
+  replaces the help function). Those blocks restated, in different words, what the page had just
+  said — the two copies of `--query`'s length limit had already drifted to `2-500` and `2–500`.
+  A command page is now its `Long` text and the build footer, and nothing else; a group page adds
+  the generated list of its children.
+
+### Removed
+
+- **`GETTING STARTED` from the root page, and `CAVEATS`, `EXAMPLES` and `SEE ALSO` from every
+  command page.** They were written for a reader who might not have read a skill file, not for a
+  reader of CLI help. A caveat now lives in the flag it qualifies, an example beside the flag it
+  demonstrates, and the command tree already lists the siblings that `SEE ALSO` pointed at.
 
   Facts newly written down, each verified against the code or the API rather than inherited from
   the previous text: `products variants` returns the whole product, not the variants you sent;
@@ -47,10 +67,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   `option1..option3` are positional against the product's `options[]`; `--aliases` and `--tags`
   replace the array rather than append to it.
 
-- **Reference-data help pages rebuilt on the same skeleton** — `brands`, `categories`,
+- **Reference-data help pages rebuilt on the same shape** — `brands`, `categories`,
   `product-types` and `units`, twenty pages across five verbs. Each now states the object it
-  returns, and each `replace` page says plainly that a field you do not send is reset rather
-  than preserved, which is the whole difference between it and `update`.
+  returns.
 
 - **`tasks` help pages rebuilt on the same skeleton**, including the two attachment-download
   commands. `tasks list`, `tasks get` and `tasks create` had no long help at all.
@@ -61,22 +80,72 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   envelope. A timeline entry's `kind` has four values — `comment`, `activity`, `card`,
   `artifact` — where the page named two.
 
-- **The remaining groups rebuilt on the same skeleton** — `boards`, `members`, `tenants`, `auth`,
-  `config`, `health`, `version`. Every runnable command in the CLI now carries
-  `PURPOSE · INPUT · OUTPUT · EXAMPLES · SEE ALSO`, and `CAVEATS` where a trap is worth naming.
+- **The remaining groups rebuilt on the same shape** — `boards`, `members`, `tenants`, `auth`,
+  `config`, `health`, `version`.
 
   `config get`, `config set`, `version` and `auth logout` say plainly that they ignore
   `--output` and print the same text in every mode — verified by running each. An agent that
   reaches for `.data` on their output is reaching for something that was never there.
 
-- **Two tests now hold the skeleton in place**, so it survives the next person who adds a command.
-  `TestRunnableCommandsFollowTheSkeleton` asserts every runnable command has the five sections, as
-  bare headers, in order. `TestHelpDoesNotNameFlagsThatDoNotExist` asserts that the `INPUT`
-  section of a page names only flags that page's command actually defines — it caught two of the
-  pages in this branch, one of which was a `there is no --clear flag` sentence, i.e. help
-  documenting an absence instead of what exists.
+- **Commands are listed in the order a caller meets them**, not alphabetically: `list` before
+  `create`, read before write (`cobra.EnableCommandSorting = false`). `help` and `completion`,
+  which document the CLI rather than the API, no longer sit among the domains.
+
+- **Five tests hold the shape in place**, so it survives the next person who adds a command.
+  They assert the four sections are present, as bare headers, in order; that no retired heading
+  reappears; that `FLAGS` documents every flag the command defines *and* names no flag it does
+  not; and that `USAGE` spells the command it belongs to. The flag checks matter more now that
+  cobra prints no flag table: a flag missing from `FLAGS` is a flag documented nowhere.
 
 ### Fixed
+
+- **The `replace` pages had PUT's semantics backwards.** They said a field you do not send is
+  reset rather than preserved, "which is the whole difference between it and `update`". The
+  OpenAPI spec says otherwise for all four reference-data resources: `PUT /pcms/<resource>/{id}`
+  has no required body fields and is documented as "At least one field must be provided" — the
+  same shape as PATCH — and the categories PUT documents `parent_id` as "Omit to leave
+  unchanged". The API clears nothing you omit.
+
+  What makes `replace` a full replace is the CLI, not the server: it requires the field flags on
+  every call, so a field cannot be left out by accident. Each `replace` page now says that, and
+  each `update` page agrees with it.
+
+- **`products update` was labelled PATCH and sends PUT.** `/pcms/products/{id}` exposes only
+  `get` and `put`; there is no PATCH to send. The word had been copied from the reference-data
+  groups, which do have both.
+
+- **`config set` never accepted `default_tenant`.** Its key switch handles `api_url` and
+  `default_profile`, and anything else exits 5 — yet the group page and the `set` page both
+  listed `default_tenant` among the recognised keys. It is settable only through
+  `config set-default-tenant`. (`config get` does read all three, so that page was right.)
+
+- **`config set`, `config set-default-tenant` and `config unset-default-tenant` print nothing on
+  success.** All three pages promised "a one-line confirmation". Only `config get` prints. The
+  pages now say: exit 0 and silence, confirm with `config get`.
+
+- **`config set-default-tenant` does not validate the tenant.** It makes no API call and stores
+  the code as given, while the old help called it "the same thing, with tenant validation".
+
+- **`tenants list` prints no summary footer**, unlike every other list command. Its page said
+  nothing, so a reader who had learned the pattern from `capigo help output` would look for a
+  `Total:` line that is never printed.
+
+- **`auth whoami` calls an endpoint that production does not serve.** `GET /me` is absent from the
+  OpenAPI document and 404s on prod, which the page now states along with the consequence: exit 4
+  here is the endpoint missing, not the key being rejected (that is exit 2). `health` is the
+  preflight that works.
+
+- **The attachment-download pages claimed the signed URL is "single-use".** The OpenAPI
+  description says short-lived (five minutes); nothing in the spec or the code says single-use.
+  The claim is gone.
+
+- **`meta.server_time`, `meta.missing_ids` and `meta.complete` are added by the CLI, not sent by
+  the API.** The `MetaPagination` schema carries exactly four fields — `page`, `limit`, `total`,
+  `has_more`. The pages that mention the other three now say who produces them.
+
+- **`--page 0` is a CLI sentinel**, not a page. It means "send no page parameter"; pages start at
+  1. The old text read `0 = server default`, which invited a caller to believe 0 was a page the
+  server understood.
 
 - **`capigo auth logout` emitted a spurious `-o json` nudge**, for the same reason `capigo help`
   did: it ignores `--output` and prints plain text, so the nudge was a false positive. Joined

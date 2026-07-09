@@ -128,6 +128,33 @@ docs/           Additional documentation
 - Tenant handling: follow the precedence rules in `internal/config/store.go` — do not duplicate logic in command files
 - Secrets: never log or print API key values, even in `--verbose` mode
 
+### Writing a command's help
+
+Cobra prints a command's `Long` text and nothing else — no generated `Usage:` or `Flags:` block
+(see `cmd/help_render.go`). A flag your `Long` forgets is a flag documented nowhere, and the tests
+in `cmd/help_skeleton_test.go` will say so.
+
+Every runnable command carries four sections, in this order, as bare uppercase headers on their
+own line:
+
+- `PURPOSE` — why this command and not its neighbour
+- `USAGE` — a git-style synopsis; `[a | b]` says the two cannot be combined
+- `FLAGS` — one entry per flag and per positional, with its constraints, its traps, and one or
+  two runnable examples indented beneath it
+- `OUTPUT` — the real table and the real JSON, not a description of them
+
+There is no `INPUT`, `CAVEATS`, `EXAMPLES` or `SEE ALSO` section. A caveat belongs to the flag it
+qualifies; an example belongs beside the flag it demonstrates; the command tree already lists the
+siblings. A fact true of many commands belongs in a help topic (`cmd/help_topics.go`), referenced
+from the page rather than restated on it.
+
+Groups and help topics are prose, plus a generated list of children. Register a group's children
+in the order a caller meets them — `list` first, then `get`, then the writes; command sorting is
+off, so registration order *is* display order.
+
+Verify a claim before you write it: the endpoint and its schemas in `api/openapi.json`, the verb
+and flags in the command's own `RunE`, the table columns in `internal/output/formatter.go`.
+
 ---
 
 ## Commit & PR Guidelines
