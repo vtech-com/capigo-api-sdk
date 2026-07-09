@@ -17,12 +17,27 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "capigo",
 	Short: "Capigo CLI — interact with the Capigo Public API",
-	Long: `capigo is a command-line interface for the Capigo Public API.
+	Long: `capigo is the command-line interface to the Capigo Public API.
 
-It manages credentials, tenants, tasks, boards, and more.
-Configuration is stored in ~/.capigo/config.json.
+It stores your API key, attaches the tenant header, maps API errors to stable
+exit codes, and formats results as table, JSON, or bare ids. Configuration lives
+in ~/.capigo/config.json.
 
-API keys must start with csk_. Use 'capigo auth login --key <key>' to authenticate.`,
+HOW HELP IS ORGANISED
+  capigo --help                  which domain?
+  capigo <group> --help          which command in that domain?
+  capigo <group> <cmd> --help    how to call it: flags, input, output,
+                                 caveats, examples, related commands
+
+  Every command page states both the input it accepts and the output it
+  returns, so a call can be built without running one first. A fact that is
+  true of many commands lives in one of the help topics listed below, and is
+  referenced from a command page rather than repeated on it.
+
+GETTING STARTED
+  $ capigo auth login --key csk_...   store your API key (keys begin with csk_)
+  $ capigo health                     confirm the key is accepted (exit 0 = ok)
+  $ capigo tenants list               see which tenants you can reach`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	// Nudge toward -o json when output is being captured but table is still in

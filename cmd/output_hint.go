@@ -32,7 +32,13 @@ func shouldHintJSON(mode string, outputChanged, stdoutIsTTY, hintsDisabled bool)
 // that is wrong on `version`/`config` trains the agent to ignore it on the
 // commands where it matters, so exempt them. (`health`, `auth whoami/login`
 // honour json, so they are NOT exempt.)
-var hintExemptGroups = map[string]bool{"version": true, "config": true}
+//
+// `help` is exempt for the same reason: `capigo help <topic>` and
+// `capigo help <command>` print documentation, never a resource. Note that the
+// `--help` FLAG never reaches here — cobra short-circuits on it before
+// PersistentPreRunE — but the `help` COMMAND is runnable and does, so without
+// this entry every `capigo help …` invocation emits a spurious -o json nudge.
+var hintExemptGroups = map[string]bool{"version": true, "config": true, "help": true}
 
 // cmdExemptFromJSONHint reports whether cmd, or any of its ancestors, belongs to
 // an exempt group — covering both `capigo version` and `capigo config get`.

@@ -9,7 +9,39 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Cross-cutting help topics.** `capigo help tenancy`, `help output`, `help exit-codes`,
+  `help soft-delete` and `help versioning` are documentation pages that ship inside the binary.
+  Cobra lists them under "Additional help topics"; they have no `Run` and never execute.
+
+  They exist so that a fact true of many commands is stated in exactly one place, and referenced
+  from a command page rather than restated on it. Restating a cross-cutting contract on every
+  command page is precisely how the `Response: {"data": …}` error below reached nineteen pages.
+
+  `help versioning` publishes the OpenAPI specification URL and states the relationship plainly:
+  a capability present in the spec and absent from this CLI is a gap in the CLI, not in the
+  platform. Withholding that link never prevented a caller from reaching the API directly — the
+  key, the base URL and `--verbose` were always at hand — it only made the resulting bug report
+  less accurate.
+
+- **Every help page now ends with the build it came from** — `capigo <version> (built <date>) ·
+  capigo help versioning`. Help ships inside the binary, so a page cannot disagree with the
+  binary that printed it; it can, however, describe an older surface than the one deployed. The
+  footer lets the reader tell which. A local `go build` omits the meaningless `(built unknown)`.
+
+- The root help now describes how help itself is organised, and points at the topics. The list of
+  command groups is left to cobra, which generates it from each command's `Short` — hand-writing
+  that list would be a second copy of it.
+
 ### Fixed
+
+- **`capigo help …` emitted a spurious `-o json` nudge on stderr.** The `--help` *flag* never
+  reached the hint (cobra short-circuits before `PersistentPreRunE`), but the `help` *command* is
+  runnable and did, so asking for documentation produced a warning about parsing JSON. A hint
+  that is wrong where it does not belong trains the reader to ignore it where it does. `help` now
+  joins `version` and `config` in `hintExemptGroups`. Present since v0.16.0; surfaced by the new
+  topics, which make `capigo help <topic>` a first-class path.
 
 - **Help text described the API's HTTP response instead of the CLI's stdout.** Nineteen
   single-item commands (`get` / `create` / `update` / `replace` across `brands`, `categories`,

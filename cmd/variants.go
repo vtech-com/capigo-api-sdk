@@ -15,7 +15,7 @@ import (
 
 var variantsCmd = &cobra.Command{
 	Use:   "variants",
-	Short: "Query PCMS variants",
+	Short: "Query PCMS variants (read-only)",
 }
 
 // --------------------------------------------------------------------------

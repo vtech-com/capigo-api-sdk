@@ -256,6 +256,20 @@ barcode allocation — live in your catalogue-policy skill, not here.)
   bare object.
 - **`quiet`** — prints just an id.
 
+**Cross-cutting mechanics now ship inside the binary as help topics** — pull one when you need
+it, instead of trusting your memory of this file:
+
+```
+capigo help tenancy      how --tenant resolves; which commands require it
+capigo help output       output modes, the JSON contract, which stream carries what
+capigo help exit-codes   what each exit code means; the on-error diagnosis block
+capigo help soft-delete  how deleted records appear in reads
+capigo help versioning   how this CLI relates to the API it calls
+```
+
+**Where a topic and this skill disagree, the topic wins.** It is versioned with the binary that
+printed it; this file is not.
+
 Deeper mechanics — pagination, delta sync, `--from-json`, per-command flags, code-vs-UUID
 lookup — are in [`references/cli_basics.md`](./references/cli_basics.md). Reach for it when the
 map points you to a command and you need its exact flags.
