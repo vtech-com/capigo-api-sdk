@@ -15,6 +15,10 @@ import (
 var categoriesCmd = &cobra.Command{
 	Use:   "categories",
 	Short: "Manage PCMS categories",
+	Long: `Manage categories in the Capigo Product Catalog Management System (PCMS).
+
+Categories are tenant-scoped reference data. Every command here requires a tenant.
+  capigo help tenancy`,
 }
 
 // --------------------------------------------------------------------------
@@ -31,10 +35,35 @@ var (
 var categoriesListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List categories",
-	Long: `List categories from the PCMS catalog. Tenant is required.
+	Long: `List categories.
 
-Use --query / -q for a name-contains search (case-insensitive, max 200 chars).
-Each category in the response has: id, name, parent_id (uuid or null for root).`,
+PURPOSE
+  Read the categories defined for a tenant, optionally narrowed by name.
+
+INPUT
+  --tenant <code>        required
+  -q, --query <term>     name-contains filter, case-insensitive, max 200 chars
+  --page <n>             page number
+  --limit <n>            items per page, 1-100 (default 20)
+
+OUTPUT
+  -o json emits the list envelope. Each row is:
+
+      { id, name, parent_id }
+
+  The envelope, meta.total and list footers: capigo help output
+
+EXAMPLES
+  capigo categories list --tenant acme -q pin
+
+  # How many are there? Read meta.total rather than counting rows
+  capigo categories list --tenant acme --limit 1 -o json | jq '.meta.total'
+
+SEE ALSO
+  categories get <id>       one category in full
+  categories create         add a category
+  capigo help output      output modes and the JSON contract
+  capigo help tenancy     how --tenant resolves`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -125,18 +154,44 @@ var (
 var categoriesCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a new category",
-	Long: `Create a new category in PCMS. Tenant is required.
+	Long: `Create a category.
 
-Provide --name and optional --parent-id, or supply the full request body
-with --from-json <file> (use - to read from stdin). When --from-json is
-set, all individual field flags are ignored.
+PURPOSE
+  Add a category to this tenant's reference data.
 
-JSON body (--from-json):
-  { "name": "Electronics" }
-  { "name": "Smartphones", "parent_id": "uuid-of-parent" }
-  { "name": "Root Category", "parent_id": null }
+INPUT
+  --tenant <code>        required
+  --name <text>          required, unless --from-json is used
+  --parent-id <uuid>     the parent category; omit it to create a root category
 
-Output (-o json): { "id": "uuid", "name": "string", "parent_id": "uuid|null" }`,
+  Or --from-json <path|-> to send the whole body, where - reads stdin.
+  --from-json and the individual field flags are MUTUALLY EXCLUSIVE: passing
+  both exits 5.
+
+  Body:
+
+      { "name": "Phu kien", "parent_id": "8f2a-..." }
+      { "name": "Phu kien" }
+
+OUTPUT
+  -o json emits the bare created category:
+
+      { id, name, parent_id }
+
+  quiet prints its id.
+
+  Output modes and the JSON contract: capigo help output
+
+EXAMPLES
+  capigo categories create --tenant acme --name "Phu kien"
+
+  echo '{"name":"Pin","parent_id":"8f2a-..."}' \
+    | capigo categories create --tenant acme --from-json -
+
+SEE ALSO
+  categories update <id>    change some of its fields later
+  categories list           check whether it already exists
+  capigo help exit-codes  what exit 5 means`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -234,21 +289,40 @@ var (
 var categoriesUpdateCmd = &cobra.Command{
 	Use:   "update <id>",
 	Short: "Partial update of an existing category (PATCH)",
-	Long: `Partial update (PATCH) of an existing category in PCMS. Tenant is required.
+	Long: `Update a category. Fields you do not send are left unchanged.
 
-All fields are optional; at least one must be provided. Fields not specified
-are left unchanged. Use --clear-parent to promote a category to root (sets
-parent_id to null). Omitting --parent-id leaves the current parent unchanged.
+PURPOSE
+  Change part of a category (PATCH). To overwrite every field at once, use
+  categories replace <id>.
 
-Use --from-json to supply the full update body as JSON (file path or - for
-stdin). When --from-json is set, all individual field flags are ignored.
+INPUT
+  <id>                   category UUID (positional, required)
+  --tenant <code>        required
+  --name <text>          a new name
+  --parent-id <uuid>     a new parent category
+  --clear-parent         set parent_id to null, promoting it to a root category
 
-JSON body (--from-json):
-  { "name": "New Name" }
-  { "parent_id": "uuid-of-new-parent" }
-  { "parent_id": null }
+  At least one field is required; sending none exits 5.
 
-Output (-o json): { "id": "uuid", "name": "string", "parent_id": "uuid|null" }`,
+  Or --from-json <path|-> to send the whole body, where - reads stdin.
+  --from-json and the individual field flags are MUTUALLY EXCLUSIVE: passing
+  both exits 5.
+
+OUTPUT
+  -o json emits the bare updated category:
+
+      { id, name, parent_id }
+
+  Output modes and the JSON contract: capigo help output
+
+EXAMPLES
+  capigo categories update <uuid> --tenant acme --name "Phu kien dien thoai"
+  capigo categories update <uuid> --tenant acme --clear-parent
+
+SEE ALSO
+  categories replace <id>   overwrite every field instead
+  categories get <id>       read the current values first
+  capigo help exit-codes  what exit 5 means`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -336,10 +410,33 @@ var categoryGetTenant string
 var categoriesGetCmd = &cobra.Command{
 	Use:   "get <id>",
 	Short: "Get a category by ID",
-	Long: `Get a single category by ID from PCMS. Tenant is required.
+	Long: `Get one category by UUID.
 
-Returns 404 for both not-found and cross-tenant resources (no info leakage).
-Output (-o json): { "id": "uuid", "name": "string", "parent_id": "uuid|null" }`,
+PURPOSE
+  Read a single category. This command addresses it by UUID only. To find that
+  UUID from a name, use categories list --query.
+
+INPUT
+  <id>                   category UUID (positional, required)
+  --tenant <code>        required
+
+OUTPUT
+  -o json emits the bare category object:
+
+      { id, name, parent_id }
+
+  Exit 4 when no such category exists in the resolved tenant.
+
+  Output modes and the JSON contract: capigo help output
+
+EXAMPLES
+  capigo categories get <uuid> --tenant acme
+
+SEE ALSO
+  categories list           find a category by name
+  categories update <id>    change some of its fields
+  categories replace <id>   overwrite all of its fields
+  capigo help exit-codes  what exit 4 means`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -399,20 +496,41 @@ var (
 var categoriesReplaceCmd = &cobra.Command{
 	Use:   "replace <id>",
 	Short: "Full replace of a category (PUT)",
-	Long: `Full replace (PUT) of an existing category in PCMS. Tenant is required.
+	Long: `Replace a category. Every field is overwritten.
 
-All fields are required by the server. You must provide either --parent-id <uuid>
-or --root (to set parent_id to null, promoting the category to root);
-these flags are mutually exclusive.
+PURPOSE
+  Overwrite a category in full (PUT). A field you do not send is not preserved —
+  it is reset. To change one field and keep the rest, use categories update <id>.
 
-Use --from-json to supply the full request body as JSON (file path or - for
-stdin). When --from-json is set, all individual field flags are ignored.
+INPUT
+  <id>                   category UUID (positional, required)
+  --tenant <code>        required
+  --name <text>          required
+  --parent-id <uuid>     the parent category
+  --root                 set parent_id to null, making it a root category
 
-JSON body (--from-json):
-  { "name": "Electronics", "parent_id": null }
-  { "name": "Smartphones", "parent_id": "uuid-of-parent" }
+  Exactly one of --parent-id and --root must be given; they are mutually
+  exclusive. There is no way to leave the parent untouched here — that is what
+  categories update is for.
 
-Output (-o json): { "id": "uuid", "name": "string", "parent_id": "uuid|null" }`,
+  Or --from-json <path|-> to send the whole body, where - reads stdin.
+  --from-json and the individual field flags are MUTUALLY EXCLUSIVE: passing
+  both exits 5.
+
+OUTPUT
+  -o json emits the bare category as it now stands:
+
+      { id, name, parent_id }
+
+  Output modes and the JSON contract: capigo help output
+
+EXAMPLES
+  capigo categories replace <uuid> --tenant acme --name "Phu kien" --root
+
+SEE ALSO
+  categories update <id>    change one field and keep the rest
+  categories get <id>       read the current values first
+  capigo help exit-codes  what exit 5 means`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()

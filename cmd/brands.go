@@ -15,6 +15,10 @@ import (
 var brandsCmd = &cobra.Command{
 	Use:   "brands",
 	Short: "Manage PCMS brands",
+	Long: `Manage brands in the Capigo Product Catalog Management System (PCMS).
+
+Brands are tenant-scoped reference data. Every command here requires a tenant.
+  capigo help tenancy`,
 }
 
 // --------------------------------------------------------------------------
@@ -31,10 +35,35 @@ var (
 var brandsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List brands",
-	Long: `List brands from the PCMS catalog. Tenant is required.
+	Long: `List brands.
 
-Use --query / -q for a name-contains search (case-insensitive, max 200 chars).
-Each brand in the response has: id, name, logo_url (string or null).`,
+PURPOSE
+  Read the brands defined for a tenant, optionally narrowed by name.
+
+INPUT
+  --tenant <code>        required
+  -q, --query <term>     name-contains filter, case-insensitive, max 200 chars
+  --page <n>             page number
+  --limit <n>            items per page, 1-100 (default 20)
+
+OUTPUT
+  -o json emits the list envelope. Each row is:
+
+      { id, name, logo_url }
+
+  The envelope, meta.total and list footers: capigo help output
+
+EXAMPLES
+  capigo brands list --tenant acme -q nike
+
+  # How many are there? Read meta.total rather than counting rows
+  capigo brands list --tenant acme --limit 1 -o json | jq '.meta.total'
+
+SEE ALSO
+  brands get <id>       one brand in full
+  brands create         add a brand
+  capigo help output      output modes and the JSON contract
+  capigo help tenancy     how --tenant resolves`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -125,17 +154,43 @@ var (
 var brandsCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a new brand",
-	Long: `Create a new brand in PCMS. Tenant is required.
+	Long: `Create a brand.
 
-Provide --name and optional --logo-url, or supply the full request body
-with --from-json <file> (use - to read from stdin). When --from-json is
-set, all individual field flags are ignored.
+PURPOSE
+  Add a brand to this tenant's reference data.
 
-JSON body (--from-json):
-  { "name": "Nike", "logo_url": "https://example.com/logo.png" }
-  { "name": "No Brand" }
+INPUT
+  --tenant <code>        required
+  --name <text>          required, unless --from-json is used
+  --logo-url <url>       optional
 
-Output (-o json): { "id": "uuid", "name": "string", "logo_url": "string|null" }`,
+  Or --from-json <path|-> to send the whole body, where - reads stdin.
+  --from-json and the individual field flags are MUTUALLY EXCLUSIVE: passing
+  both exits 5.
+
+  Body:
+
+      { "name": "Nike", "logo_url": "https://example.com/logo.png" }
+      { "name": "No Brand" }
+
+OUTPUT
+  -o json emits the bare created brand:
+
+      { id, name, logo_url }
+
+  quiet prints its id.
+
+  Output modes and the JSON contract: capigo help output
+
+EXAMPLES
+  capigo brands create --tenant acme --name Nike
+
+  echo '{"name":"No Brand"}' | capigo brands create --tenant acme --from-json -
+
+SEE ALSO
+  brands update <id>    change some of its fields later
+  brands list           check whether it already exists
+  capigo help exit-codes  what exit 5 means`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -233,21 +288,40 @@ var (
 var brandsUpdateCmd = &cobra.Command{
 	Use:   "update <id>",
 	Short: "Partial update of an existing brand (PATCH)",
-	Long: `Partial update (PATCH) of an existing brand in PCMS. Tenant is required.
+	Long: `Update a brand. Fields you do not send are left unchanged.
 
-All fields are optional; at least one must be provided. Fields not specified
-are left unchanged on the server. Use --clear-logo to explicitly set logo_url
-to null (removing the logo).
+PURPOSE
+  Change part of a brand (PATCH). To overwrite every field at once, use
+  brands replace <id>.
 
-Use --from-json to supply the full update body as JSON (file path or - for
-stdin). When --from-json is set, all individual field flags are ignored.
+INPUT
+  <id>                   brand UUID (positional, required)
+  --tenant <code>        required
+  --name <text>          a new name
+  --logo-url <url>       a new logo URL
+  --clear-logo           set logo_url to null
 
-JSON body (--from-json):
-  { "name": "Nike Inc" }
-  { "logo_url": "https://example.com/new-logo.png" }
-  { "logo_url": null }
+  At least one field is required; sending none exits 5.
 
-Output (-o json): { "id": "uuid", "name": "string", "logo_url": "string|null" }`,
+  Or --from-json <path|-> to send the whole body, where - reads stdin.
+  --from-json and the individual field flags are MUTUALLY EXCLUSIVE: passing
+  both exits 5.
+
+OUTPUT
+  -o json emits the bare updated brand:
+
+      { id, name, logo_url }
+
+  Output modes and the JSON contract: capigo help output
+
+EXAMPLES
+  capigo brands update <uuid> --tenant acme --name "Nike Vietnam"
+  capigo brands update <uuid> --tenant acme --clear-logo
+
+SEE ALSO
+  brands replace <id>   overwrite every field instead
+  brands get <id>       read the current values first
+  capigo help exit-codes  what exit 5 means`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -335,10 +409,33 @@ var brandGetTenant string
 var brandsGetCmd = &cobra.Command{
 	Use:   "get <id>",
 	Short: "Get a brand by ID",
-	Long: `Get a single brand by ID from PCMS. Tenant is required.
+	Long: `Get one brand by UUID.
 
-Returns 404 for both not-found and cross-tenant resources (no info leakage).
-Output (-o json): { "id": "uuid", "name": "string", "logo_url": "string|null" }`,
+PURPOSE
+  Read a single brand. This command addresses it by UUID only. To find that
+  UUID from a name, use brands list --query.
+
+INPUT
+  <id>                   brand UUID (positional, required)
+  --tenant <code>        required
+
+OUTPUT
+  -o json emits the bare brand object:
+
+      { id, name, logo_url }
+
+  Exit 4 when no such brand exists in the resolved tenant.
+
+  Output modes and the JSON contract: capigo help output
+
+EXAMPLES
+  capigo brands get <uuid> --tenant acme
+
+SEE ALSO
+  brands list           find a brand by name
+  brands update <id>    change some of its fields
+  brands replace <id>   overwrite all of its fields
+  capigo help exit-codes  what exit 4 means`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -398,19 +495,41 @@ var (
 var brandsReplaceCmd = &cobra.Command{
 	Use:   "replace <id>",
 	Short: "Full replace of a brand (PUT)",
-	Long: `Full replace (PUT) of an existing brand in PCMS. Tenant is required.
+	Long: `Replace a brand. Every field is overwritten.
 
-All fields are required by the server. You must provide either --logo-url <url>
-or --no-logo (to set logo_url to null); these flags are mutually exclusive.
+PURPOSE
+  Overwrite a brand in full (PUT). A field you do not send is not preserved —
+  it is reset. To change one field and keep the rest, use brands update <id>.
 
-Use --from-json to supply the full request body as JSON (file path or - for
-stdin). When --from-json is set, all individual field flags are ignored.
+INPUT
+  <id>                   brand UUID (positional, required)
+  --tenant <code>        required
+  --name <text>          required
+  --logo-url <url>       the logo URL
+  --no-logo              set logo_url to null
 
-JSON body (--from-json):
-  { "name": "Nike", "logo_url": "https://example.com/logo.png" }
-  { "name": "No Brand", "logo_url": null }
+  Exactly one of --logo-url and --no-logo must be given; they are mutually
+  exclusive. There is no way to leave the logo untouched here — that is what
+  brands update is for.
 
-Output (-o json): { "id": "uuid", "name": "string", "logo_url": "string|null" }`,
+  Or --from-json <path|-> to send the whole body, where - reads stdin.
+  --from-json and the individual field flags are MUTUALLY EXCLUSIVE: passing
+  both exits 5.
+
+OUTPUT
+  -o json emits the bare brand as it now stands:
+
+      { id, name, logo_url }
+
+  Output modes and the JSON contract: capigo help output
+
+EXAMPLES
+  capigo brands replace <uuid> --tenant acme --name Nike --no-logo
+
+SEE ALSO
+  brands update <id>    change one field and keep the rest
+  brands get <id>       read the current values first
+  capigo help exit-codes  what exit 5 means`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()

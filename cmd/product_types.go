@@ -15,6 +15,10 @@ import (
 var productTypesCmd = &cobra.Command{
 	Use:   "product-types",
 	Short: "Manage PCMS product types",
+	Long: `Manage product-types in the Capigo Product Catalog Management System (PCMS).
+
+Product-types are tenant-scoped reference data. Every command here requires a tenant.
+  capigo help tenancy`,
 }
 
 // --------------------------------------------------------------------------
@@ -31,10 +35,35 @@ var (
 var productTypesListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List product types",
-	Long: `List product types from the PCMS catalog. Tenant is required.
+	Long: `List product-types.
 
-Use --query / -q for a name-contains search (case-insensitive, max 200 chars).
-Each product type in the response has: id, name, description (string or null).`,
+PURPOSE
+  Read the product-types defined for a tenant, optionally narrowed by name.
+
+INPUT
+  --tenant <code>        required
+  -q, --query <term>     name-contains filter, case-insensitive, max 200 chars
+  --page <n>             page number
+  --limit <n>            items per page, 1-100 (default 20)
+
+OUTPUT
+  -o json emits the list envelope. Each row is:
+
+      { id, name, description }
+
+  The envelope, meta.total and list footers: capigo help output
+
+EXAMPLES
+  capigo product-types list --tenant acme -q pin
+
+  # How many are there? Read meta.total rather than counting rows
+  capigo product-types list --tenant acme --limit 1 -o json | jq '.meta.total'
+
+SEE ALSO
+  product-types get <id>       one product type in full
+  product-types create         add a product type
+  capigo help output      output modes and the JSON contract
+  capigo help tenancy     how --tenant resolves`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -125,17 +154,44 @@ var (
 var productTypesCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a new product type",
-	Long: `Create a new product type in PCMS. Tenant is required.
+	Long: `Create a product type.
 
-Provide --name and optional --description, or supply the full request body
-with --from-json <file> (use - to read from stdin). When --from-json is
-set, all individual field flags are ignored.
+PURPOSE
+  Add a product type to this tenant's reference data.
 
-JSON body (--from-json):
-  { "name": "Smartphone" }
-  { "name": "Laptop", "description": "Portable computers" }
+INPUT
+  --tenant <code>        required
+  --name <text>          required, unless --from-json is used
+  --description <text>   optional, max 2000 characters
 
-Output (-o json): { "id": "uuid", "name": "string", "description": "string|null" }`,
+  Or --from-json <path|-> to send the whole body, where - reads stdin.
+  --from-json and the individual field flags are MUTUALLY EXCLUSIVE: passing
+  both exits 5.
+
+  Body:
+
+      { "name": "Pin Lien Cap", "description": "Pin va cap lien khoi" }
+      { "name": "Pin Lien Cap" }
+
+OUTPUT
+  -o json emits the bare created product type:
+
+      { id, name, description }
+
+  quiet prints its id.
+
+  Output modes and the JSON contract: capigo help output
+
+EXAMPLES
+  capigo product-types create --tenant acme --name "Pin Lien Cap"
+
+  echo '{"name":"Pin Lien Cap"}' \
+    | capigo product-types create --tenant acme --from-json -
+
+SEE ALSO
+  product-types update <id>    change some of its fields later
+  product-types list           check whether it already exists
+  capigo help exit-codes  what exit 5 means`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -233,21 +289,40 @@ var (
 var productTypesUpdateCmd = &cobra.Command{
 	Use:   "update <id>",
 	Short: "Partial update of an existing product type (PATCH)",
-	Long: `Partial update (PATCH) of an existing product type in PCMS. Tenant is required.
+	Long: `Update a product type. Fields you do not send are left unchanged.
 
-All fields are optional; at least one must be provided. Fields not specified
-are left unchanged on the server. Use --clear-description to explicitly set
-description to null.
+PURPOSE
+  Change part of a product type (PATCH). To overwrite every field at once, use
+  product-types replace <id>.
 
-Use --from-json to supply the full update body as JSON (file path or - for
-stdin). When --from-json is set, all individual field flags are ignored.
+INPUT
+  <id>                   product type UUID (positional, required)
+  --tenant <code>        required
+  --name <text>          a new name
+  --description <text>   a new description, max 2000 characters
+  --clear-description    set description to null
 
-JSON body (--from-json):
-  { "name": "New Name" }
-  { "description": "Updated description" }
-  { "description": null }
+  At least one field is required; sending none exits 5.
 
-Output (-o json): { "id": "uuid", "name": "string", "description": "string|null" }`,
+  Or --from-json <path|-> to send the whole body, where - reads stdin.
+  --from-json and the individual field flags are MUTUALLY EXCLUSIVE: passing
+  both exits 5.
+
+OUTPUT
+  -o json emits the bare updated product type:
+
+      { id, name, description }
+
+  Output modes and the JSON contract: capigo help output
+
+EXAMPLES
+  capigo product-types update <uuid> --tenant acme --description "Pin roi"
+  capigo product-types update <uuid> --tenant acme --clear-description
+
+SEE ALSO
+  product-types replace <id>   overwrite every field instead
+  product-types get <id>       read the current values first
+  capigo help exit-codes  what exit 5 means`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -335,10 +410,33 @@ var productTypeGetTenant string
 var productTypesGetCmd = &cobra.Command{
 	Use:   "get <id>",
 	Short: "Get a product type by ID",
-	Long: `Get a single product type by ID from PCMS. Tenant is required.
+	Long: `Get one product type by UUID.
 
-Returns 404 for both not-found and cross-tenant resources (no info leakage).
-Output (-o json): { "id": "uuid", "name": "string", "description": "string|null" }`,
+PURPOSE
+  Read a single product type. This command addresses it by UUID only. To find that
+  UUID from a name, use product-types list --query.
+
+INPUT
+  <id>                   product type UUID (positional, required)
+  --tenant <code>        required
+
+OUTPUT
+  -o json emits the bare product type object:
+
+      { id, name, description }
+
+  Exit 4 when no such product type exists in the resolved tenant.
+
+  Output modes and the JSON contract: capigo help output
+
+EXAMPLES
+  capigo product-types get <uuid> --tenant acme
+
+SEE ALSO
+  product-types list           find a product type by name
+  product-types update <id>    change some of its fields
+  product-types replace <id>   overwrite all of its fields
+  capigo help exit-codes  what exit 4 means`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -398,19 +496,41 @@ var (
 var productTypesReplaceCmd = &cobra.Command{
 	Use:   "replace <id>",
 	Short: "Full replace of a product type (PUT)",
-	Long: `Full replace (PUT) of an existing product type in PCMS. Tenant is required.
+	Long: `Replace a product type. Every field is overwritten.
 
-All fields are required by the server. You must provide either --description <text>
-or --no-description (to set description to null); these flags are mutually exclusive.
+PURPOSE
+  Overwrite a product type in full (PUT). A field you do not send is not preserved —
+  it is reset. To change one field and keep the rest, use product-types update <id>.
 
-Use --from-json to supply the full request body as JSON (file path or - for
-stdin). When --from-json is set, all individual field flags are ignored.
+INPUT
+  <id>                   product type UUID (positional, required)
+  --tenant <code>        required
+  --name <text>          required
+  --description <text>   the description, max 2000 characters
+  --no-description       set description to null
 
-JSON body (--from-json):
-  { "name": "Smartphone", "description": "Mobile phones and tablets" }
-  { "name": "Laptop", "description": null }
+  Exactly one of --description and --no-description must be given; they are
+  mutually exclusive. There is no way to leave the description untouched here —
+  that is what product-types update is for.
 
-Output (-o json): { "id": "uuid", "name": "string", "description": "string|null" }`,
+  Or --from-json <path|-> to send the whole body, where - reads stdin.
+  --from-json and the individual field flags are MUTUALLY EXCLUSIVE: passing
+  both exits 5.
+
+OUTPUT
+  -o json emits the bare product type as it now stands:
+
+      { id, name, description }
+
+  Output modes and the JSON contract: capigo help output
+
+EXAMPLES
+  capigo product-types replace <uuid> --tenant acme --name "Pin" --no-description
+
+SEE ALSO
+  product-types update <id>    change one field and keep the rest
+  product-types get <id>       read the current values first
+  capigo help exit-codes  what exit 5 means`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()

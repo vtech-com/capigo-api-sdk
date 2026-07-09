@@ -15,6 +15,10 @@ import (
 var unitsCmd = &cobra.Command{
 	Use:   "units",
 	Short: "Manage PCMS units",
+	Long: `Manage units in the Capigo Product Catalog Management System (PCMS).
+
+Units are tenant-scoped reference data. Every command here requires a tenant.
+  capigo help tenancy`,
 }
 
 // --------------------------------------------------------------------------
@@ -31,10 +35,35 @@ var (
 var unitsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List units",
-	Long: `List product units from the PCMS catalog. Tenant is required.
+	Long: `List units.
 
-Use --query / -q for a name-contains search (case-insensitive, max 200 chars).
-Each unit in the response has: id, name, abbreviation.`,
+PURPOSE
+  Read the units defined for a tenant, optionally narrowed by name.
+
+INPUT
+  --tenant <code>        required
+  -q, --query <term>     name-contains filter, case-insensitive, max 200 chars
+  --page <n>             page number
+  --limit <n>            items per page, 1-100 (default 20)
+
+OUTPUT
+  -o json emits the list envelope. Each row is:
+
+      { id, name, abbreviation }
+
+  The envelope, meta.total and list footers: capigo help output
+
+EXAMPLES
+  capigo units list --tenant acme -q kg
+
+  # How many are there? Read meta.total rather than counting rows
+  capigo units list --tenant acme --limit 1 -o json | jq '.meta.total'
+
+SEE ALSO
+  units get <id>       one unit in full
+  units create         add a unit
+  capigo help output      output modes and the JSON contract
+  capigo help tenancy     how --tenant resolves`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -125,18 +154,46 @@ var (
 var unitsCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a new unit",
-	Long: `Create a new product unit in PCMS. Tenant is required.
+	Long: `Create a unit.
 
-Both --name and --abbreviation are required, or supply the full request body
-with --from-json <file> (use - to read from stdin). When --from-json is
-set, all individual field flags are ignored. Abbreviation is normalized to
-lowercase by the server.
+PURPOSE
+  Add a unit to this tenant's reference data.
 
-JSON body (--from-json):
-  { "name": "Kilogram", "abbreviation": "kg" }
-  { "name": "Piece", "abbreviation": "pc" }
+INPUT
+  --tenant <code>        required
+  --name <text>          required, unless --from-json is used
+  --abbreviation <text>  required, unless --from-json is used, e.g. kg
 
-Output (-o json): { "id": "uuid", "name": "string", "abbreviation": "string" }`,
+  The server lowercases the abbreviation.
+
+  Or --from-json <path|-> to send the whole body, where - reads stdin.
+  --from-json and the individual field flags are MUTUALLY EXCLUSIVE: passing
+  both exits 5.
+
+  Body:
+
+      { "name": "Kilogram", "abbreviation": "kg" }
+      { "name": "Piece", "abbreviation": "pc" }
+
+OUTPUT
+  -o json emits the bare created unit:
+
+      { id, name, abbreviation }
+
+  quiet prints its id.
+
+  Output modes and the JSON contract: capigo help output
+
+EXAMPLES
+  capigo units create --tenant acme --name Kilogram --abbreviation kg
+
+  echo '{"name":"Piece","abbreviation":"pc"}' \
+    | capigo units create --tenant acme --from-json -
+
+SEE ALSO
+  units update <id>    change some of its fields later
+  units list           check whether it already exists
+  capigo help exit-codes  what exit 5 means`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -237,20 +294,40 @@ var (
 var unitsUpdateCmd = &cobra.Command{
 	Use:   "update <id>",
 	Short: "Partial update of an existing unit (PATCH)",
-	Long: `Partial update (PATCH) of an existing product unit in PCMS. Tenant is required.
+	Long: `Update a unit. Fields you do not send are left unchanged.
 
-All fields are optional; at least one must be provided. Fields not specified
-are left unchanged on the server.
+PURPOSE
+  Change part of a unit (PATCH). To overwrite every field at once, use
+  units replace <id>.
 
-Use --from-json to supply the full update body as JSON (file path or - for
-stdin). When --from-json is set, all individual field flags are ignored.
+INPUT
+  <id>                   unit UUID (positional, required)
+  --tenant <code>        required
+  --name <text>          a new name
+  --abbreviation <text>  a new abbreviation; the server lowercases it
 
-JSON body (--from-json):
-  { "name": "Kilogram" }
-  { "abbreviation": "kg" }
-  { "name": "Kilogram", "abbreviation": "kg" }
+  A unit has no nullable field, so there is no --clear flag here.
 
-Output (-o json): { "id": "uuid", "name": "string", "abbreviation": "string" }`,
+  At least one field is required; sending none exits 5.
+
+  Or --from-json <path|-> to send the whole body, where - reads stdin.
+  --from-json and the individual field flags are MUTUALLY EXCLUSIVE: passing
+  both exits 5.
+
+OUTPUT
+  -o json emits the bare updated unit:
+
+      { id, name, abbreviation }
+
+  Output modes and the JSON contract: capigo help output
+
+EXAMPLES
+  capigo units update <uuid> --tenant acme --abbreviation KG
+
+SEE ALSO
+  units replace <id>   overwrite every field instead
+  units get <id>       read the current values first
+  capigo help exit-codes  what exit 5 means`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -336,10 +413,33 @@ var unitGetTenant string
 var unitsGetCmd = &cobra.Command{
 	Use:   "get <id>",
 	Short: "Get a unit by ID",
-	Long: `Get a single product unit by ID from PCMS. Tenant is required.
+	Long: `Get one unit by UUID.
 
-Returns 404 for both not-found and cross-tenant resources (no info leakage).
-Output (-o json): { "id": "uuid", "name": "string", "abbreviation": "string" }`,
+PURPOSE
+  Read a single unit. This command addresses it by UUID only. To find that
+  UUID from a name, use units list --query.
+
+INPUT
+  <id>                   unit UUID (positional, required)
+  --tenant <code>        required
+
+OUTPUT
+  -o json emits the bare unit object:
+
+      { id, name, abbreviation }
+
+  Exit 4 when no such unit exists in the resolved tenant.
+
+  Output modes and the JSON contract: capigo help output
+
+EXAMPLES
+  capigo units get <uuid> --tenant acme
+
+SEE ALSO
+  units list           find a unit by name
+  units update <id>    change some of its fields
+  units replace <id>   overwrite all of its fields
+  capigo help exit-codes  what exit 4 means`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -398,17 +498,36 @@ var (
 var unitsReplaceCmd = &cobra.Command{
 	Use:   "replace <id>",
 	Short: "Full replace of a unit (PUT)",
-	Long: `Full replace (PUT) of an existing product unit in PCMS. Tenant is required.
+	Long: `Replace a unit. Every field is overwritten.
 
-All fields are required by the server: --name and --abbreviation must both be provided.
+PURPOSE
+  Overwrite a unit in full (PUT). A field you do not send is not preserved —
+  it is reset. To change one field and keep the rest, use units update <id>.
 
-Use --from-json to supply the full request body as JSON (file path or - for
-stdin). When --from-json is set, all individual field flags are ignored.
+INPUT
+  <id>                   unit UUID (positional, required)
+  --tenant <code>        required
+  --name <text>          required
+  --abbreviation <text>  required; the server lowercases it
 
-JSON body (--from-json):
-  { "name": "Kilogram", "abbreviation": "kg" }
+  Or --from-json <path|-> to send the whole body, where - reads stdin.
+  --from-json and the individual field flags are MUTUALLY EXCLUSIVE: passing
+  both exits 5.
 
-Output (-o json): { "id": "uuid", "name": "string", "abbreviation": "string" }`,
+OUTPUT
+  -o json emits the bare unit as it now stands:
+
+      { id, name, abbreviation }
+
+  Output modes and the JSON contract: capigo help output
+
+EXAMPLES
+  capigo units replace <uuid> --tenant acme --name Kilogram --abbreviation kg
+
+SEE ALSO
+  units update <id>    change one field and keep the rest
+  units get <id>       read the current values first
+  capigo help exit-codes  what exit 5 means`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()

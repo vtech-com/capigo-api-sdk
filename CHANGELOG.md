@@ -47,7 +47,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   `option1..option3` are positional against the product's `options[]`; `--aliases` and `--tags`
   replace the array rather than append to it.
 
+- **Reference-data help pages rebuilt on the same skeleton** — `brands`, `categories`,
+  `product-types` and `units`, twenty pages across five verbs. Each now states the object it
+  returns, and each `replace` page says plainly that a field you do not send is reset rather
+  than preserved, which is the whole difference between it and `update`.
+
 ### Fixed
+
+- **Twelve reference-data help pages said `--from-json` makes the field flags "ignored". It
+  rejects them.** `create`, `update` and `replace` on all four groups exit 5 with "mutually
+  exclusive" when both are passed — verified by running each. The only command in the CLI that
+  genuinely ignores its field flags is `products create`, and the twelve pages had copied its
+  sentence. Each page now describes its own command.
 
 - **`products update` help claimed the wrong behaviour for `--from-json`.** It said "all
   individual field flags are ignored". They are not ignored — passing both `--from-json` and a
