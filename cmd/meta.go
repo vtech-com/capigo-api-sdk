@@ -75,12 +75,12 @@ func mergeAPIMeta(raw json.RawMessage) output.Meta {
 	}
 	for k, v := range fields {
 		if !knownMetaKeys[k] {
-			var any_ any
-			if json.Unmarshal(v, &any_) == nil {
+			var value any
+			if json.Unmarshal(v, &value) == nil {
 				if m.Extra == nil {
 					m.Extra = map[string]any{}
 				}
-				m.Extra[k] = any_
+				m.Extra[k] = value
 			}
 			continue
 		}
