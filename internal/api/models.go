@@ -9,9 +9,17 @@ type Meta struct {
 }
 
 // Envelope is a generic response wrapper for paginated list endpoints.
+// Envelope is a generic response wrapper for list endpoints.
+//
+// Meta is a pointer because some list endpoints send none — GET /tenants is one,
+// and the OpenAPI document says so. Decoded into a value, an absent meta becomes
+// a meta of zeros, and `capigo tenants list` printed "total": 0 beside a row of
+// data. The CLI's own rule is to read meta.total rather than count data[], so
+// that zero was not a cosmetic defect: it was the wrong answer, stated
+// confidently, on the stream a caller parses.
 type Envelope[T any] struct {
-	Data T    `json:"data"`
-	Meta Meta `json:"meta"`
+	Data T     `json:"data"`
+	Meta *Meta `json:"meta"`
 }
 
 // Tenant represents a PublicTenantResponse from GET /tenants.

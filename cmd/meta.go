@@ -46,8 +46,13 @@ func itemMeta(tenant *string, tenantFlag string) output.Meta {
 // always emitted for a list, including when the list is empty — a caller that
 // asks "how many are there" must not have to distinguish a zero from a
 // missing key.
-func listMeta(tenant *string, tenantFlag string, m api.Meta) output.Meta {
+func listMeta(tenant *string, tenantFlag string, m *api.Meta) output.Meta {
 	out := itemMeta(tenant, tenantFlag)
+	if m == nil {
+		// The endpoint sent no pagination. Emitting zeros here would answer
+		// "how many are there?" with 0 while data[] holds rows.
+		return out
+	}
 	out.Page = output.Ptr(m.Page)
 	out.Limit = output.Ptr(m.Limit)
 	out.Total = output.Ptr(m.Total)

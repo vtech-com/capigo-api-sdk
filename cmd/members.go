@@ -65,8 +65,9 @@ FLAGS
       parameter and lets the server choose.
 
   --limit <n>
-      Items per page. The default, 0, sends no limit parameter; the server
-      then applies its own default of 20.
+      Items per page, 1 to 50. The default, 0, sends no limit parameter; the
+      server then applies its own default of 20. Above 50 the server rejects
+      the call with exit 5.
 
         capigo members list --tenant acme --page 2 --limit 50
 

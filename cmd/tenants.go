@@ -50,8 +50,12 @@ OUTPUT
           { "tenant_code": "demo", "name": "Demo Tenant", "role": "member",
             "joined_at": "2026-02-03T09:00:00Z" }
         ],
-        "meta": { "page": 1, "limit": 20, "total": 2, "has_more": false }
+        "meta": {}
       }
+
+  This endpoint does not paginate and sends no pagination meta, so meta is
+  empty here. Count .data[] — it is the whole list. Every other list command
+  reports meta.total, and on those you must read it rather than count.
 
   capigo help tenancy  how --tenant resolves, and which commands require it`,
 	Args: cobra.NoArgs,
@@ -80,7 +84,9 @@ OUTPUT
 			_ = config.Save(cfg)
 		}
 
-		return output.Write(os.Stdout, envelope.Data, listMeta(nil, "", envelope.Meta))
+		// No listMeta here: this endpoint neither paginates nor sends meta, and
+		// there is no tenant to name — a tenants list is how you learn the tenants.
+		return output.Write(os.Stdout, envelope.Data, output.Meta{})
 	},
 }
 

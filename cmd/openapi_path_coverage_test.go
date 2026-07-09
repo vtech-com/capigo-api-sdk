@@ -86,7 +86,13 @@ var implementedOps = map[string]string{
 // with a reason. Add here — rather than to implementedOps — when an operation is
 // left without a command on purpose.
 var unimplementedOps = map[string]string{
-	"GET /mission/tasks/{id}/subtasks": "unwrapped: `tasks list --parent-task-id <id>` returns the same rows; wrapping it would add a second way to ask one question",
+	// Not a substitute for `tasks list --parent-task-id <id>`, though it was once
+	// listed here as one. Measured against a running API: this endpoint 404s when
+	// the parent does not exist, while the filter returns 200 with zero rows — so
+	// "has no subtasks" and "is not a task" are the same answer through the filter
+	// and different answers through here. It also returns every subtask unpaginated,
+	// and stamps each row with a parent_task reference the filter does not add.
+	"GET /mission/tasks/{id}/subtasks": "unwrapped, pending a decision: it answers a question `tasks list --parent-task-id` cannot — 404 for a missing parent, versus an empty page",
 
 	// Tasks addressed by their human code (TASK-104) rather than a UUID. The set
 	// duplicates the by-id surface exactly, so the right shape is probably a flag

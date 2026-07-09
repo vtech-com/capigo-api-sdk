@@ -65,7 +65,8 @@ FLAGS
       parameter and lets the server choose.
 
   --limit <n>
-      Items per page. Defaults to 20.
+      Items per page, 1 to 50. Defaults to 20. Above 50 the server rejects the
+      call with exit 5 — mission endpoints cap at 50, unlike the PCMS lists.
 
         capigo boards list --tenant acme --page 2 --limit 50
 

@@ -199,6 +199,23 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **`capigo tenants list` reported `"total": 0` beside a row of data.** `GET /tenants` sends no
+  meta — the OpenAPI document says so, correctly — but `api.Envelope.Meta` was a value type, so an
+  absent meta decoded into a meta of zeros and the CLI printed them as fact.
+
+  This CLI's own rule, stated in its help and in the bundled skill, is: *read `meta.total`, do not
+  count `data[]`*. A caller following that rule concluded it had access to no tenants. The rule was
+  right; the number was invented.
+
+  `Envelope.Meta` is now `*Meta`, so absence is representable, and `listMeta` emits no pagination
+  when there is none. A real `total: 0` still survives — that is the answer for an empty tenant,
+  and it must not be dropped along with the fabricated one.
+
+- **Mission endpoints cap `--limit` at 50, not 100.** Measured against a running API: `tasks list`,
+  `tasks comments`, `boards list` and `members list` reject 51 with exit 5, while the PCMS lists
+  accept up to 100. The OpenAPI document declares no maximum at all. Three of those four pages
+  never mentioned a bound.
+
 - **The `replace` pages describe PUT correctly, at last.** They used to say a field you do not
   send is "reset rather than preserved". Then, on the authority of the OpenAPI document — which
   declares no required body fields and says "At least one field must be provided" — they were

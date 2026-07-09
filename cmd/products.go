@@ -259,7 +259,7 @@ OUTPUT
 func productsListAll(ctx context.Context, client *api.Client, tenant *string) error {
 	page := 1
 	var allProducts []api.Product
-	var lastMeta api.Meta
+	var lastMeta api.Meta // zero until the first page decodes; /pcms/products always sends meta
 	var lastServerTime string
 	var fetchErr error
 
@@ -287,8 +287,11 @@ func productsListAll(ctx context.Context, client *api.Client, tenant *string) er
 					lastServerTime = resp.ServerTime
 				}
 				allProducts = append(allProducts, envelope.Data...)
-				lastMeta = envelope.Meta
-				if !envelope.Meta.HasMore {
+				if envelope.Meta == nil {
+					return handleErr(fmt.Errorf("decode response: page %d carried no meta; --all cannot know whether more pages remain", page))
+				}
+				lastMeta = *envelope.Meta
+				if !lastMeta.HasMore {
 					break
 				}
 				page++
@@ -310,7 +313,7 @@ func productsListAll(ctx context.Context, client *api.Client, tenant *string) er
 		total = lastMeta.Total
 	}
 
-	meta := listMeta(tenant, productListTenant, api.Meta{
+	meta := listMeta(tenant, productListTenant, &api.Meta{
 		Page:    1,
 		Limit:   lastMeta.Limit,
 		Total:   total,
