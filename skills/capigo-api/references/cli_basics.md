@@ -230,7 +230,7 @@ through `products variants` (above); there is no `variants update`/`create`/`rep
 capigo --tenant acme variants list --barcode-prefix 634007 --sort -barcode --limit 1
 ```
 
-`variants get <id>` — **tenant required** — fetches one variant's full detail (sku, barcode,
+`variants get <id>` or `variants get --sku <sku>` — **tenant required** — fetches one variant's full detail (sku, barcode,
 price, options, type, timestamps). UUID-addressed only; orphaned/soft-deleted/cross-tenant
 variants return 404.
 

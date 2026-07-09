@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -144,24 +145,38 @@ OUTPUT
 // variants get
 // --------------------------------------------------------------------------
 
-var variantGetTenant string
+var (
+	variantGetTenant string
+	variantGetSKU    string
+)
 
 var variantsGetCmd = &cobra.Command{
-	Use:   "get <id>",
-	Short: "Get a variant by id",
-	Long: `Get one variant by id.
+	Use:   "get [<id>]",
+	Short: "Get a variant by id or by sku",
+	Long: `Get one variant, addressed by id or by sku.
 
 PURPOSE
-  Read a single variant in full. This command addresses it by id only. To
-  find that id, use variants list --barcode-prefix, or read the variants[]
+  Read a single variant in full. A variant has two addresses — its id, and its
+  sku, which is unique within a tenant — and both return the same record. Use
+  --sku when the sku is what you have; it is the key a person quotes.
+
+  To find an id, use variants list --barcode-prefix, or read the variants[]
   array of products get <id>.
 
 USAGE
-  capigo variants get <id> --tenant <code>
+  capigo variants get (<id> | --sku <sku>) --tenant <code>
 
 FLAGS
   <id>
-      Variant id, a UUID. Positional, required.
+      Variant id, a UUID. Positional. Give this or --sku, never both: a bare
+      argument is never guessed at, so a sku shaped like a UUID cannot be sent
+      to the wrong address. Giving neither, or both, exits 5.
+
+  --sku <sku>
+      Address the variant by its sku instead. Tenant-scoped: the same sku may
+      exist in another tenant, and that one is not found here.
+
+        capigo variants get --sku AT-001-S --tenant acme
 
   --tenant <code>
       Tenant the variant belongs to. Required. Exits 4 if the variant is not
@@ -193,13 +208,24 @@ OUTPUT
 
   A single-item read carries no pagination meta; there is nothing to page.
 
-  Exit 4 when no such variant exists in the resolved tenant — including one
-  that is orphaned, soft-deleted, or belongs to another tenant. Unlike a
-  product, a deleted variant is not returned and marked; it is simply
-  absent. See capigo help soft-delete.`,
-	Args: cobra.ExactArgs(1),
+  Exit 4 when no such variant exists in the resolved tenant — by either
+  address, and including one that is orphaned, soft-deleted, or belongs to
+  another tenant. Unlike a product, a deleted variant is not returned and
+  marked; it is simply absent, and an unknown sku and a deleted one give the
+  same answer. See capigo help soft-delete.`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
+
+		// One address or the other, never both and never neither. Guessing which
+		// a bare argument is — a UUID or a sku that happens to look like one —
+		// would put a request on the wrong endpoint and say nothing about it.
+		switch {
+		case len(args) == 1 && variantGetSKU != "":
+			failValidation("give an id or --sku, not both")
+		case len(args) == 0 && variantGetSKU == "":
+			failValidation("a variant address is required: an id, or --sku <sku>")
+		}
 
 		client, cfg, err := buildClient()
 		if err != nil {
@@ -214,7 +240,16 @@ OUTPUT
 		tenant := resolveTenant(variantGetTenant, profile)
 		requireTenant(tenant, "variants commands")
 
-		resp, err := client.Do(ctx, "GET", "/pcms/variants/"+args[0], nil, tenant)
+		// A sku is a value someone typed. Escaped, so one containing a slash
+		// addresses a variant rather than a different endpoint.
+		var path string
+		if variantGetSKU != "" {
+			path = "/pcms/variants/sku/" + url.PathEscape(variantGetSKU)
+		} else {
+			path = "/pcms/variants/" + url.PathEscape(args[0])
+		}
+
+		resp, err := client.Do(ctx, "GET", path, nil, tenant)
 		if err != nil {
 			return handleErr(err)
 		}
@@ -238,6 +273,7 @@ func init() {
 	variantsListCmd.Flags().IntVar(&variantListLimit, "limit", 20, "items per page (1-100, default 20)")
 
 	variantsGetCmd.Flags().StringVar(&variantGetTenant, "tenant", "", "tenant code (required)")
+	variantsGetCmd.Flags().StringVar(&variantGetSKU, "sku", "", "address the variant by sku instead of by id")
 
 	variantsCmd.AddCommand(variantsListCmd, variantsGetCmd)
 	rootCmd.AddCommand(variantsCmd)

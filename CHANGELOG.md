@@ -176,6 +176,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   not; and that `USAGE` spells the command it belongs to. The flag checks matter more now that
   cobra prints no flag table: a flag missing from `FLAGS` is a flag documented nowhere.
 
+### Added
+
+- **`variants get --sku <sku>`.** A variant has two addresses — its id, and its sku, unique within
+  a tenant — and `GET /pcms/variants/sku/{sku}` returns the same record as `GET /pcms/variants/{id}`,
+  field for field, verified against a running API.
+
+  So this is one command with two addresses, not two commands: `capigo variants get (<id> | --sku
+  <sku>)`. Giving both, or neither, exits 5. A bare argument is never guessed at — sniffing whether
+  it looks like a UUID would send a sku shaped like one to the wrong endpoint, quietly. The sku is
+  path-escaped, so a sku containing a slash addresses a variant rather than a different route.
+
 ### Changed
 
 - **`api/openapi.json` synced to production (v1.26.1).** 25 paths became 39; 57 operations in all.

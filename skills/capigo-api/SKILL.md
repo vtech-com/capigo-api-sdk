@@ -101,7 +101,7 @@ command are in [`references/cli_basics.md`](./references/cli_basics.md); this ma
 | Command | Reach for it when you want to… |
 |---|---|
 | `variants list --barcode-prefix <p> --sort -barcode --limit 1` | find the highest barcode under a prefix (allocation/counters) |
-| `variants get <id>` | see one variant's full detail. UUID only |
+| `variants get <id>` / `variants get --sku <sku>` | see one variant's full detail. Two addresses for the same record; `--sku` is tenant-scoped. Give one, never both |
 | ↳ **change or add a variant** | → use **`products variants`** (Products block above). There is no `variants update`/`create`/`replace`. |
 
 ### Tasks  *(tenant optional for reads; required for `create`/`subtasks`)*

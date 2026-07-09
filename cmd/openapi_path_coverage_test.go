@@ -55,7 +55,8 @@ var implementedOps = map[string]string{
 	"PUT /pcms/products/{id}":          "products update — note this PUT takes a partial body, unlike the ref-data PUTs",
 	"PUT /pcms/products/{id}/variants": "products variants (upsert)",
 	"GET /pcms/variants":               "variants list",
-	"GET /pcms/variants/{id}":          "variants get",
+	"GET /pcms/variants/{id}":          "variants get <id>",
+	"GET /pcms/variants/sku/{sku}":     "variants get --sku <sku> — the same record, addressed by its natural key",
 
 	"GET /pcms/brands":        "brands list",
 	"POST /pcms/brands":       "brands create",
@@ -103,8 +104,6 @@ var unimplementedOps = map[string]string{
 	"POST /mission/tasks/code/{code}/subtasks":                                    "unwrapped: by-code addressing duplicates the by-id surface; pending a design decision",
 	"GET /mission/tasks/code/{code}/attachments/{attachmentId}/download":          "unwrapped: by-code addressing duplicates the by-id surface; pending a design decision",
 	"GET /mission/tasks/code/{code}/comments/attachments/{attachmentId}/download": "unwrapped: by-code addressing duplicates the by-id surface; pending a design decision",
-
-	"GET /pcms/variants/sku/{sku}": "unwrapped: lookup by sku; `variants list` already searches by barcode prefix, so the shape of the addition needs deciding",
 
 	// WMS: a new read-only module, addressed by code rather than by id. Wrapping
 	// it means a new command group, eight help pages, and a section in the skill.
