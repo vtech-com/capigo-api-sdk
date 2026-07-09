@@ -176,6 +176,27 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   not; and that `USAGE` spells the command it belongs to. The flag checks matter more now that
   cobra prints no flag table: a flag missing from `FLAGS` is a flag documented nowhere.
 
+### Changed
+
+- **`api/openapi.json` synced to production (v1.26.1).** 25 paths became 39; 57 operations in all.
+  Nothing was removed and no existing operation changed shape, so nothing the CLI calls today
+  breaks. What arrived: a read-only **WMS** module (warehouses, inbound receipts, outbound
+  shipments, internal transfers — list and by-`code` for each), **task addressing by `code`**
+  rather than UUID, `GET /pcms/variants/sku/{sku}`, and a `GET` beside the `POST` on
+  `/mission/tasks/{id}/subtasks`.
+
+  Sixteen of the fifty-seven operations are unwrapped, each recorded with a reason in
+  `unimplementedOps`. None is a gap in the platform; each is a decision this CLI has not made yet.
+
+- **The OpenAPI coverage guard counts operations, not paths.** It used to track "paths not
+  method+path pairs" — by design, and documented as such — so a verb appearing on a path the CLI
+  already called was invisible to it. That is exactly what happened: prod added
+  `GET /mission/tasks/{id}/subtasks` beside the `POST`, and the guard stayed green while a
+  capability went unwrapped.
+
+  The guard now enumerates every `METHOD path` in the spec and fails until each is either wrapped
+  or listed with a reason. A second test rejects a reason too short to be one.
+
 ### Fixed
 
 - **The `replace` pages describe PUT correctly, at last.** They used to say a field you do not

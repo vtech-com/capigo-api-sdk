@@ -420,6 +420,10 @@
               },
               "display_name": {
                 "type": "string"
+              },
+              "member_code": {
+                "type": "string",
+                "nullable": true
               }
             }
           },
@@ -432,6 +436,10 @@
               },
               "display_name": {
                 "type": "string"
+              },
+              "member_code": {
+                "type": "string",
+                "nullable": true
               }
             }
           },
@@ -450,11 +458,14 @@
             "format": "date-time",
             "nullable": true
           },
-          "parent_task_id": {
-            "type": "string",
-            "format": "uuid",
+          "parent": {
             "nullable": true,
-            "description": "ID of this task's parent, if this row is a subtask; null for top-level tasks."
+            "description": "Parent task reference. Populated for subtasks returned via GET /mission/tasks/{id}/subtasks or code/{code}/subtasks; null elsewhere.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PublicTaskRef"
+              }
+            ]
           },
           "has_subtasks": {
             "type": "boolean",
@@ -489,6 +500,29 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "PublicTaskRef": {
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "title"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "code": {
+            "type": "string",
+            "example": "TASK-123"
+          },
+          "title": {
+            "type": "string",
+            "example": "Alert: System Monitor"
           }
         }
       },
@@ -590,6 +624,54 @@
             "nullable": true,
             "additionalProperties": true,
             "description": "Arbitrary key-value metadata for this variant."
+          },
+          "product": {
+            "description": "Denormalized parent product reference. Null when the variant is looked up via SKU and the parent product cannot be resolved (should not occur under normal operation).",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PublicVariantProductRef"
+              }
+            ],
+            "nullable": true
+          }
+        }
+      },
+      "PublicVariantProductRef": {
+        "type": "object",
+        "description": "Minimal parent product reference embedded in variant responses.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
+          "name": {
+            "type": "string",
+            "example": "Áo thun nam"
+          },
+          "slug": {
+            "type": "string",
+            "example": "ao-thun-nam-001"
+          },
+          "aliases": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "ao-thun",
+              "tee"
+            ]
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "example": [
+              "thoi-trang",
+              "nam"
+            ]
           }
         }
       },
@@ -900,6 +982,842 @@
           }
         }
       },
+      "PublicAttachmentDownloadResponse": {
+        "type": "object",
+        "required": [
+          "url",
+          "file_name",
+          "mime_type",
+          "size_bytes",
+          "expires_at"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Short-lived signed download URL. Forces Content-Disposition: attachment with the original file name."
+          },
+          "file_name": {
+            "type": "string"
+          },
+          "mime_type": {
+            "type": "string"
+          },
+          "size_bytes": {
+            "type": "integer"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the signed URL expires (5 minutes from response time)."
+          }
+        }
+      },
+      "PublicWmsWarehouseReference": {
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string",
+            "description": "Unique warehouse code (e.g. WH-001)"
+          },
+          "name": {
+            "type": "string",
+            "description": "Warehouse display name"
+          }
+        }
+      },
+      "PublicWmsProductVariantReference": {
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sku": {
+            "type": "string",
+            "nullable": true
+          },
+          "barcode": {
+            "type": "string",
+            "nullable": true
+          },
+          "variant_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "product_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "product_name": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "PublicWmsLocationReference": {
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "name"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "PublicWmsStatusHistoryEntry": {
+        "type": "object",
+        "required": [
+          "status",
+          "created_at",
+          "created_by_name"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "example": "DRAFT"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_by_name": {
+            "type": "string",
+            "description": "Display name of the user who performed the status change"
+          }
+        }
+      },
+      "PublicWmsLocationNode": {
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "name",
+          "category",
+          "type",
+          "is_active"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "ZONE",
+              "AISLE",
+              "RACK",
+              "SHELF",
+              "BIN",
+              "SHELF_BIN",
+              null
+            ]
+          },
+          "type": {
+            "type": "string"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "parent_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicWmsLocationNode"
+            }
+          }
+        }
+      },
+      "PublicWmsWarehouseResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "name",
+          "type",
+          "currency",
+          "location_strategy",
+          "is_active",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string",
+            "example": "WH-001"
+          },
+          "name": {
+            "type": "string",
+            "example": "Main Warehouse"
+          },
+          "type": {
+            "type": "string",
+            "example": "user"
+          },
+          "address": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          },
+          "currency": {
+            "type": "string",
+            "example": "VND"
+          },
+          "location_strategy": {
+            "type": "string",
+            "example": "ZONE_BIN"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "settings": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          },
+          "extra_data": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PublicWmsWarehouseDetailResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "name",
+          "type",
+          "currency",
+          "location_strategy",
+          "is_active",
+          "created_at",
+          "updated_at",
+          "location_count",
+          "location_hierarchy"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "address": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          },
+          "currency": {
+            "type": "string"
+          },
+          "location_strategy": {
+            "type": "string"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "settings": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          },
+          "extra_data": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "location_count": {
+            "type": "integer",
+            "description": "Total number of locations in this warehouse"
+          },
+          "location_hierarchy": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicWmsLocationNode"
+            }
+          }
+        }
+      },
+      "PublicWmsInboundReceiptLine": {
+        "type": "object",
+        "required": [
+          "id",
+          "qty_expected",
+          "qty_received"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "product_variant": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PublicWmsProductVariantReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "qty_expected": {
+            "type": "number"
+          },
+          "qty_received": {
+            "type": "number"
+          },
+          "unit_cost": {
+            "type": "number",
+            "nullable": true
+          },
+          "variance_notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "variance_type": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "PublicWmsInboundReceiptResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "status",
+          "line_count",
+          "total_qty_expected",
+          "total_qty_received",
+          "total_value",
+          "created_at",
+          "updated_at",
+          "warehouse"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string",
+            "example": "IR-001"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "PENDING",
+              "PARTIALLY_RECEIVED",
+              "RECEIVED",
+              "VERIFIED",
+              "CANCELLED"
+            ]
+          },
+          "rel_type": {
+            "type": "string",
+            "nullable": true
+          },
+          "external_ref": {
+            "type": "string",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "line_count": {
+            "type": "integer"
+          },
+          "total_qty_expected": {
+            "type": "number"
+          },
+          "total_qty_received": {
+            "type": "number"
+          },
+          "total_value": {
+            "type": "number"
+          },
+          "verified_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "warehouse": {
+            "$ref": "#/components/schemas/PublicWmsWarehouseReference"
+          }
+        }
+      },
+      "PublicWmsInboundReceiptDetailResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "status",
+          "line_count",
+          "total_qty_expected",
+          "total_qty_received",
+          "total_value",
+          "created_at",
+          "updated_at",
+          "warehouse",
+          "lines",
+          "status_history"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "rel_type": {
+            "type": "string",
+            "nullable": true
+          },
+          "external_ref": {
+            "type": "string",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "line_count": {
+            "type": "integer"
+          },
+          "total_qty_expected": {
+            "type": "number"
+          },
+          "total_qty_received": {
+            "type": "number"
+          },
+          "total_value": {
+            "type": "number"
+          },
+          "verified_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "warehouse": {
+            "$ref": "#/components/schemas/PublicWmsWarehouseReference"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicWmsInboundReceiptLine"
+            }
+          },
+          "status_history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicWmsStatusHistoryEntry"
+            }
+          }
+        }
+      },
+      "PublicWmsOutboundShipmentLine": {
+        "type": "object",
+        "required": [
+          "id",
+          "qty_ordered",
+          "qty_picked",
+          "qty_shipped"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "product_variant": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PublicWmsProductVariantReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "qty_ordered": {
+            "type": "number"
+          },
+          "qty_picked": {
+            "type": "number"
+          },
+          "qty_shipped": {
+            "type": "number"
+          }
+        }
+      },
+      "PublicWmsOutboundShipmentResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "status",
+          "line_count",
+          "total_qty_ordered",
+          "total_qty_shipped",
+          "created_at",
+          "updated_at",
+          "warehouse"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string",
+            "example": "SO-001"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "PLANNED",
+              "PICKING",
+              "PACKED",
+              "EXPORTED",
+              "DONE",
+              "CANCELLED"
+            ]
+          },
+          "rel_type": {
+            "type": "string",
+            "nullable": true
+          },
+          "external_ref": {
+            "type": "string",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "line_count": {
+            "type": "integer"
+          },
+          "total_qty_ordered": {
+            "type": "number"
+          },
+          "total_qty_shipped": {
+            "type": "number"
+          },
+          "exported_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "warehouse": {
+            "$ref": "#/components/schemas/PublicWmsWarehouseReference"
+          }
+        }
+      },
+      "PublicWmsOutboundShipmentDetailResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "status",
+          "line_count",
+          "total_qty_ordered",
+          "total_qty_shipped",
+          "created_at",
+          "updated_at",
+          "warehouse",
+          "lines",
+          "status_history"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "rel_type": {
+            "type": "string",
+            "nullable": true
+          },
+          "external_ref": {
+            "type": "string",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "line_count": {
+            "type": "integer"
+          },
+          "total_qty_ordered": {
+            "type": "number"
+          },
+          "total_qty_shipped": {
+            "type": "number"
+          },
+          "exported_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "warehouse": {
+            "$ref": "#/components/schemas/PublicWmsWarehouseReference"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicWmsOutboundShipmentLine"
+            }
+          },
+          "status_history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicWmsStatusHistoryEntry"
+            }
+          }
+        }
+      },
+      "PublicWmsInternalTransferLine": {
+        "type": "object",
+        "required": [
+          "id",
+          "product_variant",
+          "qty",
+          "from_location",
+          "to_location"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "product_variant": {
+            "$ref": "#/components/schemas/PublicWmsProductVariantReference"
+          },
+          "qty": {
+            "type": "number"
+          },
+          "from_location": {
+            "$ref": "#/components/schemas/PublicWmsLocationReference"
+          },
+          "to_location": {
+            "$ref": "#/components/schemas/PublicWmsLocationReference"
+          }
+        }
+      },
+      "PublicWmsInternalTransferResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "status",
+          "line_count",
+          "total_qty",
+          "created_at",
+          "updated_at",
+          "warehouse"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string",
+            "example": "IT-001"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "IN_PROGRESS",
+              "COMPLETED",
+              "CANCELLED"
+            ]
+          },
+          "line_count": {
+            "type": "integer"
+          },
+          "total_qty": {
+            "type": "number"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "warehouse": {
+            "$ref": "#/components/schemas/PublicWmsWarehouseReference"
+          }
+        }
+      },
+      "PublicWmsInternalTransferDetailResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "status",
+          "line_count",
+          "total_qty",
+          "created_at",
+          "updated_at",
+          "warehouse",
+          "lines",
+          "status_history"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "line_count": {
+            "type": "integer"
+          },
+          "total_qty": {
+            "type": "number"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "warehouse": {
+            "$ref": "#/components/schemas/PublicWmsWarehouseReference"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicWmsInternalTransferLine"
+            }
+          },
+          "status_history": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicWmsStatusHistoryEntry"
+            }
+          }
+        }
+      },
       "CreateTaskWithSubtasksTask": {
         "type": "object",
         "required": [
@@ -995,38 +1913,534 @@
             }
           }
         }
-      },
-      "PublicAttachmentDownloadResponse": {
-        "type": "object",
-        "required": [
-          "url",
-          "file_name",
-          "mime_type",
-          "size_bytes",
-          "expires_at"
-        ],
-        "properties": {
-          "url": {
-            "type": "string",
-            "format": "uri",
-            "description": "Short-lived signed download URL. Forces Content-Disposition: attachment with the original file name."
-          },
-          "file_name": {
-            "type": "string"
-          },
-          "mime_type": {
-            "type": "string"
-          },
-          "size_bytes": {
-            "type": "integer"
-          },
-          "expires_at": {
-            "type": "string",
-            "format": "date-time",
-            "description": "When the signed URL expires (5 minutes from response time)."
+      }
+    },
+    "PublicWmsWarehouseReference": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "PublicWmsProductVariantReference": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "sku": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "barcode": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "variant_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "product_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "product_name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "PublicWmsLocationReference": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      }
+    },
+    "PublicWmsStatusHistoryEntry": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "created_by_name": {
+          "type": "string"
+        }
+      }
+    },
+    "PublicWmsInboundReceiptLine": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "product_variant": {
+          "$ref": "#/components/schemas/PublicWmsProductVariantReference"
+        },
+        "qty_expected": {
+          "type": "number"
+        },
+        "qty_received": {
+          "type": "number"
+        },
+        "unit_cost": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "variance_notes": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "variance_type": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "over",
+            "short",
+            "damaged",
+            "wrong_item",
+            null
+          ]
+        }
+      }
+    },
+    "PublicWmsInboundReceiptResponse": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "DRAFT",
+            "PLANNED",
+            "RECEIVING",
+            "VERIFIED",
+            "DONE",
+            "CANCELLED"
+          ]
+        },
+        "rel_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "external_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "notes": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "line_count": {
+          "type": "integer"
+        },
+        "total_qty_expected": {
+          "type": "number"
+        },
+        "total_qty_received": {
+          "type": "number"
+        },
+        "total_value": {
+          "type": "number"
+        },
+        "verified_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "warehouse": {
+          "$ref": "#/components/schemas/PublicWmsWarehouseReference"
+        }
+      }
+    },
+    "PublicWmsInboundReceiptDetailResponse": {
+      "allOf": [
+        {
+          "$ref": "#/components/schemas/PublicWmsInboundReceiptResponse"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "lines": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/PublicWmsInboundReceiptLine"
+              }
+            },
+            "status_history": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/PublicWmsStatusHistoryEntry"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "PublicWmsInternalTransferLine": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "product_variant": {
+          "$ref": "#/components/schemas/PublicWmsProductVariantReference"
+        },
+        "qty": {
+          "type": "number"
+        },
+        "from_location": {
+          "$ref": "#/components/schemas/PublicWmsLocationReference"
+        },
+        "to_location": {
+          "$ref": "#/components/schemas/PublicWmsLocationReference"
+        }
+      }
+    },
+    "PublicWmsInternalTransferResponse": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "DRAFT",
+            "MOVED",
+            "DONE"
+          ]
+        },
+        "line_count": {
+          "type": "integer"
+        },
+        "total_qty": {
+          "type": "number"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "warehouse": {
+          "$ref": "#/components/schemas/PublicWmsWarehouseReference"
+        }
+      }
+    },
+    "PublicWmsInternalTransferDetailResponse": {
+      "allOf": [
+        {
+          "$ref": "#/components/schemas/PublicWmsInternalTransferResponse"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "lines": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/PublicWmsInternalTransferLine"
+              }
+            },
+            "status_history": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/PublicWmsStatusHistoryEntry"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "PublicWmsOutboundShipmentLine": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "product_variant": {
+          "anyOf": [
+            {
+              "$ref": "#/components/schemas/PublicWmsProductVariantReference"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "qty_ordered": {
+          "type": "number"
+        },
+        "qty_picked": {
+          "type": "number"
+        },
+        "qty_shipped": {
+          "type": "number"
+        }
+      }
+    },
+    "PublicWmsOutboundShipmentResponse": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "DRAFT",
+            "PLANNED",
+            "PICKING",
+            "PACKED",
+            "EXPORTED",
+            "DONE",
+            "CANCELLED"
+          ]
+        },
+        "rel_type": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "external_ref": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "notes": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "line_count": {
+          "type": "integer"
+        },
+        "total_qty_ordered": {
+          "type": "number"
+        },
+        "total_qty_shipped": {
+          "type": "number"
+        },
+        "exported_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "warehouse": {
+          "$ref": "#/components/schemas/PublicWmsWarehouseReference"
+        }
+      }
+    },
+    "PublicWmsOutboundShipmentDetailResponse": {
+      "allOf": [
+        {
+          "$ref": "#/components/schemas/PublicWmsOutboundShipmentResponse"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "lines": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/PublicWmsOutboundShipmentLine"
+              }
+            },
+            "status_history": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/PublicWmsStatusHistoryEntry"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "PublicWmsLocationNode": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "category": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "type": {
+          "type": "string"
+        },
+        "is_active": {
+          "type": "boolean"
+        },
+        "parent_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/PublicWmsLocationNode"
           }
         }
       }
+    },
+    "PublicWmsWarehouseResponse": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "code": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "address": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "currency": {
+          "type": "string"
+        },
+        "location_strategy": {
+          "type": "string"
+        },
+        "is_active": {
+          "type": "boolean"
+        },
+        "settings": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "extra_data": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "PublicWmsWarehouseDetailResponse": {
+      "allOf": [
+        {
+          "$ref": "#/components/schemas/PublicWmsWarehouseResponse"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "location_count": {
+              "type": "integer"
+            },
+            "location_hierarchy": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/PublicWmsLocationNode"
+              }
+            }
+          }
+        }
+      ]
     }
   },
   "security": [
@@ -1035,38 +2449,6 @@
     }
   ],
   "paths": {
-    "/tenants": {
-      "get": {
-        "summary": "List Tenants",
-        "tags": [
-          "Tenants"
-        ],
-        "description": "Retrieve the list of all tenants/workspaces that the authenticated user actively participates in.",
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/PublicTenantResponse"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid or missing Authorization"
-          }
-        }
-      }
-    },
     "/members": {
       "get": {
         "summary": "List Members",
@@ -1480,7 +2862,8 @@
             "schema": {
               "type": "string",
               "format": "uuid"
-            }
+            },
+            "description": "Task UUID"
           },
           {
             "name": "X-Tenant-Code",
@@ -1509,7 +2892,8 @@
           "404": {
             "description": "Task not found"
           }
-        }
+        },
+        "description": "Retrieve a single task by UUID."
       },
       "patch": {
         "summary": "Update Task",
@@ -1525,7 +2909,8 @@
             "schema": {
               "type": "string",
               "format": "uuid"
-            }
+            },
+            "description": "Task UUID"
           },
           {
             "name": "X-Tenant-Code",
@@ -1634,8 +3019,8 @@
     },
     "/mission/tasks/{id}/attachments/{attachmentId}/download": {
       "get": {
-        "summary": "Download a Task Attachment",
-        "description": "Returns a short-lived (5 minute) signed URL for a task-level attachment as JSON data, never an HTTP redirect. Task-scoped: only members of the task's own tenant, for attachments that belong to that task, can download.",
+        "summary": "Download Task Attachment",
+        "description": "Get a short-lived signed download URL for a task-level attachment by task UUID.",
         "tags": [
           "Tasks"
         ],
@@ -1644,7 +3029,7 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "Task ID.",
+            "description": "Task UUID",
             "schema": {
               "type": "string",
               "format": "uuid"
@@ -1690,8 +3075,8 @@
     },
     "/mission/tasks/{id}/comments": {
       "get": {
-        "summary": "Retrieve Task Comments & Activity",
-        "description": "Read-only chronological timeline of a task's conversation (human comments) and activity (status/assignment/etc. system messages). Returns 200 with an empty list when the task has no thread yet.",
+        "summary": "List Task Comments",
+        "description": "Retrieve the chronological timeline of comments and activity for a task by UUID.",
         "tags": [
           "Tasks"
         ],
@@ -1703,7 +3088,8 @@
             "schema": {
               "type": "string",
               "format": "uuid"
-            }
+            },
+            "description": "Task UUID"
           },
           {
             "name": "type",
@@ -1803,8 +3189,8 @@
     },
     "/mission/tasks/{id}/comments/attachments/{attachmentId}/download": {
       "get": {
-        "summary": "Download a Task Comment Attachment",
-        "description": "Returns a short-lived (5 minute) signed URL for a comment/message-level attachment as JSON data, never an HTTP redirect. Tenant-scoped, NOT task-scoped: any active member of this task's tenant can download this attachment, regardless of whether they have visibility into the specific task or thread it was posted to. Cross-tenant access is not possible — this is a tenant-scope, not task-scope, guarantee.",
+        "summary": "Download Comment Attachment",
+        "description": "Get a short-lived signed download URL for a comment-level attachment by task UUID.",
         "tags": [
           "Tasks"
         ],
@@ -1813,7 +3199,7 @@
             "name": "id",
             "in": "path",
             "required": true,
-            "description": "Task ID (anchors the tenant-isolation gate).",
+            "description": "Task UUID",
             "schema": {
               "type": "string",
               "format": "uuid"
@@ -1859,11 +3245,11 @@
     },
     "/mission/tasks/{id}/subtasks": {
       "post": {
-        "summary": "Create Subtasks in Existing Task",
+        "summary": "Create Subtasks",
         "tags": [
           "Tasks"
         ],
-        "description": "Create batch subtasks under an existing parent task. All-or-nothing validation: if any subtask fails validation, nothing is created. Max 25 subtasks per request.",
+        "description": "Create batch subtasks (up to 25) under a parent task by UUID. All-or-nothing validation.",
         "parameters": [
           {
             "name": "id",
@@ -1873,7 +3259,7 @@
               "type": "string",
               "format": "uuid"
             },
-            "description": "Parent task UUID"
+            "description": "Task UUID"
           }
         ],
         "requestBody": {
@@ -1954,164 +3340,38 @@
             }
           }
         }
-      }
-    },
-    "/mission/tasks/with-subtasks": {
-      "post": {
-        "summary": "Create Task with Subtasks",
+      },
+      "get": {
         "tags": [
           "Tasks"
         ],
-        "description": "Create a task together with its subtasks in a single atomic request. All-or-nothing validation: if any part fails, nothing is created. Max 25 subtasks per request.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateTaskWithSubtasksRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Task and subtasks created successfully",
-            "headers": {
-              "X-Server-Time": {
-                "schema": {
-                  "type": "string",
-                  "format": "date-time"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "task": {
-                          "$ref": "#/components/schemas/PublicTaskResponse"
-                        },
-                        "subtasks": {
-                          "type": "array",
-                          "items": {
-                            "$ref": "#/components/schemas/PublicTaskResponse"
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error (all-or-nothing) — nothing was created. Possible codes: VALIDATION_ERROR, MISSING_TENANT, INVALID_ASSIGNEE, INVALID_FOLLOWERS, BOARD_NOT_FOUND, SUBTASK_VALIDATION_ERROR.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Permission denied — not a tenant member.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/pcms/products": {
-      "get": {
-        "summary": "List Products (Catalog Sync)",
-        "tags": [
-          "PCMS"
-        ],
-        "description": "Paginated product feed for external catalog synchronization.\n\nSupports three composable modes: full/delta sync via `updated_since` (ISO 8601 UTC) for incremental pulls, explicit fetch via `ids` (comma-separated UUIDs, max 50) for known subsets, and free-text search via `q` for substring matches against product name, variant name, SKU, or barcode. All three AND-compose with each other and with pagination; results remain ordered by `updated_at` ascending for stable cursor checkpointing.\n\nWhen `q` matches against a variant field, the full parent product is returned with all non-orphaned variants — parity with `updated_since` semantics. All modes are tenant-scoped (foreign IDs and foreign-tenant matches are silently filtered, never leaked).\n\nDeleted products are included with `is_deleted: true` so consumers can remove them from their local catalog. Each product's `variants` array contains only active variants.\n\nInternal fields (cost, audit metadata, tenancy identifiers) are omitted from the response.",
+        "summary": "List Subtasks",
+        "description": "List subtasks of a parent task by UUID.",
+        "operationId": "listSubtasks",
         "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Task UUID"
+          },
           {
             "name": "X-Tenant-Code",
             "in": "header",
-            "required": true,
-            "description": "Code of the tenant to scope the request to.",
             "schema": {
               "type": "string"
-            }
-          },
-          {
-            "name": "updated_since",
-            "in": "query",
-            "description": "ISO 8601 UTC datetime. When provided, only products updated at or after this timestamp are returned — including products where an active variant was updated. Example: `2026-01-01T00:00:00Z`.",
-            "schema": {
-              "type": "string",
-              "format": "date-time"
-            }
-          },
-          {
-            "name": "ids",
-            "in": "query",
-            "description": "Comma-separated list of product UUIDs to restrict the response to. Max 50 IDs per request. Foreign IDs (belonging to other tenants) are silently filtered. Returns `400 INVALID_IDS` for malformed input (non-UUID token, empty value, more than 50 IDs).",
-            "required": false,
-            "schema": {
-              "type": "array",
-              "maxItems": 50,
-              "items": {
-                "type": "string",
-                "format": "uuid"
-              }
-            },
-            "style": "form",
-            "explode": false,
-            "example": "11111111-1111-4111-8111-111111111111,22222222-2222-4222-8222-222222222222"
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "description": "Free-text search fragment (2–500 characters). Matches case-insensitive substring (`ILIKE %q%`) against six columns for active (non-deleted) products: product name, product aliases, product tags, variant name, variant SKU, and variant barcode. When a variant matches, the full parent product is returned with all non-orphaned variants. For soft-deleted (tombstone) products, search is limited to product name, aliases, and tags only — variant fields (name, SKU, barcode) are not searchable because variant data for deleted products is not indexed. To retrieve all tombstones, omit `q` and use `updated_since` or a full sync instead. Composes with `ids` (which is independently capped at 50 UUIDs) and `updated_since` as a strict intersection — supplying all three narrows the result. Special characters `%` and `_` inside `q` are treated literally (escaped), not as wildcards. Control characters and Unicode-whitespace-only values are rejected with `INVALID_SEARCH`.",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "minLength": 2,
-              "maxLength": 500,
-              "example": "iphone"
-            }
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "default": 1,
-              "minimum": 1
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "default": 20,
-              "minimum": 1,
-              "maximum": 100
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Paginated subtask list",
             "headers": {
               "X-Server-Time": {
-                "description": "ISO 8601 server timestamp at query execution — use as `updated_since` for the next delta sync call.",
                 "schema": {
                   "type": "string",
                   "format": "date-time"
@@ -2126,653 +3386,97 @@
                     "data": {
                       "type": "array",
                       "items": {
-                        "$ref": "#/components/schemas/PublicProductResponse"
+                        "$ref": "#/components/schemas/PublicTaskResponse"
                       }
                     },
                     "meta": {
                       "$ref": "#/components/schemas/MetaPagination"
                     }
                   }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid query parameters (e.g. malformed updated_since, malformed ids, or out-of-range limit)",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid API key"
-          },
-          "403": {
-            "description": "Tenant access denied"
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "summary": "Create product",
-        "tags": [
-          "PCMS"
-        ],
-        "description": "Create a new product within the tenant identified by `X-Tenant-Code`.\n\nSupports two creation modes:\n- **Simple mode**: omit `options` and `variants`. A single default variant is created from `sku`, `barcode`, and `price` on the product body.\n- **Variant mode**: supply 1–3 entries in `options` (e.g. Color, Size) plus a `variants` array. Each variant must populate `option1`/`option2`/`option3` with the chosen value for the corresponding option (positions match `options[]` order). The backend does not auto-generate the cartesian product — clients are responsible for sending the exact list of variants to create.",
-        "parameters": [
-          {
-            "name": "X-Tenant-Code",
-            "in": "header",
-            "required": true,
-            "description": "Code of the tenant to scope the request to.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "name"
-                ],
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "maxLength": 500
-                  },
-                  "description": {
-                    "type": "string",
-                    "maxLength": 10000,
-                    "nullable": true
-                  },
-                  "brand_id": {
-                    "type": "string",
-                    "format": "uuid",
-                    "nullable": true
-                  },
-                  "category_id": {
-                    "type": "string",
-                    "format": "uuid",
-                    "nullable": true
-                  },
-                  "product_type_id": {
-                    "type": "string",
-                    "format": "uuid",
-                    "nullable": true
-                  },
-                  "unit_id": {
-                    "type": "string",
-                    "format": "uuid",
-                    "nullable": true
-                  },
-                  "status": {
-                    "type": "string",
-                    "enum": [
-                      "DRAFT",
-                      "ACTIVE",
-                      "ARCHIVED"
-                    ],
-                    "default": "DRAFT"
-                  },
-                  "currency": {
-                    "type": "string",
-                    "default": "VND"
-                  },
-                  "sku": {
-                    "type": "string",
-                    "nullable": true,
-                    "description": "Simple mode only: SKU for the auto-created default variant. Ignored when `options`/`variants` are provided."
-                  },
-                  "barcode": {
-                    "type": "string",
-                    "nullable": true,
-                    "description": "Simple mode only: barcode for the auto-created default variant."
-                  },
-                  "price": {
-                    "type": "number",
-                    "nullable": true,
-                    "description": "Simple mode only: price for the auto-created default variant."
-                  },
-                  "manufacturer_code": {
-                    "type": "string",
-                    "nullable": true,
-                    "description": "Simple mode only: manufacturer-assigned code for the auto-created default variant. Ignored when `options`/`variants` are provided."
-                  },
-                  "legacy_code": {
-                    "type": "string",
-                    "nullable": true,
-                    "description": "Simple mode only: code carried over from a legacy system for the auto-created default variant."
-                  },
-                  "extra_data": {
-                    "type": "object",
-                    "nullable": true,
-                    "additionalProperties": true,
-                    "description": "Simple mode only: arbitrary key-value metadata for the auto-created default variant."
-                  },
-                  "aliases": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "description": "Alternative names / search aliases for this product.",
-                    "example": [
-                      "áo thun",
-                      "t-shirt"
-                    ]
-                  },
-                  "tags": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "description": "Free-form string tags for product organization and filtering.",
-                    "example": [
-                      "organic",
-                      "premium"
-                    ]
-                  },
-                  "options": {
-                    "type": "array",
-                    "maxItems": 3,
-                    "description": "Variant mode: defines the option axes (e.g. Color, Size). Up to 3 options; their order determines which `option1/2/3` slot each value maps to.",
-                    "items": {
-                      "type": "object",
-                      "required": [
-                        "name",
-                        "values"
+                },
+                "examples": {
+                  "twoSubtasks": {
+                    "summary": "Parent task with 2 subtasks",
+                    "value": {
+                      "data": [
+                        {
+                          "id": "550e8400-e29b-41d4-a716-446655440001",
+                          "code": "TASK-124",
+                          "title": "Check server logs",
+                          "description": null,
+                          "status": "To-Do",
+                          "priority": "High",
+                          "assignee": {
+                            "id": "123e4567-e89b-12d3-a456-426614174000",
+                            "display_name": "Alice",
+                            "member_code": "MEM-ALICE",
+                            "email": "alice@example.com"
+                          },
+                          "owner": {
+                            "id": "123e4567-e89b-12d3-a456-426614174001",
+                            "display_name": "Bob",
+                            "member_code": "MEM-BOB",
+                            "email": "bob@example.com"
+                          },
+                          "board_id": null,
+                          "board_list_id": null,
+                          "due_date": "2026-07-15T00:00:00.000Z",
+                          "parent": {
+                            "id": "550e8400-e29b-41d4-a716-446655440000",
+                            "code": "TASK-123",
+                            "title": "Alert: System Monitor"
+                          },
+                          "has_subtasks": false,
+                          "attachments": []
+                        },
+                        {
+                          "id": "550e8400-e29b-41d4-a716-446655440002",
+                          "code": "TASK-125",
+                          "title": "Notify on-call team",
+                          "description": "Send Slack notification",
+                          "status": "Doing",
+                          "priority": "Urgent",
+                          "assignee": null,
+                          "owner": {
+                            "id": "123e4567-e89b-12d3-a456-426614174001",
+                            "display_name": "Bob"
+                          },
+                          "board_id": null,
+                          "board_list_id": null,
+                          "due_date": null,
+                          "parent": {
+                            "id": "550e8400-e29b-41d4-a716-446655440000",
+                            "code": "TASK-123",
+                            "title": "Alert: System Monitor"
+                          },
+                          "has_subtasks": false,
+                          "attachments": []
+                        }
                       ],
-                      "properties": {
-                        "name": {
-                          "type": "string"
-                        },
-                        "values": {
-                          "type": "array",
-                          "items": {
-                            "type": "string"
-                          }
-                        }
-                      }
-                    }
-                  },
-                  "variants": {
-                    "type": "array",
-                    "description": "Variant mode: explicit list of variants to create. Each variant must set `option1`/`option2`/`option3` matching the values declared in `options[]` (by position).",
-                    "items": {
-                      "type": "object",
-                      "required": [
-                        "name"
-                      ],
-                      "properties": {
-                        "name": {
-                          "type": "string"
-                        },
-                        "sku": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "barcode": {
-                          "type": "string",
-                          "nullable": true
-                        },
-                        "price": {
-                          "type": "number",
-                          "nullable": true
-                        },
-                        "option1": {
-                          "type": "string",
-                          "nullable": true,
-                          "description": "Value for `options[0]`. Required when `options[0]` is defined."
-                        },
-                        "option2": {
-                          "type": "string",
-                          "nullable": true,
-                          "description": "Value for `options[1]`."
-                        },
-                        "option3": {
-                          "type": "string",
-                          "nullable": true,
-                          "description": "Value for `options[2]`."
-                        },
-                        "manufacturer_code": {
-                          "type": "string",
-                          "nullable": true,
-                          "description": "Manufacturer-assigned code for this variant. Optional."
-                        },
-                        "legacy_code": {
-                          "type": "string",
-                          "nullable": true,
-                          "description": "Code carried over from a legacy system (e.g. ERP migration). Optional."
-                        },
-                        "extra_data": {
-                          "type": "object",
-                          "nullable": true,
-                          "additionalProperties": true,
-                          "description": "Arbitrary key-value metadata for this variant."
-                        }
+                      "meta": {
+                        "page": 1,
+                        "limit": 2,
+                        "total": 2,
+                        "has_more": false
                       }
                     }
                   }
                 }
               }
             }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Product created successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/PublicProductResponse"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error or invalid product payload",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
           },
           "401": {
-            "description": "Missing or invalid API key"
-          },
-          "403": {
-            "description": "Tenant access denied or insufficient permissions"
-          }
-        }
-      }
-    },
-    "/pcms/variants": {
-      "get": {
-        "summary": "List Variants by Barcode Prefix",
-        "tags": [
-          "PCMS"
-        ],
-        "description": "Paginated flat list of product variants. Accepts an optional `barcode_prefix` to filter variants whose barcode starts with the given string (ilike prefix-match with `%` and `_` escaped). Useful for finding the highest barcode already assigned in a prefix namespace to auto-increment without collisions.",
-        "parameters": [
-          {
-            "name": "X-Tenant-Code",
-            "in": "header",
-            "required": true,
-            "description": "Code of the tenant to scope the request to.",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "barcode_prefix",
-            "in": "query",
-            "required": false,
-            "description": "Optional barcode prefix to filter variants. Only variants whose barcode starts with this value are returned. Special characters `%` and `_` are treated literally.",
-            "schema": {
-              "type": "string",
-              "example": "620111"
-            }
-          },
-          {
-            "name": "sort",
-            "in": "query",
-            "required": false,
-            "description": "Sort order. Use `-barcode` for descending barcode order (to find highest barcode in a prefix range) or `barcode` for ascending. Defaults to `created_at` descending when omitted.",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "barcode",
-                "-barcode"
-              ],
-              "example": "-barcode"
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "default": 20,
-              "minimum": 1,
-              "maximum": 100
-            }
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "default": 1,
-              "minimum": 1
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "headers": {
-              "X-Server-Time": {
-                "description": "ISO 8601 server timestamp at query execution.",
-                "schema": {
-                  "type": "string",
-                  "format": "date-time"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "id": {
-                            "type": "string",
-                            "format": "uuid"
-                          },
-                          "barcode": {
-                            "type": "string",
-                            "nullable": true
-                          },
-                          "sku": {
-                            "type": "string",
-                            "nullable": true
-                          },
-                          "name": {
-                            "type": "string"
-                          },
-                          "product_id": {
-                            "type": "string",
-                            "format": "uuid"
-                          }
-                        }
-                      }
-                    },
-                    "meta": {
-                      "$ref": "#/components/schemas/MetaPagination"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Invalid query parameters (e.g. invalid barcode_prefix, unsupported sort column, or out-of-range limit)",
+            "description": "Unauthorized",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid API key"
-          },
-          "403": {
-            "description": "Tenant access denied"
-          },
-          "500": {
-            "description": "Internal server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/pcms/variants/{id}": {
-      "get": {
-        "summary": "Get Variant Detail",
-        "tags": [
-          "PCMS"
-        ],
-        "description": "Fetch a single product variant by id (full variant shape), tenant-scoped. Orphaned, soft-deleted, and cross-tenant variants return 404.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "X-Tenant-Code",
-            "in": "header",
-            "description": "Scope to a tenant. If omitted, the variant is resolved across all tenants the caller belongs to.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Variant detail",
-            "headers": {
-              "X-Server-Time": {
-                "schema": {
-                  "type": "string",
-                  "format": "date-time"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/PublicProductVariantResponse"
-                    }
-                  }
                 }
               }
             }
           },
           "404": {
-            "description": "Variant not found"
-          }
-        }
-      }
-    },
-    "/pcms/products/{id}": {
-      "get": {
-        "summary": "Get Product Detail",
-        "tags": [
-          "PCMS"
-        ],
-        "description": "Fetch a single product by id (same shape as the catalog sync feed), tenant-scoped. Returns 404 if the product does not exist or belongs to another tenant.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "X-Tenant-Code",
-            "in": "header",
-            "description": "Scope to a tenant. If omitted, the product is resolved across all tenants the caller belongs to.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Product detail",
-            "headers": {
-              "X-Server-Time": {
-                "schema": {
-                  "type": "string",
-                  "format": "date-time"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/PublicProductResponse"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Product not found"
-          }
-        }
-      },
-      "put": {
-        "summary": "Update product details",
-        "tags": [
-          "PCMS"
-        ],
-        "description": "Update the core details of a product. Variant-level fields (`sku`, `barcode`, `price`, option values) are intentionally **not** editable through this endpoint — use `PUT /pcms/products/{id}/variants` to modify variants.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "X-Tenant-Code",
-            "in": "header",
-            "required": true,
-            "description": "Code of the tenant that owns the product.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "minProperties": 1,
-                "description": "At least one field must be provided.",
-                "properties": {
-                  "name": {
-                    "type": "string",
-                    "maxLength": 500
-                  },
-                  "description": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "brand_id": {
-                    "type": "string",
-                    "format": "uuid",
-                    "nullable": true
-                  },
-                  "category_id": {
-                    "type": "string",
-                    "format": "uuid",
-                    "nullable": true
-                  },
-                  "product_type_id": {
-                    "type": "string",
-                    "format": "uuid",
-                    "nullable": true
-                  },
-                  "unit_id": {
-                    "type": "string",
-                    "format": "uuid",
-                    "nullable": true
-                  },
-                  "status": {
-                    "type": "string",
-                    "enum": [
-                      "DRAFT",
-                      "ACTIVE",
-                      "ARCHIVED"
-                    ]
-                  },
-                  "currency": {
-                    "type": "string"
-                  },
-                  "aliases": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    }
-                  },
-                  "tags": {
-                    "type": "array",
-                    "items": {
-                      "type": "string"
-                    },
-                    "description": "Free-form string tags for product organization and filtering."
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Product updated successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/PublicProductResponse"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error or invalid payload",
+            "description": "Parent task not found",
             "content": {
               "application/json": {
                 "schema": {
@@ -2780,146 +3484,6 @@
                 }
               }
             }
-          },
-          "401": {
-            "description": "Missing or invalid API key"
-          },
-          "403": {
-            "description": "Tenant access denied or insufficient permissions"
-          },
-          "404": {
-            "description": "Product not found in the specified tenant"
-          }
-        }
-      }
-    },
-    "/pcms/products/{id}/variants": {
-      "put": {
-        "summary": "Upsert product variants",
-        "tags": [
-          "PCMS"
-        ],
-        "description": "Upsert variants of a product. The request body is an array of items.\n\n- Items **with** `variant_id` (UUID) → update the existing variant.\n- Items **without** `variant_id` → create a new variant (`name` is required; `option1`/`option2`/`option3` should match the product's option matrix).\n\nA single request may mix create and update items. Variants **not** included in the payload are left untouched (this endpoint does not delete variants). Unknown `variant_id` values return 404.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "X-Tenant-Code",
-            "in": "header",
-            "required": true,
-            "description": "Code of the tenant that owns the product.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "description": "Either `variant_id` (update) OR `name` (create) is required.",
-                  "properties": {
-                    "variant_id": {
-                      "type": "string",
-                      "format": "uuid",
-                      "description": "Omit to create a new variant; include to update an existing one."
-                    },
-                    "name": {
-                      "type": "string",
-                      "description": "Variant display name. Required when creating (variant_id omitted). For matrix products use `\"<opt1> / <opt2>\"`."
-                    },
-                    "sku": {
-                      "type": "string",
-                      "nullable": true
-                    },
-                    "barcode": {
-                      "type": "string",
-                      "nullable": true
-                    },
-                    "price": {
-                      "type": "number",
-                      "nullable": true
-                    },
-                    "option1": {
-                      "type": "string",
-                      "nullable": true,
-                      "description": "Used when creating a new variant on a matrix product."
-                    },
-                    "option2": {
-                      "type": "string",
-                      "nullable": true
-                    },
-                    "option3": {
-                      "type": "string",
-                      "nullable": true
-                    },
-                    "manufacturer_code": {
-                      "type": "string",
-                      "nullable": true,
-                      "description": "Manufacturer-assigned code for this variant. Optional."
-                    },
-                    "legacy_code": {
-                      "type": "string",
-                      "nullable": true,
-                      "description": "Code carried over from a legacy system (e.g. ERP migration). Optional."
-                    },
-                    "extra_data": {
-                      "type": "object",
-                      "nullable": true,
-                      "additionalProperties": true,
-                      "description": "Arbitrary key-value metadata for this variant."
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Variants upserted successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/PublicProductResponse"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error or invalid variants payload",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid API key"
-          },
-          "403": {
-            "description": "Tenant access denied or insufficient permissions"
-          },
-          "404": {
-            "description": "Product or one of the supplied variants not found in the specified tenant"
           }
         }
       }
@@ -4167,6 +4731,699 @@
         }
       }
     },
+    "/pcms/products": {
+      "get": {
+        "summary": "List Products (Catalog Sync)",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Paginated product feed for external catalog synchronization.\n\nSupports three composable modes: full/delta sync via `updated_since` (ISO 8601 UTC) for incremental pulls, explicit fetch via `ids` (comma-separated UUIDs, max 50) for known subsets, and free-text search via `q` for substring matches against product name, variant name, SKU, or barcode. All three AND-compose with each other and with pagination; results remain ordered by `updated_at` ascending for stable cursor checkpointing.\n\nWhen `q` matches against a variant field, the full parent product is returned with all non-orphaned variants — parity with `updated_since` semantics. All modes are tenant-scoped (foreign IDs and foreign-tenant matches are silently filtered, never leaked).\n\nDeleted products are included with `is_deleted: true` so consumers can remove them from their local catalog. Each product's `variants` array contains only active variants.\n\nInternal fields (cost, audit metadata, tenancy identifiers) are omitted from the response.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Code of the tenant to scope the request to.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "updated_since",
+            "in": "query",
+            "description": "ISO 8601 UTC datetime. When provided, only products updated at or after this timestamp are returned — including products where an active variant was updated. Example: `2026-01-01T00:00:00Z`.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "ids",
+            "in": "query",
+            "description": "Comma-separated list of product UUIDs to restrict the response to. Max 50 IDs per request. Foreign IDs (belonging to other tenants) are silently filtered. Returns `400 INVALID_IDS` for malformed input (non-UUID token, empty value, more than 50 IDs).",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "maxItems": 50,
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "style": "form",
+            "explode": false,
+            "example": "11111111-1111-4111-8111-111111111111,22222222-2222-4222-8222-222222222222"
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Free-text search fragment (2–500 characters). Matches case-insensitive substring (`ILIKE %q%`) against six columns for active (non-deleted) products: product name, product aliases, product tags, variant name, variant SKU, and variant barcode. When a variant matches, the full parent product is returned with all non-orphaned variants. For soft-deleted (tombstone) products, search is limited to product name, aliases, and tags only — variant fields (name, SKU, barcode) are not searchable because variant data for deleted products is not indexed. To retrieve all tombstones, omit `q` and use `updated_since` or a full sync instead. Composes with `ids` (which is independently capped at 50 UUIDs) and `updated_since` as a strict intersection — supplying all three narrows the result. Special characters `%` and `_` inside `q` are treated literally (escaped), not as wildcards. Control characters and Unicode-whitespace-only values are rejected with `INVALID_SEARCH`.",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 2,
+              "maxLength": 500,
+              "example": "iphone"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp at query execution — use as `updated_since` for the next delta sync call.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicProductResponse"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/MetaPagination"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameters (e.g. malformed updated_since, malformed ids, or out-of-range limit)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied"
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create product",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Create a new product within the tenant identified by `X-Tenant-Code`.\n\nSupports two creation modes:\n- **Simple mode**: omit `options` and `variants`. A single default variant is created from `sku`, `barcode`, and `price` on the product body.\n- **Variant mode**: supply 1–3 entries in `options` (e.g. Color, Size) plus a `variants` array. Each variant must populate `option1`/`option2`/`option3` with the chosen value for the corresponding option (positions match `options[]` order). The backend does not auto-generate the cartesian product — clients are responsible for sending the exact list of variants to create.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Code of the tenant to scope the request to.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 10000,
+                    "nullable": true
+                  },
+                  "brand_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "category_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "product_type_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "unit_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "DRAFT",
+                      "ACTIVE",
+                      "ARCHIVED"
+                    ],
+                    "default": "DRAFT"
+                  },
+                  "currency": {
+                    "type": "string",
+                    "default": "VND"
+                  },
+                  "sku": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Simple mode only: SKU for the auto-created default variant. Ignored when `options`/`variants` are provided."
+                  },
+                  "barcode": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Simple mode only: barcode for the auto-created default variant."
+                  },
+                  "price": {
+                    "type": "number",
+                    "nullable": true,
+                    "description": "Simple mode only: price for the auto-created default variant."
+                  },
+                  "manufacturer_code": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Simple mode only: manufacturer-assigned code for the auto-created default variant. Ignored when `options`/`variants` are provided."
+                  },
+                  "legacy_code": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Simple mode only: code carried over from a legacy system for the auto-created default variant."
+                  },
+                  "extra_data": {
+                    "type": "object",
+                    "nullable": true,
+                    "additionalProperties": true,
+                    "description": "Simple mode only: arbitrary key-value metadata for the auto-created default variant."
+                  },
+                  "aliases": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Alternative names / search aliases for this product.",
+                    "example": [
+                      "áo thun",
+                      "t-shirt"
+                    ]
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Free-form string tags for product organization and filtering.",
+                    "example": [
+                      "organic",
+                      "premium"
+                    ]
+                  },
+                  "options": {
+                    "type": "array",
+                    "maxItems": 3,
+                    "description": "Variant mode: defines the option axes (e.g. Color, Size). Up to 3 options; their order determines which `option1/2/3` slot each value maps to.",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "name",
+                        "values"
+                      ],
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "values": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "variants": {
+                    "type": "array",
+                    "description": "Variant mode: explicit list of variants to create. Each variant must set `option1`/`option2`/`option3` matching the values declared in `options[]` (by position).",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "name"
+                      ],
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "sku": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "barcode": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "price": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "option1": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Value for `options[0]`. Required when `options[0]` is defined."
+                        },
+                        "option2": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Value for `options[1]`."
+                        },
+                        "option3": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Value for `options[2]`."
+                        },
+                        "manufacturer_code": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Manufacturer-assigned code for this variant. Optional."
+                        },
+                        "legacy_code": {
+                          "type": "string",
+                          "nullable": true,
+                          "description": "Code carried over from a legacy system (e.g. ERP migration). Optional."
+                        },
+                        "extra_data": {
+                          "type": "object",
+                          "nullable": true,
+                          "additionalProperties": true,
+                          "description": "Arbitrary key-value metadata for this variant."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Product created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicProductResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or invalid product payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient permissions"
+          }
+        }
+      }
+    },
+    "/pcms/products/{id}": {
+      "get": {
+        "summary": "Get Product Detail",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Fetch a single product by id (same shape as the catalog sync feed), tenant-scoped. Returns 404 if the product does not exist or belongs to another tenant.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "description": "Scope to a tenant. If omitted, the product is resolved across all tenants the caller belongs to.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Product detail",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicProductResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Product not found"
+          }
+        }
+      },
+      "put": {
+        "summary": "Update product details",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Update the core details of a product. Variant-level fields (`sku`, `barcode`, `price`, option values) are intentionally **not** editable through this endpoint — use `PUT /pcms/products/{id}/variants` to modify variants.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Code of the tenant that owns the product.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "minProperties": 1,
+                "description": "At least one field must be provided.",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 500
+                  },
+                  "description": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "brand_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "category_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "product_type_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "unit_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "DRAFT",
+                      "ACTIVE",
+                      "ARCHIVED"
+                    ]
+                  },
+                  "currency": {
+                    "type": "string"
+                  },
+                  "aliases": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "tags": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Free-form string tags for product organization and filtering."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Product updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicProductResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or invalid payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient permissions"
+          },
+          "404": {
+            "description": "Product not found in the specified tenant"
+          }
+        }
+      }
+    },
+    "/pcms/products/{id}/variants": {
+      "put": {
+        "summary": "Upsert product variants",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Upsert variants of a product. The request body is an array of items.\n\n- Items **with** `variant_id` (UUID) → update the existing variant.\n- Items **without** `variant_id` → create a new variant (`name` is required; `option1`/`option2`/`option3` should match the product's option matrix).\n\nA single request may mix create and update items. Variants **not** included in the payload are left untouched (this endpoint does not delete variants). Unknown `variant_id` values return 404.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Code of the tenant that owns the product.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "description": "Either `variant_id` (update) OR `name` (create) is required.",
+                  "properties": {
+                    "variant_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "Omit to create a new variant; include to update an existing one."
+                    },
+                    "name": {
+                      "type": "string",
+                      "description": "Variant display name. Required when creating (variant_id omitted). For matrix products use `\"<opt1> / <opt2>\"`."
+                    },
+                    "sku": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "barcode": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "price": {
+                      "type": "number",
+                      "nullable": true
+                    },
+                    "option1": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "Used when creating a new variant on a matrix product."
+                    },
+                    "option2": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "option3": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "manufacturer_code": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "Manufacturer-assigned code for this variant. Optional."
+                    },
+                    "legacy_code": {
+                      "type": "string",
+                      "nullable": true,
+                      "description": "Code carried over from a legacy system (e.g. ERP migration). Optional."
+                    },
+                    "extra_data": {
+                      "type": "object",
+                      "nullable": true,
+                      "additionalProperties": true,
+                      "description": "Arbitrary key-value metadata for this variant."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Variants upserted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicProductResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error or invalid variants payload",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient permissions"
+          },
+          "404": {
+            "description": "Product or one of the supplied variants not found in the specified tenant"
+          }
+        }
+      }
+    },
     "/pcms/units": {
       "get": {
         "summary": "List Product Units",
@@ -4587,6 +5844,1728 @@
           },
           "409": {
             "description": "A unit with this abbreviation already exists in the tenant"
+          }
+        }
+      }
+    },
+    "/pcms/variants": {
+      "get": {
+        "summary": "List Variants by Barcode Prefix",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Paginated flat list of product variants. Accepts an optional `barcode_prefix` to filter variants whose barcode starts with the given string (ilike prefix-match with `%` and `_` escaped). Useful for finding the highest barcode already assigned in a prefix namespace to auto-increment without collisions.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Code of the tenant to scope the request to.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "barcode_prefix",
+            "in": "query",
+            "required": false,
+            "description": "Optional barcode prefix to filter variants. Only variants whose barcode starts with this value are returned. Special characters `%` and `_` are treated literally.",
+            "schema": {
+              "type": "string",
+              "example": "620111"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Sort order. Use `-barcode` for descending barcode order (to find highest barcode in a prefix range) or `barcode` for ascending. Defaults to `created_at` descending when omitted.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "barcode",
+                "-barcode"
+              ],
+              "example": "-barcode"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp at query execution.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "barcode": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "sku": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "product_id": {
+                            "type": "string",
+                            "format": "uuid"
+                          }
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/MetaPagination"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameters (e.g. invalid barcode_prefix, unsupported sort column, or out-of-range limit)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied"
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pcms/variants/{id}": {
+      "get": {
+        "summary": "Get Variant Detail",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Fetch a single product variant by UUID. Tenant-scoped. Orphaned, soft-deleted, and cross-tenant variants return 404.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Variant UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "description": "Scope to a tenant. If omitted, the variant is resolved across all tenants the caller belongs to.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Variant detail",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicProductVariantResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Variant not found"
+          }
+        }
+      }
+    },
+    "/tenants": {
+      "get": {
+        "summary": "List Tenants",
+        "tags": [
+          "Tenants"
+        ],
+        "description": "Retrieve the list of all tenants/workspaces that the authenticated user actively participates in.",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicTenantResponse"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid or missing Authorization"
+          }
+        }
+      }
+    },
+    "/wms/inbound-receipts": {
+      "get": {
+        "summary": "List Inbound Receipts",
+        "tags": [
+          "WMS"
+        ],
+        "description": "Returns paginated inbound receipts for a specific warehouse. Requires warehouse_code via query parameter or X-Warehouse-Code header.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to scope the request to. Required.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Search query for code or external reference",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filters[status][$eq]",
+            "in": "query",
+            "description": "Filter by exact status",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "DRAFT",
+                "PENDING",
+                "PARTIALLY_RECEIVED",
+                "RECEIVED",
+                "VERIFIED",
+                "CANCELLED"
+              ]
+            }
+          },
+          {
+            "name": "filters[status][$in]",
+            "in": "query",
+            "description": "Filter by multiple statuses (comma-separated)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 50
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort by column:asc or column:desc. Default: created_at:desc",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicWmsInboundReceiptResponse"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/MetaPagination"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing X-Tenant-Code, missing warehouse_code, or invalid query parameters"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse not found"
+          }
+        }
+      }
+    },
+    "/wms/inbound-receipts/{code}": {
+      "get": {
+        "summary": "Get Inbound Receipt Detail",
+        "tags": [
+          "WMS"
+        ],
+        "description": "Returns a single inbound receipt with its lines and status history. Requires warehouse_code via query parameter or X-Warehouse-Code header.",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "description": "Receipt code (e.g. IR-001)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsInboundReceiptDetailResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing X-Tenant-Code, missing warehouse_code, or invalid query parameters"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse or receipt not found"
+          }
+        }
+      }
+    },
+    "/wms/internal-transfers": {
+      "get": {
+        "summary": "List Internal Transfers",
+        "tags": [
+          "WMS"
+        ],
+        "description": "Returns paginated internal transfers for a specific warehouse. Requires warehouse_code via query parameter or X-Warehouse-Code header.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to scope the request to. Required.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Search query for transfer code",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filters[status][$eq]",
+            "in": "query",
+            "description": "Filter by exact status",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "DRAFT",
+                "IN_PROGRESS",
+                "COMPLETED",
+                "CANCELLED"
+              ]
+            }
+          },
+          {
+            "name": "filters[status][$in]",
+            "in": "query",
+            "description": "Filter by multiple statuses (comma-separated)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 50
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort by column:asc or column:desc. Allowed: created_at, updated_at, code. Default: created_at:desc",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicWmsInternalTransferResponse"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/MetaPagination"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing X-Tenant-Code, missing warehouse_code, or invalid query parameters"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse not found"
+          }
+        }
+      }
+    },
+    "/wms/internal-transfers/{code}": {
+      "get": {
+        "summary": "Get Internal Transfer Detail",
+        "tags": [
+          "WMS"
+        ],
+        "description": "Returns a single internal transfer with its lines (including from/to locations), and status history. Requires warehouse_code via query parameter or X-Warehouse-Code header.",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "description": "Transfer code (e.g. IT-001)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsInternalTransferDetailResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing X-Tenant-Code, missing warehouse_code, or invalid query parameters"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse or transfer not found"
+          }
+        }
+      }
+    },
+    "/wms/outbound-shipments": {
+      "get": {
+        "summary": "List Outbound Shipments",
+        "tags": [
+          "WMS"
+        ],
+        "description": "Returns paginated outbound shipments for a specific warehouse. Requires warehouse_code via query parameter or X-Warehouse-Code header.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to scope the request to. Required.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Search query for code or external reference (max 100 chars)",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "name": "filters[status][$eq]",
+            "in": "query",
+            "description": "Filter by exact status",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "DRAFT",
+                "PLANNED",
+                "PICKING",
+                "PACKED",
+                "EXPORTED",
+                "DONE",
+                "CANCELLED"
+              ]
+            }
+          },
+          {
+            "name": "filters[status][$in]",
+            "in": "query",
+            "description": "Filter by multiple statuses (comma-separated)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 50
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort by column:asc or column:desc. Allowed: created_at, updated_at. Default: created_at:desc",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicWmsOutboundShipmentResponse"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/MetaPagination"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing X-Tenant-Code, missing warehouse_code, or invalid query parameters"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse not found"
+          }
+        }
+      }
+    },
+    "/wms/outbound-shipments/{code}": {
+      "get": {
+        "summary": "Get Outbound Shipment Detail",
+        "tags": [
+          "WMS"
+        ],
+        "description": "Returns a single outbound shipment with its lines and status history. Requires warehouse_code via query parameter or X-Warehouse-Code header.",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "description": "Shipment code (e.g. SO-001)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsOutboundShipmentDetailResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing X-Tenant-Code, missing warehouse_code, or invalid query parameters"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse or shipment not found"
+          }
+        }
+      }
+    },
+    "/wms/warehouses": {
+      "get": {
+        "summary": "List Warehouses",
+        "tags": [
+          "WMS"
+        ],
+        "description": "Returns paginated list of warehouses the authenticated user has access to within the tenant. Owners and wms-admins see all warehouses; other members see only warehouses where they hold view or admin scope.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to scope the request to. Required.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Search query for code or name (max 200 chars)",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
+          },
+          {
+            "name": "filters[is_active][$eq]",
+            "in": "query",
+            "description": "Filter by active status (true or false)",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 50
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort by column:asc or column:desc. Allowed: created_at, updated_at, name, code.",
+            "schema": {
+              "type": "string",
+              "default": "created_at:desc"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicWmsWarehouseResponse"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/MetaPagination"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing X-Tenant-Code or invalid query parameters"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          }
+        }
+      }
+    },
+    "/wms/warehouses/{code}": {
+      "get": {
+        "summary": "Get Warehouse Detail",
+        "tags": [
+          "WMS"
+        ],
+        "description": "Returns warehouse details including the full location hierarchy tree. Authorization via warehouse permission check (defense in depth with RLS).",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "description": "Warehouse code (e.g. WH-001)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsWarehouseDetailResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing X-Tenant-Code or invalid query parameters"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse not found"
+          }
+        }
+      }
+    },
+    "/mission/tasks/code/{code}": {
+      "get": {
+        "summary": "Get Task Detail (by Code)",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task code (e.g. ACME-42)"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Task not found"
+          }
+        },
+        "description": "Retrieve a single task by UUID."
+      }
+    },
+    "/mission/tasks/code/{code}/comments": {
+      "get": {
+        "summary": "List Task Comments (by Code)",
+        "description": "Read-only chronological timeline of a task's conversation (human comments) and activity (status/assignment/etc. system messages). Returns 200 with an empty list when the task has no thread yet.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task code (e.g. ACME-42)"
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "description": "Filter the timeline. Omit to return both.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "comment",
+                "activity"
+              ]
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Order by created_at. Default desc (newest first).",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "desc"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size. Values > 50 are rejected with 400 (not clamped).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task comment / activity timeline",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicTaskCommentResponse"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/MetaPagination"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameter (type, sort, page, or limit)"
+          },
+          "404": {
+            "description": "Task not found"
+          }
+        }
+      }
+    },
+    "/mission/tasks/code/{code}/subtasks": {
+      "post": {
+        "summary": "Create Subtasks (by Code)",
+        "tags": [
+          "Tasks"
+        ],
+        "description": "Create batch subtasks (up to 25) under a parent task resolved by code. All-or-nothing validation.",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task code (e.g. ACME-42)"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateSubtasksRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Subtasks created successfully",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "parent_task": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "code": {
+                              "type": "string"
+                            },
+                            "title": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "subtasks": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/PublicTaskResponse"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (all-or-nothing) — nothing was created. Possible codes: SUBTASK_VALIDATION_ERROR, PARENT_TASK_NOT_FOUND, SUBTASK_INVALID, PARENT_TASK_ARCHIVED, INVALID_ASSIGNEE.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied — not parent task owner or tenant owner, or not a tenant member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Tasks"
+        ],
+        "summary": "List Subtasks (by Code)",
+        "description": "List subtasks of a parent task by code (e.g. ACME-42).",
+        "operationId": "listSubtasksByCode",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task code (e.g. ACME-42)"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated subtask list",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicTaskResponse"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/MetaPagination"
+                    }
+                  }
+                },
+                "examples": {
+                  "twoSubtasks": {
+                    "summary": "Parent task (ACME-42) with 2 subtasks",
+                    "value": {
+                      "data": [
+                        {
+                          "id": "550e8400-e29b-41d4-a716-446655440001",
+                          "code": "TASK-124",
+                          "title": "Check server logs",
+                          "description": null,
+                          "status": "To-Do",
+                          "priority": "High",
+                          "assignee": {
+                            "id": "123e4567-e89b-12d3-a456-426614174000",
+                            "display_name": "Alice",
+                            "member_code": "MEM-ALICE",
+                            "email": "alice@example.com"
+                          },
+                          "owner": {
+                            "id": "123e4567-e89b-12d3-a456-426614174001",
+                            "display_name": "Bob",
+                            "member_code": "MEM-BOB",
+                            "email": "bob@example.com"
+                          },
+                          "board_id": null,
+                          "board_list_id": null,
+                          "due_date": "2026-07-15T00:00:00.000Z",
+                          "parent": {
+                            "id": "550e8400-e29b-41d4-a716-446655440000",
+                            "code": "TASK-123",
+                            "title": "Alert: System Monitor"
+                          },
+                          "has_subtasks": false,
+                          "attachments": []
+                        },
+                        {
+                          "id": "550e8400-e29b-41d4-a716-446655440002",
+                          "code": "TASK-125",
+                          "title": "Notify on-call team",
+                          "description": "Send Slack notification",
+                          "status": "Doing",
+                          "priority": "Urgent",
+                          "assignee": null,
+                          "owner": {
+                            "id": "123e4567-e89b-12d3-a456-426614174001",
+                            "display_name": "Bob"
+                          },
+                          "board_id": null,
+                          "board_list_id": null,
+                          "due_date": null,
+                          "parent": {
+                            "id": "550e8400-e29b-41d4-a716-446655440000",
+                            "code": "TASK-123",
+                            "title": "Alert: System Monitor"
+                          },
+                          "has_subtasks": false,
+                          "attachments": []
+                        }
+                      ],
+                      "meta": {
+                        "page": 1,
+                        "limit": 2,
+                        "total": 2,
+                        "has_more": false
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Parent task not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/mission/tasks/code/{code}/attachments/{attachmentId}/download": {
+      "get": {
+        "summary": "Download Task Attachment (by Code)",
+        "description": "Returns a short-lived (5 minute) signed URL for a task-level attachment as JSON data, never an HTTP redirect. Task-scoped: only members of the task's own tenant, for attachments that belong to that task, can download.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "description": "Task code (e.g. ACME-42)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "attachmentId",
+            "in": "path",
+            "required": true,
+            "description": "Attachment ID.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Signed download URL and file metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicAttachmentDownloadResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Task or attachment not found"
+          },
+          "500": {
+            "description": "Signed URL generation failed"
+          }
+        }
+      }
+    },
+    "/mission/tasks/code/{code}/comments/attachments/{attachmentId}/download": {
+      "get": {
+        "summary": "Download Comment Attachment (by Code)",
+        "description": "Returns a short-lived (5 minute) signed URL for a comment/message-level attachment as JSON data, never an HTTP redirect. Tenant-scoped, NOT task-scoped: any active member of this task's tenant can download this attachment, regardless of whether they have visibility into the specific task or thread it was posted to. Cross-tenant access is not possible — this is a tenant-scope, not task-scope, guarantee.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "description": "Task code (e.g. ACME-42)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "attachmentId",
+            "in": "path",
+            "required": true,
+            "description": "Attachment ID.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Signed download URL and file metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicAttachmentDownloadResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Task or attachment not found"
+          },
+          "500": {
+            "description": "Signed URL generation failed"
+          }
+        }
+      }
+    },
+    "/pcms/variants/sku/{sku}": {
+      "get": {
+        "summary": "Get Variant Detail (by SKU)",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Fetch a single product variant by SKU (natural key). Tenant-scoped. Orphaned, soft-deleted, and cross-tenant variants return 404.",
+        "parameters": [
+          {
+            "name": "sku",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Variant SKU (e.g. SKU-001)"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "description": "Scope to a tenant. If omitted, the variant is resolved across all tenants the caller belongs to.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Variant detail",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicProductVariantResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Variant not found"
+          }
+        }
+      }
+    },
+    "/mission/tasks/with-subtasks": {
+      "post": {
+        "summary": "Create Task with Subtasks",
+        "tags": [
+          "Tasks"
+        ],
+        "description": "Create a task together with its subtasks in a single atomic request. All-or-nothing validation: if any part fails, nothing is created. Max 25 subtasks per request.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTaskWithSubtasksRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Task and subtasks created successfully",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "task": {
+                          "$ref": "#/components/schemas/PublicTaskResponse"
+                        },
+                        "subtasks": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/PublicTaskResponse"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (all-or-nothing) — nothing was created. Possible codes: VALIDATION_ERROR, MISSING_TENANT, INVALID_ASSIGNEE, INVALID_FOLLOWERS, BOARD_NOT_FOUND, SUBTASK_VALIDATION_ERROR.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Permission denied — not a tenant member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
