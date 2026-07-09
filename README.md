@@ -226,8 +226,8 @@ Notes:
 - `products create`/`update` also accept `--from-json -` for options + variants in one call (mutually exclusive with individual field flags).
 - `products update` is the **only** write verb for updates (PUT-style full replace of the provided fields) — unlike reference data, products has no separate `replace` command.
 - Soft-deleted products still appear in list results. Check `is_deleted` on the product object — the plain `status` field does not reveal deletion on its own.
-- `--all` streams every row it fetches even if it fails mid-pagination, and exits non-zero. A zero exit is what tells you the sweep finished.
-- `--ids` exits 4 when a requested id does not come back; the rows that did are still printed.
+- `--all` streams every row it fetches even if it fails mid-pagination; the rows appear beneath an `error` key and the command exits non-zero.
+- `--ids` exits 4 when a requested id does not come back; the rows that did are still printed, beneath an `error` key naming the ones that did not.
 
 ## Reference data
 

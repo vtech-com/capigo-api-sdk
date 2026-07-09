@@ -261,6 +261,12 @@ There is **no output flag**. Every command that succeeds prints exactly one thin
 - Redirecting (`>`) or piping (`|`) is always safe: stdout is JSON and nothing else is ever
   written to it. There is no prefix line to strip.
 - A **failure** prints `{"error": {…}}` — still JSON, still stdout. Parse stdout unconditionally.
+- A command that fails *after* fetching rows (`--all` aborting mid-sweep, `--ids` missing an id)
+  prints **one** document with all three keys: `{"error": {…}, "data": […], "meta": {…}}`. The
+  rows are real; the answer is incomplete.
+- **`if "error" in doc` is the completeness test.** Run it before you report anything. A `--ids`
+  result missing two ids reports `"total": 1, "has_more": false` — indistinguishable from success
+  unless you check for the key.
 
 **Cross-cutting mechanics now ship inside the binary as help topics** — pull one when you need
 it, instead of trusting your memory of this file:

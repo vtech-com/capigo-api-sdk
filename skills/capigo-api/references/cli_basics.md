@@ -191,13 +191,15 @@ Key facts callers depend on:
   restore it.
 - The product object carries `aliases[]` and `tags[]`, so alias/Product-Code and tag checks
   don't need a second call — but completeness still requires paging (`--all`).
-- **`--ids` exits 4 when an id does not come back.** The rows that did come back are printed
-  first, as a normal envelope; the exit code carries the shortfall. A missing id means "deleted
-  or wrong-tenant" — never silently skip it in your answer. **Check the exit code**, not the row
-  count.
+- **`--ids` exits 4 when an id does not come back.** The rows that did come back are still
+  printed, in the same document, beneath an `error` key naming the ids that did not. A missing id
+  means "deleted or wrong-tenant" — never silently skip it in your answer.
 - **`--all` auto-paginates and streams every row.** If it fails mid-pagination (rate limit,
-  network), the rows already fetched are still printed and the command exits non-zero. A zero
-  exit is what tells you the sweep finished; treat a non-zero exit as a partial catalogue.
+  network), the rows already fetched are still printed, beneath an `error` key, and the command
+  exits non-zero.
+- **`if "error" in doc` is the completeness test.** A document with an `error` key is a prefix of
+  the truth, however complete `meta` looks — a `--ids` result missing two ids reports
+  `"total": 1, "has_more": false`, exactly like success. Test for the key before you report.
 
 ```bash
 # Create a simple product with a Product Code alias
@@ -446,10 +448,10 @@ How to get a complete result set:
 - **`products list` has `--all`** — it auto-paginates internally and streams every row. Use it
   when you truly need the **whole catalogue** (a full export, or an exhaustive scan `--query`
   can't express): `capigo --tenant acme products list --all | jq '.data[]'`.
-  **If `--all` fails mid-pagination** (rate limit, network), the rows already fetched are
-  still printed and the command exits non-zero. **Never treat an `--all` result as the whole
-  catalogue when the exit code is non-zero** — the rows on stdout are a truthful prefix, not
-  the whole of it.
+  **If `--all` fails mid-pagination** (rate limit, network), the rows already fetched are still
+  printed beneath an `error` key, and the command exits non-zero. **Never treat a document with
+  an `error` key as the whole catalogue** — the rows in it are a truthful prefix, not the whole
+  of it.
 - **Every other `list`** (`tasks`, `boards`, `members`, `brands`, `categories`,
   `product-types`, `units`, `variants`) has **no `--all`** — page manually: start at
   `--page 1`, and while `meta.has_more` is `true`, request the next `--page`. Raising

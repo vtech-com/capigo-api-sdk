@@ -58,22 +58,55 @@ type Meta struct {
 // caller anything it could not compute, and both cost a field in the envelope,
 // a branch in the command, and a paragraph in the help.
 
-// envelope is the one shape this CLI emits on success.
+// envelope is the one shape this CLI emits.
+//
+// Error comes first so that a reader — human or machine — meets it before the
+// rows it qualifies. It is absent on success, and its presence is the whole
+// test: a document with an error key is not a complete answer, whatever the
+// rows and the meta beside it may look like.
 type envelope struct {
-	Data any  `json:"data"`
-	Meta Meta `json:"meta"`
+	Error any  `json:"error,omitempty"`
+	Data  any  `json:"data"`
+	Meta  Meta `json:"meta"`
 }
 
 // Write emits the envelope to w. A nil or nil-slice data becomes [], so an
 // empty result is never indistinguishable from a missing one.
 func Write(w io.Writer, data any, meta Meta) error {
-	rv := reflect.ValueOf(data)
-	if rv.Kind() == reflect.Slice && rv.IsNil() {
-		data = reflect.MakeSlice(rv.Type(), 0, 0).Interface()
-	}
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
-	return enc.Encode(envelope{Data: data, Meta: meta})
+	return enc.Encode(envelope{Data: normalizeData(data), Meta: meta})
+}
+
+// WritePartial emits one document carrying both the failure and the rows that
+// were fetched before it: an --all sweep that aborted on page 41 still holds
+// forty real pages, and a --ids request that lost two ids still found the rest.
+//
+// Neither throwing the rows away nor printing them under a clean envelope is
+// honest. Thrown away, a caller must refetch what the CLI already has. Printed
+// alone, they are indistinguishable from a complete answer — a --ids result
+// missing two ids reports "total": 1, "has_more": false, which is exactly what
+// success looks like.
+//
+// So the rows stand, and the error key stands over them. A caller tests for the
+// key; it does not have to reach for the exit code, or read stderr, to know it
+// is holding a prefix of the truth.
+func WritePartial(stdout, stderr io.Writer, data any, meta Meta, d ErrorDetail) error {
+	enc := json.NewEncoder(stdout)
+	enc.SetIndent("", "  ")
+	err := enc.Encode(envelope{Error: errorObject(d), Data: normalizeData(data), Meta: meta})
+	RenderErrorSummary(stderr, d)
+	return err
+}
+
+// normalizeData turns a nil slice into an empty one. A nil slice marshals to
+// null, which reads as neither "no rows" nor "no such key".
+func normalizeData(data any) any {
+	rv := reflect.ValueOf(data)
+	if rv.Kind() == reflect.Slice && rv.IsNil() {
+		return reflect.MakeSlice(rv.Type(), 0, 0).Interface()
+	}
+	return data
 }
 
 // Ptr is a convenience for the pointer fields of Meta.
@@ -101,9 +134,20 @@ type ErrorDetail struct {
 // that parses stdout unconditionally gets an object with an "error" key rather
 // than a parse error on top of an API error.
 func RenderError(stdout, stderr io.Writer, d ErrorDetail) {
-	// Only the keys that carry something. A `"next": ""` forces a caller to
-	// tell an absent step apart from an empty one, which is a distinction
-	// without a difference and a branch nobody writes correctly.
+	enc := json.NewEncoder(stdout)
+	enc.SetIndent("", "  ")
+	_ = enc.Encode(map[string]any{"error": errorObject(d)})
+	RenderErrorSummary(stderr, d)
+}
+
+// errorObject builds the error key. It is shared by RenderError, which prints
+// nothing else, and WritePartial, which prints it above the rows it qualifies —
+// so a failure reads the same whether or not any data came back with it.
+//
+// Only the keys that carry something. A `"next": ""` forces a caller to tell an
+// absent step apart from an empty one, which is a distinction without a
+// difference and a branch nobody writes correctly.
+func errorObject(d ErrorDetail) map[string]any {
 	e := map[string]any{"code": d.Code, "message": d.Message}
 	putIf := func(k string, v string) {
 		if v != "" {
@@ -123,11 +167,7 @@ func RenderError(stdout, stderr io.Writer, d ErrorDetail) {
 	if d.CapabilityNote {
 		e["capability_note"] = capabilityBrake
 	}
-
-	enc := json.NewEncoder(stdout)
-	enc.SetIndent("", "  ")
-	_ = enc.Encode(map[string]any{"error": e})
-	RenderErrorSummary(stderr, d)
+	return e
 }
 
 // RenderErrorSummary writes only the stderr line.

@@ -124,29 +124,80 @@ func TestRenderErrorOmitsTheBrakeWhenItDoesNotApply(t *testing.T) {
 	}
 }
 
-// stdout carries one JSON document. A command that has already printed its
-// envelope and then fails must not append an error object to it: json.load on
-// the pair raises "Extra data", which is precisely the failure the single-shape
-// contract exists to remove.
-func TestRenderErrorSummaryWritesNothingToStdout(t *testing.T) {
+// A partial result is one JSON document carrying both the failure and the rows
+// that survived it. Printed under a clean envelope those rows are
+// indistinguishable from a complete answer; thrown away, the caller must refetch
+// what the CLI already holds.
+func TestWritePartialCarriesBothTheErrorAndTheRows(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	_ = Write(&stdout, []brand{{ID: "a1"}}, Meta{Total: Ptr(5)})
-	before := stdout.Len()
-
-	RenderErrorSummary(&stderr, ErrorDetail{Code: "BOOM", Message: "page 2 failed"})
-
-	if stdout.Len() != before {
-		t.Errorf("stdout grew after the envelope was written:\n%s", stdout.String())
+	err := WritePartial(&stdout, &stderr, []brand{{ID: "a1"}}, Meta{Total: Ptr(1)},
+		ErrorDetail{Code: "NOT_FOUND", Message: "2 of the requested ids were not returned: b2, c3"})
+	if err != nil {
+		t.Fatalf("WritePartial: %v", err)
 	}
-	var one any
+
+	// One document, not two: json.load on a pair raises "Extra data", which is
+	// the failure the single-shape contract exists to remove.
 	dec := json.NewDecoder(bytes.NewReader(stdout.Bytes()))
-	if err := dec.Decode(&one); err != nil {
-		t.Fatalf("envelope does not decode: %v", err)
+	var got struct {
+		Error map[string]any `json:"error"`
+		Data  []brand        `json:"data"`
+		Meta  Meta           `json:"meta"`
+	}
+	if err := dec.Decode(&got); err != nil {
+		t.Fatalf("stdout is not one JSON document: %v\n%s", err, stdout.String())
 	}
 	if dec.More() {
-		t.Error("stdout holds more than one JSON document")
+		t.Fatal("stdout holds more than one JSON document")
 	}
-	if !strings.Contains(stderr.String(), "page 2 failed") {
+
+	if got.Error["code"] != "NOT_FOUND" {
+		t.Errorf("error key lost: %v", got.Error)
+	}
+	if len(got.Data) != 1 || got.Data[0].ID != "a1" {
+		t.Errorf("the rows that were fetched were discarded: %v", got.Data)
+	}
+	if got.Meta.Total == nil || *got.Meta.Total != 1 {
+		t.Errorf("meta lost: %+v", got.Meta)
+	}
+	if !strings.Contains(stderr.String(), "b2, c3") {
 		t.Errorf("stderr lost the diagnosis: %s", stderr.String())
+	}
+}
+
+// The error key is the whole test for completeness. A caller must not have to
+// consult the exit code, or read stderr, to know whether it holds everything.
+func TestWriteOmitsTheErrorKeyOnSuccess(t *testing.T) {
+	var buf bytes.Buffer
+	if err := Write(&buf, []brand{{ID: "a1"}}, Meta{Total: Ptr(1)}); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	if strings.Contains(buf.String(), "error") {
+		t.Errorf("a successful envelope carries an error key:\n%s", buf.String())
+	}
+}
+
+// The error reads the same whether or not rows came back with it — both paths
+// build it from one function.
+func TestPartialAndBareErrorsAgreeOnTheErrorObject(t *testing.T) {
+	d := ErrorDetail{Code: "E9426", Message: "boom", RequestID: "req_7", CapabilityNote: true}
+
+	var bareOut, bareErr bytes.Buffer
+	RenderError(&bareOut, &bareErr, d)
+	var partOut, partErr bytes.Buffer
+	_ = WritePartial(&partOut, &partErr, []brand{}, Meta{}, d)
+
+	var bare, part struct {
+		Error map[string]any `json:"error"`
+	}
+	if err := json.Unmarshal(bareOut.Bytes(), &bare); err != nil {
+		t.Fatalf("bare: %v", err)
+	}
+	if err := json.Unmarshal(partOut.Bytes(), &part); err != nil {
+		t.Fatalf("partial: %v", err)
+	}
+	if len(bare.Error) != len(part.Error) || bare.Error["code"] != part.Error["code"] ||
+		bare.Error["capability_note"] != part.Error["capability_note"] {
+		t.Errorf("the two error shapes disagree:\n bare: %v\n part: %v", bare.Error, part.Error)
 	}
 }

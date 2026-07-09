@@ -55,8 +55,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - **stdout carries exactly one JSON document.** A command that had already printed its envelope
   and then failed — a `--all` sweep aborting part-way — appended an error object to it, so
   `json.load` on the pair raised `Extra data`: the precise failure the single-shape contract
-  exists to remove. Once data is on stdout, the diagnosis goes to stderr alone and the exit code
-  carries the failure.
+  exists to remove.
+
+  A command that fails after fetching real rows now prints one document carrying both, error
+  first: `{"error": {…}, "data": […], "meta": {…}}`. The rows are not discarded — an `--all`
+  sweep that aborts on page 41 still holds forty real pages — and they are not printed under a
+  clean envelope either, because a `--ids` result missing two ids reports `"total": 1` and
+  `"has_more": false`, which is exactly what success looks like.
+
+  **The presence of the `error` key is the completeness test.** A caller never has to consult the
+  exit code, or read stderr, to know it is holding a prefix of the truth.
 
 - **A failure prints JSON on stdout** — `{"error": {…}}`, carrying `code`, `message`, `meaning`,
   `next`, `capability_note`, `raw`, `request_id` and `http_status` — plus the one-line summary on

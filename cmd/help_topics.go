@@ -119,28 +119,39 @@ FAILURE
   on stdout, so a caller that parses stdout unconditionally reads a diagnosis
   rather than a parse error:
 
-      { "error": { "code": …, "message": …, "next": …, "request_id": … } }
+      { "error": { "code": …, "message": …, "next": …, "request_id": … }}
 
   A one-line summary also goes to stderr.
 
-  stdout carries ONE JSON document. When a command has already printed its
-  envelope and then fails — an --all sweep that aborts part-way, a --ids
-  request missing an id — the rows it fetched stand on stdout as a normal
-  envelope, and the diagnosis goes to stderr alone. The exit code carries the
-  failure. Nothing is ever appended to a printed envelope.
+A PARTIAL RESULT
+  A command may fail after fetching real rows: an --all sweep that aborts on
+  page 41 still holds forty pages, and a --ids request that lost two ids still
+  found the rest. Those rows are not discarded. The document carries all three
+  keys, error first:
+
+      { "error": { … }, "data": [ … ], "meta": { … } }
+
+  The error key is the test. A document that has one is not a complete answer,
+  whatever the rows and the meta beside it may look like — a --ids result
+  missing two ids reports "total": 1 and "has_more": false, which is exactly
+  what success looks like. Check for the key, and you never have to reach for
+  the exit code or read stderr to know what you are holding.
+
+  stdout carries ONE JSON document, always. Nothing is ever appended to a
+  document already printed.
 
   What the exit code means, and what each field of the error object carries:
   capigo help exit-codes
 
 STREAMS
-  stdout    one JSON document: the envelope, or the error object. Never both,
-            and never anything else.
+  stdout    one JSON document, and nothing else. It carries data, or an error,
+            or — when a command failed after fetching rows — both.
   stderr    the one-line error summary, and --verbose HTTP tracing.
 
-  Which tenant a write landed in, and how many records exist, are facts worth
-  acting on, so they are in meta on stdout rather than announced on a stream a
-  caller may not read. Whether a sweep finished is carried by the exit code,
-  which a caller cannot help but receive.
+  Everything a caller must act on is on stdout: which tenant a write landed in,
+  how many records exist, whether the answer is complete. Nothing that matters
+  is announced only on a stream the caller may not read, or only in an exit code
+  it may not check.
 
 SEE ALSO
   capigo help exit-codes   what a non-zero exit means

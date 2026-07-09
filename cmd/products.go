@@ -82,7 +82,8 @@ FLAGS
   --ids <uuid,...>
       Fetch products by id, at most 50, comma-separated. If any id does not
       come back — deleted, or in another tenant — the products that did are
-      printed and the command exits 4. Cannot be combined with --all.
+      still printed, under an error key naming the ids that did not, and the
+      command exits 4. Cannot be combined with --all.
 
         capigo products list --tenant acme --ids 7c1f2e88-...,9ab2c744-...
 
@@ -96,8 +97,8 @@ FLAGS
   --all
       Fetch every page. All pages are held in memory before anything prints, so
       page manually over a large catalogue. If a page fails mid-sweep, the rows
-      already fetched are printed and the command exits non-zero — a zero exit
-      is what tells you the sweep finished.
+      already fetched are still printed, under an error key, and the command
+      exits non-zero.
 
         capigo products list --tenant acme --all
 
@@ -140,10 +141,14 @@ OUTPUT
   the caller can see would otherwise give them. Feed it to --updated-since on
   the next call.
 
-  Exit 4 when --ids asked for an id the server did not return, and non-zero
-  when an --all sweep aborted. In both cases the rows that were fetched are
-  printed first, on stdout, as a normal envelope; the diagnosis is on stderr.
-  stdout carries one JSON document, always.
+  When --ids asked for an id the server did not return (exit 4), or an --all
+  sweep aborted (exit non-zero), the rows that were fetched are still
+  printed — in the same document, beneath an error key:
+
+      { "error": {...}, "data": [...], "meta": {...} }
+
+  An error key means the answer is incomplete. Without it, .data is everything
+  the request asked for. See capigo help output.
 
   meta.tenant is the tenant this call actually ran against, and
   meta.tenant_source says whether that came from the flag, from CAPIGO_TENANT,
@@ -226,22 +231,20 @@ OUTPUT
 		meta := listMeta(tenant, productListTenant, envelope.Meta)
 		meta.ServerTime = resp.ServerTime
 
-		if err := output.Write(os.Stdout, envelope.Data, meta); err != nil {
-			return handleErr(err)
-		}
-
-		// You asked for specific ids and did not get all of them. A clean exit 0
-		// with fewer rows than requested answers a different question than the
-		// one asked. The rows that did come back are printed first — they are
-		// real — and the exit code carries the shortfall.
+		// You asked for specific ids and did not get all of them. Printed under
+		// a clean envelope those rows are indistinguishable from a complete
+		// answer — the server reports total: 1, has_more: false, which is what
+		// success looks like. So the rows stand, and an error key stands over
+		// them.
 		if missing, _ := missingProductIDs(productListIDs, envelope.Data); len(missing) > 0 {
-			return failAfterOutput(&api.APIError{
+			return failWithData(&api.APIError{
 				Code:       "NOT_FOUND",
 				Message:    fmt.Sprintf("%d of the requested ids were not returned: %s", len(missing), strings.Join(missing, ", ")),
 				HTTPStatus: 404,
-			})
+			}, envelope.Data, meta)
 		}
-		return nil
+
+		return output.Write(os.Stdout, envelope.Data, meta)
 	},
 }
 
@@ -250,9 +253,9 @@ OUTPUT
 // still written and the command still exits with the underlying error's code,
 // so empty stdout never masquerades as an empty catalogue.
 //
-// The diagnosis goes to stderr alone. stdout carries one JSON document, and a
-// caller that parses it reads a truthful prefix of the catalogue; the exit code
-// is what tells it the sweep did not finish.
+// stdout carries one JSON document either way. When the sweep aborts, that
+// document carries an error key above the rows, so a caller holding it knows it
+// holds a prefix of the catalogue without having to consult the exit code.
 func productsListAll(ctx context.Context, client *api.Client, tenant *string) error {
 	page := 1
 	var allProducts []api.Product
@@ -315,14 +318,11 @@ func productsListAll(ctx context.Context, client *api.Client, tenant *string) er
 	})
 	meta.ServerTime = lastServerTime
 
-	if err := output.Write(os.Stdout, allProducts, meta); err != nil {
-		return handleErr(err)
+	if fetchErr != nil {
+		return failWithData(fetchErr, allProducts, meta)
 	}
 
-	if fetchErr != nil {
-		return failAfterOutput(fetchErr)
-	}
-	return nil
+	return output.Write(os.Stdout, allProducts, meta)
 }
 
 // --------------------------------------------------------------------------

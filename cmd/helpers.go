@@ -111,21 +111,23 @@ func handleErr(err error) error {
 	return nil
 }
 
-// failAfterOutput ends a command that has already written its envelope. The
-// diagnosis goes to stderr alone: stdout holds one JSON document, and appending
-// an error object to a printed envelope makes the pair unparseable.
+// failWithData ends a command that fetched real rows and then failed. It prints
+// one document carrying both — the error key above the rows it qualifies — and
+// exits non-zero.
 //
-// The exit code carries the failure. A caller that ignores it and parses stdout
-// reads a truthful, incomplete result — which is what it is.
-func failAfterOutput(err error) error {
+// Nothing is printed before this call: the rows are held until the outcome is
+// known, so stdout never receives an envelope that a later error would have to
+// contradict.
+func failWithData(err error, data any, meta output.Meta) error {
 	detail := output.ErrorDetail{Code: "ERROR", Message: err.Error()}
 	var apiErr *api.APIError
 	if errors.As(err, &apiErr) {
 		detail.Code = apiErr.Code
 		detail.Message = apiErr.Message
 		detail.RequestID = apiErr.RequestID
+		detail.HTTPStatus = apiErr.HTTPStatus
 	}
-	output.RenderErrorSummary(os.Stderr, detail)
+	_ = output.WritePartial(os.Stdout, os.Stderr, data, meta, detail)
 	os.Exit(api.ExitCodeFor(err))
 	return nil
 }
