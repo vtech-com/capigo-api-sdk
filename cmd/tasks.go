@@ -18,6 +18,11 @@ import (
 var taskCmd = &cobra.Command{
 	Use:   "tasks",
 	Short: "Manage tasks",
+	Long: `Manage tasks in Capigo Mission.
+
+Reads may span tenants: omit --tenant on list, get and comments to see every
+tenant this key can reach. Writes name exactly one.
+  capigo help tenancy`,
 }
 
 // tasks list flags
@@ -42,6 +47,52 @@ var (
 var tasksListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List tasks",
+	Long: `List tasks, optionally filtered.
+
+PURPOSE
+  Find tasks across boards, and across tenants. Reading without --tenant returns
+  tasks from every tenant this key can reach, and table output gains a Tenant
+  column.
+
+INPUT
+  (flags only; no request body)
+  --tenant <code>          optional; omit it to span every accessible tenant
+  -q, --query <term>       search by task title
+  --status <text>          Pending, To-Do, Doing, Done, Closed, Cancelled
+  --priority <text>        e.g. low, medium, high
+  --assignee-id <uuid>     tasks assigned to this user
+  --owner-id <uuid>        tasks owned by this user
+  --board-id <uuid>        tasks on this board
+  --board-list-id <uuid>   tasks in this board list
+  --due-after <date>       ISO 8601 date; due on or after it
+  --due-before <date>      ISO 8601 date; due on or before it
+  --created-after <ts>     ISO 8601 timestamp
+  --created-before <ts>    ISO 8601 timestamp
+  --parent-task-id <uuid>  the children of one task. Pass the literal string
+                           null to return only top-level tasks.
+  --page <n>               page number
+  --limit <n>              items per page
+
+OUTPUT
+  -o json emits the list envelope. Each row is a task:
+
+      { id, code, title, description, status, priority, assignee, owner,
+        board_id, board_list_id, due_date, parent_task_id, has_subtasks,
+        attachments[], created_at, updated_at }
+
+  The envelope, meta.total and list footers: capigo help output
+
+EXAMPLES
+  capigo tasks list --status To-Do
+
+  # Top-level tasks only, in one tenant
+  capigo tasks list --tenant acme --parent-task-id null -o json | jq -r '.data[].code'
+
+SEE ALSO
+  tasks get <id>          one task in full
+  tasks comments <id>     its discussion and activity
+  capigo help tenancy     when --tenant may be omitted
+  capigo help output      output modes and the JSON contract`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -127,7 +178,41 @@ var (
 var tasksGetCmd = &cobra.Command{
 	Use:   "get <id>",
 	Short: "Get a task by ID",
-	Args:  cobra.ExactArgs(1),
+	Long: `Get one task by UUID.
+
+PURPOSE
+  Read a single task in full. This is the authoritative source for a task's
+  current status and assignee. tasks comments records how it got there, but
+  activity entries are written asynchronously and can lag.
+
+INPUT
+  <id>              task UUID (positional, required)
+  --tenant <code>   optional; scopes the lookup
+
+OUTPUT
+  -o json emits the bare task object:
+
+      { id, code, title, description, status, priority, assignee, owner,
+        board_id, board_list_id, due_date, parent_task_id, has_subtasks,
+        attachments[], created_at, updated_at }
+
+  attachments[] carries metadata only — id, file_name, mime_type, size_bytes.
+  It never carries a download URL; tasks attachments download fetches one.
+
+  Exit 4 when no such task is reachable.
+
+  Output modes and the JSON contract: capigo help output
+
+EXAMPLES
+  capigo tasks get <uuid>
+  capigo tasks get <uuid> -o json | jq '.attachments[]'
+
+SEE ALSO
+  tasks comments <id>                  the discussion and activity timeline
+  tasks attachments download           fetch a file listed in attachments[]
+  tasks update <id>                    change status, assignee, board
+  capigo help exit-codes               what exit 4 means`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
 
@@ -182,20 +267,56 @@ var (
 var tasksCommentsCmd = &cobra.Command{
 	Use:   "comments <id>",
 	Short: "List a task's comments and activity timeline",
-	Long: `List the conversation and activity timeline of a task: human comments
-interleaved with system activity (status, assignment, title, description,
-due-date and create events).
+	Long: `Read a task's discussion and activity timeline.
 
-Each entry has a "kind":
-  comment   a message typed by a person or an agent
-  activity  a system event (e.g. "X changed status from Doing to Done")
+PURPOSE
+  See what people said and how the work progressed. Human comments are
+  interleaved with system activity, newest first by default.
 
-Use --type comment or --type activity to return only one kind. Order is newest
-first by default; pass --sort asc for oldest first.
+  For a task's CURRENT status or assignee, read tasks get. Activity entries are
+  written asynchronously and can lag, so this command is the history, not the
+  source of truth for live state.
 
-A task that nobody has commented on yet returns an empty list (exit 0), not an
-error. The authoritative current status of a task lives on the task itself
-(tasks get) — this command provides the history/narrative.`,
+INPUT
+  <id>              task UUID (positional, required)
+  --tenant <code>   optional; scopes the lookup
+  --type <kind>     return only one kind: comment or activity
+  --sort <order>    asc or desc by created_at. Default desc, newest first.
+  --page <n>        page number, 1-based
+  --limit <n>       items per page, at most 50
+
+OUTPUT
+  -o json emits the list envelope. Each entry:
+
+      { id, author { id, name, type }, kind, content, ui_data,
+        attachments[], parent_id, created_at }
+
+  kind is one of comment, activity, card or artifact.
+
+      comment    text a person or an agent typed; it is in content
+      activity   a system event. content is a ready-made sentence, and ui_data
+                 carries the structured before and after.
+
+  author.name may read System when the original actor can no longer be
+  resolved — a removed member, for instance. That is a graceful fallback, not
+  an error.
+
+  attachments[] carries metadata only, never a download URL.
+
+  A task nobody has commented on returns an empty list and exit 0.
+
+  The envelope, meta.total and list footers: capigo help output
+
+EXAMPLES
+  capigo tasks comments <uuid> -o json | jq '.data[] | {created_at, kind, content}'
+
+  # Only the human discussion, oldest first
+  capigo tasks comments <uuid> --type comment --sort asc -o json
+
+SEE ALSO
+  tasks get <id>                        the authoritative current state
+  tasks comments attachments download   fetch a file from a timeline entry
+  capigo help output                    output modes and the JSON contract`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -283,19 +404,44 @@ var (
 var tasksUpdateCmd = &cobra.Command{
 	Use:   "update <id>",
 	Short: "Partial update of a task (PATCH)",
-	Long: `Partial update (PATCH) of an existing task. All fields are optional;
-at least one must be provided. Fields not specified are left unchanged.
+	Long: `Update a task. Fields you do not send are left unchanged.
 
-Clearing semantics:
-  --assignee ""              unassign the task (sends assignee_id: null)
-  --board "" --list ""       remove the task from its board (both null)
+PURPOSE
+  Change a task's title, description, status, assignee, board placement or
+  followers (PATCH).
 
---board and --list are sent together: setting either flag sends both. To move
-a task onto a board pass --board <uuid> --list <uuid>; to remove it pass both
-as empty strings. (The API requires board_id and board_list_id together.)
+INPUT
+  <id>                   task UUID (positional, required)
+  --tenant <code>        optional; scopes the lookup
+  --title <text>
+  --description <text>   an empty string clears it
+  --status <text>        Pending, To-Do, Doing, Done, Closed, Cancelled
+  --assignee <uuid>      an empty string unassigns
+  --board <uuid>         board id
+  --list <uuid>          board list id
+  --follower-id <uuid>   repeatable
 
-follower_ids is additive: listed users are added as followers (idempotent);
-removing followers is not supported by this endpoint.`,
+  At least one flag is required; sending none exits 5.
+
+  --board and --list are always sent together: setting either one sends both.
+  Passing --board "" --list "" removes the task from its board.
+
+  --follower-id is additive and idempotent. This endpoint cannot remove a
+  follower.
+
+OUTPUT
+  -o json emits the bare updated task, the same shape as tasks get.
+
+  Output modes and the JSON contract: capigo help output
+
+EXAMPLES
+  capigo tasks update <uuid> --status Done
+  capigo tasks update <uuid> --assignee ""             # unassign
+  capigo tasks update <uuid> --board "" --list ""      # remove from its board
+
+SEE ALSO
+  tasks get <id>          read the current values first
+  capigo help exit-codes  what exit 5 means`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -420,6 +566,57 @@ var (
 var tasksCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a new task",
+	Long: `Create a task, optionally with its subtasks in the same call.
+
+PURPOSE
+  Add a task. With --subtasks-json the parent and its children are created
+  atomically: if any subtask is invalid, nothing at all is created.
+
+INPUT
+  --tenant <code>           required
+  --title <text>            required
+  --description <text>
+  --priority <text>         e.g. low, medium, high
+  --status <text>           initial status
+  --due-date <ts>           RFC3339 timestamp
+  --assignee <uuid>
+  --board <uuid>            board id
+  --list <uuid>             board list id
+  --follower-id <uuid>      repeatable
+  --subtasks-json <path|->  a JSON ARRAY of subtask items, at most 25, where -
+                            reads stdin
+
+  A subtask item — only title is required:
+
+      { "title": "Design", "description": "...", "assignee_id": "<uuid>",
+        "due_date": "2026-07-31", "priority": "Low|Normal|High|Urgent",
+        "status": "Pending|To-Do|Doing|Done|Closed|Cancelled" }
+
+  Note that a subtask's due_date is a calendar date, while the parent's
+  --due-date is an RFC3339 timestamp.
+
+OUTPUT
+  The shape depends on whether subtasks were sent.
+
+  Without --subtasks-json, -o json emits the bare task object.
+  With --subtasks-json it emits both, under two keys:
+
+      { "task": { ... }, "subtasks": [ { ... } ] }
+
+  quiet prints the task id.
+
+  Output modes and the JSON contract: capigo help output
+
+EXAMPLES
+  capigo tasks create --tenant acme --title "Fix login bug" --priority high
+
+  echo '[{"title":"Design"},{"title":"Build","priority":"High"}]' \
+    | capigo tasks create --tenant acme --title "Epic X" --subtasks-json -
+
+SEE ALSO
+  tasks subtasks <parent-id>   add subtasks to a task that already exists
+  tasks update <id>            change it afterwards
+  capigo help exit-codes       what a non-zero exit means`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -578,22 +775,48 @@ var tasksCreateCmd = &cobra.Command{
 var tasksSubtasksCmd = &cobra.Command{
 	Use:   "subtasks <parent-task-id>",
 	Short: "Create subtasks under an existing task",
-	Long: `Batch-create subtasks under an existing parent task (1–25 per request).
+	Long: `Add subtasks to a task that already exists.
 
-Validation is all-or-nothing: if any subtask is invalid, nothing is created.
+PURPOSE
+  Create children under a parent task. Validation is all-or-nothing: if any item
+  is invalid, nothing is created.
 
-Single subtask via flags:
+INPUT
+  <parent-id>            parent task UUID (positional, required)
+  --tenant <code>        required
 
-  capigo tasks subtasks <parent-id> --tenant acme --title "Design mockups"
+  One subtask, from flags:
+    --title <text>       required, unless --from-json is used
+    --description <text>
+    --assignee <uuid>
+    --due-date <date>    YYYY-MM-DD
+    --priority <text>    Low, Normal, High, Urgent
+    --status <text>      Pending, To-Do, Doing, Done, Closed, Cancelled
 
-Batch via JSON (an array of subtask items; use - for stdin):
+  Or a batch, with --from-json <path|->: a JSON ARRAY of subtask items, at most
+  25, where - reads stdin. Only title is required on each item.
 
-  echo '[{"title":"A"},{"title":"B","priority":"High","assignee_id":"<uuid>"}]' \
-    | capigo tasks subtasks <parent-id> --tenant acme --from-json -
+OUTPUT
+  -o json emits an object naming the parent and the children it gained. It is
+  neither a bare task nor a list envelope:
 
-Each subtask item: title (required), description, assignee_id, due_date
-(YYYY-MM-DD), priority (Low/Normal/High/Urgent), status (Pending/To-Do/Doing/
-Done/Closed/Cancelled). When --from-json is set, the single-item flags are ignored.`,
+      { "parent_task": { "id": "...", "code": "...", "title": "..." },
+        "subtasks": [ { ... } ] }
+
+  table prints the new subtasks as a task table.
+
+  Output modes and the JSON contract: capigo help output
+
+EXAMPLES
+  capigo tasks subtasks <parent-uuid> --tenant acme --title Design
+
+  echo '[{"title":"Design"},{"title":"Build","priority":"High"}]' \
+    | capigo tasks subtasks <parent-uuid> --tenant acme --from-json -
+
+SEE ALSO
+  tasks create --subtasks-json    create a parent and its subtasks at once
+  tasks list --parent-task-id     list the children of a task
+  capigo help exit-codes          what a non-zero exit means`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()

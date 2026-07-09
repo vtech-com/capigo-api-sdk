@@ -53,7 +53,8 @@ PURPOSE
   alias, product code, sku, barcode — with --query, then act on the returned id.
   A single-item read is: capigo products get <uuid>
 
-INPUT   (flags only; no request body)
+INPUT
+  (flags only; no request body)
   --tenant <code>        required
   -q, --query <term>     free-text search, 2-500 chars. Matches product name,
                          aliases, tags, variant name, sku, and barcode.

@@ -52,6 +52,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   returns, and each `replace` page says plainly that a field you do not send is reset rather
   than preserved, which is the whole difference between it and `update`.
 
+- **`tasks` help pages rebuilt on the same skeleton**, including the two attachment-download
+  commands. `tasks list`, `tasks get` and `tasks create` had no long help at all.
+
+  Three output shapes that no page described are now written down: `tasks create` returns a bare
+  task, *unless* `--subtasks-json` is given, in which case it returns `{task, subtasks[]}`;
+  `tasks subtasks` returns `{parent_task, subtasks[]}`, which is neither a bare object nor a list
+  envelope. A timeline entry's `kind` has four values — `comment`, `activity`, `card`,
+  `artifact` — where the page named two.
+
 ### Fixed
 
 - **Twelve reference-data help pages said `--from-json` makes the field flags "ignored". It

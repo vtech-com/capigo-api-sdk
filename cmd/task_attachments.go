@@ -73,24 +73,53 @@ var (
 var tasksAttachmentsCmd = &cobra.Command{
 	Use:   "attachments",
 	Short: "Manage a task's own attachments",
+	Long: `Download files attached to a task.
+
+Attachment metadata — id, file_name, mime_type, size_bytes — is listed by
+tasks get. No download URL is ever included there; this group fetches one.`,
 }
 
 var tasksAttachmentsDownloadCmd = &cobra.Command{
 	Use:   "download <task-id> <attachment-id>",
 	Short: "Download a task-level attachment",
-	Long: `Download a task's own attachment (as opposed to a comment attachment —
-see 'tasks comments attachments download' for those) to a local file.
+	Long: `Download a file attached to a task.
 
-The attachment-id comes from 'tasks get <task-id>', field attachments[].id.
+PURPOSE
+  tasks get lists a task's attachments with their ids but no download URL. This
+  command mints a fresh signed URL and writes the bytes to disk in one step.
 
-Fetches a fresh, short-lived (5 minute) signed URL and downloads the bytes
-immediately — the URL is not printed or reusable across invocations. On
-success prints the saved file path (and size/mime type in table/json mode).
+INPUT
+  <task-id>          task UUID (positional, required)
+  <attachment-id>    attachment UUID, from tasks get .attachments[].id
+  --tenant <code>    optional; scopes the lookup
+  -d, --dest <path>  a file, or a directory. Default: the original file name in
+                     the current directory. An existing file is overwritten.
 
-Without --dest, the file is saved to the current directory using its
-original file name. --dest can name a directory (file saved inside it,
-original name kept) or an exact file path (its parent directory must
-already exist). An existing file at the destination is overwritten.`,
+OUTPUT
+  The file is written to disk.
+
+  -o json emits:
+
+      { "file_name": "...", "mime_type": "...", "size_bytes": 0,
+        "saved_path": "..." }
+
+  quiet prints the saved path alone.
+
+  Output modes: capigo help output
+
+CAVEATS
+  The signed URL behind the download is short-lived (five minutes) and
+  single-use. The CLI never prints it and mints a fresh one on every
+  invocation, so an expired-URL error is answered by running the command
+  again.
+
+EXAMPLES
+  capigo tasks attachments download <task-uuid> <attachment-uuid>
+  capigo tasks attachments download <task-uuid> <attachment-uuid> --dest ./downloads/
+
+SEE ALSO
+  tasks get <id>          list a task's attachments and their ids
+  capigo help exit-codes  what a non-zero exit means`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(_ *cobra.Command, args []string) error {
 		client, cfg, err := buildClient()
@@ -116,30 +145,57 @@ var (
 var tasksCommentsAttachmentsCmd = &cobra.Command{
 	Use:   "attachments",
 	Short: "Manage a task comment's attachments",
+	Long: `Download files posted on a task's timeline.
+
+Attachment metadata is listed by tasks comments, on the entry that carries it.
+No download URL is ever included there; this group fetches one.`,
 }
 
 var tasksCommentsAttachmentsDownloadCmd = &cobra.Command{
 	Use:   "download <task-id> <attachment-id>",
 	Short: "Download a task comment's attachment",
-	Long: `Download an attachment posted on a task's comment/activity timeline
-(as opposed to a task-level attachment — see 'tasks attachments download' for
-those) to a local file.
+	Long: `Download a file posted on a comment or activity entry.
 
-The attachment-id comes from 'tasks comments <task-id>', field
-attachments[].id on the relevant timeline entry.
+PURPOSE
+  tasks comments lists each entry's attachments with their ids but no download
+  URL. This command mints a fresh signed URL and writes the bytes to disk in
+  one step.
 
-Fetches a fresh, short-lived (5 minute) signed URL and downloads the bytes
-immediately — the URL is not printed or reusable across invocations. On
-success prints the saved file path (and size/mime type in table/json mode).
+INPUT
+  <task-id>          task UUID (positional, required)
+  <attachment-id>    attachment UUID, from tasks comments .data[].attachments[].id
+  --tenant <code>    optional; scopes the lookup
+  -d, --dest <path>  a file, or a directory. Default: the original file name in
+                     the current directory. An existing file is overwritten.
 
-Without --dest, the file is saved to the current directory using its
-original file name. --dest can name a directory (file saved inside it,
-original name kept) or an exact file path (its parent directory must
-already exist). An existing file at the destination is overwritten.
+OUTPUT
+  The file is written to disk.
 
-Note: this endpoint is scoped to the task's tenant, not to the specific task
-or comment thread — any active member of that tenant can download any of the
-tenant's comment attachments this way.`,
+  -o json emits:
+
+      { "file_name": "...", "mime_type": "...", "size_bytes": 0,
+        "saved_path": "..." }
+
+  quiet prints the saved path alone.
+
+  Output modes: capigo help output
+
+CAVEATS
+  The signed URL behind the download is short-lived (five minutes) and
+  single-use. The CLI never prints it and mints a fresh one on every
+  invocation, so an expired-URL error is answered by running the command
+  again.
+
+  This endpoint is scoped to the task's TENANT, not to the task itself. The
+  <task-id> establishes tenant context; the download will succeed for any
+  attachment in that tenant, including one posted on a different task's thread.
+
+EXAMPLES
+  capigo tasks comments attachments download <task-uuid> <attachment-uuid>
+
+SEE ALSO
+  tasks comments <id>     list the timeline and its attachment ids
+  capigo help exit-codes  what a non-zero exit means`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(_ *cobra.Command, args []string) error {
 		client, cfg, err := buildClient()
