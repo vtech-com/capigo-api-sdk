@@ -133,9 +133,13 @@ func failValidation(format string, args ...any) {
 // requireTenant exits 5 when a tenant-scoped command resolved no tenant. A
 // request without a tenant header is not a narrower request; it is a request
 // the server cannot place.
-func requireTenant(tenant *string, group string) {
+//
+// subject names what needs the tenant, and is used as written: a whole group
+// ("brands commands"), or a single command where only part of the group needs
+// one ("tasks create"). The sentence is built to fit either, singular or plural.
+func requireTenant(tenant *string, subject string) {
 	if tenant == nil {
-		failValidation("%s commands require a tenant; pass --tenant <code> or set a default", group)
+		failValidation("%s: a tenant is required; pass --tenant <code> or set a default", subject)
 	}
 }
 

@@ -85,8 +85,9 @@ OUTPUT
   Read meta.total rather than counting .data[]: a page never holds more than
   --limit, so a full count needs meta, not arithmetic.
 
-  With --tenant omitted, meta.tenant and meta.tenant_source are both empty:
-  the results span every tenant this key can reach.
+  With --tenant omitted, meta.tenant and meta.tenant_source are absent: the
+  results span every tenant this key can reach, and a board does not name its
+  own tenant either. Pass --tenant when you need to know where a board lives.
 
   The lists on a board are not included here; boards get returns them.`,
 	RunE: func(_ *cobra.Command, _ []string) error {

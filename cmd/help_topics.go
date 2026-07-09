@@ -42,9 +42,11 @@ WHICH COMMANDS REQUIRE A TENANT
               — every verb. With no tenant resolved the command exits 5.
   Always      tasks create, tasks subtasks
   Optional    tasks list/get, boards list/get, members list/get.
-              Omitting --tenant resolves across every tenant the key can
-              reach. Each record then names its own tenant, and meta names
-              none — there was no single tenant to name.
+              Omitting --tenant reads across every tenant the key can reach.
+              meta then names no tenant, because there was no single one to
+              name — and the records do not name theirs either. A cross-tenant
+              read tells you what exists, not where. Pass --tenant when you
+              need to know which tenant a record lives in.
   Never       tenants, auth, health, config, version
 
 SEEING WHICH TENANT WAS USED

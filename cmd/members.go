@@ -87,8 +87,9 @@ OUTPUT
   --limit, so a full count needs meta, not arithmetic. role is owner or
   member.
 
-  With --tenant omitted, meta.tenant and meta.tenant_source are both empty:
-  the results span every tenant this key can reach.`,
+  With --tenant omitted, meta.tenant and meta.tenant_source are absent: the
+  results span every tenant this key can reach, and a member does not name its
+  own tenant either. Pass --tenant when you need to know where a member lives.`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 

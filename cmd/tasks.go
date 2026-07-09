@@ -57,8 +57,8 @@ var tasksListCmd = &cobra.Command{
 PURPOSE
   Find tasks across boards, and across tenants. Look one up by title with
   --query, then read it in full with tasks get. Omitting --tenant searches
-  every tenant this key can reach; each row's task.tenant_code names the
-  tenant it belongs to, so meta.tenant is absent in that case.
+  every tenant this key can reach, and the result then names no tenant at
+  all — neither in meta nor on the tasks themselves.
 
 USAGE
   capigo tasks list [--tenant <code>] [-q <term>] [--status <text>]
@@ -151,10 +151,11 @@ OUTPUT
   Read meta.total rather than counting .data[]: a page never holds more than
   --limit, so a full count needs meta, not arithmetic.
 
-  With --tenant omitted, meta.tenant and meta.tenant_source are absent — the
-  search spanned every tenant this key can reach, and there is no single
-  tenant to name. Each task still carries its own tenant_code, if the API
-  includes it on this endpoint; do not assume every row is from one tenant.
+  With --tenant omitted, meta.tenant and meta.tenant_source are absent: the
+  search spanned every tenant this key can reach, and there is no single one
+  to name. Neither does a task name its own — the API's task object carries no
+  tenant field. A cross-tenant list therefore tells you which tasks exist, not
+  which tenant each belongs to. Pass --tenant when that matters.
 
   Exit 5 if --parent-task-id is set to anything other than null or a task
   UUID.`,

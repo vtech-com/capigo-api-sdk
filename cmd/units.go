@@ -104,7 +104,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(unitListTenant, profile)
-		requireTenant(tenant, "units")
+		requireTenant(tenant, "units commands")
 
 		validatePCMSLimit(unitListLimit)
 
@@ -181,7 +181,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(unitGetTenant, profile)
-		requireTenant(tenant, "units")
+		requireTenant(tenant, "units commands")
 
 		resp, err := client.Do(ctx, "GET", "/pcms/units/"+args[0], nil, tenant)
 		if err != nil {
@@ -278,7 +278,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(unitCreateTenant, profile)
-		requireTenant(tenant, "units")
+		requireTenant(tenant, "units commands")
 
 		var body any
 		if unitCreateFromJSON != "" {
@@ -402,7 +402,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(unitUpdateTenant, profile)
-		requireTenant(tenant, "units")
+		requireTenant(tenant, "units commands")
 
 		var body any
 		if unitUpdateFromJSON != "" {
@@ -530,7 +530,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(unitReplaceTenant, profile)
-		requireTenant(tenant, "units")
+		requireTenant(tenant, "units commands")
 
 		var body any
 		if unitReplaceFromJSON != "" {

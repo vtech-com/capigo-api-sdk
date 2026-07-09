@@ -124,7 +124,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(variantListTenant, profile)
-		requireTenant(tenant, "variants")
+		requireTenant(tenant, "variants commands")
 
 		resp, err := client.ListVariants(ctx, tenant, variantListBarcodePrefix, variantListSort, variantListPage, variantListLimit)
 		if err != nil {
@@ -212,7 +212,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(variantGetTenant, profile)
-		requireTenant(tenant, "variants")
+		requireTenant(tenant, "variants commands")
 
 		resp, err := client.Do(ctx, "GET", "/pcms/variants/"+args[0], nil, tenant)
 		if err != nil {

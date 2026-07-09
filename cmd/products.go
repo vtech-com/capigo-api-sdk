@@ -183,7 +183,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(productListTenant, profile)
-		requireTenant(tenant, "products")
+		requireTenant(tenant, "products commands")
 
 		if productListAll {
 			if productListPage > 0 {
@@ -386,7 +386,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(productGetTenant, profile)
-		requireTenant(tenant, "products")
+		requireTenant(tenant, "products commands")
 
 		resp, err := client.Do(ctx, "GET", "/pcms/products/"+args[0], nil, tenant)
 		if err != nil {
@@ -541,7 +541,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(productCreateTenant, profile)
-		requireTenant(tenant, "products")
+		requireTenant(tenant, "products commands")
 
 		var body any
 		if productCreateFromJSON != "" {
@@ -725,7 +725,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(productUpdateTenant, profile)
-		requireTenant(tenant, "products")
+		requireTenant(tenant, "products commands")
 
 		var body any
 		if productUpdateFromJSON != "" {
@@ -928,7 +928,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(productVariantsTenant, profile)
-		requireTenant(tenant, "products")
+		requireTenant(tenant, "products commands")
 
 		raw, err := readJSONInput(productVariantsFromJSON)
 		if err != nil {

@@ -105,7 +105,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(productTypeListTenant, profile)
-		requireTenant(tenant, "product-types")
+		requireTenant(tenant, "product-types commands")
 
 		validatePCMSLimit(productTypeListLimit)
 
@@ -201,7 +201,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(productTypeCreateTenant, profile)
-		requireTenant(tenant, "product-types")
+		requireTenant(tenant, "product-types commands")
 
 		var body any
 		if productTypeCreateFromJSON != "" {
@@ -332,7 +332,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(productTypeUpdateTenant, profile)
-		requireTenant(tenant, "product-types")
+		requireTenant(tenant, "product-types commands")
 
 		var body any
 		if productTypeUpdateFromJSON != "" {
@@ -437,7 +437,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(productTypeGetTenant, profile)
-		requireTenant(tenant, "product-types")
+		requireTenant(tenant, "product-types commands")
 
 		resp, err := client.Do(ctx, "GET", "/pcms/product-types/"+args[0], nil, tenant)
 		if err != nil {
@@ -545,7 +545,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(productTypeReplaceTenant, profile)
-		requireTenant(tenant, "product-types")
+		requireTenant(tenant, "product-types commands")
 
 		var body any
 		if productTypeReplaceFromJSON != "" {

@@ -106,7 +106,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(brandListTenant, profile)
-		requireTenant(tenant, "brands")
+		requireTenant(tenant, "brands commands")
 
 		validatePCMSLimit(brandListLimit)
 
@@ -203,7 +203,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(brandCreateTenant, profile)
-		requireTenant(tenant, "brands")
+		requireTenant(tenant, "brands commands")
 
 		var body any
 		if brandCreateFromJSON != "" {
@@ -335,7 +335,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(brandUpdateTenant, profile)
-		requireTenant(tenant, "brands")
+		requireTenant(tenant, "brands commands")
 
 		var body any
 		if brandUpdateFromJSON != "" {
@@ -441,7 +441,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(brandGetTenant, profile)
-		requireTenant(tenant, "brands")
+		requireTenant(tenant, "brands commands")
 
 		resp, err := client.Do(ctx, "GET", "/pcms/brands/"+args[0], nil, tenant)
 		if err != nil {
@@ -549,7 +549,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(brandReplaceTenant, profile)
-		requireTenant(tenant, "brands")
+		requireTenant(tenant, "brands commands")
 
 		var body any
 		if brandReplaceFromJSON != "" {

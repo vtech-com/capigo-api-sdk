@@ -105,7 +105,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(categoryListTenant, profile)
-		requireTenant(tenant, "categories")
+		requireTenant(tenant, "categories commands")
 
 		validatePCMSLimit(categoryListLimit)
 
@@ -182,7 +182,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(categoryGetTenant, profile)
-		requireTenant(tenant, "categories")
+		requireTenant(tenant, "categories commands")
 
 		resp, err := client.Do(ctx, "GET", "/pcms/categories/"+args[0], nil, tenant)
 		if err != nil {
@@ -282,7 +282,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(categoryCreateTenant, profile)
-		requireTenant(tenant, "categories")
+		requireTenant(tenant, "categories commands")
 
 		var body any
 		if categoryCreateFromJSON != "" {
@@ -417,7 +417,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(categoryUpdateTenant, profile)
-		requireTenant(tenant, "categories")
+		requireTenant(tenant, "categories commands")
 
 		var body any
 		if categoryUpdateFromJSON != "" {
@@ -556,7 +556,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(categoryReplaceTenant, profile)
-		requireTenant(tenant, "categories")
+		requireTenant(tenant, "categories commands")
 
 		var body any
 		if categoryReplaceFromJSON != "" {
