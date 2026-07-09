@@ -1024,13 +1024,17 @@ FLAGS
                 --from-json -
 
 OUTPUT
-  .data names the parent and the children it gained. It is neither a bare
-  task nor a list envelope, and parent_task is trimmed — id, code, and title
-  only, not the full task shape tasks get returns:
+  .data names the parent and the children it gained. It is neither a bare task
+  nor a list envelope. parent_task is the whole parent, the same shape as
+  tasks get, with has_subtasks now true; each subtask is a whole task too.
+
+  (The published OpenAPI document declares parent_task as id, code and title
+  alone. It is wrong: the handler builds it with the full task mapper.)
 
       {
         "data": {
-          "parent_task": { "id": "...", "code": "TASK-104", "title": "..." },
+          "parent_task": { "id": "...", "code": "TASK-104", "title": "...",
+                           "has_subtasks": true, ... },
           "subtasks": [ { "id": "...", "code": "TASK-105", "title": "Design",
                           ... } ]
         },

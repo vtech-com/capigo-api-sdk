@@ -231,6 +231,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   The remaining three say why they are unchecked: `auth whoami` calls an endpoint that does not
   exist, and `tasks subtasks create` and the two `attachments download` commands write.
 
+- **`tasks subtasks create` said `parent_task` is "trimmed — id, code, and title only, not the full
+  task shape".** It is the full task. The OpenAPI document declares the trimmed shape, and the page
+  followed it; the handler builds the parent with `toPublicTaskResponse`, and the server returns all
+  sixteen fields with `has_subtasks` now true. Confirmed by minting a temporary owner key, posting one
+  subtask, reading the response, and deleting both. The page now says which of the two is wrong.
+
   Read-only. It makes no writes and creates nothing.
 
 - **`tasks subtasks list` — and `tasks subtasks` becomes a group.** Reading a task's children and
