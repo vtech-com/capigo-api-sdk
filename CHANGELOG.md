@@ -201,6 +201,23 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **`make verify-api`.** Every guard in this repo checks the CLI against `api/openapi.json`. Nothing
+  checked the document against the API — and the document is hand-written and served statically, so
+  it drifts from the routes beside it.
+
+  The target calls a running server and reports, per endpoint, the fields the spec omits (`EXTRA`)
+  and the fields it declares that never arrive (`MISSING`). Against the dev API it finds three:
+  `description` on product-types, and `manufacturer_code` / `legacy_code` / `extra_data` on variants.
+  It also names the two paths the CLI calls that the spec has never heard of — `/health`, which
+  answers 200, and `/me`, which answers 404 because no such route exists.
+
+  A second pass checks each help page's `OUTPUT` sample against a real response. It immediately
+  caught one: `variants get` never showed `product`, the nested reference that lets a lookup by sku
+  reach the parent product without a second call. Every other check said "match", because every
+  other check compared the CLI to the API and never the page to either.
+
+  Read-only. It makes no writes and creates nothing.
+
 - **`tasks subtasks list` — and `tasks subtasks` becomes a group.** Reading a task's children and
   creating them are separate calls to the API, so they are separate commands: `tasks subtasks
   list` and `tasks subtasks create`. Both take `<parent-id>` or `--code`.

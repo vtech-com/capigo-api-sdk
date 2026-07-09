@@ -230,9 +230,45 @@ through `products variants` (above); there is no `variants update`/`create`/`rep
 capigo --tenant acme variants list --barcode-prefix 634007 --sort -barcode --limit 1
 ```
 
-`variants get <id>` or `variants get --sku <sku>` — **tenant required** — fetches one variant's full detail (sku, barcode,
-price, options, type, timestamps). UUID-addressed only; orphaned/soft-deleted/cross-tenant
-variants return 404.
+`variants get <id>` or `variants get --sku <sku>` — **tenant required** — fetches one variant in
+full. Two addresses, one record; give an id **or** `--sku`, never both. Orphaned, soft-deleted and
+cross-tenant variants all return 404, so an unknown sku and a deleted one give the same answer.
+
+```json
+{
+  "data": {
+    "id": "b9b246c3-1dcd-40f2-bc0c-82957c629477",
+    "name": "Travelready Belt Leather J",
+    "sku": "ACMEC-103",
+    "barcode": null,
+    "price": null,
+    "compare_at_price": null,
+    "currency": "VND",
+    "weight": 180,
+    "dimensions": null,
+    "option1": null, "option2": null, "option3": null,
+    "manufacturer_code": null,
+    "legacy_code": null,
+    "extra_data": { "seeded_from": "pcms" },
+    "variant_type": "manual",
+    "product": {
+      "id": "bfb4fabb-a1c3-40dd-8d32-9c3cc926f62f",
+      "name": "Travelready Belt Leather J",
+      "slug": "travelready-belt-leather-j",
+      "aliases": ["TBLJ"],
+      "tags": []
+    },
+    "created_at": "2026-07-05T13:16:04.350035+00:00",
+    "updated_at": "2026-07-05T13:16:04.350035+00:00"
+  },
+  "meta": { "tenant": "acme-corp", "tenant_source": "config" }
+}
+```
+
+`product` names the parent, so a lookup by sku reaches the product without a second call.
+`variants list` rows carry a bare `product_id` instead, plus `manufacturer_code`, `legacy_code`
+and `extra_data` — three fields the published OpenAPI document does not declare, and the server
+returns anyway.
 
 ### Tasks
 

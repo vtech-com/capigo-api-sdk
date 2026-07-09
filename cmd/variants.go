@@ -194,10 +194,14 @@ OUTPUT
         "data": {
           "id": "6f1c9a3d-8b2e-4f01-9c77-1a3d5e7f9b21", "name": "Áo thun / S",
           "sku": "AT-001-S", "barcode": "634007", "price": 120000,
-          "compare_at_price": null, "currency": "VND", "weight": null,
+          "compare_at_price": null, "currency": "VND", "weight": 180,
           "dimensions": null, "option1": "S", "option2": null, "option3": null,
-          "variant_type": "simple", "manufacturer_code": null,
-          "legacy_code": null, "extra_data": null,
+          "manufacturer_code": null, "legacy_code": null,
+          "extra_data": { "seeded_from": "pcms" },
+          "variant_type": "manual",
+          "product": { "id": "7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10",
+                       "name": "Áo thun basic", "slug": "ao-thun-basic",
+                       "aliases": ["VVD013"], "tags": ["hè"] },
           "created_at": "2026-06-01T08:00:00Z",
           "updated_at": "2026-06-01T08:00:00Z"
         },
@@ -207,6 +211,10 @@ OUTPUT
   option1..option3 hold the option values in the order the product declares
   them; products get <id> shows that order in options[]. dimensions, when
   present, is { "l": ..., "w": ..., "h": ... }.
+
+  product names the variant's parent — id, name, slug, aliases, tags — so a
+  lookup by sku reaches the product without a second call. The rows of
+  variants list carry a bare product_id instead.
 
   A single-item read carries no pagination meta; there is nothing to page.
 

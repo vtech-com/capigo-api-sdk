@@ -19,7 +19,7 @@ SKILL_ZIP := $(DIST_DIR)/capigo-api-skill.zip
 TAM_HOST       ?= vtech:tam
 TAM_SKILLS_DIR ?= ~/.openclaw/plugin-skills
 
-.PHONY: build test lint release-snapshot install clean update-spec skill-package skill-install-tam
+.PHONY: build test lint release-snapshot install clean update-spec verify-api skill-package skill-install-tam
 
 ## update-spec: Fetch latest OpenAPI spec from Capigo platform
 ## Prod serves minified JSON on one line; pretty-print it to 2-space indent so
@@ -28,6 +28,17 @@ update-spec:
 	curl -fsSL https://platform.capigo.app/api/openapi | \
 		python3 -c "import json,sys; json.dump(json.load(sys.stdin), open('api/openapi.json','w'), indent=2, ensure_ascii=False); open('api/openapi.json','a').write(chr(10))"
 	@echo "Updated api/openapi.json from https://platform.capigo.app/api/openapi (pretty-printed)"
+
+## verify-api: Call a running API and compare its answers with what we claim
+## Every other guard in this repo checks the CLI against api/openapi.json. This one
+## checks the document — and the help pages — against the server, which is the only
+## party that has never lied. Read-only: it makes no writes and creates nothing.
+##   CAPIGO_API_URL=http://127.0.0.1:3999/api/v1 CAPIGO_API_KEY=csk_... \
+##   CAPIGO_TENANT=acme-corp make verify-api
+## Builds the binary first, so each help page's OUTPUT sample is checked to name
+## every field the API actually returns.
+verify-api: build
+	@python3 scripts/verify_api.py --cli $(BINARY)
 
 ## skill-package: Zip the bundled agent skill for distribution (openclaw / other hosts)
 skill-package:
