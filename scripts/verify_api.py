@@ -33,6 +33,7 @@ no POST, PUT or PATCH, and creates nothing.
 import argparse
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -172,15 +173,87 @@ def compare(spec, op, status, body):
 # reader does not know exists, and `variants get` omitted `product` — the only
 # way to reach a variant's parent — while every other check said "match".
 HELP_SAMPLES = [
+    # by-id reads
     ("/pcms/variants/{id}", ["variants", "get"]),
     ("/pcms/brands/{id}", ["brands", "get"]),
     ("/pcms/units/{id}", ["units", "get"]),
     ("/pcms/product-types/{id}", ["product-types", "get"]),
     ("/pcms/categories/{id}", ["categories", "get"]),
+    ("/pcms/products/{id}", ["products", "get"]),
     ("/mission/tasks/{id}", ["tasks", "get"]),
     ("/mission/boards/{id}", ["boards", "get"]),
     ("/members/{id}", ["members", "get"]),
+    # lists — the row shape a caller reads far more often than a single item
+    ("/pcms/variants", ["variants", "list"]),
+    ("/pcms/brands", ["brands", "list"]),
+    ("/pcms/units", ["units", "list"]),
+    ("/pcms/product-types", ["product-types", "list"]),
+    ("/pcms/categories", ["categories", "list"]),
+    ("/pcms/products", ["products", "list"]),
+    ("/mission/tasks", ["tasks", "list"]),
+    ("/mission/boards", ["boards", "list"]),
+    ("/members", ["members", "list"]),
+    ("/tenants", ["tenants", "list"]),
+    # timeline rows
+    ("/mission/tasks/{id}/comments", ["tasks", "comments"]),
+    # write pages return the same record their `get` returns, so their samples
+    # answer to the same field set. A sample that trims one is a sample that
+    # teaches a reader the field does not exist.
+    ("/pcms/brands/{id}", ["brands", "create"]),
+    ("/pcms/brands/{id}", ["brands", "update"]),
+    ("/pcms/brands/{id}", ["brands", "replace"]),
+    ("/pcms/categories/{id}", ["categories", "create"]),
+    ("/pcms/categories/{id}", ["categories", "update"]),
+    ("/pcms/categories/{id}", ["categories", "replace"]),
+    ("/pcms/units/{id}", ["units", "create"]),
+    ("/pcms/units/{id}", ["units", "update"]),
+    ("/pcms/units/{id}", ["units", "replace"]),
+    ("/pcms/product-types/{id}", ["product-types", "create"]),
+    ("/pcms/product-types/{id}", ["product-types", "update"]),
+    ("/pcms/product-types/{id}", ["product-types", "replace"]),
+    ("/pcms/products/{id}", ["products", "create"]),
+    ("/pcms/products/{id}", ["products", "update"]),
+    ("/mission/tasks/{id}", ["tasks", "create"]),
+    ("/mission/tasks/{id}", ["tasks", "update"]),
 ]
+
+
+# Commands that answer without an id or a tenant. Their pages can be checked by
+# running them: the fields they print must be the fields their sample shows.
+LOCAL_CHECKS = [["version"], ["health"]]
+
+
+def check_local_samples(cli, env):
+    """Run the command; does its own page name every field it printed?"""
+    import subprocess
+
+    failures = 0
+    for cmd in LOCAL_CHECKS:
+        run = subprocess.run([cli] + cmd, capture_output=True, text=True, env=env)
+        try:
+            doc = json.loads(run.stdout)
+        except Exception:
+            print(f"  {' '.join(cmd):<22} skipped: did not print JSON (exit {run.returncode})")
+            continue
+        # A command that failed printed an error object, not a record. Counting
+        # its zero fields as "names all 0 fields" is the false pass this script
+        # exists to prevent.
+        if "error" in doc:
+            print(f"  {' '.join(cmd):<22} SKIPPED: command failed — {doc['error'].get('message', '')}")
+            failures += 1
+            continue
+        rec = doc.get("data")
+        if not isinstance(rec, dict) or not rec:
+            print(f"  {' '.join(cmd):<22} skipped: no object at .data")
+            continue
+        page = subprocess.run([cli] + cmd + ["--help"], capture_output=True, text=True).stdout
+        missing = sorted(f for f in rec if f'"{f}"' not in page and f not in page)
+        if missing:
+            print(f"  {' '.join(cmd):<22} SAMPLE OMITS " + ",".join(missing))
+            failures += 1
+        else:
+            print(f"  {' '.join(cmd):<22} names all {len(rec)} fields")
+    return failures
 
 
 def check_help_samples(c, cli, ids):
@@ -191,15 +264,34 @@ def check_help_samples(c, cli, ids):
     failures = 0
     for path, cmd in HELP_SAMPLES:
         base = path.split("/{")[0]
-        if base not in ids:
+        if base == "/mission/tasks" and path.endswith("/comments"):
+            base = "/mission/tasks"
+        if "{id}" in path and base not in ids:
             print(f"  {' '.join(cmd):<22} skipped: no record to compare against")
             continue
-        status, body = c.get(path.replace("{id}", ids[base]))
+        concrete = path.replace("{id}", ids[base]) if "{id}" in path else path
+        status, body = c.get(concrete)
         rec = first_record(body)
-        if status != 200 or not rec:
+        if status != 200:
             print(f"  {' '.join(cmd):<22} skipped: endpoint answered {status}")
             continue
+        if not rec:
+            print(f"  {' '.join(cmd):<22} skipped: no record to compare against")
+            continue
         page = subprocess.run([cli] + cmd + ["--help"], capture_output=True, text=True).stdout
+
+        # A page may defer to another page's sample — "the same shape as products
+        # get" — rather than copy it. That is this repo's own rule: a fact true of
+        # two pages is stated on one. Follow the pointer instead of demanding a
+        # second copy that would drift from the first.
+        # The phrase wraps across lines in a help page, so match on flattened text.
+        flat = " ".join(page.split())
+        referred = re.search(r"same shape as ([a-z][a-z-]*(?: [a-z][a-z-]*)?) get", flat)
+        if referred:
+            target = referred.group(1).split() + ["get"]
+            page += subprocess.run([cli] + target + ["--help"],
+                                   capture_output=True, text=True).stdout
+
         missing = sorted(f for f in rec if f'"{f}"' not in page)
         if missing:
             print(f"  {' '.join(cmd):<22} SAMPLE OMITS " + ",".join(missing))
@@ -253,6 +345,8 @@ def main():
 
     if args.cli:
         failures += check_help_samples(c, args.cli, ids)
+        env = dict(os.environ, CAPIGO_API_URL=args.base_url, CAPIGO_API_KEY=args.key)
+        failures += check_local_samples(args.cli, env)
 
     print("\nPaths the CLI calls that the spec never declares:")
     for path in UNDECLARED_PATHS:

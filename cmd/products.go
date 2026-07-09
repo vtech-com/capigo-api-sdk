@@ -119,11 +119,21 @@ OUTPUT
           {
             "id": "7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10",
             "name": "Áo thun basic",
+            "slug": "ao-thun-basic",
+            "description": "Cotton 100%, form rộng",
             "status": "ACTIVE",
-            "is_deleted": false,
+            "currency": "VND",
             "aliases": ["VVD013"],
             "tags": ["hè"],
-            "brand": {...}, "category": {...}, "variants": [...]
+            "is_deleted": false,
+            "brand": { "id": "...", "name": "Coolmate" },
+            "category": { "id": "...", "name": "Áo" },
+            "product_type": { "id": "...", "name": "Apparel" },
+            "unit": { "id": "...", "name": "Cái" },
+            "options": [],
+            "variants": [ { "id": "...", "sku": "AT-001-S", ... } ],
+            "created_at": "2026-06-01T08:00:00Z",
+            "updated_at": "2026-06-01T08:00:00Z"
           }
         ],
         "meta": {

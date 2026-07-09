@@ -211,10 +211,21 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   It also names the two paths the CLI calls that the spec has never heard of — `/health`, which
   answers 200, and `/me`, which answers 404 because no such route exists.
 
-  A second pass checks each help page's `OUTPUT` sample against a real response. It immediately
-  caught one: `variants get` never showed `product`, the nested reference that lets a lookup by sku
-  reach the parent product without a second call. Every other check said "match", because every
-  other check compared the CLI to the API and never the page to either.
+  A second pass checks each help page's `OUTPUT` sample against a real response — thirty-five pages,
+  every one that reads a record. It caught two. `variants get` never showed `product`, the nested
+  reference that lets a lookup by sku reach the parent product without a second call. `products
+  list` named nine of a product's seventeen fields and said nothing about the eight it dropped.
+  Every other check had said "match", because every other check compared the CLI to the API and
+  never the page to either.
+
+  A page may defer — "the same shape as `products get`" — rather than copy a sample that would then
+  drift from it. The guard follows the pointer, because stating a fact once is this repo's rule and
+  a guard that punishes it would teach the wrong lesson.
+
+  Three pages are exempt: `config set`, `config set-default-tenant` and `config unset-default-tenant`
+  print nothing on success, so a sample there would be the lie. Nine more remain unchecked and say
+  why: they write, they need data the seed does not have, or they call an endpoint that does not
+  exist (`auth whoami`).
 
   Read-only. It makes no writes and creates nothing.
 
