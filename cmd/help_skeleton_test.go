@@ -119,10 +119,8 @@ func TestPagesDoNotCarryRetiredSections(t *testing.T) {
 // Cobra no longer appends a Flags block (see help_render.go), so a flag that
 // the FLAGS section forgets is a flag with no documentation anywhere.
 func TestFlagsSectionDocumentsEveryFlag(t *testing.T) {
-	// Global flags are documented once, on the root page. A page restates -o
-	// when it changes what that command returns, and omits it where the command
-	// ignores it (version, config) — so it cannot be required here.
-	global := map[string]bool{"api-url": true, "verbose": true, "help": true, "output": true}
+	// Global flags are documented once, on the root page.
+	global := map[string]bool{"api-url": true, "verbose": true, "help": true}
 
 	for _, c := range leafCommands(t) {
 		section := sectionOf(c.Long, "FLAGS")
@@ -144,7 +142,7 @@ func TestFlagsSectionDocumentsEveryFlag(t *testing.T) {
 // sends the reader to run something that will be rejected.
 func TestHelpDoesNotNameFlagsThatDoNotExist(t *testing.T) {
 	global := map[string]bool{
-		"output": true, "api-url": true, "verbose": true, "help": true, "tenant": true,
+		"api-url": true, "verbose": true, "help": true, "tenant": true,
 	}
 
 	for _, c := range leafCommands(t) {
@@ -175,6 +173,57 @@ func TestUsageSectionShowsThisCommand(t *testing.T) {
 		want := "capigo " + c.CommandPath()[len("capigo "):]
 		if !strings.Contains(usage, want) {
 			t.Errorf("%q has a USAGE section that never spells %q", c.CommandPath(), want)
+		}
+	}
+}
+
+// There is one output shape, and no flag to ask for another. A page that still
+// offers `-o json` or explains "table mode" is describing a CLI that shipped
+// once and does not exist now — and the reader will run what it says.
+//
+// This walks every page, not only the leaves: a group page or a help topic can
+// describe an output mode just as wrongly as a command page can.
+func TestNoPageAdvertisesAnOutputMode(t *testing.T) {
+	banned := []string{"-o json", "-o table", "-o quiet", "--output", "table mode", "quiet mode", "json mode"}
+
+	var walk func(c *cobra.Command)
+	walk = func(c *cobra.Command) {
+		if !(cobraAuthoredCommands[c.Name()] && c.Parent() == rootCmd) {
+			for _, line := range strings.Split(c.Long+"\n"+c.Short, "\n") {
+				// The house rule in help_topics.go names the banned phrases in
+				// order to ban them; it is a comment, not a page.
+				for _, phrase := range banned {
+					if strings.Contains(line, phrase) {
+						t.Errorf("%q says %q; there is one output shape and no output flag\n    %s",
+							c.CommandPath(), phrase, strings.TrimSpace(line))
+					}
+				}
+			}
+		}
+		for _, sub := range c.Commands() {
+			walk(sub)
+		}
+	}
+	walk(rootCmd)
+}
+
+// Every page that documents a call must say where its result lives. The
+// envelope is the whole contract: a caller that reaches for `.id` on a `get`
+// gets null, because the object is at `.data`.
+func TestOutputSectionNamesTheEnvelope(t *testing.T) {
+	// These commands print nothing at all on success, which their pages say.
+	silent := map[string]bool{
+		"capigo config set":                  true,
+		"capigo config set-default-tenant":   true,
+		"capigo config unset-default-tenant": true,
+	}
+	for _, c := range callableCommands {
+		if silent[c.CommandPath()] {
+			continue
+		}
+		out := sectionOf(c.Long, "OUTPUT")
+		if !strings.Contains(out, ".data") && !strings.Contains(out, `"data"`) {
+			t.Errorf("%q has an OUTPUT section that never mentions data; where does the result live?", c.CommandPath())
 		}
 	}
 }

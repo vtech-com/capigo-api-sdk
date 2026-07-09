@@ -16,8 +16,8 @@
 //     belong to the caller's own policy, not to a public SDK's help.
 //   - Every literal block declares what it is: `$` prefixes a command you type,
 //     an un-prefixed block is what the CLI prints, and a schema says so.
-//   - State the output mode a behaviour depends on. Several of these lines are
-//     table-mode only.
+//   - There is one output shape. A sentence that begins "in table mode" or "in
+//     json mode" is describing a CLI that no longer exists.
 package cmd
 
 import "github.com/spf13/cobra"
@@ -43,96 +43,90 @@ WHICH COMMANDS REQUIRE A TENANT
   Always      tasks create, tasks subtasks
   Optional    tasks list/get, boards list/get, members list/get.
               Omitting --tenant resolves across every tenant the key can
-              reach, and table output gains a Tenant column.
+              reach. Each record then names its own tenant, and meta names
+              none — there was no single tenant to name.
   Never       tenants, auth, health, config, version
 
-SEEING WHICH TENANT WAS USED   (table mode only)
-  A list footer and a successful write both name the tenant:
+SEEING WHICH TENANT WAS USED
+  Every response names the tenant it resolved to, and where that came from:
 
-      Tenant: acme
-      Tenant: acme (from CAPIGO_TENANT)
-      Tenant: acme (from config default_tenant)
+      "meta": { "tenant": "acme", "tenant_source": "flag" }
+      "meta": { "tenant": "acme", "tenant_source": "env" }
+      "meta": { "tenant": "acme", "tenant_source": "config" }
 
-  The parenthetical appears only when --tenant was not given, and names where
-  the value came from. In json and quiet mode neither line is printed.
+  Read it after a write. A record created in the wrong tenant is not an error
+  the server can raise — the request was valid, and it succeeded.
 
   $ capigo tenants list        # which tenants this key can reach
 
 SEE ALSO
-  capigo help output       output modes and the JSON contract
+  capigo help output       the envelope, and which stream carries what
   capigo help exit-codes   what a non-zero exit means`,
 }
 
 var outputTopicCmd = &cobra.Command{
 	Use:   "output",
-	Short: "Output modes, the JSON contract, and streams",
-	Long: `Output modes, the JSON contract, and which stream carries what.
+	Short: "The JSON envelope, and which stream carries what",
+	Long: `The one shape every command emits, and which stream carries what.
 
-MODES
-  -o table   (default) human-readable rows and summary lines
-  -o json    machine-readable; the form to parse, store, or pipe
-  -o quiet   resource ids only, one per line
+THE ENVELOPE
+  Every command that succeeds prints exactly this to stdout:
 
-  Any other value is rejected with an error.
+      { "data": …, "meta": { … } }
 
-THE JSON CONTRACT
-  List commands emit an envelope. Shape:
+  data is an array for a list and an object for a single item — a get, or a
+  successful create, update or replace. The key is always there, and always
+  called data, so a caller never has to know which kind of command it ran.
 
-      { "data": [ … ], "meta": { … } }
+      $ capigo brands list   | jq '.data[].id'    # list   → array
+      $ capigo brands create | jq '.data.id'      # single → object
 
-  The rows are at .data[] — not at the top level.
+  There is no output flag. stdout is JSON, always, and nothing else is ever
+  written to it.
 
-  Single-item commands — get, create, update, replace, and products variants —
-  emit the BARE object on stdout. The CLI unwraps the API's {"data": …}
-  envelope; there is no .data to reach for.
+META
+  meta names the tenant the call resolved to, and where that value came from:
 
-      $ capigo brands list   -o json | jq '.data[].id'    # list   → envelope
-      $ capigo brands create -o json | jq '.id'           # single → bare
+      tenant          the tenant code the request was scoped to
+      tenant_source   flag, env (CAPIGO_TENANT), or config (default_tenant)
 
-  meta always carries:
+  Both are absent on a command that takes no tenant, and on a cross-tenant
+  read that resolved none. How the tenant is chosen: capigo help tenancy
+
+  A list also carries the API's pagination:
 
       page       current page
       limit      page size
       total      full count across all pages, independent of page size
       has_more   true when further pages remain
 
-  A command may add fields to meta. Those are documented on that command's own
-  help page (for example meta.complete under products list --all).
+  total is the count across every page, not the number of rows in data. Read
+  it; do not count data[].
 
-LIST FOOTERS   (table mode only)
-  After the rows, a list prints one summary line on stdout:
+  Three further fields are added by the CLI, not sent by the API. Each is
+  documented on the command that produces it:
 
-      Tenant: acme · Total: 137 · showing 20 (page 1/7) · more rows — use --page/--limit (max 100)
-      Tenant: acme · Total: 12 (all rows shown)
+      server_time    the server clock at the time of the call, for delta sync
+      missing_ids    ids a --ids request asked for and did not get back
+      complete       false when a --all sweep aborted part-way
 
-  Total is the count across all pages, not the number of rows displayed. A
-  command may append its own hint to that line; its help page shows the exact
-  form. In json mode there is no footer — the same numbers are in meta.
+FAILURE
+  A command that fails prints an object with an error key — still JSON, still
+  on stdout, so a caller that parses stdout unconditionally reads a diagnosis
+  rather than a parse error:
 
-TENANT ECHO   (table mode only)
-  After a successful write, the CLI prints the tenant it resolved:
+      { "error": { "code": …, "message": …, "next": …, "request_id": … } }
 
-      Tenant: acme
-      Tenant: acme (from CAPIGO_TENANT)
-
-  In json and quiet mode nothing is printed.
-  How the tenant is resolved: capigo help tenancy
+  A one-line summary also goes to stderr. What the exit code means, and what
+  each field of the error object carries: capigo help exit-codes
 
 STREAMS
-  stdout    results · list footers · the tenant echo · and, when a command
-            fails, the diagnosis block (Server / Means / Next / Response,
-            including request_id)
-  stderr    the server timestamp in json and quiet mode · the one-line error
-            summary · advisory hints
+  stdout    the envelope, or the error object. Nothing else, ever.
+  stderr    the one-line error summary, and --verbose HTTP tracing.
 
-  Commands that support delta sync report the server timestamp. It prints on
-  stdout in table mode and on stderr in json and quiet mode, and is carried as
-  meta.server_time in JSON list output. A -o json stream is therefore pure
-  JSON: there is no prefix line to strip.
-
-  When stdout is not a terminal and --output was not given, the CLI writes a
-  one-line reminder to stderr that table output is text, not JSON. It never
-  writes that reminder to stdout. CAPIGO_NO_HINTS=1 silences it.
+  Nothing the CLI knows is announced only on stderr. A fact worth acting on —
+  which tenant a write landed in, how many records exist, whether a sweep
+  finished — is in meta, on stdout, where it can be read rather than noticed.
 
 SEE ALSO
   capigo help exit-codes   what a non-zero exit means
@@ -165,25 +159,24 @@ of an error message is not.
       server-enforced unique, so duplicates of those do not produce this code.
 
 WHEN A COMMAND FAILS
-  The CLI prints a diagnosis block on stdout and a one-line summary on stderr.
-  The block carries:
+  stdout carries a JSON object with an error key; stderr carries a one-line
+  summary. The error object carries:
 
-      Server:     the API's own error message
-      Means:      an added interpretation, when the server message is generic
-      Note:       shown on write failures
-      Next:       a concrete step
-      Response:   the verbatim server body, including request_id
+      code             the stable error code
+      message          the API's own error message
+      meaning          an added interpretation, when the message is generic
+      next             a concrete step
+      capability_note  present on a write failure. It says: a failed write does
+                       NOT mean this operation is unsupported
+      raw              the verbatim server body
+      request_id       identifies the call in the API's server logs
+      http_status      the response status, when the server responded
 
-  request_id identifies the call in the API's server logs.
-
-  -o json adds error.meaning, error.next, error.capability_note and error.raw.
-  -o quiet prints only the stderr summary.
-
-  --verbose re-runs the call and prints the full HTTP request and response,
-  with the Authorization header redacted.
+  --verbose prints the full HTTP request and response to stderr, with the
+  Authorization header redacted.
 
 SEE ALSO
-  capigo help output   which stream carries what`,
+  capigo help output   the envelope, and which stream carries what`,
 }
 
 var softDeleteTopicCmd = &cobra.Command{
@@ -193,14 +186,11 @@ var softDeleteTopicCmd = &cobra.Command{
 removed. What the CLI exposes about that state differs by resource.
 
 PRODUCTS
-  A soft-deleted product still appears in products list and products get.
+  A soft-deleted product still appears in products list and products get. The
+  product object carries "is_deleted": true.
 
-      -o json     the product object carries "is_deleted": true.
-                  The "status" field alone does NOT reveal deletion — a deleted
-                  product may still read "status": "ACTIVE".
-      table       the Status cell carries a suffix:
-
-                      ACTIVE (DELETED)
+  The "status" field alone does NOT reveal deletion — a deleted product may
+  still read "status": "ACTIVE". Check is_deleted, not status.
 
   Searching for tombstones is narrower than searching live products: for a
   soft-deleted product, --query matches its name and aliases only. Variant
@@ -246,7 +236,7 @@ ADDITIVE CHANGES
 
 SEE ALSO
   capigo help exit-codes   what a non-zero exit means
-  capigo help output       output modes and the JSON contract`,
+  capigo help output       the envelope, and which stream carries what`,
 }
 
 func init() {

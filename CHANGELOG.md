@@ -9,6 +9,62 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed — BREAKING
+
+- **One output shape. Table and quiet output are gone, and so is `-o/--output`.** Every command
+  that succeeds prints exactly one thing to stdout:
+
+      { "data": …, "meta": { … } }
+
+  `data` is an array for a list and an object for a single item. There is no flag to ask for
+  another shape, and no default to reason about.
+
+- **The CLI no longer unwraps the API's envelope.** `get`, `create`, `update`, `replace` and
+  `products variants` used to print a bare object, so `.id` worked on them and `.data[].id` on a
+  list. Now every command answers to `.data`. **This breaks every caller that reached for `.id`.**
+
+  The unwrapping was deliberate, and it cost more than it saved: two shapes meant every page had
+  to say which one it emitted, and nineteen of them said it wrongly.
+
+- **`meta` names the tenant.** `meta.tenant` and `meta.tenant_source` (`flag`, `env`, `config`)
+  are on every response from a tenant-scoped command, read or write.
+
+  This is the one fact the old table mode carried that JSON did not. It used to be a line of
+  prose printed in one mode out of three:
+
+      Tenant: acme (from CAPIGO_TENANT)
+
+  A write into the wrong tenant is not an error the server can raise — the request was valid, and
+  it succeeded. The only defence is a caller that can *read* which tenant it hit, so the fact now
+  lives in the shape a caller parses rather than in prose it might notice.
+
+- **`meta.server_time`, `meta.missing_ids` and `meta.complete`** replace the `Server time:` line,
+  the `Requested N ids · missing:` line, and the `INCOMPLETE — aborted at page N` footer. Each is
+  documented on the command that produces it. The API's own meta has four fields; these three are
+  the CLI's.
+
+- **A failure prints JSON on stdout** — `{"error": {…}}`, carrying `code`, `message`, `meaning`,
+  `next`, `capability_note`, `raw`, `request_id` and `http_status` — plus the one-line summary on
+  stderr. A caller may now parse stdout unconditionally: a failed command yields a diagnosis, not
+  a parse error stacked on top of an API error.
+
+- **`is_deleted` is the only deletion marker.** The `ACTIVE (DELETED)` status suffix was a table
+  artifact. `status` alone never revealed deletion and still does not.
+
+### Removed
+
+- **The `-o json` nudge on stderr, and `CAPIGO_NO_HINTS`.** The nudge existed to catch a caller
+  redirecting table text and parsing it as JSON. stdout is JSON now, so redirecting it is always
+  correct and there is nothing left to warn about. `cmd/output_hint.go` is deleted.
+
+- **`internal/output`'s table renderer, quiet renderer, display models, and list-summary
+  footers** — and with them the `go-pretty` dependency. The package is one file: an envelope and
+  an error shape.
+
+  The display models were a second definition of every resource, maintained in parallel with the
+  API's own. Deleting them deleted a class of bug: a field present in the API response, absent
+  from the display struct, and therefore invisible in a mode the caller happened to be using.
+
 ### Added
 
 - **Cross-cutting help topics.** `capigo help tenancy`, `help output`, `help exit-codes`,

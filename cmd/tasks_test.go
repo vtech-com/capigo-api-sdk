@@ -8,57 +8,6 @@ import (
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
 )
 
-func commentStrPtr(s string) *string { return &s }
-
-func TestToOutputComment(t *testing.T) {
-	c := api.TaskComment{
-		ID:          "msg_1",
-		Author:      api.CommentAuthor{ID: "u1", Name: "Trâm", Type: "user"},
-		Kind:        "comment",
-		Content:     commentStrPtr("hello"),
-		Attachments: []api.CommentAttachment{{ID: "a1"}, {ID: "a2"}},
-		CreatedAt:   "2026-06-01T08:00:00Z",
-	}
-	got := toOutputComment(c)
-	if got.ID != "msg_1" || got.Author != "Trâm" || got.Kind != "comment" {
-		t.Errorf("unexpected mapping: %+v", got)
-	}
-	if got.Content != "hello" {
-		t.Errorf("content = %q, want hello", got.Content)
-	}
-	if got.Created != "2026-06-01T08:00:00Z" {
-		t.Errorf("created = %q", got.Created)
-	}
-	if got.Attachments != 2 {
-		t.Errorf("attachments = %d, want 2", got.Attachments)
-	}
-}
-
-func TestToOutputComment_NilContent(t *testing.T) {
-	c := api.TaskComment{
-		ID:      "m",
-		Author:  api.CommentAuthor{Name: "System", Type: "user"},
-		Kind:    "activity",
-		Content: nil,
-	}
-	got := toOutputComment(c)
-	if got.Content != "" {
-		t.Errorf("nil content should map to empty string, got %q", got.Content)
-	}
-}
-
-func TestFlattenForTable(t *testing.T) {
-	// Collapses newlines/tabs/runs of whitespace into single spaces.
-	if got := flattenForTable("a\nb\t c", 100); got != "a b c" {
-		t.Errorf("flatten = %q, want 'a b c'", got)
-	}
-	// Truncates to max runes with an ellipsis.
-	got := flattenForTable(strings.Repeat("x", 50), 10)
-	if r := []rune(got); len(r) != 10 || !strings.HasSuffix(got, "…") {
-		t.Errorf("truncate = %q (len %d runes), want 10 runes ending in …", got, len([]rune(got)))
-	}
-}
-
 func TestValidateCommentParams(t *testing.T) {
 	// Valid combinations (including empty = use server default) return nil.
 	for _, c := range []struct {

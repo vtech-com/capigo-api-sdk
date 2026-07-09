@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strconv"
 
 	"github.com/spf13/cobra"
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
@@ -20,7 +19,8 @@ var variantsCmd = &cobra.Command{
 
 This group is read-only. Variants are written through products variants,
 which upserts them onto their product; this group only reads them back.
-Every command here requires a tenant.
+Every command here requires a tenant, and every response names the tenant
+it resolved to, in meta.
 
 USAGE
   capigo variants <command> --tenant <code> [<args>]`,
@@ -50,7 +50,7 @@ PURPOSE
 
 USAGE
   capigo variants list --tenant <code> [--barcode-prefix <p>] [--sort <order>]
-                       [--page <n>] [--limit <n>] [-o table|json|quiet]
+                       [--page <n>] [--limit <n>]
 
 FLAGS
   --tenant <code>
@@ -70,7 +70,7 @@ FLAGS
 
         # The highest barcode already used under a prefix
         capigo variants list --tenant acme --barcode-prefix 634007 \
-          --sort -barcode --limit 1 -o json | jq -r '.data[0].barcode'
+          --sort -barcode --limit 1 | jq -r '.data[0].barcode'
 
   --page <n>
       Page to fetch. Pages start at 1. The default, 0, sends no page
@@ -79,35 +79,30 @@ FLAGS
   --limit <n>
       Rows per page, 1 to 100. Defaults to 20.
 
-  -o, --output table|json|quiet
-      Print rows, the JSON envelope, or bare ids. Defaults to table.
-      See capigo help output.
-
 OUTPUT
-  A table of variants, then a summary line.
-
-      ┌──────────┬─────────┬──────────┬──────────────┬──────────┐
-      │ ID       │ Barcode │ SKU      │ Name         │ ProductID│
-      ├──────────┼─────────┼──────────┼──────────────┼──────────┤
-      │ 6f1c9a3d │ 634007  │ AT-001-S │ Áo thun / S  │ 7c1f2e88 │
-      └──────────┴─────────┴──────────┴──────────────┴──────────┘
-      Tenant: acme · Total: 1 · showing 1 (page 1/1)
-
-  Ids are shortened here to fit the page; the command prints them in full.
-
-  -o json emits the list envelope. Each row here is a flat summary — id,
-  barcode, sku, name, product_id — not the full variant object; read that
-  with variants get <id>:
+  Each row here is a flat summary — id, barcode, sku, name, product_id — not
+  the full variant object; read that with variants get <id>. The rows are
+  at .data[]:
 
       {
         "data": [
-          { "id": "6f1c9a3d-...", "barcode": "634007", "sku": "AT-001-S",
-            "name": "Áo thun / S", "product_id": "7c1f2e88-..." }
+          { "id": "6f1c9a3d-8b2e-4f01-9c77-1a3d5e7f9b21", "barcode": "634007",
+            "sku": "AT-001-S", "name": "Áo thun / S",
+            "product_id": "7c1f2e88-3a4b-4c5d-9e6f-1a2b3c4d5e6f" }
         ],
-        "meta": { "page": 1, "limit": 20, "total": 1, "has_more": false }
+        "meta": {
+          "tenant": "acme",
+          "tenant_source": "flag",
+          "page": 1, "limit": 20, "total": 1, "has_more": false
+        }
       }
 
-  The envelope, meta.total and list footers: capigo help output`,
+  Read meta.total rather than counting .data[]: a page never holds more than
+  --limit, so a full count needs meta, not arithmetic.
+
+  meta.tenant is the tenant this call actually ran against, and
+  meta.tenant_source says whether that came from the flag, from CAPIGO_TENANT,
+  or from the config file. See capigo help tenancy.`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -115,13 +110,7 @@ OUTPUT
 
 		validSorts := map[string]bool{"barcode": true, "-barcode": true}
 		if variantListSort != "" && !validSorts[variantListSort] {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "--sort must be one of: barcode, -barcode",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
+			failValidation("--sort must be one of: barcode, -barcode")
 		}
 
 		client, cfg, err := buildClient()
@@ -135,15 +124,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(variantListTenant, profile)
-		if tenant == nil {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "variants commands require a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
-		}
+		requireTenant(tenant, "variants")
 
 		resp, err := client.ListVariants(ctx, tenant, variantListBarcodePrefix, variantListSort, variantListPage, variantListLimit)
 		if err != nil {
@@ -155,53 +136,7 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if outputMode == "json" {
-			data := envelope.Data
-			if data == nil {
-				data = []api.VariantRecord{}
-			}
-			return output.WriteJSONList(os.Stdout, data, envelope.Meta)
-		}
-
-		items := make([]output.VariantRecord, len(envelope.Data))
-		for i, v := range envelope.Data {
-			barcode := ""
-			if v.Barcode != nil {
-				barcode = *v.Barcode
-			}
-			sku := ""
-			if v.SKU != nil {
-				sku = *v.SKU
-			}
-			items[i] = output.VariantRecord{
-				ID:        v.ID,
-				Barcode:   barcode,
-				SKU:       sku,
-				Name:      v.Name,
-				ProductID: v.ProductID,
-			}
-		}
-
-		if err := output.Render(os.Stdout, outputMode, items, output.RenderOpts{
-			GlobalMode:   false,
-			ResourceKind: "variant_record",
-		}); err != nil {
-			return handleErr(err)
-		}
-
-		if outputMode == "table" {
-			output.WriteListSummary(os.Stdout, output.ListSummary{
-				Tenant:     derefTenant(tenant),
-				TenantNote: tenantNote(tenant, variantListTenant),
-				Shown:      len(envelope.Data),
-				Page:       envelope.Meta.Page,
-				Limit:      envelope.Meta.Limit,
-				Total:      envelope.Meta.Total,
-				HasMore:    envelope.Meta.HasMore,
-			})
-		}
-
-		return nil
+		return output.Write(os.Stdout, envelope.Data, listMeta(tenant, variantListTenant, envelope.Meta))
 	},
 }
 
@@ -222,7 +157,7 @@ PURPOSE
   array of products get <id>.
 
 USAGE
-  capigo variants get <id> --tenant <code> [-o table|json|quiet]
+  capigo variants get <id> --tenant <code>
 
 FLAGS
   <id>
@@ -234,33 +169,29 @@ FLAGS
 
         capigo variants get 6f1c9a3d-8b2e-4f01-9c77-1a3d5e7f9b21 --tenant acme
 
-  -o, --output table|json|quiet
-      Print a row, the JSON object, or the bare id. Defaults to table.
-      See capigo help output.
-
 OUTPUT
-  A single-row table. Ids are shortened here to fit the page; the command
-  prints them in full.
+  The variant is at .data — an object, where a list puts an array. This is
+  the full record, unlike the flat rows variants list returns:
 
-      ┌──────────┬─────────────┬──────────┬─────────┬────────┬────────┐
-      │ ID       │ Name        │ SKU      │ Barcode │ Price  │ Type   │
-      ├──────────┼─────────────┼──────────┼─────────┼────────┼────────┤
-      │ 6f1c9a3d │ Áo thun / S │ AT-001-S │ 634007  │ 120000 │ simple │
-      └──────────┴─────────────┴──────────┴─────────┴────────┴────────┘
-
-  -o json emits the bare object. A get is not a list, so there is no envelope
-  and no .data to reach for:
-
-      { "id": "6f1c9a3d-8b2e-4f01-9c77-1a3d5e7f9b21", "name": "Áo thun / S",
-        "sku": "AT-001-S", "barcode": "634007", "price": 120000,
-        "compare_at_price": null, "currency": "VND", "weight": null,
-        "dimensions": null, "option1": "S", "option2": null, "option3": null,
-        "variant_type": "simple", "manufacturer_code": null,
-        "legacy_code": null, "extra_data": null,
-        "created_at": "...", "updated_at": "..." }
+      {
+        "data": {
+          "id": "6f1c9a3d-8b2e-4f01-9c77-1a3d5e7f9b21", "name": "Áo thun / S",
+          "sku": "AT-001-S", "barcode": "634007", "price": 120000,
+          "compare_at_price": null, "currency": "VND", "weight": null,
+          "dimensions": null, "option1": "S", "option2": null, "option3": null,
+          "variant_type": "simple", "manufacturer_code": null,
+          "legacy_code": null, "extra_data": null,
+          "created_at": "2026-06-01T08:00:00Z",
+          "updated_at": "2026-06-01T08:00:00Z"
+        },
+        "meta": { "tenant": "acme", "tenant_source": "flag" }
+      }
 
   option1..option3 hold the option values in the order the product declares
-  them; products get <id> shows that order in options[].
+  them; products get <id> shows that order in options[]. dimensions, when
+  present, is { "l": ..., "w": ..., "h": ... }.
+
+  A single-item read carries no pagination meta; there is nothing to page.
 
   Exit 4 when no such variant exists in the resolved tenant — including one
   that is orphaned, soft-deleted, or belongs to another tenant. Unlike a
@@ -281,24 +212,13 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(variantGetTenant, profile)
-		if tenant == nil {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "variants commands require a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
-		}
+		requireTenant(tenant, "variants")
 
 		resp, err := client.Do(ctx, "GET", "/pcms/variants/"+args[0], nil, tenant)
 		if err != nil {
 			return handleErr(err)
 		}
 
-		// The endpoint returns the full PublicProductVariantResponse shape;
-		// decode into api.ProductVariant so JSON mode emits every field
-		// (price, dimensions, options, variant_type, timestamps, etc.).
 		var envelope struct {
 			Data api.ProductVariant `json:"data"`
 		}
@@ -306,39 +226,7 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		emitServerTime(resp.ServerTime, "")
-
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		barcode := ""
-		if envelope.Data.Barcode != nil {
-			barcode = *envelope.Data.Barcode
-		}
-		sku := ""
-		if envelope.Data.SKU != nil {
-			sku = *envelope.Data.SKU
-		}
-		price := ""
-		if envelope.Data.Price != nil {
-			price = strconv.FormatFloat(*envelope.Data.Price, 'f', -1, 64)
-		}
-		if err := output.Render(os.Stdout, outputMode, output.Variant{
-			ID:          envelope.Data.ID,
-			Name:        envelope.Data.Name,
-			SKU:         sku,
-			Barcode:     barcode,
-			Price:       price,
-			VariantType: envelope.Data.VariantType,
-		}, output.RenderOpts{
-			GlobalMode:   false,
-			ResourceKind: "variant",
-		}); err != nil {
-			return handleErr(err)
-		}
-
-		return nil
+		return output.Write(os.Stdout, envelope.Data, itemMeta(tenant, variantGetTenant))
 	},
 }
 

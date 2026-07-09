@@ -32,43 +32,30 @@ var tenantsListCmd = &cobra.Command{
 
 PURPOSE
   Discover which tenant codes are available before naming one with --tenant.
-  This command takes no --tenant of its own, and unlike other list commands
-  its table has no summary footer.
+  This command takes no --tenant of its own.
 
 USAGE
-  capigo tenants list [-o table|json|quiet]
+  capigo tenants list
 
 FLAGS
-  -o, --output table|json|quiet
-      Print rows, the JSON envelope, or bare tenant codes. Defaults to
-      table. See capigo help output.
+  This command takes no flags.
 
 OUTPUT
-  A table of tenants:
-
-      ┌──────┬─────────────┐
-      │ Code │ Name        │
-      ├──────┼─────────────┤
-      │ acme │ Acme Co.    │
-      │ demo │ Demo Tenant │
-      └──────┴─────────────┘
-
-  -o json emits the list envelope; each row is a tenant:
+  The tenants are at .data[]; tenant_code is the value --tenant expects:
 
       {
         "data": [
           { "tenant_code": "acme", "name": "Acme Co.", "role": "owner",
-            "joined_at": "2026-01-14T09:00:00Z" }
+            "joined_at": "2026-01-14T09:00:00Z" },
+          { "tenant_code": "demo", "name": "Demo Tenant", "role": "member",
+            "joined_at": "2026-02-03T09:00:00Z" }
         ],
         "meta": { "page": 1, "limit": 20, "total": 2, "has_more": false }
       }
 
-  tenant_code is the value --tenant expects. quiet prints tenant_code, one
-  per line.
-
   capigo help tenancy  how --tenant resolves, and which commands require it`,
 	Args: cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(_ *cobra.Command, _ []string) error {
 		client, cfg, err := buildClient()
 		if err != nil {
 			return handleErr(err)
@@ -93,29 +80,7 @@ OUTPUT
 			_ = config.Save(cfg)
 		}
 
-		if outputMode == "json" {
-			data := envelope.Data
-			if data == nil {
-				data = []api.Tenant{}
-			}
-			return output.WriteJSONList(os.Stdout, data, envelope.Meta)
-		}
-
-		// Convert api.Tenant to output.Tenant for table/quiet rendering.
-		outTenants := make([]output.Tenant, len(envelope.Data))
-		for i, t := range envelope.Data {
-			outTenants[i] = output.Tenant{
-				Code: t.TenantCode,
-				Name: t.Name,
-			}
-		}
-
-		if err := output.Render(os.Stdout, outputMode, outTenants, output.RenderOpts{
-			ResourceKind: "tenant",
-		}); err != nil {
-			return handleErr(err)
-		}
-		return nil
+		return output.Write(os.Stdout, envelope.Data, listMeta(nil, "", envelope.Meta))
 	},
 }
 

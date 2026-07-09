@@ -28,7 +28,7 @@ func commentAttachmentDownloadPath(taskID, attachmentID string) string {
 // attachments download` and `tasks comments attachments download`: fetch the
 // signed-URL metadata, download the bytes to disk, and report the result.
 // path is the fully-built request path (see the two helpers above).
-func runAttachmentDownload(client *api.Client, tenant *string, path, dest string) error {
+func runAttachmentDownload(client *api.Client, tenant *string, tenantFlag, path, dest string) error {
 	ctx := context.Background()
 
 	resp, err := client.Do(ctx, "GET", path, nil, tenant)
@@ -47,21 +47,13 @@ func runAttachmentDownload(client *api.Client, tenant *string, path, dest string
 		return handleErr(err)
 	}
 
-	switch outputMode {
-	case "json":
-		return output.WriteJSONObject(os.Stdout, map[string]any{
-			"file_name":  meta.FileName,
-			"mime_type":  meta.MimeType,
-			"size_bytes": meta.SizeBytes,
-			"saved_path": destPath,
-		})
-	case "quiet":
-		_, err := fmt.Fprintln(os.Stdout, destPath)
-		return err
-	default: // table
-		_, err := fmt.Fprintf(os.Stdout, "Saved: %s (%d bytes, %s)\n", destPath, meta.SizeBytes, meta.MimeType)
-		return err
+	data := map[string]any{
+		"file_name":  meta.FileName,
+		"mime_type":  meta.MimeType,
+		"size_bytes": meta.SizeBytes,
+		"saved_path": destPath,
 	}
+	return output.Write(os.Stdout, data, itemMeta(tenant, tenantFlag))
 }
 
 // tasks attachments (group) + download flags
@@ -96,7 +88,6 @@ PURPOSE
 USAGE
   capigo tasks attachments download <task-id> <attachment-id>
                                      [--tenant <code>] [-d <path>]
-                                     [-o table|json|quiet]
 
 FLAGS
   <task-id>
@@ -118,27 +109,15 @@ FLAGS
 
         capigo tasks attachments download <task-uuid> <att-uuid> -d ./dl
 
-  -o, --output table|json|quiet
-      Controls what is printed after the file is written, not the file
-      itself — every mode writes the same bytes to the same path. Defaults
-      to table.
-      See capigo help output.
-
 OUTPUT
-  The file is written to the resolved destination path.
+  The file is written to the resolved destination path, unconditionally. The
+  file metadata is at .data:
 
-  table (default):
-
-      Saved: invoice.pdf (48213 bytes, application/pdf)
-
-  -o json:
-
-      { "file_name": "invoice.pdf", "mime_type": "application/pdf",
-        "size_bytes": 48213, "saved_path": "invoice.pdf" }
-
-  quiet prints the saved path alone:
-
-      invoice.pdf
+      {
+        "data": { "file_name": "invoice.pdf", "mime_type": "application/pdf",
+                  "size_bytes": 48213, "saved_path": "invoice.pdf" },
+        "meta": { "tenant": "acme", "tenant_source": "flag" }
+      }
 
   The signed URL behind the download is short-lived (five minutes). The CLI
   never prints it and mints a fresh one on every call, so a URL-expired error
@@ -157,7 +136,7 @@ OUTPUT
 		}
 		tenant := resolveTenant(taskAttachmentsDownloadTenant, profile)
 
-		return runAttachmentDownload(client, tenant, taskAttachmentDownloadPath(args[0], args[1]), taskAttachmentsDownloadDest)
+		return runAttachmentDownload(client, tenant, taskAttachmentsDownloadTenant, taskAttachmentDownloadPath(args[0], args[1]), taskAttachmentsDownloadDest)
 	},
 }
 
@@ -193,7 +172,6 @@ PURPOSE
 USAGE
   capigo tasks comments attachments download <task-id> <attachment-id>
                                               [--tenant <code>] [-d <path>]
-                                              [-o table|json|quiet]
 
 FLAGS
   <task-id>
@@ -219,27 +197,15 @@ FLAGS
 
         capigo tasks comments attachments download <task-uuid> <id> -d ./dl
 
-  -o, --output table|json|quiet
-      Controls what is printed after the file is written, not the file
-      itself — every mode writes the same bytes to the same path. Defaults
-      to table.
-      See capigo help output.
-
 OUTPUT
-  The file is written to the resolved destination path.
+  The file is written to the resolved destination path, unconditionally. The
+  file metadata is at .data:
 
-  table (default):
-
-      Saved: invoice.pdf (48213 bytes, application/pdf)
-
-  -o json:
-
-      { "file_name": "invoice.pdf", "mime_type": "application/pdf",
-        "size_bytes": 48213, "saved_path": "invoice.pdf" }
-
-  quiet prints the saved path alone:
-
-      invoice.pdf
+      {
+        "data": { "file_name": "invoice.pdf", "mime_type": "application/pdf",
+                  "size_bytes": 48213, "saved_path": "invoice.pdf" },
+        "meta": { "tenant": "acme", "tenant_source": "flag" }
+      }
 
   The signed URL behind the download is short-lived (five minutes). The CLI
   never prints it and mints a fresh one on every call, so a URL-expired error
@@ -258,7 +224,7 @@ OUTPUT
 		}
 		tenant := resolveTenant(taskCommentsAttachmentsDownloadTenant, profile)
 
-		return runAttachmentDownload(client, tenant, commentAttachmentDownloadPath(args[0], args[1]), taskCommentsAttachmentsDownloadDest)
+		return runAttachmentDownload(client, tenant, taskCommentsAttachmentsDownloadTenant, commentAttachmentDownloadPath(args[0], args[1]), taskCommentsAttachmentsDownloadDest)
 	},
 }
 

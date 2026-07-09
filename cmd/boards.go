@@ -45,12 +45,12 @@ PURPOSE
 
 USAGE
   capigo boards list [--tenant <code>] [-q <term>] [--page <n>]
-                      [--limit <n>] [-o table|json|quiet]
+                      [--limit <n>]
 
 FLAGS
   --tenant <code>
       Tenant to search. Optional — omit it to span every tenant this key can
-      reach; table output then gains a Tenant column.
+      reach; meta.tenant is then empty.
       See capigo help tenancy.
 
         capigo boards list --tenant acme
@@ -69,33 +69,26 @@ FLAGS
 
         capigo boards list --tenant acme --page 2 --limit 50
 
-  -o, --output table|json|quiet
-      Print rows, the JSON envelope, or bare ids. Defaults to table.
-      See capigo help output.
-
 OUTPUT
-  A table of boards, then a summary line. With --tenant omitted, a Tenant
-  column is added.
+  The boards are at .data[]:
 
-      ┌──────────┬─────────────────┬────────┬─────────────────┐
-      │ ID       │ Title           │ Public │ Description     │
-      ├──────────┼─────────────────┼────────┼─────────────────┤
-      │ 7c1f2e88 │ Product Roadmap │ yes    │ Q1 2026 roadmap │
-      │ 9ab2c744 │ Internal Ops    │ no     │                 │
-      └──────────┴─────────────────┴────────┴─────────────────┘
-      Tenant: acme · Total: 2 · showing 2 (page 1/1) (all rows shown)
+      {
+        "data": [
+          { "id": "7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10",
+            "name": "Product Roadmap", "description": "Q1 2026 roadmap",
+            "is_public": true, "created_at": "2026-01-05T09:00:00Z" }
+        ],
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "page": 1, "limit": 20, "total": 1, "has_more": false }
+      }
 
-  Ids are shortened here to fit the page; the command prints them in full.
+  Read meta.total rather than counting .data[]: a page never holds more than
+  --limit, so a full count needs meta, not arithmetic.
 
-  -o json emits the list envelope; each row is a board:
+  With --tenant omitted, meta.tenant and meta.tenant_source are both empty:
+  the results span every tenant this key can reach.
 
-      { "id": "7c1f2e88-...", "name": "Product Roadmap",
-        "description": "Q1 2026 roadmap", "is_public": true,
-        "created_at": "..." }
-
-  The lists on a board are not included here; boards get returns them.
-
-  The envelope, meta.total and list footers: capigo help output`,
+  The lists on a board are not included here; boards get returns them.`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -137,48 +130,7 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if outputMode == "json" {
-			data := envelope.Data
-			if data == nil {
-				data = []api.Board{}
-			}
-			return output.WriteJSONList(os.Stdout, data, envelope.Meta)
-		}
-
-		items := make([]output.Board, len(envelope.Data))
-		for i, b := range envelope.Data {
-			desc := ""
-			if b.Description != nil {
-				desc = *b.Description
-			}
-			items[i] = output.Board{
-				ID:          b.ID,
-				Title:       b.Name,
-				IsPublic:    b.IsPublic,
-				Description: desc,
-			}
-		}
-
-		if err := output.Render(os.Stdout, outputMode, items, output.RenderOpts{
-			GlobalMode:   tenant == nil,
-			ResourceKind: "board",
-		}); err != nil {
-			return handleErr(err)
-		}
-
-		if outputMode == "table" {
-			output.WriteListSummary(os.Stdout, output.ListSummary{
-				Tenant:     derefTenant(tenant),
-				TenantNote: tenantNote(tenant, boardListTenant),
-				Shown:      len(envelope.Data),
-				Page:       envelope.Meta.Page,
-				Limit:      envelope.Meta.Limit,
-				Total:      envelope.Meta.Total,
-				HasMore:    envelope.Meta.HasMore,
-			})
-		}
-
-		return nil
+		return output.Write(os.Stdout, envelope.Data, listMeta(tenant, boardListTenant, envelope.Meta))
 	},
 }
 
@@ -196,7 +148,7 @@ PURPOSE
   tasks update --list expects.
 
 USAGE
-  capigo boards get <id> [--tenant <code>] [-o table|json|quiet]
+  capigo boards get <id> [--tenant <code>]
 
 FLAGS
   <id>
@@ -208,30 +160,21 @@ FLAGS
 
         capigo boards get 7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10 --tenant acme
 
-  -o, --output table|json|quiet
-      Print a row, the JSON object, or the bare id. Defaults to table.
-      See capigo help output.
-
 OUTPUT
-  A single-row table:
+  The board, with its lists, is at .data:
 
-      ┌──────────────────────────────────────┬─────────────────┬───────┐
-      │ ID                                   │ Title           │ Lists │
-      ├──────────────────────────────────────┼─────────────────┼───────┤
-      │ 7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10 │ Product Roadmap │ 3     │
-      └──────────────────────────────────────┴─────────────────┴───────┘
+      {
+        "data": { "id": "7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10",
+                  "name": "Product Roadmap", "description": "Q1 2026 roadmap",
+                  "is_public": true, "created_at": "2026-01-05T09:00:00Z",
+                  "lists": [ { "id": "9ab2c744-...", "name": "Backlog",
+                              "position": 0 } ] },
+        "meta": { "tenant": "acme", "tenant_source": "flag" }
+      }
 
-  Lists holds the count only; the lists themselves are not in the table.
+  With --tenant omitted, meta.tenant and meta.tenant_source are both empty.
 
-  -o json emits the bare board object, with its lists:
-
-      { "id": "7c1f2e88-...", "name": "Product Roadmap",
-        "description": "...", "is_public": true, "created_at": "...",
-        "lists": [ { "id": "...", "name": "Backlog", "position": 0 } ] }
-
-  Exit 4 when no such board is reachable.
-
-  Output modes and the JSON contract: capigo help output`,
+  Exit 4 when no such board is reachable.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -260,22 +203,7 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		if err := output.Render(os.Stdout, outputMode, output.BoardDetail{
-			ID:        envelope.Data.ID,
-			Title:     envelope.Data.Name,
-			ListCount: len(envelope.Data.Lists),
-		}, output.RenderOpts{
-			GlobalMode:   tenant == nil,
-			ResourceKind: "board_detail",
-		}); err != nil {
-			return handleErr(err)
-		}
-
-		return nil
+		return output.Write(os.Stdout, envelope.Data, itemMeta(tenant, boardGetTenant))
 	},
 }
 

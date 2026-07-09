@@ -19,8 +19,7 @@ var unitsCmd = &cobra.Command{
 System (PCMS).
 
 Units are tenant-scoped reference data. Every command here requires a
-tenant.
-  capigo help tenancy
+tenant, and every response names the tenant it resolved to, in meta.
 
 USAGE
   capigo units <command> --tenant <code> [<args>]`,
@@ -48,12 +47,10 @@ PURPOSE
 
 USAGE
   capigo units list --tenant <code> [-q <term>] [--page <n>] [--limit <n>]
-                    [-o table|json|quiet]
 
 FLAGS
   --tenant <code>
-      Tenant to read from. Required. Falls back to CAPIGO_TENANT, then to
-      default_tenant in the config file. Exits 5 if none resolves.
+      Tenant to read from. Required.
 
         capigo units list --tenant acme
 
@@ -71,23 +68,8 @@ FLAGS
 
         capigo units list --tenant acme --page 2 --limit 100
 
-  -o, --output table|json|quiet
-      Print rows, the JSON envelope, or bare ids. Defaults to table.
-      See capigo help output.
-
 OUTPUT
-  A table of units, then a summary line. Ids are shortened here to fit the
-  page; the command prints them in full.
-
-      ┌──────────┬──────────┬──────────────┐
-      │ ID       │ Name     │ Abbreviation │
-      ├──────────┼──────────┼──────────────┤
-      │ 7c1f2e88 │ Kilogram │ kg           │
-      │ 9ab2c744 │ Piece    │ pc           │
-      └──────────┴──────────┴──────────────┘
-      Tenant: acme · Total: 2 (all rows shown)
-
-  -o json emits the list envelope; the units are at .data[]:
+  The units are at .data[]:
 
       {
         "data": [
@@ -96,8 +78,18 @@ OUTPUT
           { "id": "9ab2c744-1e3a-4b8c-9f10-5c1e2a4d9f10", "name": "Piece",
             "abbreviation": "pc" }
         ],
-        "meta": { "page": 1, "limit": 20, "total": 2, "has_more": false }
-      }`,
+        "meta": {
+          "tenant": "acme", "tenant_source": "flag",
+          "page": 1, "limit": 20, "total": 2, "has_more": false
+        }
+      }
+
+  Read meta.total rather than counting .data[]: a page never holds more than
+  --limit, so a full count needs meta, not arithmetic.
+
+  meta.tenant is the tenant this call actually ran against, and
+  meta.tenant_source says whether that came from the flag, from CAPIGO_TENANT,
+  or from the config file. See capigo help tenancy.`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -112,15 +104,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(unitListTenant, profile)
-		if tenant == nil {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "units commands require a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
-		}
+		requireTenant(tenant, "units")
 
 		validatePCMSLimit(unitListLimit)
 
@@ -134,43 +118,7 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if outputMode == "json" {
-			data := envelope.Data
-			if data == nil {
-				data = []api.Unit{}
-			}
-			return output.WriteJSONList(os.Stdout, data, envelope.Meta)
-		}
-
-		items := make([]output.Unit, len(envelope.Data))
-		for i, u := range envelope.Data {
-			items[i] = output.Unit{
-				ID:           u.ID,
-				Name:         u.Name,
-				Abbreviation: u.Abbreviation,
-			}
-		}
-
-		if err := output.Render(os.Stdout, outputMode, items, output.RenderOpts{
-			GlobalMode:   false,
-			ResourceKind: "unit",
-		}); err != nil {
-			return handleErr(err)
-		}
-
-		if outputMode == "table" {
-			output.WriteListSummary(os.Stdout, output.ListSummary{
-				Tenant:     derefTenant(tenant),
-				TenantNote: tenantNote(tenant, unitListTenant),
-				Shown:      len(envelope.Data),
-				Page:       envelope.Meta.Page,
-				Limit:      envelope.Meta.Limit,
-				Total:      envelope.Meta.Total,
-				HasMore:    envelope.Meta.HasMore,
-			})
-		}
-
-		return nil
+		return output.Write(os.Stdout, envelope.Data, listMeta(tenant, unitListTenant, envelope.Meta))
 	},
 }
 
@@ -190,7 +138,7 @@ PURPOSE
   units list --query.
 
 USAGE
-  capigo units get <id> --tenant <code> [-o table|json|quiet]
+  capigo units get <id> --tenant <code>
 
 FLAGS
   <id>
@@ -202,27 +150,20 @@ FLAGS
 
         capigo units get 4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb --tenant acme
 
-  -o, --output table|json|quiet
-      Print a row, the JSON object, or the bare id. Defaults to table.
-      See capigo help output.
-
 OUTPUT
-  A single-row table:
-
-      ┌──────────────────────────────────────┬──────────┬──────────────┐
-      │ ID                                   │ Name     │ Abbreviation │
-      ├──────────────────────────────────────┼──────────┼──────────────┤
-      │ 4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb │ Kilogram │ kg           │
-      └──────────────────────────────────────┴──────────┴──────────────┘
-
-  -o json emits the bare object. A get is not a list, so there is no envelope
-  and no .data to reach for:
+  The unit is at .data — an object, where a list puts an array. The envelope
+  is the same either way:
 
       {
-        "id": "4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
-        "name": "Kilogram",
-        "abbreviation": "kg"
+        "data": {
+          "id": "4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
+          "name": "Kilogram",
+          "abbreviation": "kg"
+        },
+        "meta": { "tenant": "acme", "tenant_source": "flag" }
       }
+
+  A single-item read carries no pagination meta; there is nothing to page.
 
   Exit 4 when no such unit exists in the resolved tenant.`,
 	Args: cobra.ExactArgs(1),
@@ -240,10 +181,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(unitGetTenant, profile)
-		if tenant == nil {
-			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "units commands require a tenant; pass --tenant <code> or set default", "")
-			os.Exit(5)
-		}
+		requireTenant(tenant, "units")
 
 		resp, err := client.Do(ctx, "GET", "/pcms/units/"+args[0], nil, tenant)
 		if err != nil {
@@ -257,15 +195,7 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		return output.Render(os.Stdout, outputMode, output.Unit{
-			ID:           envelope.Data.ID,
-			Name:         envelope.Data.Name,
-			Abbreviation: envelope.Data.Abbreviation,
-		}, output.RenderOpts{GlobalMode: false, ResourceKind: "unit"})
+		return output.Write(os.Stdout, envelope.Data, itemMeta(tenant, unitGetTenant))
 	},
 }
 
@@ -292,7 +222,6 @@ USAGE
   capigo units create --tenant <code>
                       (--name <text> --abbreviation <text>
                        | --from-json <path|->)
-                      [-o table|json|quiet]
 
 FLAGS
   --tenant <code>
@@ -309,8 +238,8 @@ FLAGS
       duplicates an existing unit's abbreviation in this tenant exits 8.
 
   --from-json <path|->
-      Send the whole request body from a file, or - for stdin. The
-      individual field flags above are ignored when this is set.
+      Send the whole request body from a file, or - for stdin. Mutually
+      exclusive with --name and --abbreviation: passing both exits 5.
 
       Body:
 
@@ -320,18 +249,21 @@ FLAGS
         echo '{"name":"Piece","abbreviation":"pc"}' \
           | capigo units create --tenant acme --from-json -
 
-  -o, --output table|json|quiet
-      Print the created row, the JSON object, or its bare id. Defaults to
-      table. See capigo help output.
-
 OUTPUT
-  -o json emits the bare created unit:
+  The created unit is at .data:
 
-      { "id": "...", "name": "Kilogram", "abbreviation": "kg" }
+      {
+        "data": { "id": "...", "name": "Kilogram", "abbreviation": "kg" },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-07-09T04:12:33Z" }
+      }
 
-  quiet prints its id.
+  meta.tenant is the tenant the unit was written to. Read it: a write that
+  landed in the wrong tenant looks exactly like a write that succeeded.
 
-  Output modes and the JSON contract: capigo help output`,
+  Exit 5 if --name or --abbreviation is missing (and --from-json is not
+  used), or if --from-json is combined with a field flag. Exit 8 if a unit
+  with the same abbreviation already exists in the tenant.`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -346,28 +278,13 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(unitCreateTenant, profile)
-		defer echoTenant(tenant, unitCreateTenant)
-		if tenant == nil {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "units commands require a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
-		}
+		requireTenant(tenant, "units")
 
 		var body any
 		if unitCreateFromJSON != "" {
 			for _, f := range []string{"name", "abbreviation"} {
 				if cmd.Flags().Changed(f) {
-					e := &api.APIError{
-						Code:       "VALIDATION_ERROR",
-						Message:    fmt.Sprintf("--from-json and --%s are mutually exclusive", f),
-						HTTPStatus: 400,
-					}
-					output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-					os.Exit(api.ExitCodeFor(e))
+					failValidation("--from-json and --%s are mutually exclusive", f)
 				}
 			}
 			raw, err := readJSONInput(unitCreateFromJSON)
@@ -377,14 +294,10 @@ OUTPUT
 			body = json.RawMessage(raw)
 		} else {
 			if unitCreateName == "" {
-				e := &api.APIError{Code: "VALIDATION_ERROR", Message: "--name is required", HTTPStatus: 400}
-				output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-				os.Exit(api.ExitCodeFor(e))
+				failValidation("--name is required")
 			}
 			if unitCreateAbbreviation == "" {
-				e := &api.APIError{Code: "VALIDATION_ERROR", Message: "--abbreviation is required", HTTPStatus: 400}
-				output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-				os.Exit(api.ExitCodeFor(e))
+				failValidation("--abbreviation is required")
 			}
 			body = api.CreateUnitRequest{
 				Name:         unitCreateName,
@@ -404,17 +317,9 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		emitServerTime(resp.ServerTime, "")
-
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		return output.Render(os.Stdout, outputMode, output.Unit{
-			ID:           envelope.Data.ID,
-			Name:         envelope.Data.Name,
-			Abbreviation: envelope.Data.Abbreviation,
-		}, output.RenderOpts{GlobalMode: false, ResourceKind: "unit"})
+		meta := itemMeta(tenant, unitCreateTenant)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, envelope.Data, meta)
 	},
 }
 
@@ -435,21 +340,23 @@ var unitsUpdateCmd = &cobra.Command{
 	Long: `Update a unit. Fields you do not send are left unchanged.
 
 PURPOSE
-  Change part of a unit: its name, or its abbreviation. To overwrite every
-  field at once, use units replace <id>. A unit has no nullable field.
+  Change one or a few fields of a unit (PATCH) without restating the rest.
+  A unit has no nullable field. units replace <id> (PUT) sends the same kind
+  of partial body but the CLI requires every field there, so use replace
+  when you want to be forced to state the whole record.
 
 USAGE
   capigo units update <id> --tenant <code>
                       ([--name <text>] [--abbreviation <text>]
                        | --from-json <path|->)
-                      [-o table|json|quiet]
 
 FLAGS
   <id>
       Unit id, a UUID. Positional, required.
 
   --tenant <code>
-      Tenant the unit belongs to. Required.
+      Tenant the unit belongs to. Required. Exits 4 if the unit is not in
+      it.
 
   --name <text>
       A new name, 1 to 500 characters.
@@ -461,23 +368,24 @@ FLAGS
 
         capigo units update <uuid> --tenant acme --abbreviation KG
 
-  At least one of --name, --abbreviation is required; sending neither
-  exits 5.
-
   --from-json <path|->
       Send the whole request body from a file, or - for stdin. Mutually
-      exclusive with the individual field flags above: passing both exits 5.
-
-  -o, --output table|json|quiet
-      Print the updated row, the JSON object, or its bare id. Defaults to
-      table. See capigo help output.
+      exclusive with --name and --abbreviation: passing both exits 5.
 
 OUTPUT
-  -o json emits the bare updated unit:
+  The unit as it now stands is at .data:
 
-      { "id": "...", "name": "Kilogram", "abbreviation": "kg" }
+      {
+        "data": { "id": "...", "name": "Kilogram", "abbreviation": "kg" },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-07-09T04:12:33Z" }
+      }
 
-  Output modes and the JSON contract: capigo help output`,
+  meta.tenant is the tenant the write landed in. See capigo help tenancy.
+
+  Exit 5 if no field flag is given (and --from-json is not used), or if
+  --from-json is combined with a field flag. Exit 4 if <id> is not in the
+  resolved tenant. Exit 8 on an abbreviation collision.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -494,18 +402,13 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(unitUpdateTenant, profile)
-		defer echoTenant(tenant, unitUpdateTenant)
-		if tenant == nil {
-			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "units commands require a tenant; pass --tenant <code> or set default", "")
-			os.Exit(5)
-		}
+		requireTenant(tenant, "units")
 
 		var body any
 		if unitUpdateFromJSON != "" {
 			for _, f := range []string{"name", "abbreviation"} {
 				if cmd.Flags().Changed(f) {
-					output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", fmt.Sprintf("--from-json and --%s are mutually exclusive", f), "")
-					os.Exit(5)
+					failValidation("--from-json and --%s are mutually exclusive", f)
 				}
 			}
 			raw, err := readJSONInput(unitUpdateFromJSON)
@@ -522,8 +425,7 @@ OUTPUT
 				m["abbreviation"] = unitUpdateAbbreviation
 			}
 			if len(m) == 0 {
-				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "at least one field must be provided for update", "")
-				os.Exit(5)
+				failValidation("at least one field must be provided for update")
 			}
 			body = m
 		}
@@ -540,17 +442,9 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		emitServerTime(resp.ServerTime, "")
-
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		return output.Render(os.Stdout, outputMode, output.Unit{
-			ID:           envelope.Data.ID,
-			Name:         envelope.Data.Name,
-			Abbreviation: envelope.Data.Abbreviation,
-		}, output.RenderOpts{GlobalMode: false, ResourceKind: "unit"})
+		meta := itemMeta(tenant, unitUpdateTenant)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, envelope.Data, meta)
 	},
 }
 
@@ -571,50 +465,55 @@ var unitsReplaceCmd = &cobra.Command{
 	Long: `Replace a unit's name and abbreviation in one call.
 
 PURPOSE
-  Rewrite a unit's name and abbreviation together in one call. The API does
-  not clear a field you omit on PUT — like PATCH, it changes only what you
-  send — but this command requires --name and --abbreviation on every call,
-  so a stale field survives only if you typed it that way. To change one
-  field without retyping the rest, use units update <id>.
+  Send the unit's whole field set in one call (PUT), so nothing is left
+  implicit. The API itself does not clear a field you omit on PUT — the same
+  as PATCH, it changes only what you send — but this command requires --name
+  and --abbreviation on every call, so a stale field can only survive if you
+  typed it that way on purpose. To touch one field and leave the rest alone
+  without restating it, use units update <id> instead.
 
 USAGE
   capigo units replace <id> --tenant <code>
                        (--name <text> --abbreviation <text>
                         | --from-json <path|->)
-                       [-o table|json|quiet]
 
 FLAGS
   <id>
       Unit id, a UUID. Positional, required.
 
   --tenant <code>
-      Tenant the unit belongs to. Required.
+      Tenant the unit belongs to. Required. Exits 4 if the unit is not in
+      it.
 
   --name <text>
-      Unit name, 1 to 500 characters. Required.
+      Unit name, 1 to 500 characters. Required, unless --from-json is used.
 
   --abbreviation <text>
-      Unit abbreviation, 1 to 20 characters. Required; the server lowercases
-      it. An abbreviation that duplicates another unit's abbreviation in
-      this tenant exits 8.
+      Unit abbreviation, 1 to 20 characters. Required, unless --from-json is
+      used; the server lowercases it. An abbreviation that duplicates
+      another unit's abbreviation in this tenant exits 8.
 
         capigo units replace <uuid> --tenant acme --name Kilogram \
           --abbreviation kg
 
   --from-json <path|->
       Send the whole request body from a file, or - for stdin. Mutually
-      exclusive with the individual field flags above: passing both exits 5.
-
-  -o, --output table|json|quiet
-      Print the replaced row, the JSON object, or its bare id. Defaults to
-      table. See capigo help output.
+      exclusive with --name and --abbreviation: passing both exits 5.
 
 OUTPUT
-  -o json emits the bare unit as it now stands:
+  The unit as it now stands is at .data:
 
-      { "id": "...", "name": "Kilogram", "abbreviation": "kg" }
+      {
+        "data": { "id": "...", "name": "Kilogram", "abbreviation": "kg" },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-07-09T04:12:33Z" }
+      }
 
-  Output modes and the JSON contract: capigo help output`,
+  meta.tenant is the tenant the write landed in. See capigo help tenancy.
+
+  Exit 5 if --name or --abbreviation is missing (and --from-json is not
+  used), or if --from-json is combined with a field flag. Exit 4 if <id> is
+  not in the resolved tenant. Exit 8 on an abbreviation collision.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -631,18 +530,13 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(unitReplaceTenant, profile)
-		defer echoTenant(tenant, unitReplaceTenant)
-		if tenant == nil {
-			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "units commands require a tenant; pass --tenant <code> or set default", "")
-			os.Exit(5)
-		}
+		requireTenant(tenant, "units")
 
 		var body any
 		if unitReplaceFromJSON != "" {
 			for _, f := range []string{"name", "abbreviation"} {
 				if cmd.Flags().Changed(f) {
-					output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", fmt.Sprintf("--from-json and --%s are mutually exclusive", f), "")
-					os.Exit(5)
+					failValidation("--from-json and --%s are mutually exclusive", f)
 				}
 			}
 			raw, err := readJSONInput(unitReplaceFromJSON)
@@ -652,12 +546,10 @@ OUTPUT
 			body = json.RawMessage(raw)
 		} else {
 			if unitReplaceName == "" {
-				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "--name is required for replace", "")
-				os.Exit(5)
+				failValidation("--name is required for replace")
 			}
 			if unitReplaceAbbreviation == "" {
-				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "--abbreviation is required for replace", "")
-				os.Exit(5)
+				failValidation("--abbreviation is required for replace")
 			}
 			body = api.ReplaceUnitRequest{
 				Name:         unitReplaceName,
@@ -677,17 +569,9 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		emitServerTime(resp.ServerTime, "")
-
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		return output.Render(os.Stdout, outputMode, output.Unit{
-			ID:           envelope.Data.ID,
-			Name:         envelope.Data.Name,
-			Abbreviation: envelope.Data.Abbreviation,
-		}, output.RenderOpts{GlobalMode: false, ResourceKind: "unit"})
+		meta := itemMeta(tenant, unitReplaceTenant)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, envelope.Data, meta)
 	},
 }
 

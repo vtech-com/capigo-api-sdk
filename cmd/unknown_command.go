@@ -115,6 +115,37 @@ var unknownCommandRegistry = []unknownCommandRedirect{
 	},
 }
 
+// removedFlagHints answers a caller who is still spelling a flag this CLI used
+// to have. cobra's own message — `unknown shorthand flag: 'o' in -o` — names
+// the character it choked on and nothing else, which reads like a typo rather
+// than like a flag that was deliberately removed. A caller who thinks it is a
+// typo tries again.
+var removedFlagHints = []struct{ marker, next string }{
+	{
+		marker: "shorthand flag: 'o'",
+		next: "There is no --output flag: capigo prints JSON on stdout, always. " +
+			"Drop the flag. The result is at .data and the tenant is at .meta.tenant. " +
+			"See 'capigo help output'.",
+	},
+	{
+		marker: "unknown flag: --output",
+		next: "There is no --output flag: capigo prints JSON on stdout, always. " +
+			"Drop the flag. The result is at .data and the tenant is at .meta.tenant. " +
+			"See 'capigo help output'.",
+	},
+}
+
+// nextForRemovedFlag returns the hint for a flag this CLI no longer defines.
+// Pure string→string, like redirectForUnknownCommand below.
+func nextForRemovedFlag(errMsg string) (next string, matched bool) {
+	for _, h := range removedFlagHints {
+		if strings.Contains(errMsg, h.marker) {
+			return h.next, true
+		}
+	}
+	return "", false
+}
+
 // unknownCommandPattern parses cobra's "unknown command %q for %q" message
 // (see spf13/cobra args.go legacyArgs and cmd/unknown_command.go
 // enableUnknownSubcommandErrors above, which produces the same shape for

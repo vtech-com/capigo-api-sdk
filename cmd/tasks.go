@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"os"
 	"strconv"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
@@ -58,7 +57,8 @@ var tasksListCmd = &cobra.Command{
 PURPOSE
   Find tasks across boards, and across tenants. Look one up by title with
   --query, then read it in full with tasks get. Omitting --tenant searches
-  every tenant this key can reach, and table output gains a Tenant column.
+  every tenant this key can reach; each row's task.tenant_code names the
+  tenant it belongs to, so meta.tenant is absent in that case.
 
 USAGE
   capigo tasks list [--tenant <code>] [-q <term>] [--status <text>]
@@ -67,12 +67,12 @@ USAGE
                      [--board-list-id <uuid>] [--due-after <date>]
                      [--due-before <date>] [--created-after <ts>]
                      [--created-before <ts>] [--parent-task-id <uuid>|null]
-                     [--page <n>] [--limit <n>] [-o table|json|quiet]
+                     [--page <n>] [--limit <n>]
 
 FLAGS
   --tenant <code>
       Tenant to search. Optional — omit it to span every tenant this key can
-      reach; table output then gains a Tenant column.
+      reach.
 
         capigo tasks list --tenant acme
 
@@ -128,23 +128,8 @@ FLAGS
 
         capigo tasks list --tenant acme --page 2 --limit 50
 
-  -o, --output table|json|quiet
-      Print rows, the JSON envelope, or bare ids. Defaults to table.
-      See capigo help output.
-
 OUTPUT
-  A table of tasks, then a summary line. With --tenant omitted, a Tenant
-  column is added.
-
-      ┌──────────┬──────────┬─────────────────┬────────┬──────────┬───────┐
-      │ Code     │ ID       │ Title           │ Status │ Assignee │ Files │
-      ├──────────┼──────────┼─────────────────┼────────┼──────────┼───────┤
-      │ TASK-104 │ 7c1f2e88 │ Fix login bug   │ To-Do  │ Minh     │     0 │
-      │ TASK-105 │ 9ab2c744 │ Design invoice  │ Doing  │          │     2 │
-      └──────────┴──────────┴─────────────────┴────────┴──────────┴───────┘
-      Tenant: acme · Total: 42 · showing 20 (page 1/3) · more rows — use --page/--limit
-
-  -o json emits the list envelope; each row is a task:
+  The tasks are at .data[]:
 
       {
         "data": [
@@ -157,13 +142,22 @@ OUTPUT
             "attachments": [...], "created_at": "...", "updated_at": "..."
           }
         ],
-        "meta": { "page": 1, "limit": 20, "total": 42, "has_more": true }
+        "meta": {
+          "tenant": "acme", "tenant_source": "flag",
+          "page": 1, "limit": 20, "total": 42, "has_more": true
+        }
       }
 
-  Exit 5 if --parent-task-id is set to anything other than null or a task
-  UUID.
+  Read meta.total rather than counting .data[]: a page never holds more than
+  --limit, so a full count needs meta, not arithmetic.
 
-  The envelope, meta.total and list footers: capigo help output`,
+  With --tenant omitted, meta.tenant and meta.tenant_source are absent — the
+  search spanned every tenant this key can reach, and there is no single
+  tenant to name. Each task still carries its own tenant_code, if the API
+  includes it on this endpoint; do not assume every row is from one tenant.
+
+  Exit 5 if --parent-task-id is set to anything other than null or a task
+  UUID.`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -206,39 +200,7 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if outputMode == "json" {
-			data := envelope.Data
-			if data == nil {
-				data = []api.Task{}
-			}
-			return output.WriteJSONList(os.Stdout, data, envelope.Meta)
-		}
-
-		items := make([]output.Task, len(envelope.Data))
-		for i, t := range envelope.Data {
-			items[i] = toOutputTask(t)
-		}
-
-		if err := output.Render(os.Stdout, outputMode, items, output.RenderOpts{
-			GlobalMode:   tenant == nil,
-			ResourceKind: "task",
-		}); err != nil {
-			return handleErr(err)
-		}
-
-		if outputMode == "table" {
-			output.WriteListSummary(os.Stdout, output.ListSummary{
-				Tenant:     derefTenant(tenant),
-				TenantNote: tenantNote(tenant, taskListTenant),
-				Shown:      len(envelope.Data),
-				Page:       envelope.Meta.Page,
-				Limit:      envelope.Meta.Limit,
-				Total:      envelope.Meta.Total,
-				HasMore:    envelope.Meta.HasMore,
-			})
-		}
-
-		return nil
+		return output.Write(os.Stdout, envelope.Data, listMeta(tenant, taskListTenant, envelope.Meta))
 	},
 }
 
@@ -257,7 +219,7 @@ PURPOSE
   activity entries are written asynchronously and can lag.
 
 USAGE
-  capigo tasks get <id> [--tenant <code>] [-o table|json|quiet]
+  capigo tasks get <id> [--tenant <code>]
 
 FLAGS
   <id>
@@ -269,30 +231,29 @@ FLAGS
 
         capigo tasks get 7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10 --tenant acme
 
-  -o, --output table|json|quiet
-      Print a row, the JSON object, or the bare id. Defaults to table.
-      See capigo help output.
-
 OUTPUT
-  A single-row table, the same columns as tasks list.
-
-  -o json emits the bare task object:
+  The task is at .data:
 
       {
-        "id": "7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10",
-        "code": "TASK-104", "title": "Fix login bug", "description": "...",
-        "status": "To-Do", "priority": "high", "assignee": {...},
-        "owner": {...}, "board_id": "...", "board_list_id": "...",
-        "due_date": "...", "parent_task_id": null, "has_subtasks": false,
-        "attachments": [...], "created_at": "...", "updated_at": "..."
+        "data": {
+          "id": "7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10",
+          "code": "TASK-104", "title": "Fix login bug", "description": "...",
+          "status": "To-Do", "priority": "high", "assignee": {...},
+          "owner": {...}, "board_id": "...", "board_list_id": "...",
+          "due_date": "...", "parent_task_id": null, "has_subtasks": false,
+          "attachments": [...], "created_at": "...", "updated_at": "..."
+        },
+        "meta": { "tenant": "acme", "tenant_source": "flag" }
       }
 
-  attachments[] carries metadata only — id, file_name, mime_type, size_bytes.
-  It never carries a download URL; tasks attachments download fetches one.
+  data.attachments[] carries metadata only — id, file_name, mime_type,
+  size_bytes. It never carries a download URL; tasks attachments download
+  fetches one.
 
-  Exit 4 when no such task is reachable.
+  meta.tenant and meta.tenant_source are absent when --tenant was omitted:
+  the id alone found the task, independent of any one tenant.
 
-  Output modes and the JSON contract: capigo help output`,
+  Exit 4 when no such task is reachable.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -321,18 +282,7 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		if err := output.Render(os.Stdout, outputMode, toOutputTask(envelope.Data), output.RenderOpts{
-			GlobalMode:   tenant == nil,
-			ResourceKind: "task",
-		}); err != nil {
-			return handleErr(err)
-		}
-
-		return nil
+		return output.Write(os.Stdout, envelope.Data, itemMeta(tenant, taskGetTenant))
 	},
 }
 
@@ -360,7 +310,6 @@ PURPOSE
 USAGE
   capigo tasks comments <id> [--tenant <code>] [--type comment|activity]
                              [--sort asc|desc] [--page <n>] [--limit <n>]
-                             [-o table|json|quiet]
 
 FLAGS
   <id>
@@ -386,22 +335,8 @@ FLAGS
 
         capigo tasks comments <uuid> --type comment --sort asc --limit 50
 
-  -o, --output table|json|quiet
-      Print rows, the JSON envelope, or bare ids. Defaults to table.
-      See capigo help output.
-
 OUTPUT
-  A table of entries, then a summary line.
-
-      ┌─────────────────────┬────────┬──────────┬───────────────────┬───────┐
-      │ Created             │ Author │ Kind     │ Content           │ Files │
-      ├─────────────────────┼────────┼──────────┼───────────────────┼───────┤
-      │ 2026-07-08T09:12:00Z│ Minh   │ comment  │ Reproduced on...  │     1 │
-      │ 2026-07-08T09:00:00Z│ System │ activity │ Status changed... │     0 │
-      └─────────────────────┴────────┴──────────┴───────────────────┴───────┘
-      Tenant: acme · Total: 6 · showing 6 (page 1/1)
-
-  -o json emits the list envelope. Each entry:
+  The entries are at .data[]:
 
       {
         "data": [
@@ -414,11 +349,14 @@ OUTPUT
         "meta": { "page": 1, "limit": 20, "total": 6, "has_more": false }
       }
 
-  kind is one of comment, activity, card or artifact.
+  kind is one of comment, activity, card, or artifact:
 
       comment    text a person or an agent typed; it is in content
       activity   a system event. content is a ready-made sentence, and
                  ui_data carries the structured before and after
+      card       a card-shaped entry (structure not further specified here)
+      artifact   an artifact-shaped entry (structure not further specified
+                 here)
 
   author.name may read System when the original actor can no longer be
   resolved — a removed member, for instance. That is a graceful fallback, not
@@ -426,9 +364,10 @@ OUTPUT
 
   attachments[] carries metadata only, never a download URL.
 
-  A task nobody has commented on returns an empty list and exit 0.
+  meta.tenant and meta.tenant_source are absent: a comments read is scoped to
+  one task by id, not to a tenant.
 
-  The envelope, meta.total and list footers: capigo help output`,
+  A task nobody has commented on returns an empty list and exit 0.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -463,41 +402,15 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if outputMode == "json" {
-			data := envelope.Data
-			if data == nil {
-				data = []api.TaskComment{}
-			}
-			return output.WriteJSONList(os.Stdout, data, envelope.Meta)
+		// Comments are scoped to a single task, so there is no tenant in meta
+		// even when a tenant was resolved implicitly.
+		meta := output.Meta{
+			Page:    output.Ptr(envelope.Meta.Page),
+			Limit:   output.Ptr(envelope.Meta.Limit),
+			Total:   output.Ptr(envelope.Meta.Total),
+			HasMore: output.Ptr(envelope.Meta.HasMore),
 		}
-
-		items := make([]output.TaskComment, len(envelope.Data))
-		for i, c := range envelope.Data {
-			items[i] = toOutputComment(c)
-		}
-
-		// Comments are scoped to a single task, so there is no tenant column even
-		// when the tenant was resolved implicitly.
-		if err := output.Render(os.Stdout, outputMode, items, output.RenderOpts{
-			GlobalMode:   false,
-			ResourceKind: "task_comment",
-		}); err != nil {
-			return handleErr(err)
-		}
-
-		if outputMode == "table" {
-			output.WriteListSummary(os.Stdout, output.ListSummary{
-				Tenant:     derefTenant(tenant),
-				TenantNote: tenantNote(tenant, taskCommentsTenant),
-				Shown:      len(envelope.Data),
-				Page:       envelope.Meta.Page,
-				Limit:      envelope.Meta.Limit,
-				Total:      envelope.Meta.Total,
-				HasMore:    envelope.Meta.HasMore,
-			})
-		}
-
-		return nil
+		return output.Write(os.Stdout, envelope.Data, meta)
 	},
 }
 
@@ -527,7 +440,7 @@ USAGE
   capigo tasks update <id> [--tenant <code>] [--title <text>]
                            [--description <text>] [--status <text>]
                            [--assignee <uuid>] [--board <uuid> --list <uuid>]
-                           [--follower-id <uuid>]... [-o table|json|quiet]
+                           [--follower-id <uuid>]...
 
 FLAGS
   <id>
@@ -566,16 +479,21 @@ FLAGS
       Add a follower. Repeatable. Additive and idempotent — this endpoint
       cannot remove a follower.
 
-  -o, --output table|json|quiet
-      Print a row, the JSON object, or the bare id. Defaults to table.
-      See capigo help output.
-
   At least one field flag is required; sending none exits 5.
 
 OUTPUT
-  -o json emits the bare updated task, the same shape as tasks get.
+  The task as it now stands is at .data, the same shape as tasks get:
 
-  Output modes and the JSON contract: capigo help output`,
+      {
+        "data": { "id": "...", "code": "TASK-104", "title": "...", ... },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-07-09T04:12:33Z" }
+      }
+
+  meta.tenant is the tenant the write landed in, when --tenant was given or
+  resolved from CAPIGO_TENANT/config; it is absent when the id alone found
+  the task with no tenant resolved. A write into the wrong tenant looks
+  exactly like a write that succeeded — read meta.tenant.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -593,7 +511,6 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(taskUpdateTenant, profile)
-		defer echoTenant(tenant, taskUpdateTenant)
 
 		// Build the PATCH body as a map so we can express the tri-state the
 		// API needs: a field is absent (omitted), set to a value, or explicitly
@@ -632,13 +549,7 @@ OUTPUT
 		}
 
 		if len(body) == 0 {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "at least one field must be provided for update",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
+			failValidation("at least one field must be provided for update")
 		}
 
 		resp, err := client.Do(ctx, "PATCH", "/mission/tasks/"+id, body, tenant)
@@ -653,20 +564,9 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		emitServerTime(resp.ServerTime, "")
-
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		if err := output.Render(os.Stdout, outputMode, toOutputTask(envelope.Data), output.RenderOpts{
-			GlobalMode:   tenant == nil,
-			ResourceKind: "task",
-		}); err != nil {
-			return handleErr(err)
-		}
-
-		return nil
+		meta := itemMeta(tenant, taskUpdateTenant)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, envelope.Data, meta)
 	},
 }
 
@@ -714,7 +614,6 @@ USAGE
                        [--due-date <ts>] [--assignee <uuid>]
                        [--board <uuid> --list <uuid>]
                        [--follower-id <uuid>]... [--subtasks-json <path|->]
-                       [-o table|json|quiet]
 
 FLAGS
   --tenant <code>
@@ -763,28 +662,32 @@ FLAGS
         echo '[{"title":"Design"},{"title":"Build","priority":"High"}]' \
           | capigo tasks create --tenant acme --title "Epic X" --subtasks-json -
 
-  -o, --output table|json|quiet
-      Print a row, the JSON object, or the bare id. Defaults to table.
-      See capigo help output.
-
 OUTPUT
-  The shape depends on whether subtasks were sent.
+  The shape of .data depends on whether subtasks were sent.
 
-  Without --subtasks-json, -o json emits the bare task object, the same shape
-  as tasks get. With --subtasks-json it emits both, under two keys:
+  Without --subtasks-json, .data is the bare created task, the same shape as
+  tasks get:
 
-      { "task": { ... }, "subtasks": [ { ... } ] }
+      {
+        "data": { "id": "...", "code": "TASK-104", "title": "...", ... },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-07-09T04:12:33Z" }
+      }
 
-  quiet prints the task id.
+  With --subtasks-json, .data carries both the parent and the children it was
+  created with:
 
-  Output modes and the JSON contract: capigo help output`,
+      { "data": { "task": { ... }, "subtasks": [ { ... } ] },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-07-09T04:12:33Z" } }
+
+  meta.tenant is the tenant the task was written to. Read it: a write that
+  landed in the wrong tenant looks exactly like a write that succeeded.`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
 		if taskCreateTitle == "" {
-			err := &api.APIError{Code: "VALIDATION_ERROR", Message: "--title is required", HTTPStatus: 400}
-			output.RenderError(os.Stderr, outputMode, err.Code, err.Message, "")
-			os.Exit(api.ExitCodeFor(err))
+			failValidation("--title is required")
 		}
 
 		client, cfg, err := buildClient()
@@ -798,19 +701,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(taskCreateTenant, profile)
-		defer echoTenant(tenant, taskCreateTenant)
-
-		// POST /mission/tasks requires a tenant; reject if nil.
-		_ = api.CreateTaskUsesBodyField
-		if tenant == nil {
-			err := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "tasks create requires a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, err.Code, err.Message, "")
-			os.Exit(api.ExitCodeFor(err))
-		}
+		requireTenant(tenant, "tasks create")
 
 		// --subtasks-json routes to the atomic parent+subtasks endpoint. The
 		// parent task is built from the same create flags; the JSON payload is
@@ -870,10 +761,9 @@ OUTPUT
 				return handleErr(fmt.Errorf("decode response: %w", err))
 			}
 
-			if outputMode == "json" {
-				return output.WriteJSONObject(os.Stdout, envelope.Data)
-			}
-			return renderTaskList(append([]api.Task{envelope.Data.Task}, envelope.Data.Subtasks...), tenant)
+			meta := itemMeta(tenant, taskCreateTenant)
+			meta.ServerTime = resp.ServerTime
+			return output.Write(os.Stdout, envelope.Data, meta)
 		}
 
 		body := api.CreateTaskRequest{
@@ -918,18 +808,9 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		if err := output.Render(os.Stdout, outputMode, toOutputTask(envelope.Data), output.RenderOpts{
-			GlobalMode:   false,
-			ResourceKind: "task",
-		}); err != nil {
-			return handleErr(err)
-		}
-
-		return nil
+		meta := itemMeta(tenant, taskCreateTenant)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, envelope.Data, meta)
 	},
 }
 
@@ -950,7 +831,6 @@ USAGE
                           [--assignee <uuid>] [--due-date <date>]
                           [--priority <text>] [--status <text>]
                           | --from-json <path|->]
-                         [-o table|json|quiet]
 
 FLAGS
   <parent-id>
@@ -988,20 +868,23 @@ FLAGS
         echo '[{"title":"Design"},{"title":"Build","priority":"High"}]' \
           | capigo tasks subtasks <parent-uuid> --tenant acme --from-json -
 
-  -o, --output table|json|quiet
-      Print rows, the JSON object, or bare ids. Defaults to table.
-      See capigo help output.
-
 OUTPUT
-  -o json emits an object naming the parent and the children it gained. It is
-  neither a bare task nor a list envelope:
+  .data names the parent and the children it gained. It is neither a bare
+  task nor a list envelope, and parent_task is trimmed — id, code, and title
+  only, not the full task shape tasks get returns:
 
-      { "parent_task": { "id": "...", "code": "...", "title": "..." },
-        "subtasks": [ { ... } ] }
+      {
+        "data": {
+          "parent_task": { "id": "...", "code": "TASK-104", "title": "..." },
+          "subtasks": [ { "id": "...", "code": "TASK-105", "title": "Design",
+                          ... } ]
+        },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-07-09T04:12:33Z" }
+      }
 
-  table prints the new subtasks as a task table.
-
-  Output modes and the JSON contract: capigo help output`,
+  meta.tenant is the tenant the subtasks were written to. Read it: a write
+  that landed in the wrong tenant looks exactly like a write that succeeded.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -1017,17 +900,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(taskSubtasksTenant, profile)
-		defer echoTenant(tenant, taskSubtasksTenant)
-
-		if tenant == nil {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "tasks subtasks requires a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
-		}
+		requireTenant(tenant, "tasks subtasks")
 
 		var subtasks []api.SubtaskItem
 		if taskSubtasksFromJSON != "" {
@@ -1040,9 +913,7 @@ OUTPUT
 			}
 		} else {
 			if taskSubtasksTitle == "" {
-				e := &api.APIError{Code: "VALIDATION_ERROR", Message: "--title is required (or use --from-json for a batch)", HTTPStatus: 400}
-				output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-				os.Exit(api.ExitCodeFor(e))
+				failValidation("--title is required (or use --from-json for a batch)")
 			}
 			item := api.SubtaskItem{Title: taskSubtasksTitle}
 			if taskSubtasksDescription != "" {
@@ -1085,26 +956,10 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-		return renderTaskList(envelope.Data.Subtasks, tenant)
+		meta := itemMeta(tenant, taskSubtasksTenant)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, envelope.Data, meta)
 	},
-}
-
-// renderTaskList renders a slice of tasks as the standard task table.
-func renderTaskList(tasks []api.Task, tenant *string) error {
-	items := make([]output.Task, len(tasks))
-	for i, t := range tasks {
-		items[i] = toOutputTask(t)
-	}
-	if err := output.Render(os.Stdout, outputMode, items, output.RenderOpts{
-		GlobalMode:   tenant == nil,
-		ResourceKind: "task",
-	}); err != nil {
-		return handleErr(err)
-	}
-	return nil
 }
 
 func init() {
@@ -1173,53 +1028,6 @@ func init() {
 	// first — it is registered here so it lands after the verbs, not above them.
 	taskCmd.AddCommand(tasksListCmd, tasksGetCmd, tasksCreateCmd, tasksUpdateCmd, tasksCommentsCmd, tasksSubtasksCmd, tasksAttachmentsCmd)
 	rootCmd.AddCommand(taskCmd)
-}
-
-// toOutputTask converts an api.Task to an output.Task for rendering.
-func toOutputTask(t api.Task) output.Task {
-	assignee := ""
-	if t.Assignee != nil {
-		assignee = t.Assignee.DisplayName
-	}
-	return output.Task{
-		ID:          t.ID,
-		Code:        t.Code,
-		Title:       t.Title,
-		Status:      t.Status,
-		Assignee:    assignee,
-		Attachments: len(t.Attachments),
-	}
-}
-
-// toOutputComment converts an api.TaskComment to an output.TaskComment for
-// table/quiet rendering. The full, unmodified content and structured ui_data are
-// only available in json mode; the table content is flattened to one line and
-// truncated for readability.
-func toOutputComment(c api.TaskComment) output.TaskComment {
-	content := ""
-	if c.Content != nil {
-		content = flattenForTable(*c.Content, 100)
-	}
-	return output.TaskComment{
-		ID:          c.ID,
-		Created:     c.CreatedAt,
-		Author:      c.Author.Name,
-		Kind:        c.Kind,
-		Content:     content,
-		Attachments: len(c.Attachments),
-	}
-}
-
-// flattenForTable collapses whitespace runs (newlines/tabs) into single spaces
-// and truncates to max runes with an ellipsis, so free-form comment text does
-// not break table layout. Display-only: json mode returns the raw content.
-func flattenForTable(s string, max int) string {
-	s = strings.Join(strings.Fields(s), " ")
-	r := []rune(s)
-	if len(r) > max {
-		return string(r[:max-1]) + "…"
-	}
-	return s
 }
 
 // commentMaxLimit mirrors the server's pagination cap for this endpoint

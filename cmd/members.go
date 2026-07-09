@@ -45,12 +45,12 @@ PURPOSE
 
 USAGE
   capigo members list [--tenant <code>] [-q <term>] [--page <n>]
-                       [--limit <n>] [-o table|json|quiet]
+                       [--limit <n>]
 
 FLAGS
   --tenant <code>
       Tenant to search. Optional — omit it to span every tenant this key can
-      reach; table output then gains a Tenant column.
+      reach; meta.tenant is then empty.
       See capigo help tenancy.
 
         capigo members list --tenant acme
@@ -70,31 +70,25 @@ FLAGS
 
         capigo members list --tenant acme --page 2 --limit 50
 
-  -o, --output table|json|quiet
-      Print rows, the JSON envelope, or bare ids. Defaults to table.
-      See capigo help output.
-
 OUTPUT
-  A table of members, then a summary line. With --tenant omitted, a Tenant
-  column is added.
+  The members are at .data[]:
 
-      ┌──────────┬─────────────┬──────────────┬────────┐
-      │ ID       │ Name        │ Email        │ Role   │
-      ├──────────┼─────────────┼──────────────┼────────┤
-      │ 4d9a1c07 │ Tram Nguyen │ tram@acme.vn │ owner  │
-      │ 8e2f61ab │ Son Nguyen  │ son@acme.vn  │ member │
-      └──────────┴─────────────┴──────────────┴────────┘
-      Tenant: acme · Total: 2 · showing 2 (page 1/1) (all rows shown)
+      {
+        "data": [
+          { "id": "4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
+            "display_name": "Tram Nguyen", "email": "tram@acme.vn",
+            "role": "owner", "avatar_url": null }
+        ],
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "page": 1, "limit": 20, "total": 1, "has_more": false }
+      }
 
-  Ids are shortened here to fit the page; the command prints them in full.
-  Role is owner or member.
+  Read meta.total rather than counting .data[]: a page never holds more than
+  --limit, so a full count needs meta, not arithmetic. role is owner or
+  member.
 
-  -o json emits the list envelope; each row is a member:
-
-      { "id": "4d9a1c07-...", "display_name": "Tram Nguyen",
-        "email": "tram@acme.vn", "role": "owner", "avatar_url": null }
-
-  The envelope, meta.total and list footers: capigo help output`,
+  With --tenant omitted, meta.tenant and meta.tenant_source are both empty:
+  the results span every tenant this key can reach.`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -136,44 +130,7 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if outputMode == "json" {
-			data := envelope.Data
-			if data == nil {
-				data = []api.Member{}
-			}
-			return output.WriteJSONList(os.Stdout, data, envelope.Meta)
-		}
-
-		items := make([]output.Member, len(envelope.Data))
-		for i, m := range envelope.Data {
-			items[i] = output.Member{
-				ID:    m.ID,
-				Name:  m.DisplayName,
-				Email: m.Email,
-				Role:  m.Role,
-			}
-		}
-
-		if err := output.Render(os.Stdout, outputMode, items, output.RenderOpts{
-			GlobalMode:   tenant == nil,
-			ResourceKind: "member",
-		}); err != nil {
-			return handleErr(err)
-		}
-
-		if outputMode == "table" {
-			output.WriteListSummary(os.Stdout, output.ListSummary{
-				Tenant:     derefTenant(tenant),
-				TenantNote: tenantNote(tenant, memberListTenant),
-				Shown:      len(envelope.Data),
-				Page:       envelope.Meta.Page,
-				Limit:      envelope.Meta.Limit,
-				Total:      envelope.Meta.Total,
-				HasMore:    envelope.Meta.HasMore,
-			})
-		}
-
-		return nil
+		return output.Write(os.Stdout, envelope.Data, listMeta(tenant, memberListTenant, envelope.Meta))
 	},
 }
 
@@ -189,7 +146,7 @@ PURPOSE
   that id from a name or an email, use members list --query.
 
 USAGE
-  capigo members get <id> [--tenant <code>] [-o table|json|quiet]
+  capigo members get <id> [--tenant <code>]
 
 FLAGS
   <id>
@@ -201,29 +158,20 @@ FLAGS
 
         capigo members get 4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb --tenant acme
 
-  -o, --output table|json|quiet
-      Print a row, the JSON object, or the bare id. Defaults to table.
-      See capigo help output.
-
 OUTPUT
-  A single-row table. Ids are shortened here to fit the page; the command
-  prints them in full.
+  The member is at .data:
 
-      ┌──────────┬─────────────┬──────────────┬───────┐
-      │ ID       │ Name        │ Email        │ Role  │
-      ├──────────┼─────────────┼──────────────┼───────┤
-      │ 4d9a1c07 │ Tram Nguyen │ tram@acme.vn │ owner │
-      └──────────┴─────────────┴──────────────┴───────┘
+      {
+        "data": { "id": "4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
+                  "display_name": "Tram Nguyen", "email": "tram@acme.vn",
+                  "role": "owner", "avatar_url": null },
+        "meta": { "tenant": "acme", "tenant_source": "flag" }
+      }
 
-  -o json emits the bare member object:
-
-      { "id": "4d9a1c07-...", "display_name": "Tram Nguyen",
-        "email": "tram@acme.vn", "role": "owner", "avatar_url": null }
+  With --tenant omitted, meta.tenant and meta.tenant_source are both empty.
 
   Exit 4 when the member is not reachable — including a member who exists in
-  a tenant this key cannot see.
-
-  Output modes and the JSON contract: capigo help output`,
+  a tenant this key cannot see.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -252,23 +200,7 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		if err := output.Render(os.Stdout, outputMode, output.Member{
-			ID:    envelope.Data.ID,
-			Name:  envelope.Data.DisplayName,
-			Email: envelope.Data.Email,
-			Role:  envelope.Data.Role,
-		}, output.RenderOpts{
-			GlobalMode:   tenant == nil,
-			ResourceKind: "member",
-		}); err != nil {
-			return handleErr(err)
-		}
-
-		return nil
+		return output.Write(os.Stdout, envelope.Data, itemMeta(tenant, memberGetTenant))
 	},
 }
 

@@ -52,7 +52,7 @@ capigo health                       # preflight: API reachable + key accepted (e
 
 `capigo health` is the preflight to run before a batch of work — exit 0 means the API is
 reachable and the key is accepted; a non-zero exit (e.g. 2) tells you why before you run real
-work. JSON mode emits `{"ok":bool,"timestamp":string}`. It is not tenant-scoped.
+work. It prints `{"data":{"ok":bool,"timestamp":string},"meta":{}}`. It is not tenant-scoped.
 
 **`auth whoami` (GET `/me`) is not a reliable preflight** — it can 404 on a deployment where
 that endpoint isn't live yet. Prefer `capigo health`. If any command returns **exit code 2**,
@@ -99,35 +99,37 @@ config file):
 | `CAPIGO_API_URL` | Override API base URL |
 
 ```bash
-CAPIGO_API_KEY=csk_… CAPIGO_TENANT=acme capigo products list --output json
+CAPIGO_API_KEY=csk_… CAPIGO_TENANT=acme capigo products list
 ```
 
-## Output modes and global flags
+## Output and global flags
+
+There is no output flag and no output modes. Every command that succeeds prints exactly one
+shape to stdout:
+
+```json
+{ "data": …, "meta": { … } }
+```
 
 | Global flag | Meaning |
 |---|---|
-| `-o, --output table\|json\|quiet` | Output format. Default `table`. Unknown values are rejected. |
 | `--api-url <url>` | Override the API base URL (staging / local dev). |
 | `-v, --verbose` | Print the HTTP request/response (Authorization header redacted). |
 
-- **`table`** — human-readable prose, for reading on screen only. When stdout is not a
-  terminal (redirected or piped) and you did not set `--output`, the CLI prints a one-line
-  reminder to **stderr** nudging you to `-o json`. (Silence with `CAPIGO_NO_HINTS=1` if you
-  really want table output piped.)
-- **`json`** — machine-readable. **JSON contract (stable as of v0.6):** every `list` command
-  emits `{"data":[…],"meta":{…}}` — read the array at `.data[]`, not the top level. The `meta`
-  object carries pagination — see [Pagination](#pagination); **one call is not the whole
-  result set**. Single-item commands (`get`, `create`, `update`, `replace`) emit the **bare
-  object** (no array wrapper). So: `… products list -o json | jq '.data[]'` but
-  `… products get <id> -o json | jq '.name'`.
-- **`quiet`** — prints just the resource ID, handy for shell piping.
+`data` is an array for a `list` command, an object for a single item (`get`, `create`,
+`update`, `replace`). The CLI does not unwrap the API's own `{"data": …}` envelope — `.data.id`
+is correct where `.id` used to be. `meta` carries pagination for a list — see
+[Pagination](#pagination); **one call is not the whole result set**. So:
+`… products list | jq '.data[]'` but `… products get <id> | jq '.data.name'`.
 
-`products list` also reports the server timestamp (`Server time: …`) — on **stdout** in table
-mode, on **stderr** in json/quiet modes, and as `meta.server_time` in JSON list output; feed it
-back as `--updated-since` for incremental delta sync. **Consequence:** a `-o json` stdout
-stream is pure JSON with no `Server time:` prefix to strip. If a file or string you are parsing
-contains a `Server time:` line, it was captured without `-o json` — re-run the command with the
-flag, never post-process the table text.
+Redirecting (`>`) or piping (`|`) stdout is always safe: it is JSON and nothing else is ever
+written to it, so there is no prefix line to strip.
+
+`products list` also reports the server timestamp as `meta.server_time`; feed it back as
+`--updated-since` for incremental delta sync.
+
+A failing command prints `{"error": {...}}` on stdout — still JSON — plus a one-line summary on
+stderr; see [Exit codes and self-diagnosis](#exit-codes-and-self-diagnosis).
 
 ## Tenant scoping (per-command facts)
 
@@ -139,15 +141,16 @@ ask-the-user flow, see `SKILL.md` → Tenant handling. The facts that matter whe
   `product-types`, `units`, for *every* verb (list, get, create, update, replace, variants).
   With no tenant resolved, the CLI rejects the call (exit 5).
 - **Mission reads may span tenants** — `tasks list/get` and `boards list/get` work without
-  `--tenant` and then return rows across every tenant you can access (a "Tenant" column is
-  added in table mode). `tasks create` and `tasks subtasks` require a tenant.
+  `--tenant` and then return rows across every tenant you can access; each record names its own
+  tenant, and `meta.tenant` names none — there was no single tenant to name. `tasks create` and
+  `tasks subtasks` require a tenant.
 - `members list/get` also accept an optional `--tenant`; omitting it resolves across all
   accessible tenants.
 
 List the tenants you can reach:
 
 ```bash
-capigo tenants list --output json
+capigo tenants list
 ```
 
 ## Command reference
@@ -181,23 +184,19 @@ Key facts callers depend on:
   numeric barcode.
 - A variant item also accepts `manufacturer_code`, `legacy_code`, and `extra_data` (arbitrary
   key-value metadata) — pass them inside `--from-json` like any other field. `variants get`,
-  `products get`, and `products variants` echo them back in JSON output (empty/omitted table
-  columns for now).
-- **Soft-deleted products still appear in list results.** In table mode the Status cell marks
-  them — e.g. `ACTIVE (DELETED)`; in JSON check the `is_deleted` field (the `status` field
-  alone does NOT reveal deletion). Never report a `(DELETED)` product as available, and never
-  update or upsert variants onto one unless the user explicitly asks to restore it.
-- The product table includes **Aliases** and **Tags** columns (each joined with `, `), so
-  alias/Product-Code and tag checks are visible in table mode too — but completeness still
-  requires paging (`--all`).
-- **`--ids` reports what it could NOT find.** Asking for 5 UUIDs and getting 3 rows back is
-  still exit 0, but the missing IDs are named — `Requested 5 ids · 3 found · missing: <id>,
-  <id>` in table mode, `meta.missing_ids` in JSON. Treat a missing ID as "deleted or
-  wrong-tenant", not as something to silently skip in your answer.
+  `products get`, and `products variants` echo them back on the object.
+- **Soft-deleted products still appear in list results.** Check the `is_deleted` field — the
+  `status` field alone does NOT reveal deletion. Never report a soft-deleted product as
+  available, and never update or upsert variants onto one unless the user explicitly asks to
+  restore it.
+- The product object carries `aliases[]` and `tags[]`, so alias/Product-Code and tag checks
+  don't need a second call — but completeness still requires paging (`--all`).
+- **`--ids` reports what it could NOT find** in `meta.missing_ids`. Asking for 5 UUIDs and
+  getting 3 rows back is still exit 0, but the missing IDs are named there. Treat a missing ID
+  as "deleted or wrong-tenant", not as something to silently skip in your answer.
 - **`--all` auto-paginates and streams every row.** If it fails mid-pagination (rate limit,
-  network), the rows already fetched are still printed, the table footer says `INCOMPLETE —
-  aborted at page N — results are PARTIAL`, JSON `meta.complete` is `false`, and the command
-  exits non-zero. Check `complete` / the footer before treating an `--all` result as the whole
+  network), the rows already fetched are still printed, `meta.complete` is `false`, and the
+  command exits non-zero. Check `complete` before treating an `--all` result as the whole
   catalogue.
 
 ```bash
@@ -226,7 +225,7 @@ through `products variants` (above); there is no `variants update`/`create`/`rep
 | `--page`, `--limit` | pagination (limit default 20) |
 
 ```bash
-capigo --tenant acme variants list --barcode-prefix 634007 --sort -barcode --limit 1 --output json
+capigo --tenant acme variants list --barcode-prefix 634007 --sort -barcode --limit 1
 ```
 
 `variants get <id>` — **tenant required** — fetches one variant's full detail (sku, barcode,
@@ -249,8 +248,8 @@ Tenant is **optional** for reads, **required** for `create` and `subtasks`.
 | `tasks subtasks <parent-id>` | `--tenant` (required); single subtask via `--title` (+ `--description`, `--assignee`, `--due-date` `YYYY-MM-DD`, `--priority`, `--status`), or a batch via `--from-json -` (array of subtask items). Max 25 per request. |
 
 ```bash
-capigo tasks list --status To-Do --output json
-capigo tasks create --tenant acme --title "Fix login bug" --priority high --output quiet
+capigo tasks list --status To-Do
+capigo tasks create --tenant acme --title "Fix login bug" --priority high
 ```
 
 #### Creating subtasks (`tasks subtasks`, `tasks create --subtasks-json`)
@@ -286,7 +285,7 @@ Use this when you need a task's current state — what people said and how the w
 progressed — before summarizing it or deciding what follow-up task to create. It returns the
 task's timeline: human comments interleaved with system activity, oldest-or-newest first.
 
-Parse `--output json` and read `.data[]`. Each entry tells you what it is via `kind`:
+Read `.data[]` from the response. Each entry tells you what it is via `kind`:
 
 - `kind: "comment"` — a message a person or agent typed; the real discussion lives in
   `content`.
@@ -300,9 +299,9 @@ Other fields per entry: `author {id, name, type}` (who did it), `attachments[]`
 
 ```bash
 # Whole timeline, newest first
-capigo tasks comments <task-uuid> --output json | jq '.data[] | {created_at, kind, author: .author.name, content}'
+capigo tasks comments <task-uuid> | jq '.data[] | {created_at, kind, author: .author.name, content}'
 # Only the human discussion (skip status/assignment noise)
-capigo tasks comments <task-uuid> --type comment --output json
+capigo tasks comments <task-uuid> --type comment
 ```
 
 Two things to keep honest:
@@ -393,8 +392,8 @@ Per-resource flags:
 - **units** — `create --name --abbreviation` (both req); `update` either; `replace` both req.
 
 ```bash
-capigo --tenant acme brands list --query nike --output json
-capigo --tenant acme product-types create --name "Pin Liền Cáp" --output json
+capigo --tenant acme brands list --query nike
+capigo --tenant acme product-types create --name "Pin Liền Cáp"
 echo '{"name":"Pin Liền Cáp"}' | capigo --tenant acme product-types create --from-json -
 ```
 
@@ -446,38 +445,28 @@ How to get a complete result set:
   need every row.
 - **`products list` has `--all`** — it auto-paginates internally and streams every row. Use it
   when you truly need the **whole catalogue** (a full export, or an exhaustive scan `--query`
-  can't express): `capigo --tenant acme products list --all --output json | jq '.data[]'`.
+  can't express): `capigo --tenant acme products list --all | jq '.data[]'`.
   **If `--all` fails mid-pagination** (rate limit, network), the rows already fetched are
-  still printed, the table footer says `INCOMPLETE — aborted at page N — results are
-  PARTIAL`, JSON meta carries `"complete": false`, and the command exits non-zero. **Check
-  `complete` / the footer before treating an `--all` result as the whole catalogue** — and
-  never treat it as complete when the exit code is non-zero.
+  still printed, `meta.complete` is `false`, and the command exits non-zero. **Check
+  `complete` before treating an `--all` result as the whole catalogue** — and never treat it
+  as complete when the exit code is non-zero.
 - **Every other `list`** (`tasks`, `boards`, `members`, `brands`, `categories`,
   `product-types`, `units`, `variants`) has **no `--all`** — page manually: start at
   `--page 1`, and while `meta.has_more` is `true`, request the next `--page`. Raising
   `--limit` to 100 cuts the number of round-trips.
 
-> **In table mode** every `list` prints a summary **footer on stdout**, after the table:
-> `Tenant: acme · Total: 137 · showing 20 (page 1/7) · more rows — use --page/--limit (max 100)`
-> (with `or --all` for products), or `Tenant: acme · Total: 12 (all rows shown)` when the page
-> is complete. So even a glance at the table tells you the real total — don't count the rows.
-> The `Tenant:` prefix names the tenant the answer is scoped to (omitted on cross-tenant
-> reads). **In JSON mode there is no footer** — the agent path is JSON, so inspect
-> `meta.total` / `meta.has_more` yourself. Never treat a first page as complete when the answer
-> depends on the full set (does X exist? is this code/alias/barcode already taken? how many of
-> Y are there?). Either narrow with `--query`/`--ids` until the result fits one page, or page
-> to the end.
+Never treat a first page as complete when the answer depends on the full set (does X exist? is
+this code/alias/barcode already taken? how many of Y are there?). Either narrow with
+`--query`/`--ids` until the result fits one page, or page to the end using `meta.total` /
+`meta.has_more`.
 
 Counting "how many X are there?": **never answer by counting the rows you see** — that's one
 page (≤20 by default). Read `meta.total` directly with a 1-row page so you don't pull the
 whole collection:
 
 ```bash
-capigo --tenant acme brands list --limit 1 --output json | jq '.meta.total'
+capigo --tenant acme brands list --limit 1 | jq '.meta.total'
 ```
-
-In table mode the same number is on the footer line (`Total: 43 · …`). Either way: trust
-`total`, not the visible row count.
 
 ### Passing JSON input (`--from-json`)
 

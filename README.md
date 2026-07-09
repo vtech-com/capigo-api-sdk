@@ -15,7 +15,7 @@ capigo tasks list
 capigo tasks create --title "Fix login bug" --tenant acme
 
 # Pipe to jq for AI agent processing
-capigo tasks list --output json | jq '.data[] | select(.status=="To-Do")'
+capigo tasks list | jq '.data[] | select(.status=="To-Do")'
 ```
 
 ## Why Capigo CLI?
@@ -23,7 +23,7 @@ capigo tasks list --output json | jq '.data[] | select(.status=="To-Do")'
 Capigo exposes a stable Public API, but integrating it today requires implementing your own HTTP client, handling auth, pagination, and error codes from scratch. This SDK removes that friction:
 
 - **Zero-config for AI agents** — `shell exec("capigo tasks list")` just works
-- **Standardized output** — `table | json | quiet` for human and machine consumption
+- **One output shape** — every command prints `{"data": …, "meta": …}` on stdout; nothing else, ever
 - **Deterministic exit codes** — agents branch on exit code, not error message text
 - **Single binary** — no Node.js, Python, or any runtime required
 - **Cross-platform** — Linux, macOS, Windows on amd64 and arm64
@@ -93,7 +93,7 @@ capigo tasks list --tenant acme
 capigo config set-default-tenant acme
 
 # 6. Use JSON output for AI agent or script consumption
-capigo tasks list --output json | jq '.data[] | select(.status=="To-Do")'
+capigo tasks list | jq '.data[] | select(.status=="To-Do")'
 ```
 
 > **Preflight tip:** `capigo auth whoami` (`GET /me`) is not guaranteed to be live on every
@@ -180,13 +180,12 @@ Run `capigo <group> <command> --help` for the complete, authoritative flag list 
 
 | Flag | Description |
 |------|-------------|
-| `-o, --output table\|json\|quiet` | Output format (unknown values are rejected with an error) |
 | `--api-url <url>` | Override API base URL (staging / local dev) |
 | `-v, --verbose` | Print HTTP request/response details (Authorization header is redacted) |
 
 `--tenant <code>` appears as a local flag on commands that require or accept a tenant scope (e.g. `capigo products list --tenant acme`). It is not a global flag. The active config profile is always read from `~/.capigo/config.json` and cannot be overridden at runtime.
 
-Every PCMS command (`products`, `variants`, `brands`, `categories`, `product-types`, `units`) **requires** a tenant on every verb. `tasks list`/`get`, `boards list`/`get`, and `members list`/`get` accept an *optional* `--tenant` — omit it to read across every tenant you can access (a "Tenant" column is added in table mode for these cross-tenant reads). `tasks create` and `tasks subtasks` always require a tenant.
+Every PCMS command (`products`, `variants`, `brands`, `categories`, `product-types`, `units`) **requires** a tenant on every verb. `tasks list`/`get`, `boards list`/`get`, and `members list`/`get` accept an *optional* `--tenant` — omit it to read across every tenant you can access (`meta.tenant` is then absent — there is no single tenant to name). `tasks create` and `tasks subtasks` always require a tenant.
 
 ## Products
 
@@ -201,7 +200,7 @@ capigo products list --tenant acme --query iphone
 capigo products list --tenant acme --updated-since 2026-01-01T00:00:00Z
 
 # Fetch all pages into a single JSON stream
-capigo products list --tenant acme --all --output json
+capigo products list --tenant acme --all
 
 # Create a simple product with aliases and tags
 capigo products create --tenant acme --name "Blue T-Shirt" --sku "SKU-001" --price 299000 \
@@ -226,9 +225,9 @@ Notes:
 
 - `products create`/`update` also accept `--from-json -` for options + variants in one call (mutually exclusive with individual field flags).
 - `products update` is the **only** write verb for updates (PUT-style full replace of the provided fields) — unlike reference data, products has no separate `replace` command.
-- Soft-deleted products still appear in list results. Table mode marks them `ACTIVE (DELETED)`; JSON exposes `is_deleted` (the plain `status` field does not reveal deletion on its own).
-- `--all` streams every row it fetches even if it fails mid-pagination; the table footer then reads `INCOMPLETE — aborted at page N — results are PARTIAL` and JSON `meta.complete` is `false`. Check this before treating a result as the whole catalogue.
-- `--ids` reports what it could **not** find: `Requested 5 ids · 3 found · missing: <id>, <id>` (table) / `meta.missing_ids` (JSON).
+- Soft-deleted products still appear in list results. Check `is_deleted` on the product object — the plain `status` field does not reveal deletion on its own.
+- `--all` streams every row it fetches even if it fails mid-pagination; `meta.complete` is `false` and the command exits non-zero. Check this before treating a result as the whole catalogue.
+- `--ids` reports what it could **not** find in `meta.missing_ids`.
 
 ## Reference data
 
@@ -289,13 +288,13 @@ capigo variants list --tenant acme --barcode-prefix 620111 --sort -barcode --lim
 
 ```bash
 # Filter tasks
-capigo tasks list --status To-Do --priority high --output json
+capigo tasks list --status To-Do --priority high
 
 # Read a task's comment + activity timeline
-capigo tasks comments <task-uuid> --type comment --output json
+capigo tasks comments <task-uuid> --type comment
 
 # Create a task
-capigo tasks create --tenant acme --title "Fix login bug" --priority high --output quiet
+capigo tasks create --tenant acme --title "Fix login bug" --priority high
 
 # Create a task with subtasks in one atomic call
 echo '[{"title":"Subtask A"},{"title":"Subtask B"}]' \
@@ -356,54 +355,52 @@ To point at a different environment (staging, local dev) without touching the co
 CAPIGO_API_URL=http://localhost:3999 CAPIGO_API_KEY=csk_dev_... capigo tasks list
 ```
 
-## Output Modes
+## Output
 
-```bash
-# Default: human-readable table
-capigo tasks list --tenant acme
-# ┌──────────────┬───────────────────┬────────┬──────────┐
-# │ ID           │ Title             │ Status │ Assignee │
-# ├──────────────┼───────────────────┼────────┼──────────┤
-# │ task_abc123  │ Fix login bug     │ To-Do  │ Alice    │
-# └──────────────┴───────────────────┴────────┴──────────┘
+There is no output flag and no output modes. Every command that succeeds prints exactly one
+shape to stdout:
 
-# Omit --tenant on a spanning read to see tasks across every tenant you can access
-# (table mode adds a Tenant column automatically)
-capigo tasks list
-
-# JSON for AI agents and scripts
-capigo tasks list --output json
-
-# Quiet mode — prints the resource ID only (useful for shell piping)
-capigo tasks create --title "New task" --tenant acme --output quiet
-# task_def456
+```json
+{ "data": …, "meta": { … } }
 ```
 
-Every `list` command prints a summary footer on stdout in table mode, e.g.
-`Tenant: acme · Total: 137 · showing 20 (page 1/7) · more rows — use --page/--limit (max 100)`.
-Trust that `Total:` (or `meta.total` in JSON) over counting visible rows — a single call is one
-page, not the whole collection.
+```bash
+capigo tasks list --tenant acme | jq '.data[] | {id, title, status}'
 
-If stdout is redirected or piped and you didn't pass `--output`, the CLI prints a one-line
-reminder to **stderr** nudging you toward `-o json` (never to stdout, so it can't corrupt a
-piped table). Silence it with `CAPIGO_NO_HINTS=1` if you deliberately want piped table text.
+# Omit --tenant on a spanning read to see tasks across every tenant you can access
+capigo tasks list
 
-### JSON output contract
+capigo tasks create --title "New task" --tenant acme | jq -r '.data.id'
+```
 
-When `--output json` is used, every command follows a stable machine-readable contract:
+`data` is an array for a `list` command and an object for a single item (`get`, `create`,
+`update`, `replace`). The CLI does not unwrap the API's own `{"data": …}` envelope, so
+`.data.id` is correct where `.id` used to be. Redirecting (`>`) or piping (`|`) is always
+safe — stdout is JSON and nothing else is ever written to it.
 
-| Command type | JSON shape | Notes |
+### JSON contract
+
+| Command type | Shape | Notes |
 |---|---|---|
-| `list` commands | `{"data": [...], "meta": {"page", "limit", "total", "has_more"}}` | Full API objects, never stripped display models. `data` is always a JSON array (never `null`). `tenants list` returns zero-value `meta` (the endpoint provides no pagination metadata). |
-| Single-item commands (`get`, `create`, `update`, `replace`, `variants`, `auth whoami`, `auth login`) | `{...}` bare object | Full API object, no wrapper. (`auth login` emits `{"profile", "status"}`.) |
+| `list` commands | `{"data": [...], "meta": {"page", "limit", "total", "has_more", "tenant", "tenant_source", …}}` | Full API objects, never stripped display models. `data` is always a JSON array (never `null`). |
+| Single-item commands (`get`, `create`, `update`, `replace`, `variants`) | `{"data": {...}, "meta": {"tenant", "tenant_source", …}}` | Full API object under `data`. |
 
-Table mode uses human-friendly display models and is for human consumption only. Quiet mode emits the resource ID only (one per line). Only the JSON contract is stable for machine consumption.
+`meta.tenant` and `meta.tenant_source` (`flag`/`env`/`config`) name the tenant a command
+resolved to and where that came from; both are absent on a command that takes no tenant, and
+on a cross-tenant read that resolved none. A list also carries `page`/`limit`/`total`/
+`has_more`. `total` is the count across every page — count `meta.total`, never `data[]`. The
+CLI additionally adds `server_time` (delta-sync cursor), `missing_ids` (with `--ids`), and
+`complete` (`false` when an `--all` sweep aborted partway) where relevant.
+
+A failing command prints `{"error": {...}}` — still JSON, still on stdout — plus a one-line
+summary on stderr. Parse stdout unconditionally; see [Exit Codes](#exit-codes).
 
 Skill authors: use `.data[]` to iterate list results, e.g.:
 
 ```bash
-capigo tasks list --output json | jq '.data[] | select(.status=="To-Do")'
-capigo brands list --tenant acme --output json | jq '.data[].id'
+capigo tasks list | jq '.data[] | select(.status=="To-Do")'
+capigo brands list --tenant acme | jq '.data[].id'
+capigo brands create --tenant acme --name Nike | jq '.data.id'
 ```
 
 ## Exit Codes
@@ -428,7 +425,7 @@ AI agents should branch on exit code, **not** on error message text.
 
 ```bash
 # List open tasks and filter with jq
-capigo --output json tasks list --tenant acme | jq '.data[] | select(.status=="To-Do")'
+capigo tasks list --tenant acme | jq '.data[] | select(.status=="To-Do")'
 ```
 
 ### LangChain / Python
@@ -437,7 +434,7 @@ capigo --output json tasks list --tenant acme | jq '.data[] | select(.status=="T
 import subprocess, json
 
 result = subprocess.run(
-    ["capigo", "tasks", "list", "--tenant", "acme", "--output", "json"],
+    ["capigo", "tasks", "list", "--tenant", "acme"],
     capture_output=True, text=True
 )
 if result.returncode == 0:
@@ -455,7 +452,7 @@ elif result.returncode == 7:
 Use the **Execute Command** node:
 
 ```
-capigo tasks list --tenant acme --output json
+capigo tasks list --tenant acme
 ```
 
 ### Environment variable injection (CI / secrets manager)
@@ -464,7 +461,7 @@ capigo tasks list --tenant acme --output json
 CAPIGO_API_KEY=${{ secrets.CAPIGO_KEY }} \
 CAPIGO_API_URL=${{ vars.CAPIGO_API_URL }} \
 CAPIGO_TENANT=acme \
-capigo tasks list --output json
+capigo tasks list
 ```
 
 ### Bundled agent skill

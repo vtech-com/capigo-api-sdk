@@ -5,23 +5,13 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/vtech-com/capigo-api-sdk/internal/api"
 	"github.com/vtech-com/capigo-api-sdk/internal/config"
 	"github.com/vtech-com/capigo-api-sdk/internal/output"
 )
 
-// configValidationErr exits with code 5 (validation) via the standard error path.
-func configValidationErr(msg string) {
-	e := &api.APIError{Code: "VALIDATION_ERROR", Message: msg, HTTPStatus: 400}
-	output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-	os.Exit(api.ExitCodeFor(e))
-}
-
 // configNotFoundErr exits with code 4 (not found) via the standard error path.
 func configNotFoundErr(msg string) {
-	e := &api.APIError{Code: "NOT_FOUND", Message: msg, HTTPStatus: 404}
-	output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-	os.Exit(api.ExitCodeFor(e))
+	fail("NOT_FOUND", msg, 404)
 }
 
 var configCmd = &cobra.Command{
@@ -64,9 +54,6 @@ FLAGS
 OUTPUT
   Nothing on success: exit 0 and silence. Confirm with config get <key>.
 
-  This command ignores --output: configuration is not a resource, so there is
-  no JSON envelope to emit.
-
   Exit 5 for an unrecognised key, or when default_profile names a profile
   that does not exist. Exit 4 when api_url is set before any profile exists —
   run auth login first.`,
@@ -76,8 +63,7 @@ OUTPUT
 
 		cfg, err := config.Load()
 		if err != nil {
-			output.RenderError(os.Stderr, outputMode, "CONFIG_LOAD_ERROR", err.Error(), "")
-			os.Exit(api.ExitCodeFor(err))
+			fail("CONFIG_LOAD_ERROR", err.Error(), 0)
 		}
 
 		switch key {
@@ -95,16 +81,15 @@ OUTPUT
 
 		case "default_profile":
 			if err := config.SetProfile(cfg, value); err != nil {
-				configValidationErr(err.Error())
+				failValidation("%s", err.Error())
 			}
 
 		default:
-			configValidationErr(fmt.Sprintf("unknown key %q; supported: api_url, default_profile", key))
+			failValidation("unknown key %q; supported: api_url, default_profile", key)
 		}
 
 		if err := config.Save(cfg); err != nil {
-			output.RenderError(os.Stderr, outputMode, "CONFIG_SAVE_ERROR", err.Error(), "")
-			os.Exit(1)
+			fail("CONFIG_SAVE_ERROR", err.Error(), 0)
 		}
 		return nil
 	},
@@ -131,14 +116,12 @@ FLAGS
         capigo config get api_url
 
 OUTPUT
-  The raw value, on one line, with no quoting and no key name.
+  The key and its value are at .data:
 
-      acme
+      { "data": { "key": "default_tenant", "value": "acme" }, "meta": {} }
 
-  This command ignores --output: it prints the same bare value in every mode,
-  which makes it safe to capture directly:
-
-      TENANT=$(capigo config get default_tenant)
+  value is "" when the key exists but is unset (e.g. no default_tenant has
+  been stored yet) — never null.
 
   Exit 4 if the active profile itself is not in the config file yet.`,
 	Args: cobra.ExactArgs(1),
@@ -147,36 +130,36 @@ OUTPUT
 
 		cfg, err := config.Load()
 		if err != nil {
-			output.RenderError(os.Stderr, outputMode, "CONFIG_LOAD_ERROR", err.Error(), "")
-			os.Exit(api.ExitCodeFor(err))
+			fail("CONFIG_LOAD_ERROR", err.Error(), 0)
 		}
 
+		var value string
 		switch key {
 		case "default_profile":
-			name := cfg.ActiveProfile
-			if name == "" {
-				name = "default"
+			value = cfg.ActiveProfile
+			if value == "" {
+				value = "default"
 			}
-			fmt.Println(name)
 
 		case "api_url":
 			p, err := config.ActiveProfile(cfg)
 			if err != nil {
 				configNotFoundErr(err.Error())
 			}
-			fmt.Println(p.APIURL)
+			value = p.APIURL
 
 		case "default_tenant":
 			p, err := config.ActiveProfile(cfg)
 			if err != nil {
 				configNotFoundErr(err.Error())
 			}
-			fmt.Println(p.DefaultTenant)
+			value = p.DefaultTenant
 
 		default:
-			configValidationErr(fmt.Sprintf("unknown key %q; supported: api_url, default_profile, default_tenant", key))
+			failValidation("unknown key %q; supported: api_url, default_profile, default_tenant", key)
 		}
-		return nil
+
+		return output.Write(os.Stdout, map[string]string{"key": key, "value": value}, output.Meta{})
 	},
 }
 
@@ -205,9 +188,6 @@ OUTPUT
   Nothing on success: exit 0 and silence. Confirm with config get
   default_tenant.
 
-  This command ignores --output: configuration is not a resource, so there is
-  no JSON envelope to emit.
-
   Exit 4 if the active profile itself is not in the config file yet.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -215,8 +195,7 @@ OUTPUT
 
 		cfg, err := config.Load()
 		if err != nil {
-			output.RenderError(os.Stderr, outputMode, "CONFIG_LOAD_ERROR", err.Error(), "")
-			os.Exit(api.ExitCodeFor(err))
+			fail("CONFIG_LOAD_ERROR", err.Error(), 0)
 		}
 
 		profileName := cfg.ActiveProfile
@@ -231,8 +210,7 @@ OUTPUT
 		cfg.Profiles[profileName] = p
 
 		if err := config.Save(cfg); err != nil {
-			output.RenderError(os.Stderr, outputMode, "CONFIG_SAVE_ERROR", err.Error(), "")
-			os.Exit(1)
+			fail("CONFIG_SAVE_ERROR", err.Error(), 0)
 		}
 		return nil
 	},
@@ -256,18 +234,14 @@ FLAGS
 
 OUTPUT
   Nothing on success: exit 0 and silence. Confirm with config get
-  default_tenant, which then prints an empty line.
-
-  This command ignores --output: configuration is not a resource, so there is
-  no JSON envelope to emit.
+  default_tenant, which then reports value: "".
 
   Exit 4 if the active profile itself is not in the config file yet.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {
-			output.RenderError(os.Stderr, outputMode, "CONFIG_LOAD_ERROR", err.Error(), "")
-			os.Exit(api.ExitCodeFor(err))
+			fail("CONFIG_LOAD_ERROR", err.Error(), 0)
 		}
 
 		profileName := cfg.ActiveProfile
@@ -282,8 +256,7 @@ OUTPUT
 		cfg.Profiles[profileName] = p
 
 		if err := config.Save(cfg); err != nil {
-			output.RenderError(os.Stderr, outputMode, "CONFIG_SAVE_ERROR", err.Error(), "")
-			os.Exit(1)
+			fail("CONFIG_SAVE_ERROR", err.Error(), 0)
 		}
 		return nil
 	},

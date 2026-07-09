@@ -62,7 +62,6 @@ USAGE
                        [--ids <uuid,...> | --all]
                        [--updated-since <timestamp>]
                        [--page <n>] [--limit <n>]
-                       [-o table|json|quiet]
 
 FLAGS
   --tenant <code>
@@ -82,13 +81,15 @@ FLAGS
 
   --ids <uuid,...>
       Fetch products by id, at most 50, comma-separated. Ids the server does
-      not return are reported. Cannot be combined with --all.
+      not return are reported in meta.missing_ids. Cannot be combined with
+      --all.
 
         capigo products list --tenant acme --ids 7c1f2e88-...,9ab2c744-...
 
   --updated-since <timestamp>
       Return only products changed at or after an ISO 8601 timestamp. Pass back
-      the server time from the previous call to fetch a delta.
+      the server time from the previous call's meta.server_time to fetch a
+      delta.
 
         capigo products list --tenant acme --updated-since 2026-07-01T00:00:00Z
 
@@ -108,28 +109,8 @@ FLAGS
 
         capigo products list --tenant acme --page 2 --limit 100
 
-  -o, --output table|json|quiet
-      Print rows, the JSON envelope, or bare ids. Defaults to table.
-      See capigo help output.
-
 OUTPUT
-  A table of products, then a summary line. Ids are shortened here to fit the
-  page; the command prints them in full.
-
-      ┌──────────┬────────────────┬──────────────────┬────────┬────────┬──────────┬─────────┬──────┐
-      │ ID       │ Name           │ Status           │ SKU    │ Price  │ Variants │ Aliases │ Tags │
-      ├──────────┼────────────────┼──────────────────┼────────┼────────┼──────────┼─────────┼──────┤
-      │ 7c1f2e88 │ Áo thun basic  │ ACTIVE           │ AT-001 │ 120000 │        3 │ VVD013  │ hè   │
-      │ 9ab2c744 │ Quần jean slim │ ACTIVE (DELETED) │ QJ-014 │ 390000 │        2 │         │      │
-      └──────────┴────────────────┴──────────────────┴────────┴────────┴──────────┴─────────┴──────┘
-      Tenant: acme · Total: 137 · showing 20 (page 1/7) · more rows — use --page/--limit (max 100)
-
-  With --ids, a line reports the ids the server did not return. Those are
-  deleted, or in another tenant. The exit code is still 0.
-
-      Requested 5 ids · 3 found · missing: 3e91b0a2-..., c48d7f16-...
-
-  -o json emits the list envelope; the products are at .data[]:
+  The products are at .data[]:
 
       {
         "data": [
@@ -143,54 +124,52 @@ OUTPUT
             "brand": {...}, "category": {...}, "variants": [...]
           }
         ],
-        "meta": { "page": 1, "limit": 20, "total": 137, "has_more": true }
+        "meta": {
+          "tenant": "acme", "tenant_source": "flag",
+          "page": 1, "limit": 20, "total": 137, "has_more": true,
+          "server_time": "2026-07-09T04:12:33Z"
+        }
       }
 
-  The CLI adds three fields to meta that the API does not send:
+  Read meta.total rather than counting .data[]: a page never holds more than
+  --limit, so a full count needs meta, not arithmetic.
+
+  The API's own list meta has only page/limit/total/has_more. The CLI adds:
 
       server_time    the server clock at the time of the call. Feed it to
                      --updated-since on the next one.
-      missing_ids    with --ids only; the ids reported in the line above.
-      complete       with --all only; false when the sweep aborted part-way.
+      missing_ids    with --ids only: the requested ids the server did not
+                     return (deleted, or in another tenant). Absent when
+                     every requested id was found.
+      complete       with --all only: false when the sweep aborted part-way,
+                     so .data[] is a prefix of the catalogue, not all of it.
+                     A partial --all result still prints and still exits
+                     non-zero.
 
-  A soft-deleted product is still listed. In JSON it carries is_deleted: true,
-  and status alone does not reveal it. See capigo help soft-delete.`,
+  meta.tenant is the tenant this call actually ran against, and
+  meta.tenant_source says whether that came from the flag, from CAPIGO_TENANT,
+  or from the config file. See capigo help tenancy.
+
+  A soft-deleted product is still listed. is_deleted: true is the only signal
+  — status alone does not reveal it. See capigo help soft-delete.`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
 		if productListIDs != "" && productListAll {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "--ids and --all are mutually exclusive; use --ids to fetch specific products or --all to paginate the full catalog",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
+			failValidation("--ids and --all are mutually exclusive; use --ids to fetch specific products or --all to paginate the full catalog")
 		}
 
 		if productListIDs != "" {
 			idParts := strings.Split(productListIDs, ",")
 			if len(idParts) > 50 {
-				e := &api.APIError{
-					Code:       "VALIDATION_ERROR",
-					Message:    fmt.Sprintf("--ids accepts at most 50 UUIDs (got %d); split into multiple requests", len(idParts)),
-					HTTPStatus: 400,
-				}
-				output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-				os.Exit(api.ExitCodeFor(e))
+				failValidation("--ids accepts at most 50 UUIDs (got %d); split into multiple requests", len(idParts))
 			}
 		}
 
 		validatePCMSLimit(productListLimit)
 
 		if productListQuery != "" && utf8.RuneCountInString(productListQuery) < 2 {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "--query must be at least 2 characters",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
+			failValidation("--query must be at least 2 characters")
 		}
 
 		client, cfg, err := buildClient()
@@ -204,17 +183,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(productListTenant, profile)
-
-		// /pcms/* requires a tenant — reject early per §5.3 rule #2.
-		if tenant == nil {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "products commands require a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
-		}
+		requireTenant(tenant, "products")
 
 		if productListAll {
 			if productListPage > 0 {
@@ -255,61 +224,24 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		// Delta-sync cursor: stdout in table mode, stderr otherwise.
-		emitServerTime(resp.ServerTime, serverTimeHint)
-
 		// --ids: surface any requested IDs the server did not return — a
 		// clean exit 0 with fewer rows than requested must not read as
 		// "the missing products are fine".
-		missing, requested := missingProductIDs(productListIDs, envelope.Data)
+		missing, _ := missingProductIDs(productListIDs, envelope.Data)
 
-		if outputMode == "json" {
-			// C1 + M1: render full api.Product with meta envelope in JSON mode.
-			return output.WriteJSONList(os.Stdout, envelope.Data, listMetaExtras{
-				Meta:       envelope.Meta,
-				ServerTime: resp.ServerTime,
-				MissingIDs: missing,
-			})
-		}
+		meta := listMeta(tenant, productListTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		meta.MissingIDs = missing
 
-		items := make([]output.Product, len(envelope.Data))
-		for i, p := range envelope.Data {
-			items[i] = toOutputProduct(p)
-		}
-
-		if err := output.Render(os.Stdout, outputMode, items, output.RenderOpts{
-			GlobalMode:   false,
-			ResourceKind: "product",
-		}); err != nil {
-			return handleErr(err)
-		}
-
-		if outputMode == "table" {
-			output.WriteListSummary(os.Stdout, output.ListSummary{
-				Tenant:     derefTenant(tenant),
-				TenantNote: tenantNote(tenant, productListTenant),
-				Shown:      len(envelope.Data),
-				Page:       envelope.Meta.Page,
-				Limit:      envelope.Meta.Limit,
-				Total:      envelope.Meta.Total,
-				HasMore:    envelope.Meta.HasMore,
-				HintAll:    true,
-			})
-			if len(missing) > 0 {
-				_, _ = fmt.Fprintf(os.Stdout, "Requested %d ids · %d found · missing: %s\n",
-					requested, len(envelope.Data), strings.Join(missing, ", "))
-			}
-		}
-
-		return nil
+		return output.Write(os.Stdout, envelope.Data, meta)
 	},
 }
 
 // productsListAll auto-paginates until has_more is false. A mid-pagination
 // failure does not discard what was already fetched: the partial result is
-// still rendered, marked INCOMPLETE (table footer) / "complete": false (JSON
-// meta), and the command still exits with the underlying error's code —
-// empty stdout must never masquerade as an empty catalogue.
+// still written, with meta.complete: false, and the command still exits with
+// the underlying error's code — empty stdout must never masquerade as an
+// empty catalogue.
 func productsListAll(ctx context.Context, client *api.Client, tenant *string) error {
 	page := 1
 	var allProducts []api.Product
@@ -350,7 +282,7 @@ func productsListAll(ctx context.Context, client *api.Client, tenant *string) er
 			}
 		}
 		// A failed page: with nothing fetched yet this is a plain error;
-		// with rows already in hand, render the partial set first.
+		// with rows already in hand, write the partial set first.
 		if len(allProducts) == 0 {
 			return handleErr(err)
 		}
@@ -358,61 +290,23 @@ func productsListAll(ctx context.Context, client *api.Client, tenant *string) er
 		break
 	}
 
-	emitServerTime(lastServerTime, serverTimeHint)
-
 	complete := fetchErr == nil
 	total := len(allProducts)
 	if !complete && lastMeta.Total > total {
 		total = lastMeta.Total
 	}
 
-	if outputMode == "json" {
-		// C1 + M1: render full api.Product with synthetic meta for --all;
-		// complete reports whether pagination reached the last page.
-		if err := output.WriteJSONList(os.Stdout, allProducts, allMeta{
-			Meta: api.Meta{
-				Page:    1,
-				Limit:   lastMeta.Limit,
-				Total:   total,
-				HasMore: !complete,
-			},
-			ServerTime: lastServerTime,
-			Complete:   complete,
-		}); err != nil {
-			return handleErr(err)
-		}
-		if fetchErr != nil {
-			return handleErr(fetchErr)
-		}
-		return nil
-	}
+	meta := listMeta(tenant, productListTenant, api.Meta{
+		Page:    1,
+		Limit:   lastMeta.Limit,
+		Total:   total,
+		HasMore: !complete,
+	})
+	meta.ServerTime = lastServerTime
+	meta.Complete = output.Ptr(complete)
 
-	items := make([]output.Product, len(allProducts))
-	for i, p := range allProducts {
-		items[i] = toOutputProduct(p)
-	}
-
-	if err := output.Render(os.Stdout, outputMode, items, output.RenderOpts{
-		GlobalMode:   false,
-		ResourceKind: "product",
-	}); err != nil {
+	if err := output.Write(os.Stdout, allProducts, meta); err != nil {
 		return handleErr(err)
-	}
-
-	if outputMode == "table" {
-		s := output.ListSummary{
-			Tenant:     derefTenant(tenant),
-			TenantNote: tenantNote(tenant, productListTenant),
-			Shown:      len(allProducts),
-			Page:       1,
-			Limit:      len(allProducts),
-			Total:      total,
-			HasMore:    !complete,
-		}
-		if !complete {
-			s.Incomplete = fmt.Sprintf("aborted at page %d — results are PARTIAL", page)
-		}
-		output.WriteListSummary(os.Stdout, s)
 	}
 
 	if fetchErr != nil {
@@ -439,7 +333,7 @@ PURPOSE
   products list --query first.
 
 USAGE
-  capigo products get <id> --tenant <code> [-o table|json|quiet]
+  capigo products get <id> --tenant <code>
 
 FLAGS
   <id>
@@ -451,29 +345,27 @@ FLAGS
 
         capigo products get 8f2a1c07-2b6e-4f83-a5d1-8c07e2f419bb --tenant acme
 
-  -o, --output table|json|quiet
-      Print a row, the JSON object, or the bare id. Defaults to table.
-      See capigo help output.
-
 OUTPUT
-  A single-row table, same columns as products list:
+  The product is at .data — an object, where a list puts an array:
 
-      ┌──────────┬───────────────┬────────┬────────┬────────┬──────────┬─────────┬──────┐
-      │ ID       │ Name          │ Status │ SKU    │ Price  │ Variants │ Aliases │ Tags │
-      ├──────────┼───────────────┼────────┼────────┼────────┼──────────┼─────────┼──────┤
-      │ 7c1f2e88 │ Áo thun basic │ ACTIVE │ AT-001 │ 120000 │        3 │ VVD013  │ hè   │
-      └──────────┴───────────────┴────────┴────────┴────────┴──────────┴─────────┴──────┘
-
-  -o json emits the bare product object — the same shape as an item in
-  products list .data[]:
-
-      { id, name, slug, description, status, currency, aliases[], tags[],
-        is_deleted, created_at, updated_at, brand, category, product_type,
-        unit, options[], variants[] }
+      {
+        "data": {
+          "id": "7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10",
+          "name": "Áo thun basic", "slug": "ao-thun-basic",
+          "description": null, "status": "ACTIVE", "currency": "VND",
+          "aliases": ["VVD013"], "tags": ["hè"], "is_deleted": false,
+          "created_at": "...", "updated_at": "...",
+          "brand": {...}, "category": {...}, "product_type": {...},
+          "unit": {...}, "options": [...], "variants": [...]
+        },
+        "meta": { "tenant": "acme", "tenant_source": "flag" }
+      }
 
   options[] carries the product's option names in order. That order is what
   option1, option2 and option3 refer to when writing variants with
   products variants.
+
+  A single-item read carries no pagination meta; there is nothing to page.
 
   A soft-deleted product is returned like any other. Its status may still read
   ACTIVE; is_deleted is the field that tells you. See capigo help soft-delete.
@@ -494,17 +386,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(productGetTenant, profile)
-
-		// /pcms/* requires a tenant.
-		if tenant == nil {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "products commands require a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
-		}
+		requireTenant(tenant, "products")
 
 		resp, err := client.Do(ctx, "GET", "/pcms/products/"+args[0], nil, tenant)
 		if err != nil {
@@ -518,21 +400,7 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		// M2: emit X-Server-Time to stderr.
-		emitServerTime(resp.ServerTime, "")
-
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		if err := output.Render(os.Stdout, outputMode, toOutputProduct(envelope.Data), output.RenderOpts{
-			GlobalMode:   false,
-			ResourceKind: "product",
-		}); err != nil {
-			return handleErr(err)
-		}
-
-		return nil
+		return output.Write(os.Stdout, envelope.Data, itemMeta(tenant, productGetTenant))
 	},
 }
 
@@ -579,7 +447,6 @@ USAGE
                          [--brand-id <uuid>] [--category-id <uuid>]
                          [--product-type-id <uuid>] [--unit-id <uuid>]
                          [--aliases <text>]... [--tags <text>]...
-                         [-o table|json|quiet]
   capigo products create --tenant <code> --from-json <path|->
 
 FLAGS
@@ -645,18 +512,21 @@ FLAGS
                "tags":["pin"]}' \
           | capigo products create --tenant acme --from-json -
 
-  -o, --output table|json|quiet
-      Print a row, the JSON object, or the bare id. Defaults to table.
-      See capigo help output.
-
 OUTPUT
-  -o json emits the bare created product — the same shape as products get.
-  quiet prints its id.
+  The created product is at .data — same shape as products get:
+
+      {
+        "data": { "id": "8f2a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
+                  "name": "Blue T-Shirt", "status": "DRAFT", ... },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-07-09T04:12:33Z" }
+      }
+
+  meta.tenant is the tenant the product was written to. Read it: a write that
+  landed in the wrong tenant looks exactly like a write that succeeded.
 
   A variant sku is unique per tenant: a duplicate exits 8. A barcode is NOT
-  enforced unique — the server accepts a duplicate without error.
-
-  Output modes and the JSON contract: capigo help output`,
+  enforced unique — the server accepts a duplicate without error.`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -671,18 +541,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(productCreateTenant, profile)
-		defer echoTenant(tenant, productCreateTenant)
-
-		// /pcms/* requires a tenant.
-		if tenant == nil {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "products commands require a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
-		}
+		requireTenant(tenant, "products")
 
 		var body any
 		if productCreateFromJSON != "" {
@@ -693,9 +552,7 @@ OUTPUT
 			body = json.RawMessage(raw)
 		} else {
 			if productCreateName == "" {
-				e := &api.APIError{Code: "VALIDATION_ERROR", Message: "--name is required", HTTPStatus: 400}
-				output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-				os.Exit(api.ExitCodeFor(e))
+				failValidation("--name is required")
 			}
 
 			req := api.CreateProductRequest{
@@ -752,22 +609,9 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		// M2: emit X-Server-Time to stderr.
-		emitServerTime(resp.ServerTime, "")
-
-		if outputMode == "json" {
-			// C1: render full api.Product in JSON mode.
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		if err := output.Render(os.Stdout, outputMode, toOutputProduct(envelope.Data), output.RenderOpts{
-			GlobalMode:   false,
-			ResourceKind: "product",
-		}); err != nil {
-			return handleErr(err)
-		}
-
-		return nil
+		meta := itemMeta(tenant, productCreateTenant)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, envelope.Data, meta)
 	},
 }
 
@@ -809,7 +653,6 @@ USAGE
                          [--brand-id <uuid>] [--category-id <uuid>]
                          [--product-type-id <uuid>] [--unit-id <uuid>]
                          [--aliases <text>]... [--tags <text>]...
-                         [-o table|json|quiet]
   capigo products update <id> --tenant <code> --from-json <path|->
 
 FLAGS
@@ -852,15 +695,19 @@ FLAGS
         echo '{"status":"ACTIVE","tags":["summer"]}' \
           | capigo products update 8f2a1c07-... --tenant acme --from-json -
 
-  -o, --output table|json|quiet
-      Print a row, the JSON object, or the bare id. Defaults to table.
-      See capigo help output.
-
 OUTPUT
-  -o json emits the bare updated product — the same shape as products get.
-  quiet prints its id.
+  The updated product is at .data — same shape as products get:
 
-  Output modes and the JSON contract: capigo help output`,
+      {
+        "data": { "id": "8f2a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
+                  "status": "ACTIVE", "tags": ["summer"], ... },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-07-09T04:12:33Z" }
+      }
+
+  meta.tenant is the tenant the write landed in. A write into the wrong
+  tenant looks exactly like a write that succeeded, so read it. See
+  capigo help tenancy.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -878,19 +725,8 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(productUpdateTenant, profile)
-		defer echoTenant(tenant, productUpdateTenant)
+		requireTenant(tenant, "products")
 
-		if tenant == nil {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "products commands require a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
-		}
-
-		// M3: --from-json support for update.
 		var body any
 		if productUpdateFromJSON != "" {
 			// Check that no individual field flags were also set.
@@ -898,13 +734,7 @@ OUTPUT
 				"brand-id", "category-id", "product-type-id", "unit-id", "aliases", "tags"}
 			for _, f := range individualFlags {
 				if cmd.Flags().Changed(f) {
-					e := &api.APIError{
-						Code:       "VALIDATION_ERROR",
-						Message:    fmt.Sprintf("--from-json and --%s are mutually exclusive; use one or the other", f),
-						HTTPStatus: 400,
-					}
-					output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-					os.Exit(api.ExitCodeFor(e))
+					failValidation("--from-json and --%s are mutually exclusive; use one or the other", f)
 				}
 			}
 			raw, err := readJSONInput(productUpdateFromJSON)
@@ -958,13 +788,7 @@ OUTPUT
 			}
 
 			if fieldCount == 0 {
-				e := &api.APIError{
-					Code:       "VALIDATION_ERROR",
-					Message:    "at least one field must be provided for update",
-					HTTPStatus: 400,
-				}
-				output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-				os.Exit(api.ExitCodeFor(e))
+				failValidation("at least one field must be provided for update")
 			}
 			body = req
 		}
@@ -981,22 +805,9 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		// M2: emit X-Server-Time to stderr.
-		emitServerTime(resp.ServerTime, "")
-
-		if outputMode == "json" {
-			// C1: render full api.Product in JSON mode.
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		if err := output.Render(os.Stdout, outputMode, toOutputProduct(envelope.Data), output.RenderOpts{
-			GlobalMode:   false,
-			ResourceKind: "product",
-		}); err != nil {
-			return handleErr(err)
-		}
-
-		return nil
+		meta := itemMeta(tenant, productUpdateTenant)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, envelope.Data, meta)
 	},
 }
 
@@ -1030,7 +841,7 @@ PURPOSE
 
 USAGE
   capigo products variants --tenant <code> --product-id <id>
-                           --from-json <path|-> [-o table|json|quiet]
+                           --from-json <path|->
 
 FLAGS
   --tenant <code>
@@ -1067,7 +878,7 @@ FLAGS
       duplicates of what already landed.
 
         # Read the option order before writing option1..option3
-        capigo products get 8f2a1c07-... --tenant acme -o json | jq '.options'
+        capigo products get 8f2a1c07-... --tenant acme | jq '.data.options'
 
         # One update, one create in the same call
         echo '[ { "variant_id": "6f1c1a02-...", "price": 250000 },
@@ -1076,39 +887,34 @@ FLAGS
           | capigo products variants --tenant acme --product-id 8f2a1c07-... \
               --from-json -
 
-  -o, --output table|json|quiet
-      Print a row, the JSON object, or the bare id. Defaults to table.
-      See capigo help output.
-
 OUTPUT
-  The full updated PRODUCT — not the list of variants you sent.
+  The full updated PRODUCT is at .data — not the list of variants you sent:
 
-  -o json emits the bare product object, the same shape as products get.
-  table prints a product summary and does NOT surface variant_id; if you will
-  need to reference a variant you just wrote, use -o json:
+      {
+        "data": { "id": "8f2a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
+                  "variants": [...], ... },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-07-09T04:12:33Z" }
+      }
+
+  Read .data.variants[] for the variant_id of what you just wrote:
 
       capigo products variants --tenant acme --product-id 8f2a1c07-... \
-        --from-json ./variants.json -o json \
-        | jq '.variants[] | {id, sku, price}'
+        --from-json ./variants.json \
+        | jq '.data.variants[] | {id, sku, price}'
 
-  quiet prints the product id.
+  meta.tenant is the tenant the write landed in. See capigo help tenancy.
 
   A duplicate sku exits 8. A duplicate barcode is accepted by the server
-  without error.
-
-  Output modes and the JSON contract: capigo help output`,
+  without error.`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
 		if productVariantsProductID == "" {
-			e := &api.APIError{Code: "VALIDATION_ERROR", Message: "--product-id is required", HTTPStatus: 400}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
+			failValidation("--product-id is required")
 		}
 		if productVariantsFromJSON == "" {
-			e := &api.APIError{Code: "VALIDATION_ERROR", Message: "--from-json is required", HTTPStatus: 400}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
+			failValidation("--from-json is required")
 		}
 
 		client, cfg, err := buildClient()
@@ -1122,17 +928,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(productVariantsTenant, profile)
-		defer echoTenant(tenant, productVariantsTenant)
-
-		if tenant == nil {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "products commands require a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
-		}
+		requireTenant(tenant, "products")
 
 		raw, err := readJSONInput(productVariantsFromJSON)
 		if err != nil {
@@ -1164,22 +960,9 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		// M2: emit X-Server-Time to stderr.
-		emitServerTime(resp.ServerTime, "")
-
-		if outputMode == "json" {
-			// C1: render full api.Product in JSON mode.
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		if err := output.Render(os.Stdout, outputMode, toOutputProduct(envelope.Data), output.RenderOpts{
-			GlobalMode:   false,
-			ResourceKind: "product",
-		}); err != nil {
-			return handleErr(err)
-		}
-
-		return nil
+		meta := itemMeta(tenant, productVariantsTenant)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, envelope.Data, meta)
 	},
 }
 
@@ -1194,7 +977,7 @@ func init() {
 	// products list flags
 	productsListCmd.Flags().StringVar(&productListTenant, "tenant", "", "tenant code (required)")
 	productsListCmd.Flags().StringVarP(&productListQuery, "query", "q", "", "free-text search (2–500 chars): matches product name, aliases, tags, variant name, SKU, and barcode")
-	productsListCmd.Flags().StringVar(&productListUpdatedSince, "updated-since", "", "ISO 8601 timestamp for delta sync (from previous X-Server-Time header)")
+	productsListCmd.Flags().StringVar(&productListUpdatedSince, "updated-since", "", "ISO 8601 timestamp for delta sync (from previous meta.server_time)")
 	productsListCmd.Flags().IntVar(&productListPage, "page", 0, "page number (0 = server default)")
 	productsListCmd.Flags().IntVar(&productListLimit, "limit", 0, "items per page (1–100, default 20)")
 	productsListCmd.Flags().BoolVar(&productListAll, "all", false, "fetch all pages automatically (loads all pages into memory before output; for large catalogs prefer paginating manually)")
@@ -1244,23 +1027,6 @@ func init() {
 // helpers
 // --------------------------------------------------------------------------
 
-// listMetaExtras decorates the server's pagination meta on the JSON path with
-// the delta-sync cursor and, when --ids was used, any requested IDs the
-// server did not return.
-type listMetaExtras struct {
-	api.Meta
-	ServerTime string   `json:"server_time,omitempty"`
-	MissingIDs []string `json:"missing_ids,omitempty"`
-}
-
-// allMeta is the synthetic meta for --all. Complete reports whether the
-// pagination loop reached the last page; false means the result is PARTIAL.
-type allMeta struct {
-	api.Meta
-	ServerTime string `json:"server_time,omitempty"`
-	Complete   bool   `json:"complete"`
-}
-
 // missingProductIDs reports which of the comma-separated requested IDs are
 // absent from the returned rows, plus how many IDs were requested. Matching
 // is case-insensitive since UUIDs compare equal regardless of case.
@@ -1283,37 +1049,4 @@ func missingProductIDs(idsFlag string, got []api.Product) (missing []string, req
 		}
 	}
 	return missing, requested
-}
-
-// toOutputProduct converts an api.Product to the display model.
-// SKU and Price are derived from the first non-nil variant fields.
-// VariantCount holds the total number of variants.
-func toOutputProduct(p api.Product) output.Product {
-	sku := ""
-	price := ""
-	if len(p.Variants) > 0 {
-		v := p.Variants[0]
-		if v.SKU != nil {
-			sku = *v.SKU
-		}
-		if v.Price != nil {
-			price = strconv.FormatFloat(*v.Price, 'f', -1, 64)
-		}
-	}
-	// Soft-deleted products must never look live: surface the tombstone in
-	// the Status cell, the one column every reader scans.
-	status := p.Status
-	if p.IsDeleted {
-		status += " (DELETED)"
-	}
-	return output.Product{
-		ID:           p.ID,
-		Name:         p.Name,
-		Status:       status,
-		SKU:          sku,
-		Price:        price,
-		VariantCount: len(p.Variants),
-		Aliases:      strings.Join(p.Aliases, ", "),
-		Tags:         strings.Join(p.Tags, ", "),
-	}
 }

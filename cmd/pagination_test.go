@@ -9,19 +9,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// paginationMarker is the call list commands emit to render their pagination
-// footer (via output.WriteListSummary). Any file that calls it is a paginated
-// list advertising --page/--limit, so it MUST register those flags.
-const paginationMarker = "output.WriteListSummary"
+// paginationMarker is the call a list command makes to build its meta. A file
+// that calls it emits page/limit/total/has_more, so it advertises pagination
+// and MUST register --page and --limit.
+const paginationMarker = "listMeta("
 
-// paginatedListCommands are every list command that renders a pagination
-// footer. Because they advertise --page/--limit to the user, each one MUST
+// paginatedListCommands are every list command that reports pagination in its
+// meta. Because they advertise --page/--limit to the user, each one MUST
 // register those flags. This guards
 // against the boards list regression where the hint was printed but the flags
 // were never registered (the command rejected --page with "unknown flag").
 //
 // When adding a new list command that paginates, add it here. The
-// `make check-hints` target catches files that print the hint without the
+// `make check-hints` target catches files that report pagination without the
 // flags even if they are forgotten here.
 var paginatedListCommands = map[string]*cobra.Command{
 	"boards list":        boardsListCmd,
@@ -46,10 +46,10 @@ func TestPaginatedListCommandsRegisterPaginationFlags(t *testing.T) {
 }
 
 // TestPaginationHintImpliesFlags scans every command source file: if a file
-// renders the pagination footer, it must also register the --page and --limit
-// flags it advertises. This is the dynamic backstop that catches a new list
-// command that prints the footer but is forgotten from paginatedListCommands
-// above — the exact way the boards list bug shipped.
+// reports pagination in its meta, it must also register the --page and --limit
+// flags that meta invites the caller to use. This is the dynamic backstop that
+// catches a new list command forgotten from paginatedListCommands above — the
+// exact way the boards list bug shipped.
 func TestPaginationHintImpliesFlags(t *testing.T) {
 	files, err := filepath.Glob("*.go")
 	if err != nil {
@@ -64,12 +64,16 @@ func TestPaginationHintImpliesFlags(t *testing.T) {
 			t.Fatalf("read %s: %v", f, err)
 		}
 		body := string(src)
+		// The file that declares listMeta is not a command that calls it.
+		if strings.Contains(body, "func listMeta(") {
+			continue
+		}
 		if !strings.Contains(body, paginationMarker) {
 			continue
 		}
 		for _, flag := range []string{`"page"`, `"limit"`} {
 			if !strings.Contains(body, flag) {
-				t.Errorf("%s renders the pagination footer but never registers a %s flag", f, flag)
+				t.Errorf("%s reports pagination in meta but never registers a %s flag", f, flag)
 			}
 		}
 	}

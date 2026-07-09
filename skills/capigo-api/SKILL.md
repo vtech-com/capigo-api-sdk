@@ -72,7 +72,7 @@ which then tempts a wrong "the API can't do this" conclusion. The right command 
   every variant write is an upsert through `products variants`.
 - **Get a product by its Product Code / SKU / barcode?** → there is **no "get by code"**.
   Use `products list --query "<code>"`, then act on the returned `.id`.
-- **Count "how many X"?** → read `meta.total` from any `list -o json`. **Never count `data[]`**
+- **Count "how many X"?** → read `meta.total` from any `list`. **Never count `data[]`**
   — that's one page (≤20).
 
 ## Capability map
@@ -216,10 +216,11 @@ global); resolution order: `--tenant` flag → `CAPIGO_TENANT` env → `default_
 - **Mission/Members reads** (`tasks/boards/members list/get`) may omit `--tenant` to span all
   accessible tenants. `tasks create` requires one.
 
-**Check the tenant the CLI echoes.** Every table-mode list footer and every successful write
-prints `Tenant: <code>` (with `(from CAPIGO_TENANT)` / `(from config default_tenant)` when
-resolved implicitly). If it isn't the tenant the user meant, the data you read — or wrote — is in
-the wrong place: stop and redo with an explicit `--tenant`.
+**Check `meta.tenant` after every write.** Every response carries `meta.tenant` and
+`meta.tenant_source` (`flag` / `env` / `config`). If it isn't the tenant the user meant, the data
+you read — or wrote — is in the wrong place: stop and redo with an explicit `--tenant`. A write
+into the wrong tenant is not an error the server can raise; the request was valid, and it
+succeeded.
 
 If the tenant isn't clear and the user didn't name one, ask before any fetch — offer their
 default (`default_tenant`) or the list from `capigo tenants list`.
@@ -242,19 +243,24 @@ barcode allocation — live in your catalogue-policy skill, not here.)
   fragment or use `products list --all`.)
 - **Don't silently change identifiers.** Changing an existing `sku`, `barcode`, or alias on a
   live record breaks whatever references it — only do so when the user explicitly asks.
-- **Never report a soft-deleted record as available.** In table mode Status shows e.g. `ACTIVE
-  (DELETED)`; in JSON check `is_deleted` (the `status` field alone does not reveal deletion).
+- **Never report a soft-deleted record as available.** Check `is_deleted` on the product object.
+  The `status` field alone does not reveal deletion — a deleted product still reads `ACTIVE`.
 
-## Output modes (pick before you act)
+## Output: one shape, always
 
-- **`table`** (default) — human prose for reading on screen. **Never redirect (`>`) or pipe
-  (`|`) table output**: it's text, not JSON, so `json.load()` / `jq` on it fails. The moment you
-  add `>` or `|`, also add `-o json`.
-- **`-o json`** — for anything you'll parse, store, or pipe. A `-o json` stream is pure JSON
-  (the `Server time:` line moves to stderr, so there's no prefix to strip). Contract: every
-  `list` returns `{"data":[…],"meta":{…}}` (read `.data[]`); single-item commands return the
-  bare object.
-- **`quiet`** — prints just an id.
+There is **no output flag**. Every command that succeeds prints exactly one thing to stdout:
+
+```json
+{ "data": …, "meta": { … } }
+```
+
+- `data` is an **array** for a `list`, an **object** for a single item (`get`, `create`,
+  `update`, `replace`). Read `.data[]` or `.data` — never the top level, never a bare object.
+- `meta` always names the tenant: `meta.tenant` and `meta.tenant_source` (`flag` / `env` /
+  `config`). A list also carries `page`, `limit`, `total`, `has_more`.
+- Redirecting (`>`) or piping (`|`) is always safe: stdout is JSON and nothing else is ever
+  written to it. There is no prefix line to strip.
+- A **failure** prints `{"error": {…}}` — still JSON, still stdout. Parse stdout unconditionally.
 
 **Cross-cutting mechanics now ship inside the binary as help topics** — pull one when you need
 it, instead of trusting your memory of this file:

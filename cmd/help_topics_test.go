@@ -48,28 +48,6 @@ func TestHelpTopicsAreRegisteredAndNotRunnable(t *testing.T) {
 	}
 }
 
-// Every `capigo help …` invocation runs the built-in, runnable `help` command,
-// so it passes through PersistentPreRunE and would otherwise emit the -o json
-// nudge on stderr. Documentation is not a resource; the nudge there is a false
-// positive, and false positives train the reader to ignore the hint where it
-// matters.
-func TestHelpCommandIsExemptFromJSONHint(t *testing.T) {
-	// Cobra only attaches its built-in `help` command inside Execute(), so a test
-	// that reaches for it beforehand must ask for it explicitly.
-	rootCmd.InitDefaultHelpCmd()
-
-	helpCmd, _, err := rootCmd.Find([]string{"help"})
-	if err != nil {
-		t.Fatalf("rootCmd.Find([help]): %v", err)
-	}
-	if helpCmd.Name() != "help" {
-		t.Fatalf("expected the help command, got %q", helpCmd.Name())
-	}
-	if !cmdExemptFromJSONHint(helpCmd) {
-		t.Error("`capigo help …` must be exempt from the -o json hint")
-	}
-}
-
 // The help footer names the build a page came from. A local `go build` injects
 // no date, and a bare "(built unknown)" would be noise rather than information.
 func TestHelpFooterOmitsUnknownBuildDate(t *testing.T) {

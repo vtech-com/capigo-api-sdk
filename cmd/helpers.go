@@ -82,6 +82,10 @@ func renderCLIError(err error) {
 			detail.Next = info.Next
 			detail.CapabilityNote = info.CapabilityNote
 		}
+	} else if next, ok := nextForRemovedFlag(detail.Message); ok {
+		// A flag we deleted. Say so, rather than letting cobra's "unknown
+		// shorthand flag" read as a typo the caller should retype.
+		detail.Next = next
 	} else if next, ok := redirectForUnknownCommand(detail.Message); ok {
 		// Curated cross-group redirect (Layer 2, cmd/unknown_command.go) for a
 		// conceptual wrong-guess cobra's own distance-based suggestions can't
@@ -96,7 +100,7 @@ func renderCLIError(err error) {
 	if detail.RawBody == detail.Message {
 		detail.RawBody = ""
 	}
-	output.RenderErrorRich(os.Stdout, os.Stderr, outputMode, detail)
+	output.RenderError(os.Stdout, os.Stderr, detail)
 }
 
 // handleErr renders the error and exits with the appropriate exit code.
@@ -105,6 +109,34 @@ func handleErr(err error) error {
 	renderCLIError(err)
 	os.Exit(api.ExitCodeFor(err))
 	return nil
+}
+
+// fail renders a locally-detected error — a bad flag combination, an
+// unreadable config — and exits. The server was never called, so there is no
+// request id and no catalog entry to enrich it with.
+//
+// It exists because the alternative, spelled out at eighty-nine call sites,
+// was a three-line ritual of building an APIError, rendering it to stderr, and
+// looking up its exit code.
+func fail(code, message string, httpStatus int) {
+	e := &api.APIError{Code: code, Message: message, HTTPStatus: httpStatus}
+	renderCLIError(e)
+	os.Exit(api.ExitCodeFor(e))
+}
+
+// failValidation is the common case: the caller asked for something the CLI
+// can see is wrong without asking the server. Exit 5.
+func failValidation(format string, args ...any) {
+	fail("VALIDATION_ERROR", fmt.Sprintf(format, args...), 400)
+}
+
+// requireTenant exits 5 when a tenant-scoped command resolved no tenant. A
+// request without a tenant header is not a narrower request; it is a request
+// the server cannot place.
+func requireTenant(tenant *string, group string) {
+	if tenant == nil {
+		failValidation("%s commands require a tenant; pass --tenant <code> or set a default", group)
+	}
 }
 
 // readJSONInput reads raw bytes from a file path or from stdin when path is "-".
@@ -137,12 +169,6 @@ func resolveTenant(tenantFlag string, profile *config.Profile) *string {
 func validatePCMSLimit(limit int) {
 	const maxPCMSLimit = 100
 	if limit > maxPCMSLimit {
-		e := &api.APIError{
-			Code:       "VALIDATION_ERROR",
-			Message:    fmt.Sprintf("--limit must be at most %d for this command (got %d)", maxPCMSLimit, limit),
-			HTTPStatus: 400,
-		}
-		output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-		os.Exit(api.ExitCodeFor(e))
+		failValidation("--limit must be at most %d for this command (got %d)", maxPCMSLimit, limit)
 	}
 }

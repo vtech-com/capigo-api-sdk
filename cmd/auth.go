@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
 	"github.com/vtech-com/capigo-api-sdk/internal/config"
 	"github.com/vtech-com/capigo-api-sdk/internal/output"
@@ -39,7 +40,7 @@ PURPOSE
   itself confirm the key is accepted. Run health next to confirm that.
 
 USAGE
-  capigo auth login --key <csk_...> [-o table|json]
+  capigo auth login --key <csk_...>
 
 FLAGS
   --key <csk_...>
@@ -50,18 +51,14 @@ FLAGS
 
         capigo auth login --key csk_live_9f2a1c...
 
-  -o, --output table|json
-      table and quiet both print the one-line confirmation below; json
-      prints the object instead. See capigo help output.
-
 OUTPUT
-  table / quiet:
+  The key itself is never echoed back, in any form:
 
-      Logged in as profile "default"
-
-  -o json emits:
-
-      { "profile": "default", "status": "logged_in" }
+      {
+        "data": { "profile": "default",
+                  "api_url": "https://platform.capigo.app/api/v1" },
+        "meta": {}
+      }
 
   Exit 1 if --key does not start with csk_, or if ~/.capigo/config.json
   cannot be read or written.`,
@@ -81,17 +78,15 @@ USAGE
   capigo auth logout
 
 FLAGS
-  This command takes no flags. --output is ignored: it prints the same
-  text in every mode.
+  This command takes no flags.
 
 OUTPUT
-  A one-line confirmation naming the profile:
+  The profile and its resulting state:
 
-      Logged out of profile "default"
+      { "data": { "profile": "default", "status": "logged_out" }, "meta": {} }
 
-  Or, if the profile already had no key:
-
-      Profile "default" has no stored credentials
+  status is "no_credentials" instead, when the profile had no stored key to
+  begin with.
 
   Exit 1 if ~/.capigo/config.json cannot be read or written.`,
 	RunE: runLogout,
@@ -110,26 +105,20 @@ PURPOSE
   depend on /me.
 
 USAGE
-  capigo auth whoami [-o table|json|quiet]
+  capigo auth whoami
 
 FLAGS
-  -o, --output table|json|quiet
-      table prints ID, Name and Email on three lines; quiet prints the id
-      alone; json emits the bare user object. Defaults to table.
-      See capigo help output.
+  This command takes no flags.
 
 OUTPUT
-  table:
+  The user object is at .data:
 
-      ID:    3f9c2a10-6b1e-4d2f-8a77-0e4c9b2f7a31
-      Name:  Trâm Nguyễn
-      Email: tram@example.com
-
-  -o json emits the bare object, with no envelope:
-
-      { "id": "3f9c2a10-6b1e-4d2f-8a77-0e4c9b2f7a31",
-        "display_name": "Trâm Nguyễn", "email": "tram@example.com",
-        "avatar_url": null }
+      {
+        "data": { "id": "3f9c2a10-6b1e-4d2f-8a77-0e4c9b2f7a31",
+                  "display_name": "Trâm Nguyễn", "email": "tram@example.com",
+                  "avatar_url": null },
+        "meta": {}
+      }
 
   Exit 2 when the key itself is missing, malformed or rejected. Exit 4 on
   production today, because /me is not deployed there — see PURPOSE above.
@@ -145,11 +134,9 @@ func init() {
 	rootCmd.AddCommand(authCmd)
 }
 
-func runLogin(cmd *cobra.Command, _ []string) error {
+func runLogin(_ *cobra.Command, _ []string) error {
 	if !strings.HasPrefix(loginKey, "csk_") {
-		err := fmt.Errorf("invalid API key: must start with csk_")
-		output.RenderError(os.Stderr, outputMode, "INVALID_API_KEY", err.Error(), "")
-		os.Exit(api.ExitCodeFor(err))
+		fail("INVALID_API_KEY", "invalid API key: must start with csk_", 0)
 	}
 
 	// Overwrite the flag value in os.Args so the key does not leak via `ps`.
@@ -166,8 +153,7 @@ func runLogin(cmd *cobra.Command, _ []string) error {
 
 	cfg, err := config.Load()
 	if err != nil {
-		output.RenderError(os.Stderr, outputMode, "CONFIG_LOAD_ERROR", err.Error(), "")
-		os.Exit(api.ExitCodeFor(err))
+		return handleErr(fmt.Errorf("load config: %w", err))
 	}
 
 	profileName := cfg.ActiveProfile
@@ -189,26 +175,31 @@ func runLogin(cmd *cobra.Command, _ []string) error {
 	cfg.Version = 1
 
 	if err := config.Save(cfg); err != nil {
-		output.RenderError(os.Stderr, outputMode, "CONFIG_SAVE_ERROR", err.Error(), "")
-		os.Exit(api.ExitCodeFor(err))
+		return handleErr(fmt.Errorf("save config: %w", err))
 	}
 
-	if outputMode == "json" {
-		return output.WriteJSONObject(cmd.OutOrStdout(), map[string]string{
-			"profile": profileName,
-			"status":  "logged_in",
-		})
+	// Same precedence as buildClient, without requiring a key to already work.
+	baseURL := p.APIURL
+	if u := viper.GetString("api_url"); u != "" {
+		baseURL = u
+	}
+	if apiURL != "" {
+		baseURL = apiURL
+	}
+	if baseURL == "" {
+		baseURL = defaultBaseURL
 	}
 
-	_, err = fmt.Fprintf(cmd.OutOrStdout(), "Logged in as profile %q\n", profileName)
-	return err
+	return output.Write(os.Stdout, map[string]string{
+		"profile": profileName,
+		"api_url": baseURL,
+	}, output.Meta{})
 }
 
 func runLogout(_ *cobra.Command, _ []string) error {
 	cfg, err := config.Load()
 	if err != nil {
-		output.RenderError(os.Stderr, outputMode, "CONFIG_LOAD_ERROR", err.Error(), "")
-		os.Exit(api.ExitCodeFor(err))
+		return handleErr(fmt.Errorf("load config: %w", err))
 	}
 
 	profileName := cfg.ActiveProfile
@@ -216,27 +207,25 @@ func runLogout(_ *cobra.Command, _ []string) error {
 		profileName = "default"
 	}
 
-	if cfg.Profiles == nil {
-		_, err = fmt.Fprintf(os.Stdout, "Profile %q has no stored credentials\n", profileName)
-		return err
-	}
-
 	p, ok := cfg.Profiles[profileName]
 	if !ok || p.APIKey == "" {
-		_, err = fmt.Fprintf(os.Stdout, "Profile %q has no stored credentials\n", profileName)
-		return err
+		return output.Write(os.Stdout, map[string]string{
+			"profile": profileName,
+			"status":  "no_credentials",
+		}, output.Meta{})
 	}
 
 	p.APIKey = ""
 	cfg.Profiles[profileName] = p
 
 	if err := config.Save(cfg); err != nil {
-		output.RenderError(os.Stderr, outputMode, "CONFIG_SAVE_ERROR", err.Error(), "")
-		os.Exit(api.ExitCodeFor(err))
+		return handleErr(fmt.Errorf("save config: %w", err))
 	}
 
-	_, err = fmt.Fprintf(os.Stdout, "Logged out of profile %q\n", profileName)
-	return err
+	return output.Write(os.Stdout, map[string]string{
+		"profile": profileName,
+		"status":  "logged_out",
+	}, output.Meta{})
 }
 
 func runWhoami(_ *cobra.Command, _ []string) error {
@@ -261,16 +250,5 @@ func runWhoami(_ *cobra.Command, _ []string) error {
 		return handleErr(fmt.Errorf("decode response: %w", jerr))
 	}
 
-	if outputMode == "json" {
-		return output.WriteJSONObject(os.Stdout, me)
-	}
-
-	if outputMode == "quiet" {
-		_, err = fmt.Fprintln(os.Stdout, me.ID)
-		return err
-	}
-
-	// table / default
-	_, err = fmt.Fprintf(os.Stdout, "ID:    %s\nName:  %s\nEmail: %s\n", me.ID, me.DisplayName, me.Email)
-	return err
+	return output.Write(os.Stdout, me, output.Meta{})
 }

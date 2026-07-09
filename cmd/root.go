@@ -9,9 +9,8 @@ import (
 )
 
 var (
-	outputMode string
-	apiURL     string
-	verbose    bool
+	apiURL  string
+	verbose bool
 )
 
 var rootCmd = &cobra.Command{
@@ -20,23 +19,19 @@ var rootCmd = &cobra.Command{
 	Long: `capigo is the command-line interface to the Capigo Public API.
 
 It stores your API key, attaches the tenant header, maps API errors to stable
-exit codes, and formats results as table, JSON, or bare ids. Configuration lives
-in ~/.capigo/config.json.
+exit codes, and prints JSON. Configuration lives in ~/.capigo/config.json.
+
+Every command emits the same envelope on stdout — { "data": …, "meta": … } —
+whether it read one record, read a page of them, or wrote one. There is no
+output flag, and no second shape to branch on.
 
 USAGE
-  capigo [-o table|json|quiet] [--api-url <url>] [-v] <group> <command> [<args>]
+  capigo [--api-url <url>] [-v] <group> <command> [<args>]
 
   capigo <group> --help          the commands in that group
   capigo <group> <cmd> --help    purpose, usage, flags, output`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
-	// Nudge toward -o json when output is being captured but table is still in
-	// effect (see maybeWarnNonTTYTable). No child command defines its own
-	// PersistentPreRunE, so cobra runs this for every command.
-	PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
-		maybeWarnNonTTYTable(cmd)
-		return nil
-	},
 }
 
 func Execute() {
@@ -63,7 +58,6 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	rootCmd.PersistentFlags().StringVarP(&outputMode, "output", "o", "table", "output format: table, json, or quiet")
 	rootCmd.PersistentFlags().StringVar(&apiURL, "api-url", "", "override the API base URL")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "print the HTTP request and response (key redacted)")
 

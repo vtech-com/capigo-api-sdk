@@ -22,22 +22,13 @@ PURPOSE
   whoami it does not depend on the /me endpoint — run this one first.
 
 USAGE
-  capigo health [-o table|json|quiet]
+  capigo health
 
 FLAGS
-  -o, --output table|json|quiet
-      json emits the object below; table and quiet both print the status
-      word and server timestamp on one line. Defaults to table.
-      See capigo help output.
+  This command takes no flags.
 
 OUTPUT
-  table / quiet:
-
-      ok	2026-07-09T10:15:00Z
-
-  -o json emits:
-
-      { "ok": true, "timestamp": "2026-07-09T10:15:00Z" }
+  { "data": { "ok": true, "timestamp": "2026-07-09T10:15:00Z" }, "meta": {} }
 
   Exit 2 when the key is rejected, exit 6 when the API cannot be reached.
 
@@ -60,16 +51,7 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, health)
-		}
-
-		status := "ok"
-		if !health.OK {
-			status = "not ok"
-		}
-		_, _ = fmt.Fprintf(os.Stdout, "%s\t%s\n", status, health.Timestamp)
-		return nil
+		return output.Write(os.Stdout, health, output.Meta{})
 	},
 }
 

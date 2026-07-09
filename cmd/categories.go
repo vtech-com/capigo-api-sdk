@@ -19,8 +19,7 @@ var categoriesCmd = &cobra.Command{
 Product Catalog Management System (PCMS).
 
 Categories are tenant-scoped reference data. Every command here requires a
-tenant.
-  capigo help tenancy
+tenant, and every response names the tenant it resolved to, in meta.
 
 USAGE
   capigo categories <command> --tenant <code> [<args>]`,
@@ -48,12 +47,11 @@ PURPOSE
 
 USAGE
   capigo categories list --tenant <code> [-q <term>] [--page <n>]
-                         [--limit <n>] [-o table|json|quiet]
+                         [--limit <n>]
 
 FLAGS
   --tenant <code>
-      Tenant to read from. Required. Falls back to CAPIGO_TENANT, then to
-      default_tenant in the config file. Exits 5 if none resolves.
+      Tenant to read from. Required.
 
         capigo categories list --tenant acme
 
@@ -71,25 +69,8 @@ FLAGS
 
         capigo categories list --tenant acme --page 2 --limit 100
 
-  -o, --output table|json|quiet
-      Print rows, the JSON envelope, or bare ids. Defaults to table.
-      See capigo help output.
-
 OUTPUT
-  A table of categories, then a summary line. A root category has no
-  ParentID.
-
-      ┌──────────┬────────────┬──────────┐
-      │ ID       │ Name       │ ParentID │
-      ├──────────┼────────────┼──────────┤
-      │ 7c1f2e88 │ Phu kien   │          │
-      │ 9ab2c744 │ Op lung dt │ 7c1f2e88 │
-      └──────────┴────────────┴──────────┘
-      Tenant: acme · Total: 2 (all rows shown)
-
-  Ids are shortened here to fit the page; the command prints them in full.
-
-  -o json emits the list envelope; the categories are at .data[]:
+  The categories are at .data[]. A root category has a null parent_id:
 
       {
         "data": [
@@ -98,8 +79,18 @@ OUTPUT
           { "id": "9ab2c744-1e3a-4b8c-9f10-5c1e2a4d9f10", "name": "Op lung dt",
             "parent_id": "7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10" }
         ],
-        "meta": { "page": 1, "limit": 20, "total": 2, "has_more": false }
-      }`,
+        "meta": {
+          "tenant": "acme", "tenant_source": "flag",
+          "page": 1, "limit": 20, "total": 2, "has_more": false
+        }
+      }
+
+  Read meta.total rather than counting .data[]: a page never holds more than
+  --limit, so a full count needs meta, not arithmetic.
+
+  meta.tenant is the tenant this call actually ran against, and
+  meta.tenant_source says whether that came from the flag, from CAPIGO_TENANT,
+  or from the config file. See capigo help tenancy.`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -114,15 +105,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(categoryListTenant, profile)
-		if tenant == nil {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "categories commands require a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
-		}
+		requireTenant(tenant, "categories")
 
 		validatePCMSLimit(categoryListLimit)
 
@@ -136,43 +119,7 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if outputMode == "json" {
-			data := envelope.Data
-			if data == nil {
-				data = []api.Category{}
-			}
-			return output.WriteJSONList(os.Stdout, data, envelope.Meta)
-		}
-
-		items := make([]output.Category, len(envelope.Data))
-		for i, c := range envelope.Data {
-			items[i] = output.Category{
-				ID:       c.ID,
-				Name:     c.Name,
-				ParentID: c.ParentID,
-			}
-		}
-
-		if err := output.Render(os.Stdout, outputMode, items, output.RenderOpts{
-			GlobalMode:   false,
-			ResourceKind: "category",
-		}); err != nil {
-			return handleErr(err)
-		}
-
-		if outputMode == "table" {
-			output.WriteListSummary(os.Stdout, output.ListSummary{
-				Tenant:     derefTenant(tenant),
-				TenantNote: tenantNote(tenant, categoryListTenant),
-				Shown:      len(envelope.Data),
-				Page:       envelope.Meta.Page,
-				Limit:      envelope.Meta.Limit,
-				Total:      envelope.Meta.Total,
-				HasMore:    envelope.Meta.HasMore,
-			})
-		}
-
-		return nil
+		return output.Write(os.Stdout, envelope.Data, listMeta(tenant, categoryListTenant, envelope.Meta))
 	},
 }
 
@@ -192,7 +139,7 @@ PURPOSE
   use categories list --query.
 
 USAGE
-  capigo categories get <id> --tenant <code> [-o table|json|quiet]
+  capigo categories get <id> --tenant <code>
 
 FLAGS
   <id>
@@ -204,29 +151,20 @@ FLAGS
 
         capigo categories get 4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb --tenant acme
 
-  -o, --output table|json|quiet
-      Print a row, the JSON object, or the bare id. Defaults to table.
-      See capigo help output.
-
 OUTPUT
-  A single-row table:
-
-      ┌──────────┬──────────┬──────────┐
-      │ ID       │ Name     │ ParentID │
-      ├──────────┼──────────┼──────────┤
-      │ 4d9a1c07 │ Phu kien │          │
-      └──────────┴──────────┴──────────┘
-
-  Ids are shortened here to fit the page; the command prints them in full.
-
-  -o json emits the bare object. A get is not a list, so there is no envelope
-  and no .data to reach for:
+  The category is at .data — an object, where a list puts an array. The
+  envelope is the same either way:
 
       {
-        "id": "4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
-        "name": "Phu kien",
-        "parent_id": null
+        "data": {
+          "id": "4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
+          "name": "Phu kien",
+          "parent_id": null
+        },
+        "meta": { "tenant": "acme", "tenant_source": "flag" }
       }
+
+  A single-item read carries no pagination meta; there is nothing to page.
 
   Exit 4 when no such category exists in the resolved tenant.`,
 	Args: cobra.ExactArgs(1),
@@ -244,10 +182,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(categoryGetTenant, profile)
-		if tenant == nil {
-			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "categories commands require a tenant; pass --tenant <code> or set default", "")
-			os.Exit(5)
-		}
+		requireTenant(tenant, "categories")
 
 		resp, err := client.Do(ctx, "GET", "/pcms/categories/"+args[0], nil, tenant)
 		if err != nil {
@@ -261,15 +196,7 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		return output.Render(os.Stdout, outputMode, output.Category{
-			ID:       envelope.Data.ID,
-			Name:     envelope.Data.Name,
-			ParentID: envelope.Data.ParentID,
-		}, output.RenderOpts{GlobalMode: false, ResourceKind: "category"})
+		return output.Write(os.Stdout, envelope.Data, itemMeta(tenant, categoryGetTenant))
 	},
 }
 
@@ -297,7 +224,6 @@ USAGE
   capigo categories create --tenant <code>
                            (--name <text> [--parent-id <uuid>]
                             | --from-json <path|->)
-                           [-o table|json|quiet]
 
 FLAGS
   --tenant <code>
@@ -317,8 +243,8 @@ FLAGS
         capigo categories create --tenant acme --name Pin --parent-id 8f2a-...
 
   --from-json <path|->
-      Send the whole request body from a file, or - for stdin. The
-      individual field flags above are ignored when this is set.
+      Send the whole request body from a file, or - for stdin. Mutually
+      exclusive with --name and --parent-id: passing both exits 5.
 
       Body:
 
@@ -328,18 +254,20 @@ FLAGS
         echo '{"name":"Pin","parent_id":"8f2a-..."}' \
           | capigo categories create --tenant acme --from-json -
 
-  -o, --output table|json|quiet
-      Print the created row, the JSON object, or its bare id. Defaults to
-      table. See capigo help output.
-
 OUTPUT
-  -o json emits the bare created category:
+  The created category is at .data:
 
-      { "id": "8f2a-...", "name": "Pin", "parent_id": "8f2a-..." }
+      {
+        "data": { "id": "8f2a-...", "name": "Pin", "parent_id": "8f2a-..." },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-07-09T04:12:33Z" }
+      }
 
-  quiet prints its id.
+  meta.tenant is the tenant the category was written to. Read it: a write
+  that landed in the wrong tenant looks exactly like a write that succeeded.
 
-  Output modes and the JSON contract: capigo help output`,
+  Exit 5 if --name is missing (and --from-json is not used), or if
+  --from-json is combined with a field flag. Exit 8 on a name collision.`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -354,28 +282,13 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(categoryCreateTenant, profile)
-		defer echoTenant(tenant, categoryCreateTenant)
-		if tenant == nil {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "categories commands require a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
-		}
+		requireTenant(tenant, "categories")
 
 		var body any
 		if categoryCreateFromJSON != "" {
 			for _, f := range []string{"name", "parent-id"} {
 				if cmd.Flags().Changed(f) {
-					e := &api.APIError{
-						Code:       "VALIDATION_ERROR",
-						Message:    fmt.Sprintf("--from-json and --%s are mutually exclusive", f),
-						HTTPStatus: 400,
-					}
-					output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-					os.Exit(api.ExitCodeFor(e))
+					failValidation("--from-json and --%s are mutually exclusive", f)
 				}
 			}
 			raw, err := readJSONInput(categoryCreateFromJSON)
@@ -385,9 +298,7 @@ OUTPUT
 			body = json.RawMessage(raw)
 		} else {
 			if categoryCreateName == "" {
-				e := &api.APIError{Code: "VALIDATION_ERROR", Message: "--name is required", HTTPStatus: 400}
-				output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-				os.Exit(api.ExitCodeFor(e))
+				failValidation("--name is required")
 			}
 			req := api.CreateCategoryRequest{Name: categoryCreateName}
 			if categoryCreateParentID != "" {
@@ -408,17 +319,9 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		emitServerTime(resp.ServerTime, "")
-
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		return output.Render(os.Stdout, outputMode, output.Category{
-			ID:       envelope.Data.ID,
-			Name:     envelope.Data.Name,
-			ParentID: envelope.Data.ParentID,
-		}, output.RenderOpts{GlobalMode: false, ResourceKind: "category"})
+		meta := itemMeta(tenant, categoryCreateTenant)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, envelope.Data, meta)
 	},
 }
 
@@ -440,22 +343,24 @@ var categoriesUpdateCmd = &cobra.Command{
 	Long: `Update a category. Fields you do not send are left unchanged.
 
 PURPOSE
-  Change part of a category: its name, or its parent. To overwrite every
-  field at once, use categories replace <id>.
+  Change one or a few fields of a category (PATCH) without restating the
+  rest. categories replace <id> (PUT) sends the same kind of partial body but
+  the CLI requires every field there, so use replace when you want to be
+  forced to state the whole record.
 
 USAGE
   capigo categories update <id> --tenant <code>
                            ([--name <text>]
                             [--parent-id <uuid> | --clear-parent]
                             | --from-json <path|->)
-                           [-o table|json|quiet]
 
 FLAGS
   <id>
       Category id, a UUID. Positional, required.
 
   --tenant <code>
-      Tenant the category belongs to. Required.
+      Tenant the category belongs to. Required. Exits 4 if the category is
+      not in it.
 
   --name <text>
       A new name, 1 to 500 characters. A name that duplicates another
@@ -474,26 +379,28 @@ FLAGS
 
         capigo categories update <uuid> --tenant acme --clear-parent
 
-  At least one of --name, --parent-id, --clear-parent is required; sending
-  none exits 5.
-
   --from-json <path|->
       Send the whole request body from a file, or - for stdin. Mutually
-      exclusive with the individual field flags above: passing both exits 5.
+      exclusive with --name, --parent-id and --clear-parent: passing both
+      exits 5.
 
         echo '{"name":"Phu kien dt"}' \
           | capigo categories update <uuid> --tenant acme --from-json -
 
-  -o, --output table|json|quiet
-      Print the updated row, the JSON object, or its bare id. Defaults to
-      table. See capigo help output.
-
 OUTPUT
-  -o json emits the bare updated category:
+  The category as it now stands is at .data:
 
-      { "id": "...", "name": "Phu kien dt", "parent_id": null }
+      {
+        "data": { "id": "...", "name": "Phu kien dt", "parent_id": null },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-07-09T04:12:33Z" }
+      }
 
-  Output modes and the JSON contract: capigo help output`,
+  meta.tenant is the tenant the write landed in. See capigo help tenancy.
+
+  Exit 5 if no field flag is given (and --from-json is not used), or if
+  --from-json is combined with a field flag. Exit 4 if <id> is not in the
+  resolved tenant. Exit 8 on a name collision.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -510,18 +417,13 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(categoryUpdateTenant, profile)
-		defer echoTenant(tenant, categoryUpdateTenant)
-		if tenant == nil {
-			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "categories commands require a tenant; pass --tenant <code> or set default", "")
-			os.Exit(5)
-		}
+		requireTenant(tenant, "categories")
 
 		var body any
 		if categoryUpdateFromJSON != "" {
 			for _, f := range []string{"name", "parent-id", "clear-parent"} {
 				if cmd.Flags().Changed(f) {
-					output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", fmt.Sprintf("--from-json and --%s are mutually exclusive", f), "")
-					os.Exit(5)
+					failValidation("--from-json and --%s are mutually exclusive", f)
 				}
 			}
 			raw, err := readJSONInput(categoryUpdateFromJSON)
@@ -540,8 +442,7 @@ OUTPUT
 				m["parent_id"] = categoryUpdateParentID
 			}
 			if len(m) == 0 {
-				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "at least one field must be provided for update", "")
-				os.Exit(5)
+				failValidation("at least one field must be provided for update")
 			}
 			body = m
 		}
@@ -558,17 +459,9 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		emitServerTime(resp.ServerTime, "")
-
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		return output.Render(os.Stdout, outputMode, output.Category{
-			ID:       envelope.Data.ID,
-			Name:     envelope.Data.Name,
-			ParentID: envelope.Data.ParentID,
-		}, output.RenderOpts{GlobalMode: false, ResourceKind: "category"})
+		meta := itemMeta(tenant, categoryUpdateTenant)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, envelope.Data, meta)
 	},
 }
 
@@ -590,29 +483,30 @@ var categoriesReplaceCmd = &cobra.Command{
 	Long: `Replace a category's name and parent in one call.
 
 PURPOSE
-  Rewrite a category's name and its place in the tree together in one call.
-  The API does not clear a field you omit on PUT — like PATCH, it changes
-  only what you send — but this command requires --name and one of
-  --parent-id/--root on every call, so a stale field survives only if you
-  typed it that way. To change one field without retyping the rest, use
-  categories update <id>.
+  Send the category's whole field set in one call (PUT), so nothing is left
+  implicit. The API itself does not clear a field you omit on PUT — the same
+  as PATCH, it changes only what you send — but this command requires --name
+  and a parent decision on every call, so a stale field can only survive if
+  you typed it that way on purpose. To touch one field and leave the rest
+  alone without restating it, use categories update <id> instead.
 
 USAGE
   capigo categories replace <id> --tenant <code>
                             (--name <text> [--parent-id <uuid> | --root]
                              | --from-json <path|->)
-                            [-o table|json|quiet]
 
 FLAGS
   <id>
       Category id, a UUID. Positional, required.
 
   --tenant <code>
-      Tenant the category belongs to. Required.
+      Tenant the category belongs to. Required. Exits 4 if the category is
+      not in it.
 
   --name <text>
-      Category name, 1 to 500 characters. Required. A name that duplicates
-      another category's name in this tenant exits 8.
+      Category name, 1 to 500 characters. Required, unless --from-json is
+      used. A name that duplicates another category's name in this tenant
+      exits 8.
 
   --parent-id <uuid>
       The parent category. Mutually exclusive with --root. An id that does
@@ -622,25 +516,30 @@ FLAGS
       Set parent_id to null, making the category a root. Mutually exclusive
       with --parent-id.
 
-  Exactly one of --parent-id and --root is required; replace always writes
-  the parent.
+  Exactly one of --parent-id and --root is required unless --from-json is
+  used; replace always writes the parent.
 
         capigo categories replace <uuid> --tenant acme --name "Phu kien" --root
 
   --from-json <path|->
       Send the whole request body from a file, or - for stdin. Mutually
-      exclusive with the individual field flags above: passing both exits 5.
-
-  -o, --output table|json|quiet
-      Print the replaced row, the JSON object, or its bare id. Defaults to
-      table. See capigo help output.
+      exclusive with --name, --parent-id and --root: passing both exits 5.
 
 OUTPUT
-  -o json emits the bare category as it now stands:
+  The category as it now stands is at .data:
 
-      { "id": "...", "name": "Phu kien", "parent_id": null }
+      {
+        "data": { "id": "...", "name": "Phu kien", "parent_id": null },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-07-09T04:12:33Z" }
+      }
 
-  Output modes and the JSON contract: capigo help output`,
+  meta.tenant is the tenant the write landed in. See capigo help tenancy.
+
+  Exit 5 if --name or a parent flag is missing (and --from-json is not
+  used), if both --parent-id and --root are given, or if --from-json is
+  combined with a field flag. Exit 4 if <id> is not in the resolved tenant.
+  Exit 8 on a name collision.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -657,18 +556,13 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(categoryReplaceTenant, profile)
-		defer echoTenant(tenant, categoryReplaceTenant)
-		if tenant == nil {
-			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "categories commands require a tenant; pass --tenant <code> or set default", "")
-			os.Exit(5)
-		}
+		requireTenant(tenant, "categories")
 
 		var body any
 		if categoryReplaceFromJSON != "" {
 			for _, f := range []string{"name", "parent-id", "root"} {
 				if cmd.Flags().Changed(f) {
-					output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", fmt.Sprintf("--from-json and --%s are mutually exclusive", f), "")
-					os.Exit(5)
+					failValidation("--from-json and --%s are mutually exclusive", f)
 				}
 			}
 			raw, err := readJSONInput(categoryReplaceFromJSON)
@@ -678,17 +572,14 @@ OUTPUT
 			body = json.RawMessage(raw)
 		} else {
 			if categoryReplaceName == "" {
-				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "--name is required for replace", "")
-				os.Exit(5)
+				failValidation("--name is required for replace")
 			}
 			parentIDSet := cmd.Flags().Changed("parent-id")
 			if parentIDSet && categoryReplaceRoot {
-				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "--parent-id and --root are mutually exclusive", "")
-				os.Exit(5)
+				failValidation("--parent-id and --root are mutually exclusive")
 			}
 			if !parentIDSet && !categoryReplaceRoot {
-				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "one of --parent-id or --root is required for replace", "")
-				os.Exit(5)
+				failValidation("one of --parent-id or --root is required for replace")
 			}
 			req := api.ReplaceCategoryRequest{Name: categoryReplaceName}
 			if !categoryReplaceRoot {
@@ -709,17 +600,9 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		emitServerTime(resp.ServerTime, "")
-
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		return output.Render(os.Stdout, outputMode, output.Category{
-			ID:       envelope.Data.ID,
-			Name:     envelope.Data.Name,
-			ParentID: envelope.Data.ParentID,
-		}, output.RenderOpts{GlobalMode: false, ResourceKind: "category"})
+		meta := itemMeta(tenant, categoryReplaceTenant)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, envelope.Data, meta)
 	},
 }
 

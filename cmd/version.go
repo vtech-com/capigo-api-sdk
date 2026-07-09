@@ -1,9 +1,10 @@
 package cmd
 
 import (
-	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/vtech-com/capigo-api-sdk/internal/output"
 	"github.com/vtech-com/capigo-api-sdk/internal/version"
 )
 
@@ -23,18 +24,20 @@ FLAGS
   (none)
 
 OUTPUT
-  Three lines: the version, the commit, and the build date.
+  Version, commit and build date are at .data:
 
-      capigo 0.16.0
-      commit: 4a1f9c2
-      built:  2026-06-18T10:03:00Z
-
-  This command ignores --output: it prints the same text in every mode.`,
+      {
+        "data": { "version": "0.16.0", "commit": "4a1f9c2",
+                  "built": "2026-06-18T10:03:00Z" },
+        "meta": {}
+      }`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Printf("capigo %s\n", version.Version)
-		fmt.Printf("commit: %s\n", version.Commit)
-		fmt.Printf("built:  %s\n", version.Date)
-		return nil
+		data := map[string]string{
+			"version": version.Version,
+			"commit":  version.Commit,
+			"built":   version.Date,
+		}
+		return output.Write(os.Stdout, data, output.Meta{})
 	},
 }
 

@@ -18,7 +18,7 @@ var brandsCmd = &cobra.Command{
 	Long: `Brands, part of the Capigo Product Catalog Management System (PCMS).
 
 Brands are tenant-scoped reference data. Every command here requires a
-tenant, and update/create/replace echo the resolved tenant on success.
+tenant, and every response names the tenant it resolved to, in meta.
 
 USAGE
   capigo brands <command> --tenant <code> [<args>]`,
@@ -47,7 +47,6 @@ PURPOSE
 
 USAGE
   capigo brands list --tenant <code> [-q <term>] [--page <n>] [--limit <n>]
-                     [-o table|json|quiet]
 
 FLAGS
   --tenant <code>
@@ -70,32 +69,29 @@ FLAGS
 
         capigo brands list --tenant acme --page 2 --limit 100
 
-  -o, --output table|json|quiet
-      Print rows, the JSON envelope, or bare ids. Defaults to table.
-      See capigo help output.
-
 OUTPUT
-  A table of brands, then a summary line:
-
-      ┌──────────────────────────────────────┬──────────┐
-      │ ID                                   │ Name     │
-      ├──────────────────────────────────────┼──────────┤
-      │ 4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb │ Coolmate │
-      │ 8f2e0a91-6c3d-4b17-9e2a-1f5d7c8b0e44 │ Nike     │
-      └──────────────────────────────────────┴──────────┘
-      Tenant: acme · Total: 2 (all rows shown)
-
-  -o json emits the list envelope; the brands are at .data[]:
+  The brands are at .data[]:
 
       {
         "data": [
-          { "id": "4d9a1c07-...", "name": "Coolmate", "logo_url": null }
+          { "id": "4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb", "name": "Coolmate",
+            "logo_url": null },
+          { "id": "8f2e0a91-6c3d-4b17-9e2a-1f5d7c8b0e44", "name": "Nike",
+            "logo_url": "https://cdn.capigo.app/b/nike.png" }
         ],
-        "meta": { "page": 1, "limit": 20, "total": 2, "has_more": false }
+        "meta": {
+          "tenant": "acme",
+          "tenant_source": "flag",
+          "page": 1, "limit": 20, "total": 2, "has_more": false
+        }
       }
 
-  Read meta.total rather than counting rows; a page never holds more than
-  --limit. The envelope and the JSON contract: capigo help output`,
+  Read meta.total rather than counting .data[]: a page never holds more than
+  --limit, so a full count needs meta, not arithmetic.
+
+  meta.tenant is the tenant this call actually ran against, and
+  meta.tenant_source says whether that came from the flag, from CAPIGO_TENANT,
+  or from the config file. See capigo help tenancy.`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -110,15 +106,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(brandListTenant, profile)
-		if tenant == nil {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "brands commands require a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
-		}
+		requireTenant(tenant, "brands")
 
 		validatePCMSLimit(brandListLimit)
 
@@ -132,43 +120,7 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if outputMode == "json" {
-			data := envelope.Data
-			if data == nil {
-				data = []api.Brand{}
-			}
-			return output.WriteJSONList(os.Stdout, data, envelope.Meta)
-		}
-
-		items := make([]output.Brand, len(envelope.Data))
-		for i, b := range envelope.Data {
-			items[i] = output.Brand{
-				ID:      b.ID,
-				Name:    b.Name,
-				LogoURL: b.LogoURL,
-			}
-		}
-
-		if err := output.Render(os.Stdout, outputMode, items, output.RenderOpts{
-			GlobalMode:   false,
-			ResourceKind: "brand",
-		}); err != nil {
-			return handleErr(err)
-		}
-
-		if outputMode == "table" {
-			output.WriteListSummary(os.Stdout, output.ListSummary{
-				Tenant:     derefTenant(tenant),
-				TenantNote: tenantNote(tenant, brandListTenant),
-				Shown:      len(envelope.Data),
-				Page:       envelope.Meta.Page,
-				Limit:      envelope.Meta.Limit,
-				Total:      envelope.Meta.Total,
-				HasMore:    envelope.Meta.HasMore,
-			})
-		}
-
-		return nil
+		return output.Write(os.Stdout, envelope.Data, listMeta(tenant, brandListTenant, envelope.Meta))
 	},
 }
 
@@ -195,7 +147,7 @@ PURPOSE
 
 USAGE
   capigo brands create --tenant <code> (--name <text> [--logo-url <url>]
-                       | --from-json <path|->) [-o table|json|quiet]
+                       | --from-json <path|->)
 
 FLAGS
   --tenant <code>
@@ -221,16 +173,18 @@ FLAGS
         echo '{"name":"No Brand"}' \
             | capigo brands create --tenant acme --from-json -
 
-  -o, --output table|json|quiet
-      Print a row, the JSON object, or the bare id. Defaults to table.
-      See capigo help output.
-
 OUTPUT
-  -o json emits the bare created brand, not a list envelope:
+  The created brand is at .data:
 
-      { "id": "8f2e0a91-...", "name": "Nike", "logo_url": null }
+      {
+        "data": { "id": "8f2e0a91-6c3d-4b17-9e2a-1f5d7c8b0e44",
+                  "name": "Nike", "logo_url": null },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-07-09T04:12:33Z" }
+      }
 
-  quiet prints its id. Output modes and the JSON contract: capigo help output
+  meta.tenant is the tenant the brand was written to. Read it: a write that
+  landed in the wrong tenant looks exactly like a write that succeeded.
 
   Exit 5 if --name is missing (and --from-json is not used), or if
   --from-json is combined with a field flag. Exit 8 if a brand with the same
@@ -249,28 +203,13 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(brandCreateTenant, profile)
-		defer echoTenant(tenant, brandCreateTenant)
-		if tenant == nil {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "brands commands require a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
-		}
+		requireTenant(tenant, "brands")
 
 		var body any
 		if brandCreateFromJSON != "" {
 			for _, f := range []string{"name", "logo-url"} {
 				if cmd.Flags().Changed(f) {
-					e := &api.APIError{
-						Code:       "VALIDATION_ERROR",
-						Message:    fmt.Sprintf("--from-json and --%s are mutually exclusive", f),
-						HTTPStatus: 400,
-					}
-					output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-					os.Exit(api.ExitCodeFor(e))
+					failValidation("--from-json and --%s are mutually exclusive", f)
 				}
 			}
 			raw, err := readJSONInput(brandCreateFromJSON)
@@ -280,9 +219,7 @@ OUTPUT
 			body = json.RawMessage(raw)
 		} else {
 			if brandCreateName == "" {
-				e := &api.APIError{Code: "VALIDATION_ERROR", Message: "--name is required", HTTPStatus: 400}
-				output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-				os.Exit(api.ExitCodeFor(e))
+				failValidation("--name is required")
 			}
 			req := api.CreateBrandRequest{Name: brandCreateName}
 			if brandCreateLogoURL != "" {
@@ -303,17 +240,9 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		emitServerTime(resp.ServerTime, "")
-
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		return output.Render(os.Stdout, outputMode, output.Brand{
-			ID:      envelope.Data.ID,
-			Name:    envelope.Data.Name,
-			LogoURL: envelope.Data.LogoURL,
-		}, output.RenderOpts{GlobalMode: false, ResourceKind: "brand"})
+		meta := itemMeta(tenant, brandCreateTenant)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, envelope.Data, meta)
 	},
 }
 
@@ -344,7 +273,7 @@ USAGE
   capigo brands update <id> --tenant <code>
                        ([--name <text>] [--logo-url <url> | --clear-logo]
                        | --from-json <path|->)
-                       [-o table|json|quiet]
+                      
 
 FLAGS
   <id>
@@ -375,16 +304,17 @@ FLAGS
       exclusive with --name, --logo-url and --clear-logo: passing both
       exits 5.
 
-  -o, --output table|json|quiet
-      Print a row, the JSON object, or the bare id. Defaults to table.
-      See capigo help output.
-
 OUTPUT
-  -o json emits the bare updated brand, not a list envelope:
+  The brand as it now stands is at .data:
 
-      { "id": "4d9a1c07-...", "name": "Nike Vietnam", "logo_url": null }
+      {
+        "data": { "id": "4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
+                  "name": "Nike Vietnam", "logo_url": null },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-07-09T04:12:33Z" }
+      }
 
-  Output modes and the JSON contract: capigo help output
+  meta.tenant is the tenant the write landed in. See capigo help tenancy.
 
   Exit 5 if no field flag is given (and --from-json is not used), or if
   --from-json is combined with a field flag. Exit 4 if <id> is not in the
@@ -405,18 +335,13 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(brandUpdateTenant, profile)
-		defer echoTenant(tenant, brandUpdateTenant)
-		if tenant == nil {
-			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "brands commands require a tenant; pass --tenant <code> or set default", "")
-			os.Exit(5)
-		}
+		requireTenant(tenant, "brands")
 
 		var body any
 		if brandUpdateFromJSON != "" {
 			for _, f := range []string{"name", "logo-url", "clear-logo"} {
 				if cmd.Flags().Changed(f) {
-					output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", fmt.Sprintf("--from-json and --%s are mutually exclusive", f), "")
-					os.Exit(5)
+					failValidation("--from-json and --%s are mutually exclusive", f)
 				}
 			}
 			raw, err := readJSONInput(brandUpdateFromJSON)
@@ -435,8 +360,7 @@ OUTPUT
 				m["logo_url"] = brandUpdateLogoURL
 			}
 			if len(m) == 0 {
-				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "at least one field must be provided for update", "")
-				os.Exit(5)
+				failValidation("at least one field must be provided for update")
 			}
 			body = m
 		}
@@ -453,17 +377,9 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		emitServerTime(resp.ServerTime, "")
-
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		return output.Render(os.Stdout, outputMode, output.Brand{
-			ID:      envelope.Data.ID,
-			Name:    envelope.Data.Name,
-			LogoURL: envelope.Data.LogoURL,
-		}, output.RenderOpts{GlobalMode: false, ResourceKind: "brand"})
+		meta := itemMeta(tenant, brandUpdateTenant)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, envelope.Data, meta)
 	},
 }
 
@@ -483,7 +399,7 @@ PURPOSE
   brands list --query.
 
 USAGE
-  capigo brands get <id> --tenant <code> [-o table|json|quiet]
+  capigo brands get <id> --tenant <code>
 
 FLAGS
   <id>
@@ -494,27 +410,20 @@ FLAGS
 
         capigo brands get 4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb --tenant acme
 
-  -o, --output table|json|quiet
-      Print a row, the JSON object, or the bare id. Defaults to table.
-      See capigo help output.
-
 OUTPUT
-  A single-row table:
-
-      ┌──────────────────────────────────────┬──────────┐
-      │ ID                                   │ Name     │
-      ├──────────────────────────────────────┼──────────┤
-      │ 4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb │ Coolmate │
-      └──────────────────────────────────────┴──────────┘
-
-  -o json emits the bare object. A get is not a list, so there is no envelope
-  and no .data to reach for:
+  The brand is at .data — an object, where a list puts an array. The envelope
+  is the same either way:
 
       {
-        "id": "4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
-        "name": "Coolmate",
-        "logo_url": "https://cdn.capigo.app/b/coolmate.png"
+        "data": {
+          "id": "4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
+          "name": "Coolmate",
+          "logo_url": "https://cdn.capigo.app/b/coolmate.png"
+        },
+        "meta": { "tenant": "acme", "tenant_source": "flag" }
       }
+
+  A single-item read carries no pagination meta; there is nothing to page.
 
   Exit 4 when no such brand exists in the resolved tenant.`,
 	Args: cobra.ExactArgs(1),
@@ -532,10 +441,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(brandGetTenant, profile)
-		if tenant == nil {
-			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "brands commands require a tenant; pass --tenant <code> or set default", "")
-			os.Exit(5)
-		}
+		requireTenant(tenant, "brands")
 
 		resp, err := client.Do(ctx, "GET", "/pcms/brands/"+args[0], nil, tenant)
 		if err != nil {
@@ -549,15 +455,7 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		return output.Render(os.Stdout, outputMode, output.Brand{
-			ID:      envelope.Data.ID,
-			Name:    envelope.Data.Name,
-			LogoURL: envelope.Data.LogoURL,
-		}, output.RenderOpts{GlobalMode: false, ResourceKind: "brand"})
+		return output.Write(os.Stdout, envelope.Data, itemMeta(tenant, brandGetTenant))
 	},
 }
 
@@ -590,7 +488,7 @@ USAGE
   capigo brands replace <id> --tenant <code>
                        (--name <text> (--logo-url <url> | --no-logo)
                        | --from-json <path|->)
-                       [-o table|json|quiet]
+                      
 
 FLAGS
   <id>
@@ -619,16 +517,17 @@ FLAGS
       Send the whole request body from a file, or - for stdin. Mutually
       exclusive with --name, --logo-url and --no-logo: passing both exits 5.
 
-  -o, --output table|json|quiet
-      Print a row, the JSON object, or the bare id. Defaults to table.
-      See capigo help output.
-
 OUTPUT
-  -o json emits the bare brand as it now stands, not a list envelope:
+  The brand as it now stands is at .data:
 
-      { "id": "4d9a1c07-...", "name": "Nike", "logo_url": null }
+      {
+        "data": { "id": "4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
+                  "name": "Nike", "logo_url": null },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-07-09T04:12:33Z" }
+      }
 
-  Output modes and the JSON contract: capigo help output
+  meta.tenant is the tenant the write landed in. See capigo help tenancy.
 
   Exit 5 if --name or a logo flag is missing (and --from-json is not used),
   if both --logo-url and --no-logo are given, or if --from-json is combined
@@ -650,18 +549,13 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(brandReplaceTenant, profile)
-		defer echoTenant(tenant, brandReplaceTenant)
-		if tenant == nil {
-			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "brands commands require a tenant; pass --tenant <code> or set default", "")
-			os.Exit(5)
-		}
+		requireTenant(tenant, "brands")
 
 		var body any
 		if brandReplaceFromJSON != "" {
 			for _, f := range []string{"name", "logo-url", "no-logo"} {
 				if cmd.Flags().Changed(f) {
-					output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", fmt.Sprintf("--from-json and --%s are mutually exclusive", f), "")
-					os.Exit(5)
+					failValidation("--from-json and --%s are mutually exclusive", f)
 				}
 			}
 			raw, err := readJSONInput(brandReplaceFromJSON)
@@ -671,17 +565,14 @@ OUTPUT
 			body = json.RawMessage(raw)
 		} else {
 			if brandReplaceName == "" {
-				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "--name is required for replace", "")
-				os.Exit(5)
+				failValidation("--name is required for replace")
 			}
 			logoSet := cmd.Flags().Changed("logo-url")
 			if logoSet && brandReplaceNoLogo {
-				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "--logo-url and --no-logo are mutually exclusive", "")
-				os.Exit(5)
+				failValidation("--logo-url and --no-logo are mutually exclusive")
 			}
 			if !logoSet && !brandReplaceNoLogo {
-				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "one of --logo-url or --no-logo is required for replace", "")
-				os.Exit(5)
+				failValidation("one of --logo-url or --no-logo is required for replace")
 			}
 			req := api.ReplaceBrandRequest{Name: brandReplaceName}
 			if !brandReplaceNoLogo {
@@ -702,17 +593,9 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		emitServerTime(resp.ServerTime, "")
-
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		return output.Render(os.Stdout, outputMode, output.Brand{
-			ID:      envelope.Data.ID,
-			Name:    envelope.Data.Name,
-			LogoURL: envelope.Data.LogoURL,
-		}, output.RenderOpts{GlobalMode: false, ResourceKind: "brand"})
+		meta := itemMeta(tenant, brandReplaceTenant)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, envelope.Data, meta)
 	},
 }
 
