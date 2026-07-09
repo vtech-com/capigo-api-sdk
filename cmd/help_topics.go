@@ -109,13 +109,8 @@ META
 
       server_time    the server clock at the time of the call, for delta sync
 
-  Anything else in meta is the API's own, passed through: boards get sends
-  list_count. The CLI does not decide which of the API's fields you see.
-
-  meta carries only what a caller cannot work out for itself. The tenant comes
-  from a resolution order internal to this CLI; the server clock comes from a
-  header the caller never sees. Anything a caller can compute from what it sent
-  and what it got back is not in meta.
+  An endpoint may add meta fields of its own — boards get sends list_count.
+  They are documented on that command's page.
 
 FAILURE
   A command that fails prints an object with an error key — still JSON, still

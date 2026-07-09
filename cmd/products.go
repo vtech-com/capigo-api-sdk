@@ -146,10 +146,8 @@ OUTPUT
   Read meta.total rather than counting .data[]: a page never holds more than
   --limit, so a full count needs meta, not arithmetic.
 
-  The API's own list meta has only page/limit/total/has_more. The CLI adds
-  meta.server_time: the server clock at the time of the call, which no header
-  the caller can see would otherwise give them. Feed it to --updated-since on
-  the next call.
+  meta.server_time is the server clock at the time of the call, taken from a
+  response header. Feed it to --updated-since on the next call.
 
   When --ids asked for an id the server did not return (exit 4), or an --all
   sweep aborted (exit non-zero), the rows that were fetched are still

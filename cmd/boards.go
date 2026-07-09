@@ -174,10 +174,6 @@ OUTPUT
         "meta": { "tenant": "acme", "tenant_source": "flag", "list_count": 5 }
       }
 
-  meta.list_count is the API's own, and counts the lists in data.lists[]. It is
-  the only endpoint that adds a meta field of its own; the CLI passes it through
-  rather than deciding you may not see it.
-
   With --tenant omitted, meta.tenant and meta.tenant_source are absent.
 
   Exit 4 when no such board is reachable.`,
