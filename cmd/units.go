@@ -340,10 +340,12 @@ var unitsUpdateCmd = &cobra.Command{
 	Long: `Update a unit. Fields you do not send are left unchanged.
 
 PURPOSE
-  Change one or a few fields of a unit (PATCH) without restating the rest.
-  A unit has no nullable field. units replace <id> (PUT) sends the same kind
-  of partial body but the CLI requires every field there, so use replace
-  when you want to be forced to state the whole record.
+  Change one or a few fields of a unit without restating the rest. This is
+  PATCH: the API accepts any subset, so long as it is not empty, and leaves
+  every field you do not send unchanged. A unit has no nullable field.
+
+  units replace <id> is the other half of the pair. It sends PUT, which the
+  API refuses unless both fields are present.
 
 USAGE
   capigo units update <id> --tenant <code>
@@ -465,12 +467,12 @@ var unitsReplaceCmd = &cobra.Command{
 	Long: `Replace a unit's name and abbreviation in one call.
 
 PURPOSE
-  Send the unit's whole field set in one call (PUT), so nothing is left
-  implicit. The API itself does not clear a field you omit on PUT — the same
-  as PATCH, it changes only what you send — but this command requires --name
-  and --abbreviation on every call, so a stale field can only survive if you
-  typed it that way on purpose. To touch one field and leave the rest alone
-  without restating it, use units update <id> instead.
+  Send the unit's whole field set in one call. PUT is a true replace: the API
+  requires both fields on the request and rejects one that leaves either out,
+  with exit 5 and the message "Required". This command's flags mirror that
+  rule — --name and --abbreviation on every call — so an incomplete record is
+  refused here rather than at the server. To change one field without retyping
+  the other, use units update <id>, which sends PATCH.
 
 USAGE
   capigo units replace <id> --tenant <code>

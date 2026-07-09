@@ -76,7 +76,8 @@ OUTPUT
       {
         "data": [
           { "id": "3e91b0a2-4c7d-4f11-9a8e-6d5b1c2f9e33",
-            "name": "Pin Lien Cap" }
+            "name": "Pin Lien Cap",
+            "description": "Pin va cap lien khoi" }
         ],
         "meta": {
           "tenant": "acme",
@@ -87,6 +88,9 @@ OUTPUT
 
   Read meta.total rather than counting .data[]: a page never holds more than
   --limit, so a full count needs meta, not arithmetic.
+
+  description is returned, and may be null. The published OpenAPI document
+  does not declare it — the field is real; the document is incomplete.
 
   meta.tenant is the tenant this call actually ran against, and
   meta.tenant_source says whether that came from the flag, from CAPIGO_TENANT,
@@ -176,7 +180,8 @@ OUTPUT
 
       {
         "data": { "id": "3e91b0a2-4c7d-4f11-9a8e-6d5b1c2f9e33",
-                  "name": "Pin Lien Cap" },
+                  "name": "Pin Lien Cap",
+                  "description": "Pin va cap lien khoi" },
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "server_time": "2026-07-09T04:12:33Z" }
       }
@@ -262,10 +267,12 @@ var productTypesUpdateCmd = &cobra.Command{
 	Long: `Update a product type. Fields you do not send are left unchanged.
 
 PURPOSE
-  Change part of a product type without deciding every field. To rewrite
-  name and description together, forcing a decision on both, use
-  product-types replace <id> — the two commands hit the same API behavior;
-  replace only adds the CLI-side requirement to touch both fields.
+  Change part of a product type without deciding every field. This is PATCH:
+  the API accepts any subset, so long as it is not empty, and leaves every
+  field you do not send unchanged.
+
+  product-types replace <id> is the other half of the pair. It sends PUT,
+  which the API refuses unless both fields are present.
 
 USAGE
   capigo product-types update <id> --tenant <code>
@@ -306,7 +313,8 @@ OUTPUT
 
       {
         "data": { "id": "3e91b0a2-4c7d-4f11-9a8e-6d5b1c2f9e33",
-                  "name": "Pin Lien Cap" },
+                  "name": "Pin Lien Cap",
+                  "description": "Pin va cap lien khoi" },
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "server_time": "2026-07-09T04:12:33Z" }
       }
@@ -415,7 +423,8 @@ OUTPUT
 
       {
         "data": { "id": "3e91b0a2-4c7d-4f11-9a8e-6d5b1c2f9e33",
-                  "name": "Pin Lien Cap" },
+                  "name": "Pin Lien Cap",
+                  "description": "Pin va cap lien khoi" },
         "meta": { "tenant": "acme", "tenant_source": "flag" }
       }
 
@@ -473,13 +482,12 @@ var productTypesReplaceCmd = &cobra.Command{
 	Long: `Replace a product type.
 
 PURPOSE
-  Rewrite a product type's name and description together in one call. The
-  API does not clear an omitted field on this endpoint — like
-  product-types update <id>, it changes only what you send. What sets this
-  command apart is that it requires --name and one of --description or
-  --no-description on every call, so a stale field survives only if you
-  typed it that way. To change one field without deciding the other, use
-  product-types update <id>.
+  Rewrite a product type's name and description together in one call. PUT is
+  a true replace: the API requires both fields on the request and rejects one
+  that leaves either out, with exit 5 and the message "Required". description
+  may be null — that is what --no-description sends — but it must be sent.
+  This command's flags mirror that rule. To change one field without deciding
+  the other, use product-types update <id>, which sends PATCH.
 
 USAGE
   capigo product-types replace <id> --tenant <code>
@@ -518,7 +526,8 @@ OUTPUT
   The product type as it now stands is at .data:
 
       {
-        "data": { "id": "3e91b0a2-4c7d-4f11-9a8e-6d5b1c2f9e33", "name": "Pin" },
+        "data": { "id": "3e91b0a2-4c7d-4f11-9a8e-6d5b1c2f9e33", "name": "Pin",
+                  "description": null },
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "server_time": "2026-07-09T04:12:33Z" }
       }

@@ -94,15 +94,18 @@ OUTPUT
 
 var whoamiCmd = &cobra.Command{
 	Use:   "whoami",
-	Short: "Show the authenticated user",
+	Short: "Show the authenticated user (the API has no /me endpoint; exits 4)",
 	Long: `Show the user the stored API key belongs to.
 
 PURPOSE
-  Identify the caller by calling GET /me. That endpoint is not deployed on
-  production and returns HTTP 404 there (exit 4) — a 404 here is not
-  evidence the key is invalid. To confirm a key is accepted before a batch
-  of work, run health instead: it is the working preflight, and it does not
-  depend on /me.
+  Identify the caller by calling GET /me.
+
+  The API does not implement that endpoint. Not on production, not anywhere:
+  there is no route for it, and the request lands on the platform's not-found
+  handler. This command therefore exits 4 on every call today.
+
+  To confirm a key is accepted before a batch of work, run health. It is the
+  preflight that works, and it does not depend on /me.
 
 USAGE
   capigo auth whoami
@@ -111,7 +114,11 @@ FLAGS
   This command takes no flags.
 
 OUTPUT
-  The user object is at .data:
+  Today: exit 4, and an error object. The 404 says the endpoint is missing,
+  not that your key was rejected — that is exit 2, and health will tell you
+  which of the two you are looking at.
+
+  Were the endpoint implemented, the user object would be at .data:
 
       {
         "data": { "id": "3f9c2a10-6b1e-4d2f-8a77-0e4c9b2f7a31",
@@ -120,8 +127,6 @@ OUTPUT
         "meta": {}
       }
 
-  Exit 2 when the key itself is missing, malformed or rejected. Exit 4 on
-  production today, because /me is not deployed there — see PURPOSE above.
   What each exit code means: capigo help exit-codes.`,
 	RunE: runWhoami,
 }

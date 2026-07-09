@@ -139,7 +139,7 @@ command are in [`references/cli_basics.md`](./references/cli_basics.md); this ma
 |---|---|
 | `tenants list` | list the tenants you can reach |
 | `capigo health` | **preflight** — is the key accepted and API reachable? (exit 0 = ok). Use this before a batch of work, not `auth whoami` |
-| `capigo auth whoami` / `login --key csk_…` / `logout` | check identity / log in / out. ⚠️ `whoami` (GET `/me`) may **404** where it isn't deployed — it is *not* a reliable preflight; use `health`. On **exit 2** the key is bad — ask the *user* to re-login; don't retry |
+| `capigo auth whoami` / `login --key csk_…` / `logout` | check identity / log in / out. ⚠️ `whoami` calls GET `/me`, which the API **does not implement** — it always exits 4. Use `health` as the preflight. On **exit 2** the key is bad — ask the *user* to re-login; don't retry |
 
 ## When you can't find a command (Gate 1 — a hard rule)
 

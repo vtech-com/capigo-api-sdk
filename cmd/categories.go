@@ -343,10 +343,13 @@ var categoriesUpdateCmd = &cobra.Command{
 	Long: `Update a category. Fields you do not send are left unchanged.
 
 PURPOSE
-  Change one or a few fields of a category (PATCH) without restating the
-  rest. categories replace <id> (PUT) sends the same kind of partial body but
-  the CLI requires every field there, so use replace when you want to be
-  forced to state the whole record.
+  Change one or a few fields of a category without restating the rest. This
+  is PATCH: the API accepts any subset, so long as it is not empty, and leaves
+  every field you do not send unchanged.
+
+  categories replace <id> is the other half of the pair. It sends PUT, which
+  the API refuses unless every field is present — use it when you want the
+  whole record stated.
 
 USAGE
   capigo categories update <id> --tenant <code>
@@ -483,12 +486,12 @@ var categoriesReplaceCmd = &cobra.Command{
 	Long: `Replace a category's name and parent in one call.
 
 PURPOSE
-  Send the category's whole field set in one call (PUT), so nothing is left
-  implicit. The API itself does not clear a field you omit on PUT — the same
-  as PATCH, it changes only what you send — but this command requires --name
-  and a parent decision on every call, so a stale field can only survive if
-  you typed it that way on purpose. To touch one field and leave the rest
-  alone without restating it, use categories update <id> instead.
+  Send the category's whole field set in one call. PUT is a true replace: the
+  API requires every field on the request and rejects one that leaves any out,
+  with exit 5 and the message "Required". parent_id may be null — that is what
+  --root sends — but it must be sent. This command's flags mirror that rule:
+  --name, and one of --parent-id or --root, on every call. To change one field
+  and leave the rest alone, use categories update <id>, which sends PATCH.
 
 USAGE
   capigo categories replace <id> --tenant <code>

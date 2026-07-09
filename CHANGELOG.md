@@ -178,16 +178,38 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- **The `replace` pages had PUT's semantics backwards.** They said a field you do not send is
-  reset rather than preserved, "which is the whole difference between it and `update`". The
-  OpenAPI spec says otherwise for all four reference-data resources: `PUT /pcms/<resource>/{id}`
-  has no required body fields and is documented as "At least one field must be provided" — the
-  same shape as PATCH — and the categories PUT documents `parent_id` as "Omit to leave
-  unchanged". The API clears nothing you omit.
+- **The `replace` pages describe PUT correctly, at last.** They used to say a field you do not
+  send is "reset rather than preserved". Then, on the authority of the OpenAPI document — which
+  declares no required body fields and says "At least one field must be provided" — they were
+  rewritten to say the opposite: that PUT changes only what you send, like PATCH.
 
-  What makes `replace` a full replace is the CLI, not the server: it requires the field flags on
-  every call, so a field cannot be left out by accident. Each `replace` page now says that, and
-  each `update` page agrees with it.
+  Both were wrong, and the second more so. Against a running API:
+
+      PUT /pcms/brands/{id}  {"name":"x"}                  → 400  VALIDATION_ERROR "Required"
+      PUT /pcms/brands/{id}  {"name":"x","logo_url":null}  → 200
+      PATCH /pcms/brands/{id} {"name":"x"}                 → 200
+
+  PUT is a true replace, enforced by the server: every field must be present, and a nullable one
+  must be sent as `null` rather than omitted. `apps/platform/src/lib/api/dto/brand-write-params.ts`
+  says so in as many words — `// PUT (full replace) — all fields required`. The same holds for
+  categories, units and product-types. The published OpenAPI document is wrong on this point, and
+  reading its prose as behaviour is what produced the second error.
+
+  `products` is the exception: its `PUT /pcms/products/{id}` parses with the *partial* schema, so
+  the same verb means "full replace" on reference data and "partial update" on products.
+
+  The CLI itself was never wrong — `replace` has always required every field flag, which is
+  exactly what the server demands. Only the pages lied. (So did nothing in the bundled skill,
+  which has said `PUT — all fields required` throughout.)
+
+- **`auth whoami` calls an endpoint that does not exist.** The pages said `/me` "is not deployed
+  on production". There is no `/me` route in the API at all — the request reaches the platform's
+  not-found handler and returns HTML. The command exits 4 on every call, and its page now says
+  so, rather than describing a success it cannot produce.
+
+- **`product-types` responses carry `description`.** Every sample on those five pages omitted it,
+  because the OpenAPI document's `PublicProductTypeResponse` declares only `id` and `name`. The
+  server returns the field; the document is incomplete. The pages now show it, and say why.
 
 - **`products update` was labelled PATCH and sends PUT.** `/pcms/products/{id}` exposes only
   `get` and `put`; there is no PATCH to send. The word had been copied from the reference-data
