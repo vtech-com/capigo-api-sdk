@@ -535,7 +535,7 @@ INPUT
     --aliases              repeatable; alternative names and product codes
     --tags                 repeatable; free-form labels
 
-  Both aliases and tags are matched by products list --query.
+  Both aliases and tags are matched by the search in products list.
 
   Body mode — --from-json <path|->, where - reads stdin. When --from-json is
   given the individual field flags are ignored. (products update differs —

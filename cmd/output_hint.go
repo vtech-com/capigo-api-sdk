@@ -38,7 +38,7 @@ func shouldHintJSON(mode string, outputChanged, stdoutIsTTY, hintsDisabled bool)
 // `--help` FLAG never reaches here — cobra short-circuits on it before
 // PersistentPreRunE — but the `help` COMMAND is runnable and does, so without
 // this entry every `capigo help …` invocation emits a spurious -o json nudge.
-var hintExemptGroups = map[string]bool{"version": true, "config": true, "help": true}
+var hintExemptGroups = map[string]bool{"version": true, "config": true, "help": true, "logout": true}
 
 // cmdExemptFromJSONHint reports whether cmd, or any of its ancestors, belongs to
 // an exempt group — covering both `capigo version` and `capigo config get`.

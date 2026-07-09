@@ -17,6 +17,10 @@ import (
 var memberCmd = &cobra.Command{
 	Use:   "members",
 	Short: "Manage members",
+	Long: `Workspace members in Capigo Mission.
+
+Reads may span tenants: omit --tenant to see every tenant this key can reach.
+  capigo help tenancy`,
 }
 
 var (
@@ -29,6 +33,37 @@ var (
 var membersListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List workspace members",
+	Long: `List workspace members.
+
+PURPOSE
+  Find the people in a workspace — most often to turn a name into the UUID that
+  tasks create --assignee and tasks list --assignee-id expect.
+
+INPUT
+  --tenant <code>     optional; omit it to span every accessible tenant
+  -q, --query <term>  filter by member name or email
+  --page <n>          page number (0 = server default)
+  --limit <n>         items per page (0 = server default)
+
+OUTPUT
+  -o json emits the list envelope. Each row is a member:
+
+      { id, display_name, email, role, avatar_url }
+
+  role is owner or member.
+
+  The envelope, meta.total and list footers: capigo help output
+
+EXAMPLES
+  capigo members list --tenant acme -q tram
+
+  # Name to UUID, for an assignment
+  capigo members list --tenant acme -q tram -o json | jq -r '.data[0].id'
+
+SEE ALSO
+  members get <id>      one member in full
+  tasks list            filter tasks by --assignee-id
+  capigo help tenancy   when --tenant may be omitted`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -116,13 +151,32 @@ var memberGetTenant string
 var membersGetCmd = &cobra.Command{
 	Use:   "get <id>",
 	Short: "Get a member by ID",
-	Long: `Get a single workspace member by UUID. Optional --tenant scopes the lookup.
+	Long: `Get one member by UUID.
 
-If --tenant is omitted the member is resolved across all tenants the caller belongs to.
-Returns 404 if the member is not found in any accessible tenant.
+PURPOSE
+  Read a single member. This command addresses a member by UUID only; to find
+  that UUID from a name or an email, use members list --query.
 
-Output (-o json): { "id": "uuid", "display_name": "string", "email": "string",
-  "role": "owner|member", "avatar_url": "string|null" }`,
+INPUT
+  <id>              member UUID (positional, required)
+  --tenant <code>   optional; scopes the lookup
+
+OUTPUT
+  -o json emits the bare member object:
+
+      { id, display_name, email, role, avatar_url }
+
+  Exit 4 when the member is not reachable — including a member who exists in a
+  tenant this key cannot see.
+
+  Output modes and the JSON contract: capigo help output
+
+EXAMPLES
+  capigo members get <uuid> --tenant acme
+
+SEE ALSO
+  members list            find a member by name or email
+  capigo help exit-codes  what exit 4 means`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()

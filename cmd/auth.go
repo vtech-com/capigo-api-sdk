@@ -16,6 +16,10 @@ import (
 var authCmd = &cobra.Command{
 	Use:   "auth",
 	Short: "Manage authentication credentials",
+	Long: `Manage the API key this CLI sends.
+
+The key is read from CAPIGO_API_KEY first, then from the active profile in
+~/.capigo/config.json (file mode 600).`,
 }
 
 var loginKey string
@@ -23,19 +27,92 @@ var loginKey string
 var loginCmd = &cobra.Command{
 	Use:   "login",
 	Short: "Save an API key to the active profile",
-	RunE:  runLogin,
+	Long: `Store an API key in the active profile.
+
+PURPOSE
+  Save the key this CLI will send on every request. The key is written to
+  ~/.capigo/config.json with file mode 600.
+
+INPUT
+  --key <csk_...>   required. An API key; it must begin with csk_
+
+OUTPUT
+  -o json emits:
+
+      { "profile": "default", "status": "logged_in" }
+
+  table prints a one-line confirmation naming the profile.
+
+  Output modes: capigo help output
+
+EXAMPLES
+  capigo auth login --key csk_...
+
+SEE ALSO
+  health                  confirm the key is accepted (exit 0 = ok)
+  auth whoami             show who the key belongs to
+  capigo help exit-codes  what exit 2 means`,
+	RunE: runLogin,
 }
 
 var logoutCmd = &cobra.Command{
 	Use:   "logout",
 	Short: "Remove the API key from the active profile",
-	RunE:  runLogout,
+	Long: `Clear the stored API key from the active profile.
+
+PURPOSE
+  Remove the key from ~/.capigo/config.json. A profile with no key is not an
+  error; logging out twice is harmless.
+
+INPUT
+  (no flags)
+
+OUTPUT
+  A one-line confirmation naming the profile.
+
+  This command ignores --output: it prints the same text in every mode.
+
+EXAMPLES
+  capigo auth logout
+
+SEE ALSO
+  auth login --key csk_...   store a key again`,
+	RunE: runLogout,
 }
 
 var whoamiCmd = &cobra.Command{
 	Use:   "whoami",
 	Short: "Show the authenticated user",
-	RunE:  runWhoami,
+	Long: `Show the user the stored API key belongs to.
+
+PURPOSE
+  Identify the caller. To check that a key is accepted before a batch of work,
+  prefer health: it is the preflight, and it does not depend on this endpoint
+  being deployed.
+
+INPUT
+  (no flags)
+
+OUTPUT
+  -o json emits the bare user object:
+
+      { id, display_name, email, avatar_url }
+
+  quiet prints the id alone. table prints ID, Name and Email on three lines.
+
+  Exit 2 when the key is missing, malformed or rejected.
+
+  Output modes and the JSON contract: capigo help output
+
+EXAMPLES
+  capigo auth whoami
+  capigo auth whoami -o quiet
+
+SEE ALSO
+  health                  the preflight to run before a batch of work
+  auth login --key csk_   store a different key
+  capigo help exit-codes  what exit 2 means`,
+	RunE: runWhoami,
 }
 
 func init() {

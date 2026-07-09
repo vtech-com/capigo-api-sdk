@@ -306,7 +306,7 @@ INPUT
   --name <text>          a new name
   --abbreviation <text>  a new abbreviation; the server lowercases it
 
-  A unit has no nullable field, so there is no --clear flag here.
+  A unit has no nullable field.
 
   At least one field is required; sending none exits 5.
 

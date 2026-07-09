@@ -15,12 +15,41 @@ import (
 var tenantsCmd = &cobra.Command{
 	Use:   "tenants",
 	Short: "Manage tenants",
+	Long:  `The tenants this API key can reach.`,
 }
 
 var tenantsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List tenants accessible to the authenticated user",
-	Args:  cobra.NoArgs,
+	Long: `List the tenants this API key can reach.
+
+PURPOSE
+  Discover which tenant codes are available before naming one with --tenant.
+  This command takes no --tenant of its own.
+
+INPUT
+  (no flags)
+
+OUTPUT
+  -o json emits the list envelope. Each row is a tenant:
+
+      { tenant_code, name, role, joined_at }
+
+  tenant_code is the value --tenant expects.
+
+  Codes discovered here are merged into known_tenants in
+  ~/.capigo/config.json.
+
+  The envelope and list footers: capigo help output
+
+EXAMPLES
+  capigo tenants list
+  capigo tenants list -o json | jq -r '.data[].tenant_code'
+
+SEE ALSO
+  capigo help tenancy     how --tenant resolves, and which commands require it
+  config set-default-tenant   stop passing --tenant on every command`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client, cfg, err := buildClient()
 		if err != nil {

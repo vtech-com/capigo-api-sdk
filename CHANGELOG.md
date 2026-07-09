@@ -61,7 +61,26 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   envelope. A timeline entry's `kind` has four values — `comment`, `activity`, `card`,
   `artifact` — where the page named two.
 
+- **The remaining groups rebuilt on the same skeleton** — `boards`, `members`, `tenants`, `auth`,
+  `config`, `health`, `version`. Every runnable command in the CLI now carries
+  `PURPOSE · INPUT · OUTPUT · EXAMPLES · SEE ALSO`, and `CAVEATS` where a trap is worth naming.
+
+  `config get`, `config set`, `version` and `auth logout` say plainly that they ignore
+  `--output` and print the same text in every mode — verified by running each. An agent that
+  reaches for `.data` on their output is reaching for something that was never there.
+
+- **Two tests now hold the skeleton in place**, so it survives the next person who adds a command.
+  `TestRunnableCommandsFollowTheSkeleton` asserts every runnable command has the five sections, as
+  bare headers, in order. `TestHelpDoesNotNameFlagsThatDoNotExist` asserts that the `INPUT`
+  section of a page names only flags that page's command actually defines — it caught two of the
+  pages in this branch, one of which was a `there is no --clear flag` sentence, i.e. help
+  documenting an absence instead of what exists.
+
 ### Fixed
+
+- **`capigo auth logout` emitted a spurious `-o json` nudge**, for the same reason `capigo help`
+  did: it ignores `--output` and prints plain text, so the nudge was a false positive. Joined
+  `version`, `config` and `help` in `hintExemptGroups`.
 
 - **Twelve reference-data help pages said `--from-json` makes the field flags "ignored". It
   rejects them.** `create`, `update` and `replace` on all four groups exit 5 with "mutually

@@ -27,16 +27,42 @@ func configNotFoundErr(msg string) {
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Manage capigo CLI configuration",
+	Long: `Read and write this CLI's local configuration.
+
+Settings live in ~/.capigo/config.json (file mode 600). There is exactly one
+active profile; this CLI takes no --profile flag.
+
+Recognised keys: api_url, default_profile, default_tenant`,
 }
 
 var configSetCmd = &cobra.Command{
 	Use:   "set <key> <value>",
 	Short: "Set a configuration key",
-	Long: `Set a configuration key in the active profile.
+	Long: `Set a configuration value.
 
-Supported keys:
-  api_url          - Override the API base URL
-  default_profile  - Set the active profile name`,
+PURPOSE
+  Write one setting into ~/.capigo/config.json.
+
+INPUT
+  <key>     one of api_url, default_profile, default_tenant
+  <value>   the value to store
+
+  An unrecognised key exits 5 and names the keys that are recognised.
+
+OUTPUT
+  A one-line confirmation.
+
+  This command ignores --output: configuration is not a resource, so there is
+  no JSON envelope to emit.
+
+EXAMPLES
+  capigo config set api_url https://platform.capigo.app/api/v1
+  capigo config set default_tenant acme
+
+SEE ALSO
+  config get <key>            read one back
+  config set-default-tenant   the same thing, with tenant validation
+  capigo help tenancy         how default_tenant is used`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		key, value := args[0], args[1]
@@ -80,12 +106,27 @@ Supported keys:
 var configGetCmd = &cobra.Command{
 	Use:   "get <key>",
 	Short: "Get a configuration value",
-	Long: `Print the value of a configuration key from the active profile.
+	Long: `Read a configuration value.
 
-Supported keys:
-  api_url          - The API base URL
-  default_profile  - The active profile name
-  default_tenant   - The default tenant code for the active profile`,
+PURPOSE
+  Print one setting from ~/.capigo/config.json.
+
+INPUT
+  <key>   one of api_url, default_profile, default_tenant
+
+OUTPUT
+  The raw value, on one line, with no quoting and no key name.
+
+  This command ignores --output: it prints the same bare value in every mode,
+  which makes it safe to capture directly.
+
+EXAMPLES
+  capigo config get default_tenant
+  TENANT=$(capigo config get default_tenant)
+
+SEE ALSO
+  config set <key> <value>   write one
+  capigo help tenancy        how default_tenant is used`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		key := args[0]
@@ -128,7 +169,26 @@ Supported keys:
 var configSetDefaultTenantCmd = &cobra.Command{
 	Use:   "set-default-tenant <code>",
 	Short: "Set the default tenant for the active profile",
-	Args:  cobra.ExactArgs(1),
+	Long: `Set the tenant used when --tenant is omitted.
+
+PURPOSE
+  Store default_tenant so that commands which need a tenant can find one
+  without --tenant on every invocation.
+
+INPUT
+  <code>   a tenant code, as reported by tenants list
+
+OUTPUT
+  A one-line confirmation.
+
+EXAMPLES
+  capigo config set-default-tenant acme
+
+SEE ALSO
+  tenants list                  the codes this key can reach
+  config unset-default-tenant   clear it again
+  capigo help tenancy           the full resolution order`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		code := args[0]
 
@@ -160,7 +220,25 @@ var configSetDefaultTenantCmd = &cobra.Command{
 var configUnsetDefaultTenantCmd = &cobra.Command{
 	Use:   "unset-default-tenant",
 	Short: "Clear the default tenant for the active profile",
-	Args:  cobra.NoArgs,
+	Long: `Clear the default tenant.
+
+PURPOSE
+  Remove default_tenant, so that every command which needs a tenant must be
+  given one explicitly.
+
+INPUT
+  (no arguments)
+
+OUTPUT
+  A one-line confirmation.
+
+EXAMPLES
+  capigo config unset-default-tenant
+
+SEE ALSO
+  config set-default-tenant   set it again
+  capigo help tenancy         the full resolution order`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {
