@@ -208,10 +208,14 @@ PRODUCTS
   A full sweep therefore needs products list --all or --updated-since rather
   than --query.
 
+VARIANTS
+  A soft-deleted variant is not returned and marked — it is simply absent.
+  variants get on one exits 4, the same as a variant that never existed.
+
 EVERY OTHER RESOURCE
-  variants, brands, categories, product-types, units, members, tasks and boards
-  do not expose a deletion flag through this CLI. Their responses carry no
-  is_deleted field and their table output carries no deletion marker.
+  brands, categories, product-types, units, members, tasks and boards do not
+  expose a deletion flag through this CLI. Their responses carry no is_deleted
+  field and their table output carries no deletion marker.
 
 SEE ALSO
   capigo help output   the JSON contract and table footers`,

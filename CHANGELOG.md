@@ -34,7 +34,29 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   command groups is left to cobra, which generates it from each command's `Short` — hand-writing
   that list would be a second copy of it.
 
+- **`products` and `variants` help pages rebuilt to a fixed skeleton** —
+  `PURPOSE · INPUT · OUTPUT · CAVEATS · EXAMPLES · SEE ALSO`. Every page now states the shape it
+  returns, not only the flags it takes, so a call can be built without running one first.
+  Cross-cutting mechanics (the JSON envelope, list footers, stream placement, tenant resolution,
+  exit codes, soft-delete) are referenced from the help topics rather than restated.
+
+  Facts newly written down, each verified against the code or the API rather than inherited from
+  the previous text: `products variants` returns the whole product, not the variants you sent;
+  it is not atomic, so a failed call may have applied some items; an omitted field is left
+  unchanged while an explicit `null` clears it; table mode never surfaces `variant_id`;
+  `option1..option3` are positional against the product's `options[]`; `--aliases` and `--tags`
+  replace the array rather than append to it.
+
 ### Fixed
+
+- **`products update` help claimed the wrong behaviour for `--from-json`.** It said "all
+  individual field flags are ignored". They are not ignored — passing both `--from-json` and a
+  field flag exits 5 with "mutually exclusive". `products create` genuinely does ignore them, and
+  the update page had been describing the create page's behaviour. The two now say what each
+  does, and each names the other's difference.
+
+- **`variants get` help listed the variant shape but omitted three of its fields** —
+  `manufacturer_code`, `legacy_code` and `extra_data`, all present in the response.
 
 - **`capigo help …` emitted a spurious `-o json` nudge on stderr.** The `--help` *flag* never
   reached the hint (cobra short-circuits before `PersistentPreRunE`), but the `help` *command* is

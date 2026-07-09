@@ -3,6 +3,8 @@ package cmd
 import (
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 // helpTopicNames are the cross-cutting pages a command help page may reference.
@@ -98,28 +100,52 @@ func TestHelpFooterOmitsUnknownBuildDate(t *testing.T) {
 	}
 }
 
-// A topic page that references a sibling topic which does not exist is the same
-// class of defect as a command page that lies about its output: the reader
-// follows the pointer and finds nothing.
-func TestHelpTopicCrossReferencesResolve(t *testing.T) {
+// Any help page — topic or command — that points at `capigo help <target>` is
+// making a promise the reader will try to keep. A pointer to a topic that does
+// not exist is the same class of defect as a page that lies about its output:
+// the reader follows it and finds nothing. This walks the whole command tree,
+// because command pages reference topics far more often than topics reference
+// each other.
+func TestHelpReferencesToTopicsResolve(t *testing.T) {
+	// Register cobra's built-ins unconditionally, so this test sees the same
+	// command tree whether or not another test in the package got there first.
+	rootCmd.InitDefaultHelpCmd()
+	rootCmd.InitDefaultCompletionCmd()
+
+	// Cobra authors these two pages, not us; `help` even documents itself with
+	// the literal "capigo help [path to command]".
+	cobraOwned := map[string]bool{"help": true, "completion": true}
+
 	known := map[string]bool{}
 	for _, n := range helpTopicNames {
 		known[n] = true
 	}
-	for _, c := range rootCmd.Commands() {
-		if !known[c.Name()] {
-			continue
+
+	var walk func(c *cobra.Command)
+	walk = func(c *cobra.Command) {
+		if c.Parent() == rootCmd && cobraOwned[c.Name()] {
+			return
 		}
-		for _, line := range strings.Split(c.Long, "\n") {
-			idx := strings.Index(line, "capigo help ")
-			if idx < 0 {
-				continue
+		for _, text := range []string{c.Long, c.Short} {
+			for _, line := range strings.Split(text, "\n") {
+				idx := strings.Index(line, "capigo help ")
+				if idx < 0 {
+					continue
+				}
+				fields := strings.Fields(line[idx+len("capigo help "):])
+				if len(fields) == 0 {
+					t.Errorf("%q writes `capigo help` with no target", c.CommandPath())
+					continue
+				}
+				if target := fields[0]; !known[target] {
+					t.Errorf("%q references `capigo help %s`, which is not a registered topic",
+						c.CommandPath(), target)
+				}
 			}
-			rest := strings.TrimSpace(line[idx+len("capigo help "):])
-			target := strings.Fields(rest)[0]
-			if !known[target] {
-				t.Errorf("topic %q references `capigo help %s`, which is not a registered topic", c.Name(), target)
-			}
+		}
+		for _, sub := range c.Commands() {
+			walk(sub)
 		}
 	}
+	walk(rootCmd)
 }

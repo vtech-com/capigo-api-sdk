@@ -16,6 +16,13 @@ import (
 var variantsCmd = &cobra.Command{
 	Use:   "variants",
 	Short: "Query PCMS variants (read-only)",
+	Long: `Query product variants in PCMS.
+
+Variants are written through products variants, which upserts them onto their
+product. Reading them lives here.
+
+Every variants command requires a tenant.
+  capigo help tenancy`,
 }
 
 // --------------------------------------------------------------------------
@@ -33,12 +40,37 @@ var (
 var variantsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List variants by barcode prefix",
-	Long: `List product variants from the PCMS catalog.
+	Long: `List product variants, filtered by the leading digits of their barcode.
 
-Use --barcode-prefix to filter variants whose barcode starts with the given string.
-Use --sort to control sort order: "barcode" (ascending) or "-barcode" (descending).
-The primary use case is finding the highest barcode in a prefix namespace; use
---limit 1 --sort -barcode to get the top result.`,
+PURPOSE
+  Find variants whose barcode begins with a given string. The usual reason is
+  allocation: read the highest barcode already taken under a prefix, so the
+  next one can be chosen.
+
+INPUT
+  --tenant <code>          required
+  --barcode-prefix <p>     match variants whose barcode starts with p
+  --sort <order>           barcode (ascending) or -barcode (descending).
+                           Default -barcode.
+  --page <n>               page number
+  --limit <n>              items per page, 1-100 (default 20)
+
+OUTPUT
+  -o json emits the list envelope. Each row is a variant object; its shape is
+  documented on variants get.
+
+  The envelope, meta.total and list footers: capigo help output
+
+EXAMPLES
+  # The highest barcode already used under a prefix
+  capigo variants list --tenant acme --barcode-prefix 634007 \
+    --sort -barcode --limit 1 -o json | jq -r '.data[0].barcode'
+
+SEE ALSO
+  variants get <id>       one variant in full
+  products variants       create or update variants
+  capigo help output      output modes and the JSON contract
+  capigo help tenancy     how --tenant resolves`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -145,13 +177,41 @@ var variantGetTenant string
 var variantsGetCmd = &cobra.Command{
 	Use:   "get <id>",
 	Short: "Get a variant by ID",
-	Long: `Get a single product variant by UUID from PCMS. Tenant is required.
+	Long: `Get one variant by UUID.
 
-Returns the full variant shape (id, name, sku, barcode, price, compare_at_price,
-currency, weight, dimensions, option1/2/3, variant_type, created_at, updated_at).
-Orphaned, soft-deleted, and cross-tenant variants return 404.
+PURPOSE
+  Read a single variant in full. This command addresses a variant by UUID only.
+  To find that UUID, use variants list --barcode-prefix, or read the variants[]
+  array of products get <id>.
 
-Output (-o json): the bare variant object — full PublicProductVariantResponse shape.`,
+INPUT
+  <id>              variant UUID (positional, required)
+  --tenant <code>   required
+
+OUTPUT
+  -o json emits the bare variant object:
+
+      { id, name, sku, barcode, price, compare_at_price, currency, weight,
+        dimensions { l, w, h }, option1, option2, option3, variant_type,
+        manufacturer_code, legacy_code, extra_data, created_at, updated_at }
+
+  option1..option3 hold the option values in the order the product declares
+  them; products get <id> shows that order in options[].
+
+  Exit 4 when the variant is orphaned, soft-deleted, or in another tenant.
+  Unlike a product, a deleted variant is not returned and marked — it is
+  simply absent. See capigo help soft-delete
+
+  Output modes and the JSON contract: capigo help output
+
+EXAMPLES
+  capigo variants get 6f1c-... --tenant acme
+
+SEE ALSO
+  variants list           find variants by barcode prefix
+  products get <id>       the product and all of its variants at once
+  products variants       create or update variants
+  capigo help exit-codes  what exit 4 means`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
