@@ -15,10 +15,15 @@ import (
 var categoriesCmd = &cobra.Command{
 	Use:   "categories",
 	Short: "Manage PCMS categories",
-	Long: `Manage categories in the Capigo Product Catalog Management System (PCMS).
+	Long: `Categories organize products into a tree via parent_id, in the Capigo
+Product Catalog Management System (PCMS).
 
-Categories are tenant-scoped reference data. Every command here requires a tenant.
-  capigo help tenancy`,
+Categories are tenant-scoped reference data. Every command here requires a
+tenant.
+  capigo help tenancy
+
+USAGE
+  capigo categories <command> --tenant <code> [<args>]`,
 }
 
 // --------------------------------------------------------------------------
@@ -38,32 +43,63 @@ var categoriesListCmd = &cobra.Command{
 	Long: `List categories.
 
 PURPOSE
-  Read the categories defined for a tenant, optionally narrowed by name.
+  Read the categories defined for a tenant, optionally narrowed by name. To
+  read a single category whose id you already have, use categories get.
 
-INPUT
-  --tenant <code>        required
-  -q, --query <term>     name-contains filter, case-insensitive, max 200 chars
-  --page <n>             page number
-  --limit <n>            items per page, 1-100 (default 20)
+USAGE
+  capigo categories list --tenant <code> [-q <term>] [--page <n>]
+                         [--limit <n>] [-o table|json|quiet]
+
+FLAGS
+  --tenant <code>
+      Tenant to read from. Required. Falls back to CAPIGO_TENANT, then to
+      default_tenant in the config file. Exits 5 if none resolves.
+
+        capigo categories list --tenant acme
+
+  -q, --query <term>
+      Name-contains filter, case-insensitive, up to 200 characters.
+
+        capigo categories list --tenant acme -q "phu kien"
+
+  --page <n>
+      Page to fetch. Pages start at 1. The default, 0, sends no page
+      parameter and lets the server choose.
+
+  --limit <n>
+      Rows per page, 1 to 100. Defaults to 20.
+
+        capigo categories list --tenant acme --page 2 --limit 100
+
+  -o, --output table|json|quiet
+      Print rows, the JSON envelope, or bare ids. Defaults to table.
+      See capigo help output.
 
 OUTPUT
-  -o json emits the list envelope. Each row is:
+  A table of categories, then a summary line. A root category has no
+  ParentID.
 
-      { id, name, parent_id }
+      ┌──────────┬────────────┬──────────┐
+      │ ID       │ Name       │ ParentID │
+      ├──────────┼────────────┼──────────┤
+      │ 7c1f2e88 │ Phu kien   │          │
+      │ 9ab2c744 │ Op lung dt │ 7c1f2e88 │
+      └──────────┴────────────┴──────────┘
+      Tenant: acme · Total: 2 (all rows shown)
 
-  The envelope, meta.total and list footers: capigo help output
+  Ids are shortened here to fit the page; the command prints them in full.
 
-EXAMPLES
-  capigo categories list --tenant acme -q pin
+  -o json emits the list envelope; the categories are at .data[]:
 
-  # How many are there? Read meta.total rather than counting rows
-  capigo categories list --tenant acme --limit 1 -o json | jq '.meta.total'
-
-SEE ALSO
-  categories get <id>       one category in full
-  categories create         add a category
-  capigo help output      output modes and the JSON contract
-  capigo help tenancy     how --tenant resolves`,
+      {
+        "data": [
+          { "id": "7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10", "name": "Phu kien",
+            "parent_id": null },
+          { "id": "9ab2c744-1e3a-4b8c-9f10-5c1e2a4d9f10", "name": "Op lung dt",
+            "parent_id": "7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10" }
+        ],
+        "meta": { "page": 1, "limit": 20, "total": 2, "has_more": false }
+      }`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -141,6 +177,103 @@ SEE ALSO
 }
 
 // --------------------------------------------------------------------------
+// categories get
+// --------------------------------------------------------------------------
+
+var categoryGetTenant string
+
+var categoriesGetCmd = &cobra.Command{
+	Use:   "get <id>",
+	Short: "Get a category by id",
+	Long: `Get one category by id.
+
+PURPOSE
+  Read a single category, addressed by id only. To find that id from a name,
+  use categories list --query.
+
+USAGE
+  capigo categories get <id> --tenant <code> [-o table|json|quiet]
+
+FLAGS
+  <id>
+      Category id, a UUID. Positional, required.
+
+  --tenant <code>
+      Tenant the category belongs to. Required. Exits 4 if the category is
+      not in it.
+
+        capigo categories get 4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb --tenant acme
+
+  -o, --output table|json|quiet
+      Print a row, the JSON object, or the bare id. Defaults to table.
+      See capigo help output.
+
+OUTPUT
+  A single-row table:
+
+      ┌──────────┬──────────┬──────────┐
+      │ ID       │ Name     │ ParentID │
+      ├──────────┼──────────┼──────────┤
+      │ 4d9a1c07 │ Phu kien │          │
+      └──────────┴──────────┴──────────┘
+
+  Ids are shortened here to fit the page; the command prints them in full.
+
+  -o json emits the bare object. A get is not a list, so there is no envelope
+  and no .data to reach for:
+
+      {
+        "id": "4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
+        "name": "Phu kien",
+        "parent_id": null
+      }
+
+  Exit 4 when no such category exists in the resolved tenant.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(categoryGetTenant, profile)
+		if tenant == nil {
+			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "categories commands require a tenant; pass --tenant <code> or set default", "")
+			os.Exit(5)
+		}
+
+		resp, err := client.Do(ctx, "GET", "/pcms/categories/"+args[0], nil, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope struct {
+			Data api.Category `json:"data"`
+		}
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		if outputMode == "json" {
+			return output.WriteJSONObject(os.Stdout, envelope.Data)
+		}
+
+		return output.Render(os.Stdout, outputMode, output.Category{
+			ID:       envelope.Data.ID,
+			Name:     envelope.Data.Name,
+			ParentID: envelope.Data.ParentID,
+		}, output.RenderOpts{GlobalMode: false, ResourceKind: "category"})
+	},
+}
+
+// --------------------------------------------------------------------------
 // categories create
 // --------------------------------------------------------------------------
 
@@ -157,41 +290,56 @@ var categoriesCreateCmd = &cobra.Command{
 	Long: `Create a category.
 
 PURPOSE
-  Add a category to this tenant's reference data.
+  Add a category to this tenant's reference data. Omit --parent-id to create
+  a root category.
 
-INPUT
-  --tenant <code>        required
-  --name <text>          required, unless --from-json is used
-  --parent-id <uuid>     the parent category; omit it to create a root category
+USAGE
+  capigo categories create --tenant <code>
+                           (--name <text> [--parent-id <uuid>]
+                            | --from-json <path|->)
+                           [-o table|json|quiet]
 
-  Or --from-json <path|-> to send the whole body, where - reads stdin.
-  --from-json and the individual field flags are MUTUALLY EXCLUSIVE: passing
-  both exits 5.
+FLAGS
+  --tenant <code>
+      Tenant to create in. Required.
 
-  Body:
+        capigo categories create --tenant acme --name "Phu kien"
 
-      { "name": "Phu kien", "parent_id": "8f2a-..." }
-      { "name": "Phu kien" }
+  --name <text>
+      Category name, 1 to 500 characters. Required, unless --from-json is
+      used. A name that duplicates an existing category's name in this
+      tenant exits 8.
+
+  --parent-id <uuid>
+      The parent category. Omit it to create a root category. An id that
+      does not exist, or belongs to another tenant, exits 5.
+
+        capigo categories create --tenant acme --name Pin --parent-id 8f2a-...
+
+  --from-json <path|->
+      Send the whole request body from a file, or - for stdin. The
+      individual field flags above are ignored when this is set.
+
+      Body:
+
+          { "name": "Pin", "parent_id": "8f2a-..." }
+          { "name": "Phu kien" }
+
+        echo '{"name":"Pin","parent_id":"8f2a-..."}' \
+          | capigo categories create --tenant acme --from-json -
+
+  -o, --output table|json|quiet
+      Print the created row, the JSON object, or its bare id. Defaults to
+      table. See capigo help output.
 
 OUTPUT
   -o json emits the bare created category:
 
-      { id, name, parent_id }
+      { "id": "8f2a-...", "name": "Pin", "parent_id": "8f2a-..." }
 
   quiet prints its id.
 
-  Output modes and the JSON contract: capigo help output
-
-EXAMPLES
-  capigo categories create --tenant acme --name "Phu kien"
-
-  echo '{"name":"Pin","parent_id":"8f2a-..."}' \
-    | capigo categories create --tenant acme --from-json -
-
-SEE ALSO
-  categories update <id>    change some of its fields later
-  categories list           check whether it already exists
-  capigo help exit-codes  what exit 5 means`,
+  Output modes and the JSON contract: capigo help output`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -288,41 +436,64 @@ var (
 
 var categoriesUpdateCmd = &cobra.Command{
 	Use:   "update <id>",
-	Short: "Partial update of an existing category (PATCH)",
+	Short: "Change some fields of a category",
 	Long: `Update a category. Fields you do not send are left unchanged.
 
 PURPOSE
-  Change part of a category (PATCH). To overwrite every field at once, use
-  categories replace <id>.
+  Change part of a category: its name, or its parent. To overwrite every
+  field at once, use categories replace <id>.
 
-INPUT
-  <id>                   category UUID (positional, required)
-  --tenant <code>        required
-  --name <text>          a new name
-  --parent-id <uuid>     a new parent category
-  --clear-parent         set parent_id to null, promoting it to a root category
+USAGE
+  capigo categories update <id> --tenant <code>
+                           ([--name <text>]
+                            [--parent-id <uuid> | --clear-parent]
+                            | --from-json <path|->)
+                           [-o table|json|quiet]
 
-  At least one field is required; sending none exits 5.
+FLAGS
+  <id>
+      Category id, a UUID. Positional, required.
 
-  Or --from-json <path|-> to send the whole body, where - reads stdin.
-  --from-json and the individual field flags are MUTUALLY EXCLUSIVE: passing
-  both exits 5.
+  --tenant <code>
+      Tenant the category belongs to. Required.
+
+  --name <text>
+      A new name, 1 to 500 characters. A name that duplicates another
+      category's name in this tenant exits 8.
+
+        capigo categories update <uuid> --tenant acme --name "Phu kien dt"
+
+  --parent-id <uuid>
+      A new parent category. Mutually exclusive with --clear-parent. An id
+      that does not exist, creates a cycle, or belongs to another tenant,
+      exits 5.
+
+  --clear-parent
+      Set parent_id to null, promoting the category to root. Mutually
+      exclusive with --parent-id.
+
+        capigo categories update <uuid> --tenant acme --clear-parent
+
+  At least one of --name, --parent-id, --clear-parent is required; sending
+  none exits 5.
+
+  --from-json <path|->
+      Send the whole request body from a file, or - for stdin. Mutually
+      exclusive with the individual field flags above: passing both exits 5.
+
+        echo '{"name":"Phu kien dt"}' \
+          | capigo categories update <uuid> --tenant acme --from-json -
+
+  -o, --output table|json|quiet
+      Print the updated row, the JSON object, or its bare id. Defaults to
+      table. See capigo help output.
 
 OUTPUT
   -o json emits the bare updated category:
 
-      { id, name, parent_id }
+      { "id": "...", "name": "Phu kien dt", "parent_id": null }
 
-  Output modes and the JSON contract: capigo help output
-
-EXAMPLES
-  capigo categories update <uuid> --tenant acme --name "Phu kien dien thoai"
-  capigo categories update <uuid> --tenant acme --clear-parent
-
-SEE ALSO
-  categories replace <id>   overwrite every field instead
-  categories get <id>       read the current values first
-  capigo help exit-codes  what exit 5 means`,
+  Output modes and the JSON contract: capigo help output`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -402,86 +573,6 @@ SEE ALSO
 }
 
 // --------------------------------------------------------------------------
-// categories get
-// --------------------------------------------------------------------------
-
-var categoryGetTenant string
-
-var categoriesGetCmd = &cobra.Command{
-	Use:   "get <id>",
-	Short: "Get a category by ID",
-	Long: `Get one category by UUID.
-
-PURPOSE
-  Read a single category. This command addresses it by UUID only. To find that
-  UUID from a name, use categories list --query.
-
-INPUT
-  <id>                   category UUID (positional, required)
-  --tenant <code>        required
-
-OUTPUT
-  -o json emits the bare category object:
-
-      { id, name, parent_id }
-
-  Exit 4 when no such category exists in the resolved tenant.
-
-  Output modes and the JSON contract: capigo help output
-
-EXAMPLES
-  capigo categories get <uuid> --tenant acme
-
-SEE ALSO
-  categories list           find a category by name
-  categories update <id>    change some of its fields
-  categories replace <id>   overwrite all of its fields
-  capigo help exit-codes  what exit 4 means`,
-	Args: cobra.ExactArgs(1),
-	RunE: func(_ *cobra.Command, args []string) error {
-		ctx := context.Background()
-
-		client, cfg, err := buildClient()
-		if err != nil {
-			return handleErr(err)
-		}
-
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
-
-		tenant := resolveTenant(categoryGetTenant, profile)
-		if tenant == nil {
-			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "categories commands require a tenant; pass --tenant <code> or set default", "")
-			os.Exit(5)
-		}
-
-		resp, err := client.Do(ctx, "GET", "/pcms/categories/"+args[0], nil, tenant)
-		if err != nil {
-			return handleErr(err)
-		}
-
-		var envelope struct {
-			Data api.Category `json:"data"`
-		}
-		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
-			return handleErr(fmt.Errorf("decode response: %w", err))
-		}
-
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		return output.Render(os.Stdout, outputMode, output.Category{
-			ID:       envelope.Data.ID,
-			Name:     envelope.Data.Name,
-			ParentID: envelope.Data.ParentID,
-		}, output.RenderOpts{GlobalMode: false, ResourceKind: "category"})
-	},
-}
-
-// --------------------------------------------------------------------------
 // categories replace
 // --------------------------------------------------------------------------
 
@@ -495,42 +586,61 @@ var (
 
 var categoriesReplaceCmd = &cobra.Command{
 	Use:   "replace <id>",
-	Short: "Full replace of a category (PUT)",
-	Long: `Replace a category. Every field is overwritten.
+	Short: "Overwrite every field of a category",
+	Long: `Replace a category's name and parent in one call.
 
 PURPOSE
-  Overwrite a category in full (PUT). A field you do not send is not preserved —
-  it is reset. To change one field and keep the rest, use categories update <id>.
+  Rewrite a category's name and its place in the tree together in one call.
+  The API does not clear a field you omit on PUT — like PATCH, it changes
+  only what you send — but this command requires --name and one of
+  --parent-id/--root on every call, so a stale field survives only if you
+  typed it that way. To change one field without retyping the rest, use
+  categories update <id>.
 
-INPUT
-  <id>                   category UUID (positional, required)
-  --tenant <code>        required
-  --name <text>          required
-  --parent-id <uuid>     the parent category
-  --root                 set parent_id to null, making it a root category
+USAGE
+  capigo categories replace <id> --tenant <code>
+                            (--name <text> [--parent-id <uuid> | --root]
+                             | --from-json <path|->)
+                            [-o table|json|quiet]
 
-  Exactly one of --parent-id and --root must be given; they are mutually
-  exclusive; replace always writes the parent. To change one field and keep
-  the rest, use categories update <id>.
+FLAGS
+  <id>
+      Category id, a UUID. Positional, required.
 
-  Or --from-json <path|-> to send the whole body, where - reads stdin.
-  --from-json and the individual field flags are MUTUALLY EXCLUSIVE: passing
-  both exits 5.
+  --tenant <code>
+      Tenant the category belongs to. Required.
+
+  --name <text>
+      Category name, 1 to 500 characters. Required. A name that duplicates
+      another category's name in this tenant exits 8.
+
+  --parent-id <uuid>
+      The parent category. Mutually exclusive with --root. An id that does
+      not exist, creates a cycle, or belongs to another tenant, exits 5.
+
+  --root
+      Set parent_id to null, making the category a root. Mutually exclusive
+      with --parent-id.
+
+  Exactly one of --parent-id and --root is required; replace always writes
+  the parent.
+
+        capigo categories replace <uuid> --tenant acme --name "Phu kien" --root
+
+  --from-json <path|->
+      Send the whole request body from a file, or - for stdin. Mutually
+      exclusive with the individual field flags above: passing both exits 5.
+
+  -o, --output table|json|quiet
+      Print the replaced row, the JSON object, or its bare id. Defaults to
+      table. See capigo help output.
 
 OUTPUT
   -o json emits the bare category as it now stands:
 
-      { id, name, parent_id }
+      { "id": "...", "name": "Phu kien", "parent_id": null }
 
-  Output modes and the JSON contract: capigo help output
-
-EXAMPLES
-  capigo categories replace <uuid> --tenant acme --name "Phu kien" --root
-
-SEE ALSO
-  categories update <id>    change one field and keep the rest
-  categories get <id>       read the current values first
-  capigo help exit-codes  what exit 5 means`,
+  Output modes and the JSON contract: capigo help output`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -638,6 +748,6 @@ func init() {
 	categoriesReplaceCmd.Flags().BoolVar(&categoryReplaceRoot, "root", false, "set parent_id to null (promote to root; mutually exclusive with --parent-id)")
 	categoriesReplaceCmd.Flags().StringVar(&categoryReplaceFromJSON, "from-json", "", "path to JSON file with full request body (use - for stdin); mutually exclusive with individual field flags")
 
-	categoriesCmd.AddCommand(categoriesListCmd, categoriesCreateCmd, categoriesUpdateCmd, categoriesGetCmd, categoriesReplaceCmd)
+	categoriesCmd.AddCommand(categoriesListCmd, categoriesGetCmd, categoriesCreateCmd, categoriesUpdateCmd, categoriesReplaceCmd)
 	rootCmd.AddCommand(categoriesCmd)
 }

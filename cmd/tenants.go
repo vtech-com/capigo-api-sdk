@@ -15,7 +15,14 @@ import (
 var tenantsCmd = &cobra.Command{
 	Use:   "tenants",
 	Short: "Manage tenants",
-	Long:  `The tenants this API key can reach.`,
+	Long: `The tenants this API key can reach.
+
+Codes discovered by tenants list are cached in known_tenants in
+~/.capigo/config.json, for reference — nothing here validates a --tenant
+value against that cache.
+
+USAGE
+  capigo tenants <command> [<args>]`,
 }
 
 var tenantsListCmd = &cobra.Command{
@@ -25,30 +32,41 @@ var tenantsListCmd = &cobra.Command{
 
 PURPOSE
   Discover which tenant codes are available before naming one with --tenant.
-  This command takes no --tenant of its own.
+  This command takes no --tenant of its own, and unlike other list commands
+  its table has no summary footer.
 
-INPUT
-  (no flags)
+USAGE
+  capigo tenants list [-o table|json|quiet]
+
+FLAGS
+  -o, --output table|json|quiet
+      Print rows, the JSON envelope, or bare tenant codes. Defaults to
+      table. See capigo help output.
 
 OUTPUT
-  -o json emits the list envelope. Each row is a tenant:
+  A table of tenants:
 
-      { tenant_code, name, role, joined_at }
+      ┌──────┬─────────────┐
+      │ Code │ Name        │
+      ├──────┼─────────────┤
+      │ acme │ Acme Co.    │
+      │ demo │ Demo Tenant │
+      └──────┴─────────────┘
 
-  tenant_code is the value --tenant expects.
+  -o json emits the list envelope; each row is a tenant:
 
-  Codes discovered here are merged into known_tenants in
-  ~/.capigo/config.json.
+      {
+        "data": [
+          { "tenant_code": "acme", "name": "Acme Co.", "role": "owner",
+            "joined_at": "2026-01-14T09:00:00Z" }
+        ],
+        "meta": { "page": 1, "limit": 20, "total": 2, "has_more": false }
+      }
 
-  The envelope and list footers: capigo help output
+  tenant_code is the value --tenant expects. quiet prints tenant_code, one
+  per line.
 
-EXAMPLES
-  capigo tenants list
-  capigo tenants list -o json | jq -r '.data[].tenant_code'
-
-SEE ALSO
-  capigo help tenancy     how --tenant resolves, and which commands require it
-  config set-default-tenant   stop passing --tenant on every command`,
+  capigo help tenancy  how --tenant resolves, and which commands require it`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client, cfg, err := buildClient()

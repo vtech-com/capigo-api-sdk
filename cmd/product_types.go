@@ -15,10 +15,13 @@ import (
 var productTypesCmd = &cobra.Command{
 	Use:   "product-types",
 	Short: "Manage PCMS product types",
-	Long: `Manage product-types in the Capigo Product Catalog Management System (PCMS).
+	Long: `Product types in the Capigo Product Catalog Management System (PCMS).
 
-Product-types are tenant-scoped reference data. Every command here requires a tenant.
-  capigo help tenancy`,
+Product types are tenant-scoped reference data. Every command here requires a
+tenant.
+
+USAGE
+  capigo product-types <command> --tenant <code> [<args>]`,
 }
 
 // --------------------------------------------------------------------------
@@ -35,35 +38,67 @@ var (
 var productTypesListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List product types",
-	Long: `List product-types.
+	Long: `List product types.
 
 PURPOSE
-  Read the product-types defined for a tenant, optionally narrowed by name.
+  Read the product types defined for a tenant, optionally narrowed by name.
+  To find the id of one by name, this is the command; to read it by id, use
+  product-types get.
 
-INPUT
-  --tenant <code>        required
-  -q, --query <term>     name-contains filter, case-insensitive, max 200 chars
-  --page <n>             page number
-  --limit <n>            items per page, 1-100 (default 20)
+USAGE
+  capigo product-types list --tenant <code> [-q <term>]
+                            [--page <n>] [--limit <n>]
+                            [-o table|json|quiet]
+
+FLAGS
+  --tenant <code>
+      Tenant to read from. Required. Falls back to CAPIGO_TENANT, then to
+      default_tenant in the config file. Exits 5 if none resolves.
+
+        capigo product-types list --tenant acme
+
+  -q, --query <term>
+      Name-contains filter, case-insensitive. 1 to 200 characters.
+
+        capigo product-types list --tenant acme -q pin
+
+  --page <n>
+      Page to fetch. Pages start at 1. The default, 0, sends no page
+      parameter and lets the server choose.
+
+  --limit <n>
+      Rows per page, 1 to 100. Defaults to 20.
+
+        capigo product-types list --tenant acme --page 2 --limit 100
+
+  -o, --output table|json|quiet
+      Print rows, the JSON envelope, or bare ids. Defaults to table.
+      See capigo help output.
 
 OUTPUT
-  -o json emits the list envelope. Each row is:
+  A table of product types, then a summary line.
 
-      { id, name, description }
+      ┌──────────────────────────────────────┬──────────────┐
+      │ ID                                   │ Name         │
+      ├──────────────────────────────────────┼──────────────┤
+      │ 3e91b0a2-4c7d-4f11-9a8e-6d5b1c2f9e33 │ Pin Lien Cap │
+      └──────────────────────────────────────┴──────────────┘
+      Tenant: acme · Total: 12 · showing 12 (page 1/1)
 
-  The envelope, meta.total and list footers: capigo help output
+  -o json emits the list envelope; the product types are at .data[]:
 
-EXAMPLES
-  capigo product-types list --tenant acme -q pin
+      {
+        "data": [
+          { "id": "3e91b0a2-4c7d-4f11-9a8e-6d5b1c2f9e33",
+            "name": "Pin Lien Cap", "description": "Pin va cap lien khoi" }
+        ],
+        "meta": { "page": 1, "limit": 20, "total": 12, "has_more": false }
+      }
 
-  # How many are there? Read meta.total rather than counting rows
-  capigo product-types list --tenant acme --limit 1 -o json | jq '.meta.total'
+      capigo product-types list --tenant acme --limit 1 -o json \
+          | jq '.meta.total'
 
-SEE ALSO
-  product-types get <id>       one product type in full
-  product-types create         add a product type
-  capigo help output      output modes and the JSON contract
-  capigo help tenancy     how --tenant resolves`,
+  Read meta.total for a count; a page of rows is not the whole tenant.`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -159,39 +194,46 @@ var productTypesCreateCmd = &cobra.Command{
 PURPOSE
   Add a product type to this tenant's reference data.
 
-INPUT
-  --tenant <code>        required
-  --name <text>          required, unless --from-json is used
-  --description <text>   optional, max 2000 characters
+USAGE
+  capigo product-types create --tenant <code>
+                              [--name <text> [--description <text>]
+                               | --from-json <path|->]
 
-  Or --from-json <path|-> to send the whole body, where - reads stdin.
-  --from-json and the individual field flags are MUTUALLY EXCLUSIVE: passing
-  both exits 5.
+FLAGS
+  --tenant <code>
+      Tenant to create in. Required.
 
-  Body:
+  --name <text>
+      Product type name. Required, unless --from-json is used.
 
-      { "name": "Pin Lien Cap", "description": "Pin va cap lien khoi" }
-      { "name": "Pin Lien Cap" }
+        capigo product-types create --tenant acme --name "Pin Lien Cap"
+
+  --description <text>
+      Free-text description. Optional, max 2000 characters.
+
+  --from-json <path|->
+      Send the whole request body from a file, or - for stdin. Mutually
+      exclusive with --name and --description: passing both exits 5.
+
+      Body:
+
+          { "name": "Pin Lien Cap", "description": "Pin va cap lien khoi" }
+          { "name": "Pin Lien Cap" }
+
+        echo '{"name":"Pin Lien Cap"}' \
+          | capigo product-types create --tenant acme --from-json -
+
+  -o, --output table|json|quiet
+      Print the row, the bare created object, or its id. Defaults to table.
+      See capigo help output.
 
 OUTPUT
   -o json emits the bare created product type:
 
-      { id, name, description }
+      { "id": "3e91b0a2-4c7d-4f11-9a8e-6d5b1c2f9e33",
+        "name": "Pin Lien Cap", "description": "Pin va cap lien khoi" }
 
-  quiet prints its id.
-
-  Output modes and the JSON contract: capigo help output
-
-EXAMPLES
-  capigo product-types create --tenant acme --name "Pin Lien Cap"
-
-  echo '{"name":"Pin Lien Cap"}' \
-    | capigo product-types create --tenant acme --from-json -
-
-SEE ALSO
-  product-types update <id>    change some of its fields later
-  product-types list           check whether it already exists
-  capigo help exit-codes  what exit 5 means`,
+  quiet prints its id. Output modes and the JSON contract: capigo help output`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -288,41 +330,59 @@ var (
 
 var productTypesUpdateCmd = &cobra.Command{
 	Use:   "update <id>",
-	Short: "Partial update of an existing product type (PATCH)",
+	Short: "Change some fields of a product type",
 	Long: `Update a product type. Fields you do not send are left unchanged.
 
 PURPOSE
-  Change part of a product type (PATCH). To overwrite every field at once, use
-  product-types replace <id>.
+  Change part of a product type without deciding every field. To rewrite
+  name and description together, forcing a decision on both, use
+  product-types replace <id> — the two commands hit the same API behavior;
+  replace only adds the CLI-side requirement to touch both fields.
 
-INPUT
-  <id>                   product type UUID (positional, required)
-  --tenant <code>        required
-  --name <text>          a new name
-  --description <text>   a new description, max 2000 characters
-  --clear-description    set description to null
+USAGE
+  capigo product-types update <id> --tenant <code>
+                                   [--name <text>]
+                                   [--description <text> | --clear-description]
+                                   [--from-json <path|->]
 
-  At least one field is required; sending none exits 5.
+FLAGS
+  <id>
+      Product type id, a UUID. Positional, required.
 
-  Or --from-json <path|-> to send the whole body, where - reads stdin.
-  --from-json and the individual field flags are MUTUALLY EXCLUSIVE: passing
-  both exits 5.
+  --tenant <code>
+      Tenant the product type belongs to. Required.
+
+  --name <text>
+      A new name.
+
+  --description <text>
+      A new description, max 2000 characters. Mutually exclusive with
+      --clear-description.
+
+  --clear-description
+      Set description to null. Mutually exclusive with --description.
+
+        capigo product-types update <uuid> --tenant acme --description "Pin roi"
+        capigo product-types update <uuid> --tenant acme --clear-description
+
+      At least one field is required; sending none exits 5.
+
+  --from-json <path|->
+      Send the whole request body from a file, or - for stdin. Mutually
+      exclusive with --name, --description and --clear-description: passing
+      both exits 5.
+
+  -o, --output table|json|quiet
+      Print the row, the bare updated object, or its id. Defaults to table.
+      See capigo help output.
 
 OUTPUT
   -o json emits the bare updated product type:
 
-      { id, name, description }
+      { "id": "3e91b0a2-4c7d-4f11-9a8e-6d5b1c2f9e33",
+        "name": "Pin Lien Cap", "description": "Pin roi" }
 
-  Output modes and the JSON contract: capigo help output
-
-EXAMPLES
-  capigo product-types update <uuid> --tenant acme --description "Pin roi"
-  capigo product-types update <uuid> --tenant acme --clear-description
-
-SEE ALSO
-  product-types replace <id>   overwrite every field instead
-  product-types get <id>       read the current values first
-  capigo help exit-codes  what exit 5 means`,
+  Output modes and the JSON contract: capigo help output`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -409,34 +469,47 @@ var productTypeGetTenant string
 
 var productTypesGetCmd = &cobra.Command{
 	Use:   "get <id>",
-	Short: "Get a product type by ID",
-	Long: `Get one product type by UUID.
+	Short: "Get a product type by id",
+	Long: `Get one product type by id.
 
 PURPOSE
-  Read a single product type. This command addresses it by UUID only. To find that
-  UUID from a name, use product-types list --query.
+  Read a single product type, addressed by id only. To find that id from a
+  name, use product-types list --query.
 
-INPUT
-  <id>                   product type UUID (positional, required)
-  --tenant <code>        required
+USAGE
+  capigo product-types get <id> --tenant <code> [-o table|json|quiet]
+
+FLAGS
+  <id>
+      Product type id, a UUID. Positional, required.
+
+  --tenant <code>
+      Tenant the product type belongs to. Required. Exits 4 if the product
+      type is not in it.
+
+        capigo product-types get 3e91b0a2-4c7d-4f11-9a8e-6d5b1c2f9e33 \
+            --tenant acme
+
+  -o, --output table|json|quiet
+      Print a row, the JSON object, or the bare id. Defaults to table.
+      See capigo help output.
 
 OUTPUT
-  -o json emits the bare product type object:
+  A single-row table:
 
-      { id, name, description }
+      ┌──────────────────────────────────────┬──────────────┐
+      │ ID                                   │ Name         │
+      ├──────────────────────────────────────┼──────────────┤
+      │ 3e91b0a2-4c7d-4f11-9a8e-6d5b1c2f9e33 │ Pin Lien Cap │
+      └──────────────────────────────────────┴──────────────┘
 
-  Exit 4 when no such product type exists in the resolved tenant.
+  -o json emits the bare object. A get is not a list, so there is no envelope
+  and no .data to reach for:
 
-  Output modes and the JSON contract: capigo help output
+      { "id": "3e91b0a2-4c7d-4f11-9a8e-6d5b1c2f9e33",
+        "name": "Pin Lien Cap", "description": "Pin va cap lien khoi" }
 
-EXAMPLES
-  capigo product-types get <uuid> --tenant acme
-
-SEE ALSO
-  product-types list           find a product type by name
-  product-types update <id>    change some of its fields
-  product-types replace <id>   overwrite all of its fields
-  capigo help exit-codes  what exit 4 means`,
+  Exit 4 when no such product type exists in the resolved tenant.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -495,42 +568,60 @@ var (
 
 var productTypesReplaceCmd = &cobra.Command{
 	Use:   "replace <id>",
-	Short: "Full replace of a product type (PUT)",
-	Long: `Replace a product type. Every field is overwritten.
+	Short: "Overwrite every field of a product type",
+	Long: `Replace a product type.
 
 PURPOSE
-  Overwrite a product type in full (PUT). A field you do not send is not preserved —
-  it is reset. To change one field and keep the rest, use product-types update <id>.
+  Rewrite a product type's name and description together in one call. The
+  API does not clear an omitted field on this endpoint — like
+  product-types update <id>, it changes only what you send. What sets this
+  command apart is that it requires --name and one of --description or
+  --no-description on every call, so a stale field survives only if you
+  typed it that way. To change one field without deciding the other, use
+  product-types update <id>.
 
-INPUT
-  <id>                   product type UUID (positional, required)
-  --tenant <code>        required
-  --name <text>          required
-  --description <text>   the description, max 2000 characters
-  --no-description       set description to null
+USAGE
+  capigo product-types replace <id> --tenant <code>
+                                    (--name <text>
+                                     (--description <text> | --no-description)
+                                     | --from-json <path|->)
 
-  Exactly one of --description and --no-description must be given; they are
-  mutually exclusive; replace always writes the description. To change one field
-  and keep the rest, use product-types update <id>.
+FLAGS
+  <id>
+      Product type id, a UUID. Positional, required.
 
-  Or --from-json <path|-> to send the whole body, where - reads stdin.
-  --from-json and the individual field flags are MUTUALLY EXCLUSIVE: passing
-  both exits 5.
+  --tenant <code>
+      Tenant the product type belongs to. Required.
+
+  --name <text>
+      Product type name. Required on every call.
+
+  --description <text>
+      The description, max 2000 characters. Mutually exclusive with
+      --no-description; exactly one of the two is required on every call.
+
+  --no-description
+      Set description to null. Mutually exclusive with --description.
+
+        capigo product-types replace <uuid> --tenant acme --name "Pin" \
+            --no-description
+
+  --from-json <path|->
+      Send the whole request body from a file, or - for stdin. Mutually
+      exclusive with --name, --description and --no-description: passing
+      both exits 5.
+
+  -o, --output table|json|quiet
+      Print the row, the bare replaced object, or its id. Defaults to table.
+      See capigo help output.
 
 OUTPUT
   -o json emits the bare product type as it now stands:
 
-      { id, name, description }
+      { "id": "3e91b0a2-4c7d-4f11-9a8e-6d5b1c2f9e33",
+        "name": "Pin", "description": null }
 
-  Output modes and the JSON contract: capigo help output
-
-EXAMPLES
-  capigo product-types replace <uuid> --tenant acme --name "Pin" --no-description
-
-SEE ALSO
-  product-types update <id>    change one field and keep the rest
-  product-types get <id>       read the current values first
-  capigo help exit-codes  what exit 5 means`,
+  Output modes and the JSON contract: capigo help output`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -638,6 +729,6 @@ func init() {
 	productTypesReplaceCmd.Flags().BoolVar(&productTypeReplaceNoDescription, "no-description", false, "set description to null (mutually exclusive with --description)")
 	productTypesReplaceCmd.Flags().StringVar(&productTypeReplaceFromJSON, "from-json", "", "path to JSON file with full request body (use - for stdin); mutually exclusive with individual field flags")
 
-	productTypesCmd.AddCommand(productTypesListCmd, productTypesCreateCmd, productTypesUpdateCmd, productTypesGetCmd, productTypesReplaceCmd)
+	productTypesCmd.AddCommand(productTypesListCmd, productTypesGetCmd, productTypesCreateCmd, productTypesUpdateCmd, productTypesReplaceCmd)
 	rootCmd.AddCommand(productTypesCmd)
 }

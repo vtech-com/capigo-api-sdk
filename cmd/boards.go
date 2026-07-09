@@ -19,8 +19,12 @@ var boardCmd = &cobra.Command{
 	Short: "Manage boards",
 	Long: `Boards and their lists in Capigo Mission.
 
-Reads may span tenants: omit --tenant to see every tenant this key can reach.
-  capigo help tenancy`,
+--tenant is optional on both commands here: list and get search across every
+tenant this key can reach when it is omitted.
+  capigo help tenancy
+
+USAGE
+  capigo boards <command> [--tenant <code>] [<args>]`,
 }
 
 var (
@@ -32,36 +36,66 @@ var (
 
 var boardsListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List boards (supports --query for name search)",
+	Short: "List boards",
 	Long: `List boards.
 
 PURPOSE
   Find boards by name, across one tenant or across every tenant this key can
   reach.
 
-INPUT
-  --tenant <code>     optional; omit it to span every accessible tenant
-  -q, --query <term>  case-insensitive search against the board name
-  --page <n>          page number
-  --limit <n>         items per page (default 20)
+USAGE
+  capigo boards list [--tenant <code>] [-q <term>] [--page <n>]
+                      [--limit <n>] [-o table|json|quiet]
+
+FLAGS
+  --tenant <code>
+      Tenant to search. Optional — omit it to span every tenant this key can
+      reach; table output then gains a Tenant column.
+      See capigo help tenancy.
+
+        capigo boards list --tenant acme
+
+  -q, --query <term>
+      Case-insensitive substring search against the board name.
+
+        capigo boards list -q sprint
+
+  --page <n>
+      Page to fetch. Pages start at 1. The default, 0, sends no page
+      parameter and lets the server choose.
+
+  --limit <n>
+      Items per page. Defaults to 20.
+
+        capigo boards list --tenant acme --page 2 --limit 50
+
+  -o, --output table|json|quiet
+      Print rows, the JSON envelope, or bare ids. Defaults to table.
+      See capigo help output.
 
 OUTPUT
-  -o json emits the list envelope. Each row is a board:
+  A table of boards, then a summary line. With --tenant omitted, a Tenant
+  column is added.
 
-      { id, name, description, is_public, created_at }
+      ┌──────────┬─────────────────┬────────┬─────────────────┐
+      │ ID       │ Title           │ Public │ Description     │
+      ├──────────┼─────────────────┼────────┼─────────────────┤
+      │ 7c1f2e88 │ Product Roadmap │ yes    │ Q1 2026 roadmap │
+      │ 9ab2c744 │ Internal Ops    │ no     │                 │
+      └──────────┴─────────────────┴────────┴─────────────────┘
+      Tenant: acme · Total: 2 · showing 2 (page 1/1) (all rows shown)
+
+  Ids are shortened here to fit the page; the command prints them in full.
+
+  -o json emits the list envelope; each row is a board:
+
+      { "id": "7c1f2e88-...", "name": "Product Roadmap",
+        "description": "Q1 2026 roadmap", "is_public": true,
+        "created_at": "..." }
 
   The lists on a board are not included here; boards get returns them.
 
-  The envelope, meta.total and list footers: capigo help output
-
-EXAMPLES
-  capigo boards list -q sprint
-  capigo boards list --tenant acme -o json | jq -r '.data[].id'
-
-SEE ALSO
-  boards get <id>       one board, with its lists
-  tasks list --board-id the tasks on a board
-  capigo help tenancy   when --tenant may be omitted`,
+  The envelope, meta.total and list footers: capigo help output`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -154,35 +188,50 @@ var (
 
 var boardsGetCmd = &cobra.Command{
 	Use:   "get <id>",
-	Short: "Get a board by ID",
-	Long: `Get one board by UUID, with its lists.
+	Short: "Get a board by id",
+	Long: `Get one board by id, with its lists.
 
 PURPOSE
   Read a single board and the lists it contains. A board list id is what
   tasks update --list expects.
 
-INPUT
-  <id>              board UUID (positional, required)
-  --tenant <code>   optional; scopes the lookup
+USAGE
+  capigo boards get <id> [--tenant <code>] [-o table|json|quiet]
+
+FLAGS
+  <id>
+      Board UUID. Positional, required.
+
+  --tenant <code>
+      Tenant to scope the lookup to. Optional; omit it to search every
+      tenant this key can reach.
+
+        capigo boards get 7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10 --tenant acme
+
+  -o, --output table|json|quiet
+      Print a row, the JSON object, or the bare id. Defaults to table.
+      See capigo help output.
 
 OUTPUT
+  A single-row table:
+
+      ┌──────────────────────────────────────┬─────────────────┬───────┐
+      │ ID                                   │ Title           │ Lists │
+      ├──────────────────────────────────────┼─────────────────┼───────┤
+      │ 7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10 │ Product Roadmap │ 3     │
+      └──────────────────────────────────────┴─────────────────┴───────┘
+
+  Lists holds the count only; the lists themselves are not in the table.
+
   -o json emits the bare board object, with its lists:
 
-      { id, name, description, is_public, created_at,
-        lists: [ { id, name, position } ] }
+      { "id": "7c1f2e88-...", "name": "Product Roadmap",
+        "description": "...", "is_public": true, "created_at": "...",
+        "lists": [ { "id": "...", "name": "Backlog", "position": 0 } ] }
 
   Exit 4 when no such board is reachable.
 
-  Output modes and the JSON contract: capigo help output
-
-EXAMPLES
-  capigo boards get <uuid>
-  capigo boards get <uuid> -o json | jq '.lists[] | {id, name}'
-
-SEE ALSO
-  boards list             find a board by name
-  tasks update <id>       move a task onto one of these lists
-  capigo help exit-codes  what exit 4 means`,
+  Output modes and the JSON contract: capigo help output`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()

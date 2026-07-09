@@ -18,28 +18,29 @@ var healthCmd = &cobra.Command{
 
 PURPOSE
   The preflight to run before a batch of work. Exit 0 means the API answered
-  and accepted the stored key. It is not tenant-scoped, and it does not depend
-  on the /me endpoint that auth whoami calls.
+  and accepted the stored key. It is not tenant-scoped, and unlike auth
+  whoami it does not depend on the /me endpoint — run this one first.
 
-INPUT
-  (no flags)
+USAGE
+  capigo health [-o table|json|quiet]
+
+FLAGS
+  -o, --output table|json|quiet
+      json emits the object below; table and quiet both print the status
+      word and server timestamp on one line. Defaults to table.
+      See capigo help output.
 
 OUTPUT
+  table / quiet:
+
+      ok	2026-07-09T10:15:00Z
+
   -o json emits:
 
-      { "ok": true, "timestamp": "..." }
-
-  table prints a status word and the server timestamp.
+      { "ok": true, "timestamp": "2026-07-09T10:15:00Z" }
 
   Exit 2 when the key is rejected, exit 6 when the API cannot be reached.
 
-  Output modes and exit codes: capigo help exit-codes
-
-EXAMPLES
-  capigo health && echo reachable
-
-SEE ALSO
-  auth whoami             who the key belongs to
   capigo help exit-codes  what each non-zero exit means`,
 	Args: cobra.NoArgs,
 	RunE: func(_ *cobra.Command, _ []string) error {

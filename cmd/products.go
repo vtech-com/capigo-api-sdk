@@ -19,10 +19,14 @@ import (
 var productCmd = &cobra.Command{
 	Use:   "products",
 	Short: "Manage PCMS products",
-	Long: `Manage products in the Capigo Product Catalog Management System (PCMS).
+	Long: `Products in the Capigo Product Catalog Management System (PCMS).
 
-Every products command requires a tenant.
-  capigo help tenancy`,
+Every products command requires a tenant. A product with options carries its
+variants alongside it; write the product's own fields with products
+create/update, and write variants with products variants.
+
+USAGE
+  capigo products <command> --tenant <code> [<args>]`,
 }
 
 // --------------------------------------------------------------------------
@@ -43,79 +47,114 @@ var productsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List products (search, paginate, delta-sync, fetch by id)",
 	// push: TODO — a --query that returns zero rows because the term is longer
-	// than the stored value reads to a caller like "no such product". The CAVEATS
-	// note below only helps a caller who reads it; the trap needs a zero-row hint
-	// on stdout before this page can be called a mitigation.
+	// than the stored value reads to a caller like "no such product". The note
+	// under --query below only helps a caller who reads it; the trap needs a
+	// zero-row hint on stdout before this page can be called a mitigation.
 	Long: `List products from the PCMS catalog.
 
 PURPOSE
-  Find products and read them in bulk. Look a product up by a human key — name,
-  alias, product code, sku, barcode — with --query, then act on the returned id.
-  A single-item read is: capigo products get <uuid>
+  Find products, and read them in bulk. Look one up by a human key — name,
+  alias, sku, barcode — with --query, then act on the id it returns. To read a
+  single product whose id you already have, use products get.
 
-INPUT
-  (flags only; no request body)
-  --tenant <code>        required
-  -q, --query <term>     free-text search, 2-500 chars. Matches product name,
-                         aliases, tags, variant name, sku, and barcode.
-  --ids <uuid,uuid>      fetch specific products, max 50. Mutually exclusive
-                         with --all; may be combined with --updated-since.
-  --updated-since <ts>   ISO 8601 timestamp for delta sync. Feed back the
-                         server time reported by a previous call.
-  --all                  auto-paginate. Loads every page into memory before
-                         printing; for a large catalogue prefer paging manually.
-  --page <n>             page number (0 = server default)
-  --limit <n>            items per page, 1-100 (default 20)
+USAGE
+  capigo products list --tenant <code> [-q <term>]
+                       [--ids <uuid,...> | --all]
+                       [--updated-since <timestamp>]
+                       [--page <n>] [--limit <n>]
+                       [-o table|json|quiet]
+
+FLAGS
+  --tenant <code>
+      Tenant to read from. Required. Falls back to CAPIGO_TENANT, then to
+      default_tenant in the config file. Exits 5 if none resolves.
+
+        capigo products list --tenant acme
+
+  -q, --query <term>
+      Substring search over name, aliases, tags, variant name, sku and barcode.
+      2 to 500 characters. The stored value must contain the term, so a term
+      longer than what is stored matches nothing: the alias VVD013 is not found
+      by searching SLM-DS-VVD013. Search the shortest distinctive fragment.
+
+        capigo products list --tenant acme -q VVD013
+        capigo products list --tenant acme -q "áo thun"
+
+  --ids <uuid,...>
+      Fetch products by id, at most 50, comma-separated. Ids the server does
+      not return are reported. Cannot be combined with --all.
+
+        capigo products list --tenant acme --ids 7c1f2e88-...,9ab2c744-...
+
+  --updated-since <timestamp>
+      Return only products changed at or after an ISO 8601 timestamp. Pass back
+      the server time from the previous call to fetch a delta.
+
+        capigo products list --tenant acme --updated-since 2026-07-01T00:00:00Z
+
+  --all
+      Fetch every page. All pages are held in memory before anything prints, so
+      page manually over a large catalogue. If a page fails mid-sweep, the rows
+      already fetched are printed and the command exits non-zero.
+
+        capigo products list --tenant acme --all
+
+  --page <n>
+      Page to fetch. Pages start at 1. The default, 0, sends no page parameter
+      and lets the server choose.
+
+  --limit <n>
+      Rows per page, 1 to 100. Defaults to 20.
+
+        capigo products list --tenant acme --page 2 --limit 100
+
+  -o, --output table|json|quiet
+      Print rows, the JSON envelope, or bare ids. Defaults to table.
+      See capigo help output.
 
 OUTPUT
-  -o json emits the list envelope. Beyond the meta fields carried by every
-  list, this command reports:
+  A table of products, then a summary line. Ids are shortened here to fit the
+  page; the command prints them in full.
 
-      meta.server_time   feed to --updated-since on the next call
-      meta.complete      only with --all. false means pagination aborted and
-                         the result is incomplete. The command also exits
-                         non-zero, and the rows already fetched are printed.
-      meta.missing_ids   only with --ids. Requested UUIDs the server did not
-                         return — deleted, or in another tenant. The exit code
-                         is still 0.
+      ┌──────────┬────────────────┬──────────────────┬────────┬────────┬──────────┬─────────┬──────┐
+      │ ID       │ Name           │ Status           │ SKU    │ Price  │ Variants │ Aliases │ Tags │
+      ├──────────┼────────────────┼──────────────────┼────────┼────────┼──────────┼─────────┼──────┤
+      │ 7c1f2e88 │ Áo thun basic  │ ACTIVE           │ AT-001 │ 120000 │        3 │ VVD013  │ hè   │
+      │ 9ab2c744 │ Quần jean slim │ ACTIVE (DELETED) │ QJ-014 │ 390000 │        2 │         │      │
+      └──────────┴────────────────┴──────────────────┴────────┴────────┴──────────┴─────────┴──────┘
+      Tenant: acme · Total: 137 · showing 20 (page 1/7) · more rows — use --page/--limit (max 100)
 
-  In table mode the same id reconciliation appears as a line:
+  With --ids, a line reports the ids the server did not return. Those are
+  deleted, or in another tenant. The exit code is still 0.
 
-      Requested 5 ids · 3 found · missing: <uuid>, <uuid>
+      Requested 5 ids · 3 found · missing: 3e91b0a2-..., c48d7f16-...
 
-  Table columns include Aliases and Tags.
+  -o json emits the list envelope; the products are at .data[]:
 
-  The envelope, meta.total, list footers, and which stream carries the server
-  timestamp: capigo help output
+      {
+        "data": [
+          {
+            "id": "7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10",
+            "name": "Áo thun basic",
+            "status": "ACTIVE",
+            "is_deleted": false,
+            "aliases": ["VVD013"],
+            "tags": ["hè"],
+            "brand": {...}, "category": {...}, "variants": [...]
+          }
+        ],
+        "meta": { "page": 1, "limit": 20, "total": 137, "has_more": true }
+      }
 
-CAVEATS
-  --query is a substring match: the stored value must contain your term. A term
-  longer than the stored value finds nothing — a stored alias "VVD013" is not
-  matched by the query "SLM-DS-VVD013". Search the shortest distinctive
-  fragment, or use --all and filter locally.
+  The CLI adds three fields to meta that the API does not send:
 
-  Soft-deleted products still appear here: capigo help soft-delete
+      server_time    the server clock at the time of the call. Feed it to
+                     --updated-since on the next one.
+      missing_ids    with --ids only; the ids reported in the line above.
+      complete       with --all only; false when the sweep aborted part-way.
 
-EXAMPLES
-  # Find a product by a code fragment and take its id
-  capigo products list --tenant acme -q VVD013 -o json | jq -r '.data[0].id'
-
-  # How many products are there? Read meta.total; do not pull the catalogue
-  capigo products list --tenant acme --limit 1 -o json | jq '.meta.total'
-
-  # Full export, and check that it completed
-  capigo products list --tenant acme --all -o json | jq '.meta.complete'
-
-  # Everything changed since the last run
-  capigo products list --tenant acme --updated-since 2026-07-01T00:00:00Z -o json
-
-SEE ALSO
-  products get <id>       one product in full
-  products variants       create or update variants on a product
-  variants list           query variants by barcode prefix
-  capigo help output      output modes and the JSON contract
-  capigo help tenancy     how --tenant resolves
-  capigo help exit-codes  what a non-zero exit means`,
+  A soft-deleted product is still listed. In JSON it carries is_deleted: true,
+  and status alone does not reveal it. See capigo help soft-delete.`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -390,7 +429,7 @@ var productGetTenant string
 
 var productsGetCmd = &cobra.Command{
 	Use:   "get <id>",
-	Short: "Get a product by ID",
+	Short: "Get a product by id",
 	Long: `Get one product by UUID.
 
 PURPOSE
@@ -399,11 +438,32 @@ PURPOSE
   UUID from a name, alias, product code, sku or barcode, use
   products list --query first.
 
-INPUT
-  <id>              product UUID (positional, required)
-  --tenant <code>   required
+USAGE
+  capigo products get <id> --tenant <code> [-o table|json|quiet]
+
+FLAGS
+  <id>
+      Product UUID. Positional, required.
+
+  --tenant <code>
+      Tenant the product belongs to. Required. Exits 4 if the product is not
+      in it.
+
+        capigo products get 8f2a1c07-2b6e-4f83-a5d1-8c07e2f419bb --tenant acme
+
+  -o, --output table|json|quiet
+      Print a row, the JSON object, or the bare id. Defaults to table.
+      See capigo help output.
 
 OUTPUT
+  A single-row table, same columns as products list:
+
+      ┌──────────┬───────────────┬────────┬────────┬────────┬──────────┬─────────┬──────┐
+      │ ID       │ Name          │ Status │ SKU    │ Price  │ Variants │ Aliases │ Tags │
+      ├──────────┼───────────────┼────────┼────────┼────────┼──────────┼─────────┼──────┤
+      │ 7c1f2e88 │ Áo thun basic │ ACTIVE │ AT-001 │ 120000 │        3 │ VVD013  │ hè   │
+      └──────────┴───────────────┴────────┴────────┴────────┴──────────┴─────────┴──────┘
+
   -o json emits the bare product object — the same shape as an item in
   products list .data[]:
 
@@ -412,27 +472,13 @@ OUTPUT
         unit, options[], variants[] }
 
   options[] carries the product's option names in order. That order is what
-  option1, option2 and option3 refer to when writing variants.
+  option1, option2 and option3 refer to when writing variants with
+  products variants.
 
-  Exit 4 when no such product exists in the resolved tenant.
-
-  Output modes and the JSON contract: capigo help output
-
-CAVEATS
   A soft-deleted product is returned like any other. Its status may still read
-  ACTIVE; is_deleted is the field that tells you.
-      capigo help soft-delete
+  ACTIVE; is_deleted is the field that tells you. See capigo help soft-delete.
 
-EXAMPLES
-  capigo products get 8f2a-... --tenant acme
-
-  # The option order to use when writing variants
-  capigo products get 8f2a-... --tenant acme -o json | jq '.options'
-
-SEE ALSO
-  products list           find a product by name, alias, sku or barcode
-  products variants       create or update variants on this product
-  capigo help exit-codes  what a non-zero exit means`,
+  Exit 4 when no such product exists in the resolved tenant.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -522,63 +568,95 @@ var productsCreateCmd = &cobra.Command{
 
 PURPOSE
   Add a product to the catalogue. A product with no options carries one default
-  variant, built from --sku, --barcode and --price.
+  variant, built from --sku, --barcode and --price. To add options and
+  variants, use --from-json.
 
-INPUT
-  --tenant <code>          required
+USAGE
+  capigo products create --tenant <code> --name <name>
+                         [--sku <sku>] [--barcode <code>] [--price <n>]
+                         [--currency <code>] [--description <text>]
+                         [--status <status>]
+                         [--brand-id <uuid>] [--category-id <uuid>]
+                         [--product-type-id <uuid>] [--unit-id <uuid>]
+                         [--aliases <text>]... [--tags <text>]...
+                         [-o table|json|quiet]
+  capigo products create --tenant <code> --from-json <path|->
 
-  Simple mode — flags:
-    --name                 required, unless --from-json is used
-    --sku --barcode --price --currency --description
-    --status               DRAFT, ACTIVE, or ARCHIVED (default DRAFT)
-    --brand-id --category-id --product-type-id --unit-id
-    --aliases              repeatable; alternative names and product codes
-    --tags                 repeatable; free-form labels
+FLAGS
+  --tenant <code>
+      Tenant to create the product in. Required. Falls back to CAPIGO_TENANT,
+      then to default_tenant in the config file. Exits 5 if none resolves.
 
-  Both aliases and tags are matched by the search in products list.
+        capigo products create --tenant acme --name "Blue T-Shirt" \
+          --sku SKU-001 --price 299000
 
-  Body mode — --from-json <path|->, where - reads stdin. When --from-json is
-  given the individual field flags are ignored. (products update differs —
-  there, passing both exits 5.)
+  --name <name>
+      Product name. Required in flag mode, unless --from-json is used.
 
-  Simple body:
+  --sku <sku>, --barcode <code>, --price <n>
+      Fields of the auto-created default variant. Ignored if the product ends
+      up with options (only possible via --from-json).
 
-      { "name": "Blue T-Shirt", "sku": "SKU-001", "price": 299000,
-        "status": "DRAFT", "aliases": ["BT-001"], "tags": ["summer"] }
+  --currency <code>
+      Default VND.
 
-  Body with options and variants. If options is present, variants is REQUIRED:
-  the backend does not generate the cartesian matrix from options alone.
-  option1..option3 are positional and line up with options[] in order:
+  --description <text>
 
-      { "name": "T-Shirt",
-        "options": [ {"name": "Color", "values": ["Blue", "Red"]},
-                     {"name": "Size",  "values": ["S", "M"]} ],
-        "variants": [
-          {"name": "Blue / S", "sku": "SKU-BS", "option1": "Blue", "option2": "S", "price": 299000},
-          {"name": "Red / M",  "sku": "SKU-RM", "option1": "Red",  "option2": "M", "price": 279000}
-        ] }
+  --status <status>
+      DRAFT, ACTIVE, or ARCHIVED. Default DRAFT.
+
+  --brand-id <uuid>, --category-id <uuid>, --product-type-id <uuid>,
+  --unit-id <uuid>
+
+  --aliases <text>
+      Alternative names and product codes. Repeatable: --aliases foo --aliases
+      bar. Matched by the search in products list. Not enforced unique — the
+      server accepts a duplicate alias without error.
+
+  --tags <text>
+      Free-form labels. Repeatable. Matched by the search in products list.
+
+  --from-json <path|->
+      Send the whole request body as JSON, where - reads stdin. Individual
+      field flags are ignored when this is set. (products update differs —
+      there, passing both exits 5.)
+
+      Simple body:
+
+          { "name": "Blue T-Shirt", "sku": "SKU-001", "price": 299000,
+            "status": "DRAFT", "aliases": ["BT-001"], "tags": ["summer"] }
+
+      Body with options and variants. If options is present, variants is
+      REQUIRED: the backend does not generate the cartesian matrix from
+      options alone. option1..option3 are positional and line up with
+      options[] in order:
+
+          { "name": "T-Shirt",
+            "options": [ {"name": "Color", "values": ["Blue", "Red"]},
+                         {"name": "Size",  "values": ["S", "M"]} ],
+            "variants": [
+              {"name": "Blue / S", "sku": "SKU-BS",
+               "option1": "Blue", "option2": "S", "price": 299000},
+              {"name": "Red / M", "sku": "SKU-RM",
+               "option1": "Red", "option2": "M", "price": 279000}
+            ] }
+
+        echo '{"name":"Pin 13 Pro Max","aliases":["AP-BA-13PM"],
+               "tags":["pin"]}' \
+          | capigo products create --tenant acme --from-json -
+
+  -o, --output table|json|quiet
+      Print a row, the JSON object, or the bare id. Defaults to table.
+      See capigo help output.
 
 OUTPUT
   -o json emits the bare created product — the same shape as products get.
   quiet prints its id.
 
-  Output modes and the JSON contract: capigo help output
+  A variant sku is unique per tenant: a duplicate exits 8. A barcode is NOT
+  enforced unique — the server accepts a duplicate without error.
 
-CAVEATS
-  A variant sku is unique per tenant: a duplicate exits 8. An alias and a
-  barcode are NOT enforced unique — the server accepts duplicates of either
-  without error.
-
-EXAMPLES
-  capigo products create --tenant acme --name "Blue T-Shirt" --sku SKU-001 --price 299000
-
-  echo '{"name":"Pin 13 Pro Max","aliases":["AP-BA-13PM"],"tags":["pin"]}' \
-    | capigo products create --tenant acme --from-json -
-
-SEE ALSO
-  products update <id>    change a product after it exists
-  products variants       add or change variants on it
-  capigo help exit-codes  what exit 8 means`,
+  Output modes and the JSON contract: capigo help output`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -714,7 +792,7 @@ var (
 
 var productsUpdateCmd = &cobra.Command{
 	Use:   "update <id>",
-	Short: "Update a product's core details (PATCH)",
+	Short: "Update a product's core details",
 	Long: `Update a product. Fields you do not send are left unchanged.
 
 PURPOSE
@@ -724,48 +802,65 @@ PURPOSE
 
   Variants are not product metadata. They are written with products variants.
 
-INPUT
-  <id>                     product UUID (positional, required)
-  --tenant <code>          required
+USAGE
+  capigo products update <id> --tenant <code>
+                         [--name <name>] [--description <text>]
+                         [--status <status>] [--currency <code>]
+                         [--brand-id <uuid>] [--category-id <uuid>]
+                         [--product-type-id <uuid>] [--unit-id <uuid>]
+                         [--aliases <text>]... [--tags <text>]...
+                         [-o table|json|quiet]
+  capigo products update <id> --tenant <code> --from-json <path|->
 
-  Any of --name --description --status --currency --brand-id --category-id
-  --product-type-id --unit-id --aliases --tags. At least one is required;
-  sending none exits 5.
+FLAGS
+  <id>
+      Product UUID. Positional, required.
 
-  --aliases and --tags are repeatable, and each REPLACES the whole array
-  rather than appending to it. To add one alias, send every alias you want to
-  keep.
+  --tenant <code>
+      Tenant the product belongs to. Required. Falls back to CAPIGO_TENANT,
+      then to default_tenant in the config file. Exits 5 if none resolves.
 
-  --status is DRAFT, ACTIVE, or ARCHIVED.
+  --name <name>, --description <text>, --currency <code>
 
-  Or --from-json <path|-> to send the whole body, where - reads stdin.
-  --from-json and the individual field flags are MUTUALLY EXCLUSIVE: passing
-  both exits 5. (products create differs — there, --from-json silently wins.)
+  --status <status>
+      DRAFT, ACTIVE, or ARCHIVED.
+
+        capigo products update 8f2a1c07-... --tenant acme --status ARCHIVED
+
+  --brand-id <uuid>, --category-id <uuid>, --product-type-id <uuid>,
+  --unit-id <uuid>
+
+  --aliases <text>
+      Repeatable, and REPLACES the whole array rather than appending to it.
+      To add one alias, send every alias you want to keep. Changing or
+      dropping an alias breaks whatever refers to the product by the old one.
+
+        capigo products update 8f2a1c07-... --tenant acme \
+          --aliases AP-BA-13PM --aliases PIN13PM
+
+  --tags <text>
+      Repeatable, and REPLACES the whole array rather than appending to it.
+
+  At least one of the flags above is required in flag mode; sending none
+  exits 5.
+
+  --from-json <path|->
+      Send the whole update body as JSON, where - reads stdin. MUTUALLY
+      EXCLUSIVE with the individual field flags: passing both exits 5.
+      (products create differs — there, --from-json silently wins.)
+
+        echo '{"status":"ACTIVE","tags":["summer"]}' \
+          | capigo products update 8f2a1c07-... --tenant acme --from-json -
+
+  -o, --output table|json|quiet
+      Print a row, the JSON object, or the bare id. Defaults to table.
+      See capigo help output.
 
 OUTPUT
   -o json emits the bare updated product — the same shape as products get.
   quiet prints its id.
 
-  Output modes and the JSON contract: capigo help output
-
-CAVEATS
-  Changing an sku, barcode or alias that already exists breaks whatever refers
-  to it by that value.
-
-EXAMPLES
-  # Archive a product
-  capigo products update 8f2a-... --tenant acme --status ARCHIVED
-
-  # Replace the alias list (both aliases survive; a single --aliases would drop the other)
-  capigo products update 8f2a-... --tenant acme --aliases AP-BA-13PM --aliases PIN13PM
-
-  echo '{"status":"ACTIVE","tags":["summer"]}' \
-    | capigo products update 8f2a-... --tenant acme --from-json -
-
-SEE ALSO
-  products get <id>       read the current values before overwriting an array
-  products variants       create or update variants
-  capigo help exit-codes  what exit 5 means`,
+  Output modes and the JSON contract: capigo help output`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -929,77 +1024,79 @@ var productsVariantsCmd = &cobra.Command{
 PURPOSE
   Write variants onto an existing product. An item carrying variant_id updates
   that variant; an item without one creates a variant. A single call may mix
-  both.
+  both. Variants not included in the payload are left untouched — this
+  command does not delete variants. It does not change product metadata; use
+  products update for that.
 
-INPUT
-  --tenant <code>        required
-  --product-id <uuid>    required
-  --from-json <path|->   required. A JSON ARRAY of variant objects, where -
-                         reads stdin.
+USAGE
+  capigo products variants --tenant <code> --product-id <id>
+                           --from-json <path|-> [-o table|json|quiet]
 
-    Field              Type     Notes
-    variant_id         string   present -> UPDATE that variant; absent -> CREATE
-    name               string   required when creating; rejects null
-    sku                string   variant code. Unique per tenant (server-enforced)
-    barcode            string   numeric barcode. Not enforced unique
-    price              number
-    option1..option3   string   positional. The position is NOT inferred from
-                                the label — read the product's options[] with
-                                products get <id> and match by index.
-    manufacturer_code  string
-    legacy_code        string
-    extra_data         object   arbitrary key-value metadata
+FLAGS
+  --tenant <code>
+      Tenant the product belongs to. Required. Falls back to CAPIGO_TENANT,
+      then to default_tenant in the config file. Exits 5 if none resolves.
 
-  On an UPDATE, a field you OMIT is left unchanged, and a field you send as
-  NULL is cleared. Unknown fields are forwarded to the API untouched.
+  --product-id <uuid>
+      The product to write variants onto. Required.
 
-  Example body — one update, one create:
+  --from-json <path|->
+      Required. A JSON ARRAY of variant objects, where - reads stdin.
 
-      [ { "variant_id": "6f1c-...", "price": 250000 },
-        { "name": "Red / M", "sku": "AP-BA-13PM-R-M",
-          "option1": "Red", "option2": "M" } ]
+        Field              Type     Notes
+        variant_id         string   present -> UPDATE; absent -> CREATE
+        name               string   required when creating; rejects null
+        sku                string   variant code. Unique per tenant (server)
+        barcode            string   numeric barcode. Not enforced unique
+        price              number
+        option1..option3   string   positional. The position is NOT inferred
+                                    from the label — read the product's
+                                    options[] with products get <id> and
+                                    match by index.
+        manufacturer_code  string
+        legacy_code        string
+        extra_data         object   arbitrary key-value metadata
+
+      On an UPDATE, a field you OMIT is left unchanged, and a field you send
+      as NULL is cleared. Unknown fields are forwarded to the API untouched.
+
+      This call is not atomic. Creates are committed before updates are
+      applied, and there is no rollback. If it fails partway, some variants
+      may already have been written. Read the product back with
+      products get <id> before retrying: resending the same array can create
+      duplicates of what already landed.
+
+        # Read the option order before writing option1..option3
+        capigo products get 8f2a1c07-... --tenant acme -o json | jq '.options'
+
+        # One update, one create in the same call
+        echo '[ { "variant_id": "6f1c1a02-...", "price": 250000 },
+                 { "name": "Red / M", "sku": "AP-BA-13PM-R-M",
+                   "option1": "Red", "option2": "M" } ]' \
+          | capigo products variants --tenant acme --product-id 8f2a1c07-... \
+              --from-json -
+
+  -o, --output table|json|quiet
+      Print a row, the JSON object, or the bare id. Defaults to table.
+      See capigo help output.
 
 OUTPUT
   The full updated PRODUCT — not the list of variants you sent.
 
   -o json emits the bare product object, the same shape as products get.
   table prints a product summary and does NOT surface variant_id; if you will
-  need to reference a variant you just wrote, use -o json.
+  need to reference a variant you just wrote, use -o json:
+
+      capigo products variants --tenant acme --product-id 8f2a1c07-... \
+        --from-json ./variants.json -o json \
+        | jq '.variants[] | {id, sku, price}'
+
   quiet prints the product id.
 
-  Output modes and the JSON contract: capigo help output
+  A duplicate sku exits 8. A duplicate barcode is accepted by the server
+  without error.
 
-CAVEATS
-  This call is not atomic. Creates are committed before updates are applied,
-  and there is no rollback. If it fails partway, some variants may already have
-  been written. Read the product back with products get <id> before retrying:
-  resending the same array can create duplicates of what already landed.
-
-  A duplicate barcode is accepted by the server without error. A duplicate sku
-  exits 8.
-
-EXAMPLES
-  # Read the option order before writing option1..option3
-  capigo products get 8f2a-... --tenant acme -o json | jq '.options'
-
-  # Add one variant
-  echo '[{"name":"Red / M","sku":"AP-BA-13PM-R-M","option1":"Red","option2":"M"}]' \
-    | capigo products variants --tenant acme --product-id 8f2a-... --from-json -
-
-  # Change only the price; every other field on that variant is untouched
-  echo '[{"variant_id":"6f1c-...","price":250000}]' \
-    | capigo products variants --tenant acme --product-id 8f2a-... --from-json -
-
-  # Read back the variant ids that were written
-  capigo products variants --tenant acme --product-id 8f2a-... \
-    --from-json ./variants.json -o json | jq '.variants[] | {id, sku, price}'
-
-SEE ALSO
-  products get <id>       the product, its options[] and its variants
-  variants get <id>       one variant in full
-  variants list           query variants by barcode prefix
-  products update <id>    change product metadata, not variants
-  capigo help exit-codes  what exit 8 means`,
+  Output modes and the JSON contract: capigo help output`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -1139,7 +1236,7 @@ func init() {
 	productsVariantsCmd.Flags().StringVar(&productVariantsProductID, "product-id", "", "product UUID (required)")
 	productsVariantsCmd.Flags().StringVar(&productVariantsFromJSON, "from-json", "", "path to JSON array file (use - for stdin) (required)")
 
-	productCmd.AddCommand(productsGetCmd, productsListCmd, productsCreateCmd, productsUpdateCmd, productsVariantsCmd)
+	productCmd.AddCommand(productsListCmd, productsGetCmd, productsCreateCmd, productsUpdateCmd, productsVariantsCmd)
 	rootCmd.AddCommand(productCmd)
 }
 

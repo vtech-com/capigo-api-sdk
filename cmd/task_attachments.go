@@ -73,10 +73,14 @@ var (
 var tasksAttachmentsCmd = &cobra.Command{
 	Use:   "attachments",
 	Short: "Manage a task's own attachments",
-	Long: `Download files attached to a task.
+	Long: `Files attached directly to a task.
 
 Attachment metadata — id, file_name, mime_type, size_bytes — is listed by
-tasks get. No download URL is ever included there; this group fetches one.`,
+tasks get. No download URL is ever included there, which is why this group
+exists: it mints one.
+
+USAGE
+  capigo tasks attachments <command> [--tenant <code>] [<args>]`,
 }
 
 var tasksAttachmentsDownloadCmd = &cobra.Command{
@@ -85,41 +89,62 @@ var tasksAttachmentsDownloadCmd = &cobra.Command{
 	Long: `Download a file attached to a task.
 
 PURPOSE
-  tasks get lists a task's attachments with their ids but no download URL. This
-  command mints a fresh signed URL and writes the bytes to disk in one step.
+  tasks get lists a task's attachments with their ids but no download URL.
+  This command mints a fresh signed URL and writes the bytes to disk in one
+  step.
 
-INPUT
-  <task-id>          task UUID (positional, required)
-  <attachment-id>    attachment UUID, from tasks get .attachments[].id
-  --tenant <code>    optional; scopes the lookup
-  -d, --dest <path>  a file, or a directory. Default: the original file name in
-                     the current directory. An existing file is overwritten.
+USAGE
+  capigo tasks attachments download <task-id> <attachment-id>
+                                     [--tenant <code>] [-d <path>]
+                                     [-o table|json|quiet]
+
+FLAGS
+  <task-id>
+      Task UUID. Positional, required.
+
+  <attachment-id>
+      Attachment UUID, from tasks get .attachments[].id. Positional,
+      required.
+
+        capigo tasks attachments download <task-uuid> <att-uuid>
+
+  --tenant <code>
+      Optional; scopes the lookup.
+
+  -d, --dest <path>
+      A file, or a directory. Defaults to the original file name in the
+      current directory. An existing file at the resolved path is
+      overwritten.
+
+        capigo tasks attachments download <task-uuid> <att-uuid> -d ./dl
+
+  -o, --output table|json|quiet
+      Controls what is printed after the file is written, not the file
+      itself — every mode writes the same bytes to the same path. Defaults
+      to table.
+      See capigo help output.
 
 OUTPUT
-  The file is written to disk.
+  The file is written to the resolved destination path.
 
-  -o json emits:
+  table (default):
 
-      { "file_name": "...", "mime_type": "...", "size_bytes": 0,
-        "saved_path": "..." }
+      Saved: invoice.pdf (48213 bytes, application/pdf)
 
-  quiet prints the saved path alone.
+  -o json:
 
-  Output modes: capigo help output
+      { "file_name": "invoice.pdf", "mime_type": "application/pdf",
+        "size_bytes": 48213, "saved_path": "invoice.pdf" }
 
-CAVEATS
-  The signed URL behind the download is short-lived (five minutes) and
-  single-use. The CLI never prints it and mints a fresh one on every
-  invocation, so an expired-URL error is answered by running the command
-  again.
+  quiet prints the saved path alone:
 
-EXAMPLES
-  capigo tasks attachments download <task-uuid> <attachment-uuid>
-  capigo tasks attachments download <task-uuid> <attachment-uuid> --dest ./downloads/
+      invoice.pdf
 
-SEE ALSO
-  tasks get <id>          list a task's attachments and their ids
-  capigo help exit-codes  what a non-zero exit means`,
+  The signed URL behind the download is short-lived (five minutes). The CLI
+  never prints it and mints a fresh one on every call, so a URL-expired error
+  is answered by running the command again.
+
+  Exit 4 when no such task or attachment is reachable.`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(_ *cobra.Command, args []string) error {
 		client, cfg, err := buildClient()
@@ -145,10 +170,14 @@ var (
 var tasksCommentsAttachmentsCmd = &cobra.Command{
 	Use:   "attachments",
 	Short: "Manage a task comment's attachments",
-	Long: `Download files posted on a task's timeline.
+	Long: `Files posted on a task's timeline (comments and activity entries).
 
-Attachment metadata is listed by tasks comments, on the entry that carries it.
-No download URL is ever included there; this group fetches one.`,
+Attachment metadata is listed by tasks comments, on the entry that carries
+it. No download URL is ever included there, which is why this group exists:
+it mints one.
+
+USAGE
+  capigo tasks comments attachments <command> [--tenant <code>] [<args>]`,
 }
 
 var tasksCommentsAttachmentsDownloadCmd = &cobra.Command{
@@ -157,45 +186,66 @@ var tasksCommentsAttachmentsDownloadCmd = &cobra.Command{
 	Long: `Download a file posted on a comment or activity entry.
 
 PURPOSE
-  tasks comments lists each entry's attachments with their ids but no download
-  URL. This command mints a fresh signed URL and writes the bytes to disk in
-  one step.
+  tasks comments lists each entry's attachments with their ids but no
+  download URL. This command mints a fresh signed URL and writes the bytes to
+  disk in one step.
 
-INPUT
-  <task-id>          task UUID (positional, required)
-  <attachment-id>    attachment UUID, from tasks comments .data[].attachments[].id
-  --tenant <code>    optional; scopes the lookup
-  -d, --dest <path>  a file, or a directory. Default: the original file name in
-                     the current directory. An existing file is overwritten.
+USAGE
+  capigo tasks comments attachments download <task-id> <attachment-id>
+                                              [--tenant <code>] [-d <path>]
+                                              [-o table|json|quiet]
+
+FLAGS
+  <task-id>
+      Task UUID. Positional, required. Establishes the tenant this download
+      is scoped to (see --tenant below).
+
+  <attachment-id>
+      Attachment UUID, from tasks comments .data[].attachments[].id.
+      Positional, required.
+
+        capigo tasks comments attachments download <task-uuid> <att-uuid>
+
+  --tenant <code>
+      Optional; scopes the lookup. This endpoint is scoped to the task's
+      tenant, not to the task itself: the download succeeds for any
+      attachment id that exists in that tenant, including one posted on a
+      different task's thread.
+
+  -d, --dest <path>
+      A file, or a directory. Defaults to the original file name in the
+      current directory. An existing file at the resolved path is
+      overwritten.
+
+        capigo tasks comments attachments download <task-uuid> <id> -d ./dl
+
+  -o, --output table|json|quiet
+      Controls what is printed after the file is written, not the file
+      itself — every mode writes the same bytes to the same path. Defaults
+      to table.
+      See capigo help output.
 
 OUTPUT
-  The file is written to disk.
+  The file is written to the resolved destination path.
 
-  -o json emits:
+  table (default):
 
-      { "file_name": "...", "mime_type": "...", "size_bytes": 0,
-        "saved_path": "..." }
+      Saved: invoice.pdf (48213 bytes, application/pdf)
 
-  quiet prints the saved path alone.
+  -o json:
 
-  Output modes: capigo help output
+      { "file_name": "invoice.pdf", "mime_type": "application/pdf",
+        "size_bytes": 48213, "saved_path": "invoice.pdf" }
 
-CAVEATS
-  The signed URL behind the download is short-lived (five minutes) and
-  single-use. The CLI never prints it and mints a fresh one on every
-  invocation, so an expired-URL error is answered by running the command
-  again.
+  quiet prints the saved path alone:
 
-  This endpoint is scoped to the task's TENANT, not to the task itself. The
-  <task-id> establishes tenant context; the download will succeed for any
-  attachment in that tenant, including one posted on a different task's thread.
+      invoice.pdf
 
-EXAMPLES
-  capigo tasks comments attachments download <task-uuid> <attachment-uuid>
+  The signed URL behind the download is short-lived (five minutes). The CLI
+  never prints it and mints a fresh one on every call, so a URL-expired error
+  is answered by running the command again.
 
-SEE ALSO
-  tasks comments <id>     list the timeline and its attachment ids
-  capigo help exit-codes  what a non-zero exit means`,
+  Exit 4 when no such task or attachment is reachable.`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(_ *cobra.Command, args []string) error {
 		client, cfg, err := buildClient()
@@ -216,7 +266,9 @@ func init() {
 	tasksAttachmentsDownloadCmd.Flags().StringVar(&taskAttachmentsDownloadTenant, "tenant", "", "scope to this tenant code")
 	tasksAttachmentsDownloadCmd.Flags().StringVarP(&taskAttachmentsDownloadDest, "dest", "d", "", "destination file or directory (default: original file name in the current directory)")
 	tasksAttachmentsCmd.AddCommand(tasksAttachmentsDownloadCmd)
-	taskCmd.AddCommand(tasksAttachmentsCmd)
+	// tasksAttachmentsCmd is registered under `tasks` by tasks.go, not here.
+	// Command sorting is off, so registration order is display order — and
+	// init() runs in file-name order, which would put attachments above list.
 
 	tasksCommentsAttachmentsDownloadCmd.Flags().StringVar(&taskCommentsAttachmentsDownloadTenant, "tenant", "", "scope to this tenant code")
 	tasksCommentsAttachmentsDownloadCmd.Flags().StringVarP(&taskCommentsAttachmentsDownloadDest, "dest", "d", "", "destination file or directory (default: original file name in the current directory)")

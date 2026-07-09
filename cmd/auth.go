@@ -16,10 +16,14 @@ import (
 var authCmd = &cobra.Command{
 	Use:   "auth",
 	Short: "Manage authentication credentials",
-	Long: `Manage the API key this CLI sends.
+	Long: `The API key this CLI sends with every request.
 
-The key is read from CAPIGO_API_KEY first, then from the active profile in
-~/.capigo/config.json (file mode 600).`,
+CAPIGO_API_KEY, if set, overrides the key stored here on every call.
+Otherwise the key comes from the active profile in ~/.capigo/config.json
+(file mode 600). None of these commands take --tenant.
+
+USAGE
+  capigo auth <command> [<args>]`,
 }
 
 var loginKey string
@@ -30,28 +34,37 @@ var loginCmd = &cobra.Command{
 	Long: `Store an API key in the active profile.
 
 PURPOSE
-  Save the key this CLI will send on every request. The key is written to
-  ~/.capigo/config.json with file mode 600.
+  Save the key this CLI sends on every request. This only writes to
+  ~/.capigo/config.json (file mode 600); it makes no API call, so it cannot
+  itself confirm the key is accepted. Run health next to confirm that.
 
-INPUT
-  --key <csk_...>   required. An API key; it must begin with csk_
+USAGE
+  capigo auth login --key <csk_...> [-o table|json]
+
+FLAGS
+  --key <csk_...>
+      API key to store. Required. Must start with csk_; if it does not,
+      login exits 1 without making a request. The value is scrubbed from
+      the process argument list right after startup, so it never shows up
+      in ps.
+
+        capigo auth login --key csk_live_9f2a1c...
+
+  -o, --output table|json
+      table and quiet both print the one-line confirmation below; json
+      prints the object instead. See capigo help output.
 
 OUTPUT
+  table / quiet:
+
+      Logged in as profile "default"
+
   -o json emits:
 
       { "profile": "default", "status": "logged_in" }
 
-  table prints a one-line confirmation naming the profile.
-
-  Output modes: capigo help output
-
-EXAMPLES
-  capigo auth login --key csk_...
-
-SEE ALSO
-  health                  confirm the key is accepted (exit 0 = ok)
-  auth whoami             show who the key belongs to
-  capigo help exit-codes  what exit 2 means`,
+  Exit 1 if --key does not start with csk_, or if ~/.capigo/config.json
+  cannot be read or written.`,
 	RunE: runLogin,
 }
 
@@ -64,19 +77,23 @@ PURPOSE
   Remove the key from ~/.capigo/config.json. A profile with no key is not an
   error; logging out twice is harmless.
 
-INPUT
-  (no flags)
-
-OUTPUT
-  A one-line confirmation naming the profile.
-
-  This command ignores --output: it prints the same text in every mode.
-
-EXAMPLES
+USAGE
   capigo auth logout
 
-SEE ALSO
-  auth login --key csk_...   store a key again`,
+FLAGS
+  This command takes no flags. --output is ignored: it prints the same
+  text in every mode.
+
+OUTPUT
+  A one-line confirmation naming the profile:
+
+      Logged out of profile "default"
+
+  Or, if the profile already had no key:
+
+      Profile "default" has no stored credentials
+
+  Exit 1 if ~/.capigo/config.json cannot be read or written.`,
 	RunE: runLogout,
 }
 
@@ -86,32 +103,37 @@ var whoamiCmd = &cobra.Command{
 	Long: `Show the user the stored API key belongs to.
 
 PURPOSE
-  Identify the caller. To check that a key is accepted before a batch of work,
-  prefer health: it is the preflight, and it does not depend on this endpoint
-  being deployed.
+  Identify the caller by calling GET /me. That endpoint is not deployed on
+  production and returns HTTP 404 there (exit 4) — a 404 here is not
+  evidence the key is invalid. To confirm a key is accepted before a batch
+  of work, run health instead: it is the working preflight, and it does not
+  depend on /me.
 
-INPUT
-  (no flags)
+USAGE
+  capigo auth whoami [-o table|json|quiet]
+
+FLAGS
+  -o, --output table|json|quiet
+      table prints ID, Name and Email on three lines; quiet prints the id
+      alone; json emits the bare user object. Defaults to table.
+      See capigo help output.
 
 OUTPUT
-  -o json emits the bare user object:
+  table:
 
-      { id, display_name, email, avatar_url }
+      ID:    3f9c2a10-6b1e-4d2f-8a77-0e4c9b2f7a31
+      Name:  Trâm Nguyễn
+      Email: tram@example.com
 
-  quiet prints the id alone. table prints ID, Name and Email on three lines.
+  -o json emits the bare object, with no envelope:
 
-  Exit 2 when the key is missing, malformed or rejected.
+      { "id": "3f9c2a10-6b1e-4d2f-8a77-0e4c9b2f7a31",
+        "display_name": "Trâm Nguyễn", "email": "tram@example.com",
+        "avatar_url": null }
 
-  Output modes and the JSON contract: capigo help output
-
-EXAMPLES
-  capigo auth whoami
-  capigo auth whoami -o quiet
-
-SEE ALSO
-  health                  the preflight to run before a batch of work
-  auth login --key csk_   store a different key
-  capigo help exit-codes  what exit 2 means`,
+  Exit 2 when the key itself is missing, malformed or rejected. Exit 4 on
+  production today, because /me is not deployed there — see PURPOSE above.
+  What each exit code means: capigo help exit-codes.`,
 	RunE: runWhoami,
 }
 
@@ -119,7 +141,7 @@ func init() {
 	loginCmd.Flags().StringVar(&loginKey, "key", "", "API key (must start with csk_)")
 	_ = loginCmd.MarkFlagRequired("key")
 
-	authCmd.AddCommand(loginCmd, logoutCmd, whoamiCmd)
+	authCmd.AddCommand(loginCmd, whoamiCmd, logoutCmd)
 	rootCmd.AddCommand(authCmd)
 }
 

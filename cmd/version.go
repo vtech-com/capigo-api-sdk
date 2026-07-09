@@ -14,21 +14,22 @@ var versionCmd = &cobra.Command{
 
 PURPOSE
   Report which binary is running. Help text ships inside the binary, so the
-  pages you read describe this build and no other.
+  page you are reading describes this build and no other.
 
-INPUT
-  (no flags)
+USAGE
+  capigo version
+
+FLAGS
+  (none)
 
 OUTPUT
   Three lines: the version, the commit, and the build date.
 
-  This command ignores --output: it prints the same text in every mode.
+      capigo 0.16.0
+      commit: 4a1f9c2
+      built:  2026-06-18T10:03:00Z
 
-EXAMPLES
-  capigo version
-
-SEE ALSO
-  capigo help versioning   how this CLI relates to the API it calls`,
+  This command ignores --output: it prints the same text in every mode.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Printf("capigo %s\n", version.Version)
 		fmt.Printf("commit: %s\n", version.Commit)

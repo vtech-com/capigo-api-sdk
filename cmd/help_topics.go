@@ -65,7 +65,7 @@ SEE ALSO
 
 var outputTopicCmd = &cobra.Command{
 	Use:   "output",
-	Short: "Output modes, the JSON contract, and which stream carries what",
+	Short: "Output modes, the JSON contract, and streams",
 	Long: `Output modes, the JSON contract, and which stream carries what.
 
 MODES

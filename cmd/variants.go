@@ -16,13 +16,14 @@ import (
 var variantsCmd = &cobra.Command{
 	Use:   "variants",
 	Short: "Query PCMS variants (read-only)",
-	Long: `Query product variants in PCMS.
+	Long: `Product variants in the Capigo Product Catalog Management System (PCMS).
 
-Variants are written through products variants, which upserts them onto their
-product. Reading them lives here.
+This group is read-only. Variants are written through products variants,
+which upserts them onto their product; this group only reads them back.
+Every command here requires a tenant.
 
-Every variants command requires a tenant.
-  capigo help tenancy`,
+USAGE
+  capigo variants <command> --tenant <code> [<args>]`,
 }
 
 // --------------------------------------------------------------------------
@@ -47,30 +48,66 @@ PURPOSE
   allocation: read the highest barcode already taken under a prefix, so the
   next one can be chosen.
 
-INPUT
-  --tenant <code>          required
-  --barcode-prefix <p>     match variants whose barcode starts with p
-  --sort <order>           barcode (ascending) or -barcode (descending).
-                           Default -barcode.
-  --page <n>               page number
-  --limit <n>              items per page, 1-100 (default 20)
+USAGE
+  capigo variants list --tenant <code> [--barcode-prefix <p>] [--sort <order>]
+                       [--page <n>] [--limit <n>] [-o table|json|quiet]
+
+FLAGS
+  --tenant <code>
+      Tenant to read from. Required. Falls back to CAPIGO_TENANT, then to
+      default_tenant in the config file. Exits 5 if none resolves.
+
+  --barcode-prefix <p>
+      Match variants whose barcode starts with p. The special characters %
+      and _ are treated literally, not as wildcards. Omit it to list all
+      variants in the tenant.
+
+        capigo variants list --tenant acme --barcode-prefix 634007
+
+  --sort <order>
+      barcode for ascending, -barcode for descending. Any other value exits
+      5. Defaults to -barcode.
+
+        # The highest barcode already used under a prefix
+        capigo variants list --tenant acme --barcode-prefix 634007 \
+          --sort -barcode --limit 1 -o json | jq -r '.data[0].barcode'
+
+  --page <n>
+      Page to fetch. Pages start at 1. The default, 0, sends no page
+      parameter and lets the server choose.
+
+  --limit <n>
+      Rows per page, 1 to 100. Defaults to 20.
+
+  -o, --output table|json|quiet
+      Print rows, the JSON envelope, or bare ids. Defaults to table.
+      See capigo help output.
 
 OUTPUT
-  -o json emits the list envelope. Each row is a variant object; its shape is
-  documented on variants get.
+  A table of variants, then a summary line.
 
-  The envelope, meta.total and list footers: capigo help output
+      ┌──────────┬─────────┬──────────┬──────────────┬──────────┐
+      │ ID       │ Barcode │ SKU      │ Name         │ ProductID│
+      ├──────────┼─────────┼──────────┼──────────────┼──────────┤
+      │ 6f1c9a3d │ 634007  │ AT-001-S │ Áo thun / S  │ 7c1f2e88 │
+      └──────────┴─────────┴──────────┴──────────────┴──────────┘
+      Tenant: acme · Total: 1 · showing 1 (page 1/1)
 
-EXAMPLES
-  # The highest barcode already used under a prefix
-  capigo variants list --tenant acme --barcode-prefix 634007 \
-    --sort -barcode --limit 1 -o json | jq -r '.data[0].barcode'
+  Ids are shortened here to fit the page; the command prints them in full.
 
-SEE ALSO
-  variants get <id>       one variant in full
-  products variants       create or update variants
-  capigo help output      output modes and the JSON contract
-  capigo help tenancy     how --tenant resolves`,
+  -o json emits the list envelope. Each row here is a flat summary — id,
+  barcode, sku, name, product_id — not the full variant object; read that
+  with variants get <id>:
+
+      {
+        "data": [
+          { "id": "6f1c9a3d-...", "barcode": "634007", "sku": "AT-001-S",
+            "name": "Áo thun / S", "product_id": "7c1f2e88-..." }
+        ],
+        "meta": { "page": 1, "limit": 20, "total": 1, "has_more": false }
+      }
+
+  The envelope, meta.total and list footers: capigo help output`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -176,42 +213,59 @@ var variantGetTenant string
 
 var variantsGetCmd = &cobra.Command{
 	Use:   "get <id>",
-	Short: "Get a variant by ID",
-	Long: `Get one variant by UUID.
+	Short: "Get a variant by id",
+	Long: `Get one variant by id.
 
 PURPOSE
-  Read a single variant in full. This command addresses a variant by UUID only.
-  To find that UUID, use variants list --barcode-prefix, or read the variants[]
+  Read a single variant in full. This command addresses it by id only. To
+  find that id, use variants list --barcode-prefix, or read the variants[]
   array of products get <id>.
 
-INPUT
-  <id>              variant UUID (positional, required)
-  --tenant <code>   required
+USAGE
+  capigo variants get <id> --tenant <code> [-o table|json|quiet]
+
+FLAGS
+  <id>
+      Variant id, a UUID. Positional, required.
+
+  --tenant <code>
+      Tenant the variant belongs to. Required. Exits 4 if the variant is not
+      in it.
+
+        capigo variants get 6f1c9a3d-8b2e-4f01-9c77-1a3d5e7f9b21 --tenant acme
+
+  -o, --output table|json|quiet
+      Print a row, the JSON object, or the bare id. Defaults to table.
+      See capigo help output.
 
 OUTPUT
-  -o json emits the bare variant object:
+  A single-row table. Ids are shortened here to fit the page; the command
+  prints them in full.
 
-      { id, name, sku, barcode, price, compare_at_price, currency, weight,
-        dimensions { l, w, h }, option1, option2, option3, variant_type,
-        manufacturer_code, legacy_code, extra_data, created_at, updated_at }
+      ┌──────────┬─────────────┬──────────┬─────────┬────────┬────────┐
+      │ ID       │ Name        │ SKU      │ Barcode │ Price  │ Type   │
+      ├──────────┼─────────────┼──────────┼─────────┼────────┼────────┤
+      │ 6f1c9a3d │ Áo thun / S │ AT-001-S │ 634007  │ 120000 │ simple │
+      └──────────┴─────────────┴──────────┴─────────┴────────┴────────┘
+
+  -o json emits the bare object. A get is not a list, so there is no envelope
+  and no .data to reach for:
+
+      { "id": "6f1c9a3d-8b2e-4f01-9c77-1a3d5e7f9b21", "name": "Áo thun / S",
+        "sku": "AT-001-S", "barcode": "634007", "price": 120000,
+        "compare_at_price": null, "currency": "VND", "weight": null,
+        "dimensions": null, "option1": "S", "option2": null, "option3": null,
+        "variant_type": "simple", "manufacturer_code": null,
+        "legacy_code": null, "extra_data": null,
+        "created_at": "...", "updated_at": "..." }
 
   option1..option3 hold the option values in the order the product declares
   them; products get <id> shows that order in options[].
 
-  Exit 4 when the variant is orphaned, soft-deleted, or in another tenant.
-  Unlike a product, a deleted variant is not returned and marked — it is
-  simply absent. See capigo help soft-delete
-
-  Output modes and the JSON contract: capigo help output
-
-EXAMPLES
-  capigo variants get 6f1c-... --tenant acme
-
-SEE ALSO
-  variants list           find variants by barcode prefix
-  products get <id>       the product and all of its variants at once
-  products variants       create or update variants
-  capigo help exit-codes  what exit 4 means`,
+  Exit 4 when no such variant exists in the resolved tenant — including one
+  that is orphaned, soft-deleted, or belongs to another tenant. Unlike a
+  product, a deleted variant is not returned and marked; it is simply
+  absent. See capigo help soft-delete.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()

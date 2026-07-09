@@ -27,12 +27,14 @@ func configNotFoundErr(msg string) {
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Manage capigo CLI configuration",
-	Long: `Read and write this CLI's local configuration.
+	Long: `Local settings for this CLI.
 
-Settings live in ~/.capigo/config.json (file mode 600). There is exactly one
-active profile; this CLI takes no --profile flag.
+Every command here reads and writes ~/.capigo/config.json (file mode 600)
+directly; none of them calls the API. There is exactly one active profile;
+this CLI takes no --profile flag. Settings apply to that active profile.
 
-Recognised keys: api_url, default_profile, default_tenant`,
+USAGE
+  capigo config <command> [<args>]`,
 }
 
 var configSetCmd = &cobra.Command{
@@ -41,28 +43,33 @@ var configSetCmd = &cobra.Command{
 	Long: `Set a configuration value.
 
 PURPOSE
-  Write one setting into ~/.capigo/config.json.
+  Write one setting into ~/.capigo/config.json. default_tenant is not
+  settable here — use config set-default-tenant instead.
 
-INPUT
-  <key>     one of api_url, default_profile, default_tenant
-  <value>   the value to store
+USAGE
+  capigo config set <key> <value>
 
-  An unrecognised key exits 5 and names the keys that are recognised.
+FLAGS
+  <key>
+      One of api_url, default_profile. Positional, required. An unrecognised
+      key — including default_tenant — exits 5 and names the keys that are
+      recognised.
+
+  <value>
+      The value to store. Positional, required.
+
+        capigo config set api_url https://platform.capigo.app/api/v1
+        capigo config set default_profile staging
 
 OUTPUT
-  A one-line confirmation.
+  Nothing on success: exit 0 and silence. Confirm with config get <key>.
 
   This command ignores --output: configuration is not a resource, so there is
   no JSON envelope to emit.
 
-EXAMPLES
-  capigo config set api_url https://platform.capigo.app/api/v1
-  capigo config set default_tenant acme
-
-SEE ALSO
-  config get <key>            read one back
-  config set-default-tenant   the same thing, with tenant validation
-  capigo help tenancy         how default_tenant is used`,
+  Exit 5 for an unrecognised key, or when default_profile names a profile
+  that does not exist. Exit 4 when api_url is set before any profile exists —
+  run auth login first.`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		key, value := args[0], args[1]
@@ -109,24 +116,31 @@ var configGetCmd = &cobra.Command{
 	Long: `Read a configuration value.
 
 PURPOSE
-  Print one setting from ~/.capigo/config.json.
+  Print one setting from ~/.capigo/config.json. To change it, use config set
+  or config set-default-tenant.
 
-INPUT
-  <key>   one of api_url, default_profile, default_tenant
+USAGE
+  capigo config get <key>
+
+FLAGS
+  <key>
+      One of api_url, default_profile, default_tenant. Positional, required.
+      An unrecognised key exits 5 and names the keys that are recognised.
+
+        capigo config get default_tenant
+        capigo config get api_url
 
 OUTPUT
   The raw value, on one line, with no quoting and no key name.
 
+      acme
+
   This command ignores --output: it prints the same bare value in every mode,
-  which makes it safe to capture directly.
+  which makes it safe to capture directly:
 
-EXAMPLES
-  capigo config get default_tenant
-  TENANT=$(capigo config get default_tenant)
+      TENANT=$(capigo config get default_tenant)
 
-SEE ALSO
-  config set <key> <value>   write one
-  capigo help tenancy        how default_tenant is used`,
+  Exit 4 if the active profile itself is not in the config file yet.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		key := args[0]
@@ -172,22 +186,29 @@ var configSetDefaultTenantCmd = &cobra.Command{
 	Long: `Set the tenant used when --tenant is omitted.
 
 PURPOSE
-  Store default_tenant so that commands which need a tenant can find one
-  without --tenant on every invocation.
+  Store default_tenant as the last fallback in tenant resolution: --tenant,
+  then CAPIGO_TENANT, then this value. See capigo help tenancy for the full
+  order.
 
-INPUT
-  <code>   a tenant code, as reported by tenants list
+USAGE
+  capigo config set-default-tenant <code>
+
+FLAGS
+  <code>
+      A tenant code. Positional, required. Stored as given: this command does
+      not call the API, so it does not check that the tenant exists. Confirm
+      the code first with tenants list.
+
+        capigo config set-default-tenant acme
 
 OUTPUT
-  A one-line confirmation.
+  Nothing on success: exit 0 and silence. Confirm with config get
+  default_tenant.
 
-EXAMPLES
-  capigo config set-default-tenant acme
+  This command ignores --output: configuration is not a resource, so there is
+  no JSON envelope to emit.
 
-SEE ALSO
-  tenants list                  the codes this key can reach
-  config unset-default-tenant   clear it again
-  capigo help tenancy           the full resolution order`,
+  Exit 4 if the active profile itself is not in the config file yet.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		code := args[0]
@@ -224,20 +245,23 @@ var configUnsetDefaultTenantCmd = &cobra.Command{
 
 PURPOSE
   Remove default_tenant, so that every command which needs a tenant must be
-  given one explicitly.
+  given one explicitly via --tenant or CAPIGO_TENANT. See capigo help
+  tenancy for the full resolution order.
 
-INPUT
-  (no arguments)
-
-OUTPUT
-  A one-line confirmation.
-
-EXAMPLES
+USAGE
   capigo config unset-default-tenant
 
-SEE ALSO
-  config set-default-tenant   set it again
-  capigo help tenancy         the full resolution order`,
+FLAGS
+  (none)
+
+OUTPUT
+  Nothing on success: exit 0 and silence. Confirm with config get
+  default_tenant, which then prints an empty line.
+
+  This command ignores --output: configuration is not a resource, so there is
+  no JSON envelope to emit.
+
+  Exit 4 if the active profile itself is not in the config file yet.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
@@ -266,8 +290,8 @@ SEE ALSO
 }
 
 func init() {
-	configCmd.AddCommand(configSetCmd)
 	configCmd.AddCommand(configGetCmd)
+	configCmd.AddCommand(configSetCmd)
 	configCmd.AddCommand(configSetDefaultTenantCmd)
 	configCmd.AddCommand(configUnsetDefaultTenantCmd)
 	rootCmd.AddCommand(configCmd)

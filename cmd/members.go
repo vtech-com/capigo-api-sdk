@@ -19,8 +19,12 @@ var memberCmd = &cobra.Command{
 	Short: "Manage members",
 	Long: `Workspace members in Capigo Mission.
 
-Reads may span tenants: omit --tenant to see every tenant this key can reach.
-  capigo help tenancy`,
+--tenant is optional on both commands here: list and get search across every
+tenant this key can reach when it is omitted.
+  capigo help tenancy
+
+USAGE
+  capigo members <command> [--tenant <code>] [<args>]`,
 }
 
 var (
@@ -36,34 +40,61 @@ var membersListCmd = &cobra.Command{
 	Long: `List workspace members.
 
 PURPOSE
-  Find the people in a workspace — most often to turn a name into the UUID that
-  tasks create --assignee and tasks list --assignee-id expect.
+  Find the people in a workspace — most often to turn a name into the UUID
+  that tasks create --assignee and tasks list --assignee-id expect.
 
-INPUT
-  --tenant <code>     optional; omit it to span every accessible tenant
-  -q, --query <term>  filter by member name or email
-  --page <n>          page number (0 = server default)
-  --limit <n>         items per page (0 = server default)
+USAGE
+  capigo members list [--tenant <code>] [-q <term>] [--page <n>]
+                       [--limit <n>] [-o table|json|quiet]
+
+FLAGS
+  --tenant <code>
+      Tenant to search. Optional — omit it to span every tenant this key can
+      reach; table output then gains a Tenant column.
+      See capigo help tenancy.
+
+        capigo members list --tenant acme
+
+  -q, --query <term>
+      Filter by member display name or email.
+
+        capigo members list --tenant acme -q tram
+
+  --page <n>
+      Page to fetch. Pages start at 1. The default, 0, sends no page
+      parameter and lets the server choose.
+
+  --limit <n>
+      Items per page. The default, 0, sends no limit parameter; the server
+      then applies its own default of 20.
+
+        capigo members list --tenant acme --page 2 --limit 50
+
+  -o, --output table|json|quiet
+      Print rows, the JSON envelope, or bare ids. Defaults to table.
+      See capigo help output.
 
 OUTPUT
-  -o json emits the list envelope. Each row is a member:
+  A table of members, then a summary line. With --tenant omitted, a Tenant
+  column is added.
 
-      { id, display_name, email, role, avatar_url }
+      ┌──────────┬─────────────┬──────────────┬────────┐
+      │ ID       │ Name        │ Email        │ Role   │
+      ├──────────┼─────────────┼──────────────┼────────┤
+      │ 4d9a1c07 │ Tram Nguyen │ tram@acme.vn │ owner  │
+      │ 8e2f61ab │ Son Nguyen  │ son@acme.vn  │ member │
+      └──────────┴─────────────┴──────────────┴────────┘
+      Tenant: acme · Total: 2 · showing 2 (page 1/1) (all rows shown)
 
-  role is owner or member.
+  Ids are shortened here to fit the page; the command prints them in full.
+  Role is owner or member.
 
-  The envelope, meta.total and list footers: capigo help output
+  -o json emits the list envelope; each row is a member:
 
-EXAMPLES
-  capigo members list --tenant acme -q tram
+      { "id": "4d9a1c07-...", "display_name": "Tram Nguyen",
+        "email": "tram@acme.vn", "role": "owner", "avatar_url": null }
 
-  # Name to UUID, for an assignment
-  capigo members list --tenant acme -q tram -o json | jq -r '.data[0].id'
-
-SEE ALSO
-  members get <id>      one member in full
-  tasks list            filter tasks by --assignee-id
-  capigo help tenancy   when --tenant may be omitted`,
+  The envelope, meta.total and list footers: capigo help output`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -150,33 +181,49 @@ var memberGetTenant string
 
 var membersGetCmd = &cobra.Command{
 	Use:   "get <id>",
-	Short: "Get a member by ID",
-	Long: `Get one member by UUID.
+	Short: "Get a member by id",
+	Long: `Get one member by id.
 
 PURPOSE
-  Read a single member. This command addresses a member by UUID only; to find
-  that UUID from a name or an email, use members list --query.
+  Read a single member. This command addresses a member by id only; to find
+  that id from a name or an email, use members list --query.
 
-INPUT
-  <id>              member UUID (positional, required)
-  --tenant <code>   optional; scopes the lookup
+USAGE
+  capigo members get <id> [--tenant <code>] [-o table|json|quiet]
+
+FLAGS
+  <id>
+      Member UUID. Positional, required.
+
+  --tenant <code>
+      Tenant to scope the lookup to. Optional; omit it to search every
+      tenant this key can reach.
+
+        capigo members get 4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb --tenant acme
+
+  -o, --output table|json|quiet
+      Print a row, the JSON object, or the bare id. Defaults to table.
+      See capigo help output.
 
 OUTPUT
+  A single-row table. Ids are shortened here to fit the page; the command
+  prints them in full.
+
+      ┌──────────┬─────────────┬──────────────┬───────┐
+      │ ID       │ Name        │ Email        │ Role  │
+      ├──────────┼─────────────┼──────────────┼───────┤
+      │ 4d9a1c07 │ Tram Nguyen │ tram@acme.vn │ owner │
+      └──────────┴─────────────┴──────────────┴───────┘
+
   -o json emits the bare member object:
 
-      { id, display_name, email, role, avatar_url }
+      { "id": "4d9a1c07-...", "display_name": "Tram Nguyen",
+        "email": "tram@acme.vn", "role": "owner", "avatar_url": null }
 
-  Exit 4 when the member is not reachable — including a member who exists in a
-  tenant this key cannot see.
+  Exit 4 when the member is not reachable — including a member who exists in
+  a tenant this key cannot see.
 
-  Output modes and the JSON contract: capigo help output
-
-EXAMPLES
-  capigo members get <uuid> --tenant acme
-
-SEE ALSO
-  members list            find a member by name or email
-  capigo help exit-codes  what exit 4 means`,
+  Output modes and the JSON contract: capigo help output`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
