@@ -137,7 +137,10 @@ func TestHelpReferencesToTopicsResolve(t *testing.T) {
 					t.Errorf("%q writes `capigo help` with no target", c.CommandPath())
 					continue
 				}
-				if target := fields[0]; !known[target] {
+				// A reference may end a sentence — "See capigo help output." —
+				// so the punctuation a sentence leaves behind is not part of
+				// the topic name.
+				if target := strings.TrimRight(fields[0], ".,;:"); !known[target] {
 					t.Errorf("%q references `capigo help %s`, which is not a registered topic",
 						c.CommandPath(), target)
 				}

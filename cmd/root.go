@@ -23,21 +23,11 @@ It stores your API key, attaches the tenant header, maps API errors to stable
 exit codes, and formats results as table, JSON, or bare ids. Configuration lives
 in ~/.capigo/config.json.
 
-HOW HELP IS ORGANISED
-  capigo --help                  which domain?
-  capigo <group> --help          which command in that domain?
-  capigo <group> <cmd> --help    how to call it: flags, input, output,
-                                 caveats, examples, related commands
+USAGE
+  capigo [-o table|json|quiet] [--api-url <url>] [-v] <group> <command> [<args>]
 
-  Every command page states both the input it accepts and the output it
-  returns, so a call can be built without running one first. A fact that is
-  true of many commands lives in one of the help topics listed below, and is
-  referenced from a command page rather than repeated on it.
-
-GETTING STARTED
-  $ capigo auth login --key csk_...   store your API key (keys begin with csk_)
-  $ capigo health                     confirm the key is accepted (exit 0 = ok)
-  $ capigo tenants list               see which tenants you can reach`,
+  capigo <group> --help          the commands in that group
+  capigo <group> <cmd> --help    purpose, usage, flags, output`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	// Nudge toward -o json when output is being captured but table is still in
@@ -73,9 +63,9 @@ func Execute() {
 func init() {
 	cobra.OnInitialize(initConfig)
 
-	rootCmd.PersistentFlags().StringVarP(&outputMode, "output", "o", "table", "output format: table, json, or quiet (unknown formats are rejected with an error)")
-	rootCmd.PersistentFlags().StringVar(&apiURL, "api-url", "", "override API base URL (e.g. http://localhost:3999)")
-	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "print HTTP request/response details (redacts Authorization header)")
+	rootCmd.PersistentFlags().StringVarP(&outputMode, "output", "o", "table", "output format: table, json, or quiet")
+	rootCmd.PersistentFlags().StringVar(&apiURL, "api-url", "", "override the API base URL")
+	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "print the HTTP request and response (key redacted)")
 
 	_ = viper.BindEnv("api_key", "CAPIGO_API_KEY")
 	_ = viper.BindEnv("tenant", "CAPIGO_TENANT")
