@@ -616,6 +616,124 @@ var (
 	taskCreateSubtasksJSON string
 )
 
+// --------------------------------------------------------------------------
+// tasks subtasks (group) + list
+// --------------------------------------------------------------------------
+
+var tasksSubtasksCmd = &cobra.Command{
+	Use:   "subtasks",
+	Short: "List or create a task's subtasks",
+	Long: `The children of one task.
+
+A subtask is a task: the same object, with a parent. Reading them and creating
+them are separate calls to the API, so they are separate commands here.
+
+USAGE
+  capigo tasks subtasks <command> (<parent-id> | --code <code>) [<args>]`,
+}
+
+// tasks subtasks list flags
+var (
+	taskSubtasksListTenant string
+	taskSubtasksListCode   string
+)
+
+var tasksSubtasksListCmd = &cobra.Command{
+	Use:   "list [<parent-id>]",
+	Short: "List a task's subtasks",
+	Long: `List the subtasks of one task.
+
+PURPOSE
+  Read the children of a parent task. This is not the same question as
+  tasks list --parent-task-id <id>, which filters the task list and returns an
+  empty page when the parent does not exist. Here, a parent that does not exist
+  is exit 4 — so "this task has no subtasks" and "there is no such task" are
+  different answers, as they should be.
+
+  Every subtask is returned. There is no paging to do.
+
+USAGE
+  capigo tasks subtasks list (<parent-id> | --code <code>) [--tenant <code>]
+
+FLAGS
+  <parent-id>
+      Parent task UUID. Positional. Give this or --code, never both.
+
+  --code <code>
+      Address the parent task by its code — the key a person quotes, like
+      ACMEC-68. A code is unique within a tenant, not across them, so --code
+      needs a tenant: pass --tenant, or set a default.
+
+        capigo tasks subtasks list --code ACMEC-68 --tenant acme
+
+  --tenant <code>
+      Tenant to scope the lookup to. Optional with an id; required with
+      --code.
+
+OUTPUT
+  The subtasks are at .data[], each one a task object:
+
+      {
+        "data": [
+          { "id": "9ab2c744-16fe-4d09-8a52-3ef0b7c61d84",
+            "code": "ACMEC-69", "title": "Write the migration",
+            "status": "To-Do", "assignee": {...}, "owner": {...},
+            "parent": { "id": "7c1f2e88-...", "code": "ACMEC-68",
+                        "title": "Fix login bug" },
+            "has_subtasks": false, "created_at": "...", "updated_at": "..." }
+        ],
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "page": 1, "limit": 2, "total": 2, "has_more": false }
+      }
+
+  Each row names its parent, which the rows of tasks list do not.
+
+  The pagination in meta is nominal: this endpoint returns every subtask in one
+  answer, so page is always 1, has_more always false, and limit is simply the
+  number of rows. Read total; do not page.
+
+  Exit 4 when no such parent task is reachable — which is the point of asking
+  here rather than filtering tasks list.`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		var id string
+		if len(args) == 1 {
+			id = args[0]
+		}
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(taskSubtasksListTenant, profile)
+		requireOneTaskAddress(id, taskSubtasksListCode, tenant)
+
+		resp, err := client.Do(ctx, "GET", taskPath(id, taskSubtasksListCode)+"/subtasks", nil, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope api.RawEnvelope
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		return output.Write(os.Stdout, rawList(envelope.Data), listMeta(tenant, taskSubtasksListTenant, envelope.Meta))
+	},
+}
+
+// --------------------------------------------------------------------------
+// tasks subtasks create
+// --------------------------------------------------------------------------
+
 // tasks subtasks flags
 var (
 	taskSubtasksTenant      string
@@ -839,8 +957,8 @@ OUTPUT
 	},
 }
 
-var tasksSubtasksCmd = &cobra.Command{
-	Use:   "subtasks [<parent-task-id>]",
+var tasksSubtasksCreateCmd = &cobra.Command{
+	Use:   "create [<parent-id>]",
 	Short: "Add subtasks to an existing task",
 	Long: `Add subtasks to a task that already exists.
 
@@ -851,11 +969,11 @@ PURPOSE
   invalid, nothing is created.
 
 USAGE
-  capigo tasks subtasks (<parent-id> | --code <code>) --tenant <code>
-                         [--title <text> [--description <text>]
-                          [--assignee <uuid>] [--due-date <date>]
-                          [--priority <text>] [--status <text>]
-                          | --from-json <path|->]
+  capigo tasks subtasks create (<parent-id> | --code <code>) --tenant <code>
+                                [--title <text> [--description <text>]
+                                 [--assignee <uuid>] [--due-date <date>]
+                                 [--priority <text>] [--status <text>]
+                                 | --from-json <path|->]
 
 FLAGS
   <parent-id>
@@ -865,7 +983,8 @@ FLAGS
       Address the parent task by its code — the key a person quotes, like
       ACMEC-68 — instead of by id. A bare argument is never guessed at.
 
-        capigo tasks subtasks --code ACMEC-68 --tenant acme --title Design
+        capigo tasks subtasks create --code ACMEC-68 --tenant acme \
+            --title Design
 
   --tenant <code>
       Tenant the parent task belongs to. Required either way — a code is
@@ -874,7 +993,7 @@ FLAGS
   --title <text>
       Subtask title. Required unless --from-json is used.
 
-        capigo tasks subtasks <parent-uuid> --tenant acme --title Design
+        capigo tasks subtasks create <parent-uuid> --tenant acme --title Design
 
   --description <text>
       Subtask description.
@@ -898,7 +1017,8 @@ FLAGS
       flags above.
 
         echo '[{"title":"Design"},{"title":"Build","priority":"High"}]' \
-          | capigo tasks subtasks <parent-uuid> --tenant acme --from-json -
+          | capigo tasks subtasks create <parent-uuid> --tenant acme \
+                --from-json -
 
 OUTPUT
   .data names the parent and the children it gained. It is neither a bare
@@ -937,7 +1057,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(taskSubtasksTenant, profile)
-		requireTenant(tenant, "tasks subtasks")
+		requireTenant(tenant, "tasks subtasks create")
 		requireOneTaskAddress(id, taskSubtasksCode, tenant)
 
 		var subtasks []api.SubtaskItem
@@ -1045,19 +1165,23 @@ func init() {
 	tasksCreateCmd.Flags().StringVar(&taskCreateSubtasksJSON, "subtasks-json", "", "path to a JSON array of subtask items (use - for stdin); creates the task and its subtasks atomically via POST /mission/tasks/with-subtasks")
 
 	// tasks subtasks flags
-	tasksSubtasksCmd.Flags().StringVar(&taskSubtasksTenant, "tenant", "", "tenant code (required)")
-	tasksSubtasksCmd.Flags().StringVar(&taskSubtasksCode, "code", "", "address the parent task by its code (e.g. ACMEC-68) instead of by id")
-	tasksSubtasksCmd.Flags().StringVar(&taskSubtasksFromJSON, "from-json", "", "path to a JSON array of subtask items (use - for stdin); mutually exclusive with the single-item flags")
-	tasksSubtasksCmd.Flags().StringVar(&taskSubtasksTitle, "title", "", "subtask title (required unless --from-json is used)")
-	tasksSubtasksCmd.Flags().StringVar(&taskSubtasksDescription, "description", "", "subtask description")
-	tasksSubtasksCmd.Flags().StringVar(&taskSubtasksAssignee, "assignee", "", "assignee user UUID")
-	tasksSubtasksCmd.Flags().StringVar(&taskSubtasksDueDate, "due-date", "", "due date (YYYY-MM-DD)")
-	tasksSubtasksCmd.Flags().StringVar(&taskSubtasksPriority, "priority", "", "priority (Low, Normal, High, Urgent)")
-	tasksSubtasksCmd.Flags().StringVar(&taskSubtasksStatus, "status", "", "status (Pending, To-Do, Doing, Done, Closed, Cancelled)")
+	tasksSubtasksListCmd.Flags().StringVar(&taskSubtasksListTenant, "tenant", "", "scope to this tenant code")
+	tasksSubtasksListCmd.Flags().StringVar(&taskSubtasksListCode, "code", "", "address the parent task by its code (e.g. ACMEC-68) instead of by id")
+
+	tasksSubtasksCreateCmd.Flags().StringVar(&taskSubtasksTenant, "tenant", "", "tenant code (required)")
+	tasksSubtasksCreateCmd.Flags().StringVar(&taskSubtasksCode, "code", "", "address the parent task by its code (e.g. ACMEC-68) instead of by id")
+	tasksSubtasksCreateCmd.Flags().StringVar(&taskSubtasksFromJSON, "from-json", "", "path to a JSON array of subtask items (use - for stdin); mutually exclusive with the single-item flags")
+	tasksSubtasksCreateCmd.Flags().StringVar(&taskSubtasksTitle, "title", "", "subtask title (required unless --from-json is used)")
+	tasksSubtasksCreateCmd.Flags().StringVar(&taskSubtasksDescription, "description", "", "subtask description")
+	tasksSubtasksCreateCmd.Flags().StringVar(&taskSubtasksAssignee, "assignee", "", "assignee user UUID")
+	tasksSubtasksCreateCmd.Flags().StringVar(&taskSubtasksDueDate, "due-date", "", "due date (YYYY-MM-DD)")
+	tasksSubtasksCreateCmd.Flags().StringVar(&taskSubtasksPriority, "priority", "", "priority (Low, Normal, High, Urgent)")
+	tasksSubtasksCreateCmd.Flags().StringVar(&taskSubtasksStatus, "status", "", "status (Pending, To-Do, Doing, Done, Closed, Cancelled)")
 
 	// Registration order is display order (cobra.EnableCommandSorting is off).
 	// tasksAttachmentsCmd is defined in task_attachments.go, whose init() runs
 	// first — it is registered here so it lands after the verbs, not above them.
+	tasksSubtasksCmd.AddCommand(tasksSubtasksListCmd, tasksSubtasksCreateCmd)
 	taskCmd.AddCommand(tasksListCmd, tasksGetCmd, tasksCreateCmd, tasksUpdateCmd, tasksCommentsCmd, tasksSubtasksCmd, tasksAttachmentsCmd)
 	rootCmd.AddCommand(taskCmd)
 }

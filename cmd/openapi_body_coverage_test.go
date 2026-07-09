@@ -127,7 +127,7 @@ func buildWriteCommandMapping() []writeCommandEntry {
 			humanName: "tasks subtasks",
 			path:      "/mission/tasks/{id}/subtasks",
 			method:    "post",
-			hasFlag:   func(n string) bool { return tasksSubtasksCmd.Flags().Lookup(n) != nil },
+			hasFlag:   func(n string) bool { return tasksSubtasksCreateCmd.Flags().Lookup(n) != nil },
 		},
 		// tasks create --subtasks-json drives with-subtasks: tenant_code→--tenant,
 		// subtasks→--subtasks-json (alias), and the nested task object is built from

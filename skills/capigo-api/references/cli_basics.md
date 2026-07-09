@@ -143,7 +143,7 @@ ask-the-user flow, see `SKILL.md` → Tenant handling. The facts that matter whe
 - **Mission reads may span tenants** — `tasks list/get` and `boards list/get` work without
   `--tenant` and then return rows across every tenant you can access; each record names its own
   tenant, and `meta.tenant` names none — there was no single tenant to name. `tasks create` and
-  `tasks subtasks` require a tenant.
+  `tasks subtasks create` require a tenant.
 - `members list/get` also accept an optional `--tenant`; omitting it resolves across all
   accessible tenants.
 
@@ -247,19 +247,20 @@ Tenant is **optional** for reads, **required** for `create` and `subtasks`.
 | `tasks comments attachments download <task-id> <attachment-id>` | Same flags as above. Downloads an attachment posted on a **comment/activity** entry. |
 | `tasks create` | `--title` (required), `--tenant` (required), `--description`, `--priority`, `--status`, `--due-date` (RFC3339), `--assignee` (user id), `--board` (id), `--list` (board list id), `--follower-id` (repeatable), `--subtasks-json` (array of subtask items → creates task + subtasks atomically) |
 | `tasks update <id>` | `--tenant` (optional); any of `--title`, `--description` (empty string clears), `--status`, `--assignee` (UUID; `--assignee ""` unassigns), `--board` + `--list` (sent together; `--board "" --list ""` removes from board), `--follower-id` (repeatable, additive — removal not supported). At least one flag required. UUID-addressed only. |
-| `tasks subtasks <parent-id>` | `--tenant` (required); single subtask via `--title` (+ `--description`, `--assignee`, `--due-date` `YYYY-MM-DD`, `--priority`, `--status`), or a batch via `--from-json -` (array of subtask items). Max 25 per request. |
+| `tasks subtasks list <parent-id>` (or `--code`) | read a task's children. **Exit 4 when the parent does not exist** — unlike `tasks list --parent-task-id`, which returns an empty page for a task that never existed. Returns every subtask; no paging. |
+| `tasks subtasks create <parent-id>` (or `--code`) | `--tenant` (required); single subtask via `--title` (+ `--description`, `--assignee`, `--due-date` `YYYY-MM-DD`, `--priority`, `--status`), or a batch via `--from-json -` (array of subtask items). Max 25 per request. |
 
 ```bash
 capigo tasks list --status To-Do
 capigo tasks create --tenant acme --title "Fix login bug" --priority high
 ```
 
-#### Creating subtasks (`tasks subtasks`, `tasks create --subtasks-json`)
+#### Creating subtasks (`tasks subtasks create`, `tasks create --subtasks-json`)
 
 A task can have subtasks (child tasks). Two ways to create them, both **all-or-nothing**
 (if any item is invalid, nothing is created; max 25 subtasks per request):
 
-- **Under an existing parent** → `tasks subtasks <parent-id>`. One subtask via `--title`, or a
+- **Under an existing parent** → `tasks subtasks create <parent-id>`. One subtask via `--title`, or a
   batch via `--from-json -` (a JSON **array** of subtask items).
 - **A new parent plus its subtasks in one atomic call** → `tasks create … --subtasks-json <file>`.
   The parent is built from the normal `tasks create` flags; `--subtasks-json` is the subtasks array.
@@ -274,7 +275,7 @@ Both endpoints are still **pre-staged** — see [Pre-staged commands](#pre-stage
 ```bash
 # Add two subtasks under an existing task
 echo '[{"title":"Design"},{"title":"Build","priority":"High"}]' \
-  | capigo tasks subtasks <parent-uuid> --tenant acme --from-json -
+  | capigo tasks subtasks create <parent-uuid> --tenant acme --from-json -
 
 # Create a parent task and its subtasks atomically
 echo '[{"title":"Subtask A"},{"title":"Subtask B"}]' \
@@ -504,7 +505,7 @@ SKU / barcode / task code" yet. Two caveats worth knowing when you search by hum
 
 Some commands ship in the CLI ahead of the matching API reaching production — the current
 pre-staged set (shipped ahead of prod) is tracked in `CHANGELOG.md`'s entries; check there for
-what's currently provisional. As of this writing, `tasks subtasks` and
+what's currently provisional. As of this writing, `tasks subtasks create` and
 `tasks create --subtasks-json` are pre-staged: they exist on the platform's `develop` branch
 but may 404 on a tenant whose API hasn't deployed yet.
 

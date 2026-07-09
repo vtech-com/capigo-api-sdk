@@ -201,6 +201,23 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **`tasks subtasks list` — and `tasks subtasks` becomes a group.** Reading a task's children and
+  creating them are separate calls to the API, so they are separate commands: `tasks subtasks
+  list` and `tasks subtasks create`. Both take `<parent-id>` or `--code`.
+
+  **BREAKING:** `tasks subtasks <parent-id> --title …` is now `tasks subtasks create <parent-id>
+  --title …`. One command carrying two verbs, switched by a flag, is a command whose behaviour a
+  reader cannot predict from its name.
+
+  `tasks subtasks list` is not `tasks list --parent-task-id <id>`, though it was once dismissed
+  here as a duplicate of it. Against a running API: for a parent that does not exist, the endpoint
+  exits 4 while the filter returns 200 with zero rows — so through the filter, *"this task has no
+  subtasks"* and *"there is no such task"* are the same answer. It also returns every subtask in
+  one response, and stamps each row with the `parent` reference the filter does not add.
+
+  The pagination in its `meta` is nominal — `page` is always 1, `has_more` always false, `limit` is
+  simply the row count — and the page says so, because a caller who pages it will page forever.
+
 - **Tasks addressed by their code: `--code` on five commands.** `tasks get`, `tasks comments`,
   `tasks subtasks`, and both `attachments download` commands now take `--code ACMEC-68` in place of
   a UUID, reaching the `/mission/tasks/code/{code}/…` routes.

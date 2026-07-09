@@ -44,7 +44,8 @@ var implementedOps = map[string]string{
 	"GET /mission/tasks/{id}":                                              "tasks get",
 	"PATCH /mission/tasks/{id}":                                            "tasks update",
 	"GET /mission/tasks/{id}/comments":                                     "tasks comments",
-	"POST /mission/tasks/{id}/subtasks":                                    "tasks subtasks (batch create)",
+	"GET /mission/tasks/{id}/subtasks":                                     "tasks subtasks list",
+	"POST /mission/tasks/{id}/subtasks":                                    "tasks subtasks create (batch)",
 	"POST /mission/tasks/with-subtasks":                                    "tasks create --subtasks-json (atomic parent + subtasks)",
 	"GET /mission/tasks/{id}/attachments/{attachmentId}/download":          "tasks attachments download",
 	"GET /mission/tasks/{id}/comments/attachments/{attachmentId}/download": "tasks comments attachments download",
@@ -53,7 +54,8 @@ var implementedOps = map[string]string{
 	// One flag on each existing command, not five more commands.
 	"GET /mission/tasks/code/{code}":                                              "tasks get --code",
 	"GET /mission/tasks/code/{code}/comments":                                     "tasks comments --code",
-	"POST /mission/tasks/code/{code}/subtasks":                                    "tasks subtasks --code",
+	"GET /mission/tasks/code/{code}/subtasks":                                     "tasks subtasks list --code",
+	"POST /mission/tasks/code/{code}/subtasks":                                    "tasks subtasks create --code",
 	"GET /mission/tasks/code/{code}/attachments/{attachmentId}/download":          "tasks attachments download --code",
 	"GET /mission/tasks/code/{code}/comments/attachments/{attachmentId}/download": "tasks comments attachments download --code",
 
@@ -95,29 +97,19 @@ var implementedOps = map[string]string{
 // with a reason. Add here — rather than to implementedOps — when an operation is
 // left without a command on purpose.
 var unimplementedOps = map[string]string{
-	// Not a substitute for `tasks list --parent-task-id <id>`, though it was once
-	// listed here as one. Measured against a running API: this endpoint 404s when
-	// the parent does not exist, while the filter returns 200 with zero rows — so
-	// "has no subtasks" and "is not a task" are the same answer through the filter
-	// and different answers through here. It also returns every subtask unpaginated,
-	// and stamps each row with a parent_task reference the filter does not add.
-	"GET /mission/tasks/{id}/subtasks":        "unwrapped, pending a decision: it answers a question `tasks list --parent-task-id` cannot — 404 for a missing parent, versus an empty page",
-	"GET /mission/tasks/code/{code}/subtasks": "unwrapped, pending a decision: the by-code twin of the by-id GET above, and left with it",
 
-	// The by-code twin of the by-id GET above, and unwrapped for the same reason.
-	// Wrapping one without the other would make `--code` mean something different
-	// on one command than on the four where it is now supported.
-
-	// WMS: a new read-only module, addressed by code rather than by id. Wrapping
-	// it means a new command group, eight help pages, and a section in the skill.
-	"GET /wms/warehouses":                "unwrapped: the WMS module is not yet exposed by this CLI",
-	"GET /wms/warehouses/{code}":         "unwrapped: the WMS module is not yet exposed by this CLI",
-	"GET /wms/inbound-receipts":          "unwrapped: the WMS module is not yet exposed by this CLI",
-	"GET /wms/inbound-receipts/{code}":   "unwrapped: the WMS module is not yet exposed by this CLI",
-	"GET /wms/outbound-shipments":        "unwrapped: the WMS module is not yet exposed by this CLI",
-	"GET /wms/outbound-shipments/{code}": "unwrapped: the WMS module is not yet exposed by this CLI",
-	"GET /wms/internal-transfers":        "unwrapped: the WMS module is not yet exposed by this CLI",
-	"GET /wms/internal-transfers/{code}": "unwrapped: the WMS module is not yet exposed by this CLI",
+	// WMS: a new read-only module, addressed by code rather than by id. Held out
+	// deliberately — the API surface is not settled yet, and a CLI that wraps an
+	// unsettled surface teaches its callers a shape that will move under them.
+	// Revisit when the module stabilises.
+	"GET /wms/warehouses":                "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+	"GET /wms/warehouses/{code}":         "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+	"GET /wms/inbound-receipts":          "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+	"GET /wms/inbound-receipts/{code}":   "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+	"GET /wms/outbound-shipments":        "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+	"GET /wms/outbound-shipments/{code}": "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+	"GET /wms/internal-transfers":        "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+	"GET /wms/internal-transfers/{code}": "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
 }
 
 // openAPIPathOnlySpec is the minimal subset of OpenAPI 3.0 needed to enumerate
