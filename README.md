@@ -36,7 +36,7 @@ Capigo exposes a stable Public API, but integrating it today requires implementi
 go install github.com/vtech-com/capigo-api-sdk@latest
 ```
 
-The binary is named `capigo`. Requires Go 1.26.4+.
+The binary is named `capigo`. Requires Go 1.26.5+.
 
 ### GitHub Releases (recommended for most users)
 
@@ -56,7 +56,7 @@ make build
 # binary at ./dist/capigo
 ```
 
-Requires Go 1.26.4+.
+Requires Go 1.26.5+.
 
 ### Homebrew (macOS / Linux)
 
@@ -96,16 +96,17 @@ capigo config set-default-tenant acme
 capigo tasks list --output json | jq '.data[] | select(.status=="To-Do")'
 ```
 
-> **Preflight tip:** `capigo auth whoami` (`GET /me`) is not guaranteed to be live on every
-> deployment and can 404 even with a valid key. `capigo health` is the reliable preflight —
-> exit `0` means the API is reachable *and* the key is accepted.
+> **Preflight tip:** `capigo auth whoami` calls `GET /me`, which the API does not implement — no
+> such route exists, so it 404s (exit `4`) with any key. That is not a rejected key; a rejected key
+> is exit `2`. `capigo health` is the preflight that works: exit `0` means the API is reachable
+> *and* the key is accepted.
 
 ## Commands
 
 ```
 capigo auth login        Login with a csk_ API key
 capigo auth logout       Remove credentials from config
-capigo auth whoami       Show current user (GET /me — may 404; use `health` as preflight)
+capigo auth whoami       Show current user (GET /me — not implemented; always 404s. Use `health`)
 capigo health            Preflight: check API connectivity + key (exit 2 if auth fails)
 
 capigo config set <key> <value>           Set a config value
@@ -171,10 +172,6 @@ capigo version           Print version info
 ```
 
 Run `capigo <group> <command> --help` for the complete, authoritative flag list from your binary.
-
-> **Pre-staged commands:** `tasks subtasks` and `tasks create --subtasks-json` ship in the CLI
-> ahead of the matching API reaching production on every tenant — they may 404 on a tenant whose
-> backend hasn't deployed that endpoint yet. See `CHANGELOG.md` for the current pre-staged set.
 
 **Global flags** available on every command:
 
