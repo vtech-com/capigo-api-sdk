@@ -677,10 +677,13 @@ OUTPUT
         "data": [
           { "id": "9ab2c744-16fe-4d09-8a52-3ef0b7c61d84",
             "code": "ACMEC-69", "title": "Write the migration",
-            "status": "To-Do", "assignee": {...}, "owner": {...},
+            "description": "...", "status": "To-Do", "priority": "high",
+            "assignee": {...}, "owner": {...},
+            "board_id": "...", "board_list_id": "...", "due_date": null,
             "parent": { "id": "7c1f2e88-...", "code": "ACMEC-68",
                         "title": "Fix login bug" },
-            "has_subtasks": false, "created_at": "...", "updated_at": "..." }
+            "has_subtasks": false, "attachments": [],
+            "created_at": "...", "updated_at": "..." }
         ],
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "page": 1, "limit": 2, "total": 2, "has_more": false }

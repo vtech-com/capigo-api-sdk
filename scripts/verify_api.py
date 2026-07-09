@@ -194,8 +194,6 @@ HELP_SAMPLES = [
     ("/mission/boards", ["boards", "list"]),
     ("/members", ["members", "list"]),
     ("/tenants", ["tenants", "list"]),
-    # timeline rows
-    ("/mission/tasks/{id}/comments", ["tasks", "comments"]),
     # write pages return the same record their `get` returns, so their samples
     # answer to the same field set. A sample that trims one is a sample that
     # teaches a reader the field does not exist.
@@ -215,45 +213,82 @@ HELP_SAMPLES = [
     ("/pcms/products/{id}", ["products", "update"]),
     ("/mission/tasks/{id}", ["tasks", "create"]),
     ("/mission/tasks/{id}", ["tasks", "update"]),
+    ("/pcms/products/{id}", ["products", "variants"]),
+]
+
+# Sub-resources that need a parent which actually has rows, not merely a parent.
+SUBRESOURCE_SAMPLES = [
+    ("/subtasks", ["tasks", "subtasks", "list"]),
+    ("/comments", ["tasks", "comments"]),
 ]
 
 
 # Commands that answer without an id or a tenant. Their pages can be checked by
 # running them: the fields they print must be the fields their sample shows.
+#
+# `auth login` and `auth logout` write ~/.capigo/config.json, so they run under a
+# throwaway HOME. A verification script that edited the operator's credentials to
+# check a help page would be a poor trade.
 LOCAL_CHECKS = [["version"], ["health"]]
+ISOLATED_CHECKS = [["auth", "login", "--key", "{key}"], ["config", "get", "api_url"],
+                   ["auth", "logout"]]
 
 
-def check_local_samples(cli, env):
+def check_local_samples(cli, env, key):
     """Run the command; does its own page name every field it printed?"""
     import subprocess
+    import tempfile
 
     failures = 0
-    for cmd in LOCAL_CHECKS:
-        run = subprocess.run([cli] + cmd, capture_output=True, text=True, env=env)
+    home = tempfile.mkdtemp(prefix="capigo-verify-")
+    checks = LOCAL_CHECKS + [[a.format(key=key) for a in c] for c in ISOLATED_CHECKS]
+    for cmd in checks:
+        run_env = env
+        if cmd[0] == "auth" or cmd[:2] == ["config", "get"]:
+            run_env = dict(env, HOME=home)
+        run = subprocess.run([cli] + cmd, capture_output=True, text=True, env=run_env)
         try:
             doc = json.loads(run.stdout)
         except Exception:
-            print(f"  {' '.join(cmd):<22} skipped: did not print JSON (exit {run.returncode})")
+            print(f"  {' '.join(cmd[:3]):<22} skipped: did not print JSON (exit {run.returncode})")
             continue
         # A command that failed printed an error object, not a record. Counting
         # its zero fields as "names all 0 fields" is the false pass this script
         # exists to prevent.
         if "error" in doc:
-            print(f"  {' '.join(cmd):<22} SKIPPED: command failed — {doc['error'].get('message', '')}")
+            print(f"  {' '.join(cmd[:3]):<22} SKIPPED: command failed — {doc['error'].get('message', '')}")
             failures += 1
             continue
         rec = doc.get("data")
         if not isinstance(rec, dict) or not rec:
-            print(f"  {' '.join(cmd):<22} skipped: no object at .data")
+            print(f"  {' '.join(cmd[:3]):<22} skipped: no object at .data")
             continue
-        page = subprocess.run([cli] + cmd + ["--help"], capture_output=True, text=True).stdout
+        label = " ".join(cmd[:3] if cmd[0] != "auth" else cmd[:2])
+        page = subprocess.run([cli] + cmd[:2] + ["--help"] if cmd[0] in ("auth", "config")
+                              else [cli] + cmd + ["--help"],
+                              capture_output=True, text=True).stdout
         missing = sorted(f for f in rec if f'"{f}"' not in page and f not in page)
         if missing:
-            print(f"  {' '.join(cmd):<22} SAMPLE OMITS " + ",".join(missing))
+            print(f"  {label:<22} SAMPLE OMITS " + ",".join(missing))
             failures += 1
         else:
-            print(f"  {' '.join(cmd):<22} names all {len(rec)} fields")
+            print(f"  {label:<22} names all {len(rec)} fields")
     return failures
+
+
+def find_task_with(c, suffix, limit=50):
+    """A task whose sub-resource actually has rows.
+
+    The first task in the list has no subtasks and no comments, so checking a
+    page against it proves nothing: an empty array agrees with every sample ever
+    written. Look for one that answers.
+    """
+    _, body = c.get(f"/mission/tasks?limit={limit}")
+    for row in (body.get("data") or []) if isinstance(body, dict) else []:
+        status, sub = c.get(f"/mission/tasks/{row['id']}{suffix}")
+        if status == 200 and first_record(sub):
+            return row["id"]
+    return None
 
 
 def check_help_samples(c, cli, ids):
@@ -346,7 +381,25 @@ def main():
     if args.cli:
         failures += check_help_samples(c, args.cli, ids)
         env = dict(os.environ, CAPIGO_API_URL=args.base_url, CAPIGO_API_KEY=args.key)
-        failures += check_local_samples(args.cli, env)
+        failures += check_local_samples(args.cli, env, args.key)
+
+    if args.cli:
+        import subprocess
+
+        for suffix, cmd in SUBRESOURCE_SAMPLES:
+            tid = find_task_with(c, suffix)
+            if not tid:
+                print(f"  {' '.join(cmd):<22} skipped: no task has any {suffix.strip('/')}")
+                continue
+            _, body = c.get(f"/mission/tasks/{tid}{suffix}")
+            rec = first_record(body)
+            page = subprocess.run([args.cli] + cmd + ["--help"], capture_output=True, text=True).stdout
+            missing = sorted(f for f in rec if f'"{f}"' not in page)
+            if missing:
+                print(f"  {' '.join(cmd):<22} SAMPLE OMITS " + ",".join(missing))
+                failures += 1
+            else:
+                print(f"  {' '.join(cmd):<22} names all {len(rec)} fields")
 
     print("\nPaths the CLI calls that the spec never declares:")
     for path in UNDECLARED_PATHS:

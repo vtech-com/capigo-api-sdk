@@ -908,7 +908,8 @@ FLAGS
               --from-json -
 
 OUTPUT
-  The full updated PRODUCT is at .data — not the list of variants you sent:
+  The full updated PRODUCT is at .data — not the list of variants you sent. It
+  is the same shape as products get:
 
       {
         "data": { "id": "8f2a1c07-2b6e-4f83-a5d1-8c07e2f419bb",

@@ -222,10 +222,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   drift from it. The guard follows the pointer, because stating a fact once is this repo's rule and
   a guard that punishes it would teach the wrong lesson.
 
-  Three pages are exempt: `config set`, `config set-default-tenant` and `config unset-default-tenant`
-  print nothing on success, so a sample there would be the lie. Nine more remain unchecked and say
-  why: they write, they need data the seed does not have, or they call an endpoint that does not
-  exist (`auth whoami`).
+  Forty-three of the forty-nine command pages are now checked against a real response. Three are
+  exempt: `config set`, `config set-default-tenant` and `config unset-default-tenant` print nothing
+  on success, so a sample there would be the lie. `auth login`, `auth logout` and `config get` run
+  under a throwaway `HOME` — a script that edited the operator's credentials to check a help page
+  would be a poor trade.
+
+  The remaining three say why they are unchecked: `auth whoami` calls an endpoint that does not
+  exist, and `tasks subtasks create` and the two `attachments download` commands write.
 
   Read-only. It makes no writes and creates nothing.
 
