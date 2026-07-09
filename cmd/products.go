@@ -714,7 +714,7 @@ var (
 
 var productsUpdateCmd = &cobra.Command{
 	Use:   "update <id>",
-	Short: "Update a product's core details (partial)",
+	Short: "Update a product's core details (PATCH)",
 	Long: `Update a product. Fields you do not send are left unchanged.
 
 PURPOSE

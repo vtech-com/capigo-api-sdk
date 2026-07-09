@@ -509,8 +509,8 @@ INPUT
   --no-logo              set logo_url to null
 
   Exactly one of --logo-url and --no-logo must be given; they are mutually
-  exclusive. There is no way to leave the logo untouched here — that is what
-  brands update is for.
+  exclusive; replace always writes the logo. To change one field and keep the
+  rest, use brands update <id>.
 
   Or --from-json <path|-> to send the whole body, where - reads stdin.
   --from-json and the individual field flags are MUTUALLY EXCLUSIVE: passing

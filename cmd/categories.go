@@ -510,8 +510,8 @@ INPUT
   --root                 set parent_id to null, making it a root category
 
   Exactly one of --parent-id and --root must be given; they are mutually
-  exclusive. There is no way to leave the parent untouched here — that is what
-  categories update is for.
+  exclusive; replace always writes the parent. To change one field and keep
+  the rest, use categories update <id>.
 
   Or --from-json <path|-> to send the whole body, where - reads stdin.
   --from-json and the individual field flags are MUTUALLY EXCLUSIVE: passing

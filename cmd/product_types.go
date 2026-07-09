@@ -510,8 +510,8 @@ INPUT
   --no-description       set description to null
 
   Exactly one of --description and --no-description must be given; they are
-  mutually exclusive. There is no way to leave the description untouched here —
-  that is what product-types update is for.
+  mutually exclusive; replace always writes the description. To change one field
+  and keep the rest, use product-types update <id>.
 
   Or --from-json <path|-> to send the whole body, where - reads stdin.
   --from-json and the individual field flags are MUTUALLY EXCLUSIVE: passing
