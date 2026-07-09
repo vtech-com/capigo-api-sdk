@@ -299,7 +299,7 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		return output.Write(os.Stdout, rawItem(envelope.Data), itemMeta(tenant, taskGetTenant))
+		return output.Write(os.Stdout, rawItem(envelope.Data), itemMeta(tenant, taskGetTenant, envelope.Meta))
 	},
 }
 
@@ -436,14 +436,9 @@ OUTPUT
 		}
 
 		// Comments are scoped to a single task, so there is no tenant in meta
-		// even when a tenant was resolved implicitly.
-		meta := output.Meta{
-			Page:    output.Ptr(envelope.Meta.Page),
-			Limit:   output.Ptr(envelope.Meta.Limit),
-			Total:   output.Ptr(envelope.Meta.Total),
-			HasMore: output.Ptr(envelope.Meta.HasMore),
-		}
-		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
+		// even when a tenant was resolved implicitly. The API's own meta passes
+		// through untouched.
+		return output.Write(os.Stdout, rawList(envelope.Data), mergeAPIMeta(envelope.Meta))
 	},
 }
 
@@ -595,7 +590,7 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		meta := itemMeta(tenant, taskUpdateTenant)
+		meta := itemMeta(tenant, taskUpdateTenant, envelope.Meta)
 		meta.ServerTime = resp.ServerTime
 		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},
@@ -909,7 +904,7 @@ OUTPUT
 				return handleErr(fmt.Errorf("decode response: %w", err))
 			}
 
-			meta := itemMeta(tenant, taskCreateTenant)
+			meta := itemMeta(tenant, taskCreateTenant, envelope.Meta)
 			meta.ServerTime = resp.ServerTime
 			return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 		}
@@ -954,7 +949,7 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		meta := itemMeta(tenant, taskCreateTenant)
+		meta := itemMeta(tenant, taskCreateTenant, envelope.Meta)
 		meta.ServerTime = resp.ServerTime
 		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},
@@ -1112,7 +1107,7 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		meta := itemMeta(tenant, taskSubtasksTenant)
+		meta := itemMeta(tenant, taskSubtasksTenant, envelope.Meta)
 		meta.ServerTime = resp.ServerTime
 		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},

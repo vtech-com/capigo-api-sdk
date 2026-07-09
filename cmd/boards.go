@@ -171,10 +171,14 @@ OUTPUT
                   "is_public": true, "created_at": "2026-01-05T09:00:00Z",
                   "lists": [ { "id": "9ab2c744-...", "name": "Backlog",
                               "position": 0 } ] },
-        "meta": { "tenant": "acme", "tenant_source": "flag" }
+        "meta": { "tenant": "acme", "tenant_source": "flag", "list_count": 5 }
       }
 
-  With --tenant omitted, meta.tenant and meta.tenant_source are both empty.
+  meta.list_count is the API's own, and counts the lists in data.lists[]. It is
+  the only endpoint that adds a meta field of its own; the CLI passes it through
+  rather than deciding you may not see it.
+
+  With --tenant omitted, meta.tenant and meta.tenant_source are absent.
 
   Exit 4 when no such board is reachable.`,
 	Args: cobra.ExactArgs(1),
@@ -203,7 +207,7 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		return output.Write(os.Stdout, rawItem(envelope.Data), itemMeta(tenant, boardGetTenant))
+		return output.Write(os.Stdout, rawItem(envelope.Data), itemMeta(tenant, boardGetTenant, envelope.Meta))
 	},
 }
 

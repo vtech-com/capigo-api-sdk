@@ -2,14 +2,6 @@ package api
 
 import "encoding/json"
 
-// Meta holds pagination metadata returned by list endpoints.
-type Meta struct {
-	Page    int  `json:"page"`
-	Limit   int  `json:"limit"`
-	Total   int  `json:"total"`
-	HasMore bool `json:"has_more"`
-}
-
 // RawEnvelope keeps the API's `data` exactly as it arrived.
 //
 // The CLI is a transport, not a second definition of the platform's schemas.
@@ -27,7 +19,7 @@ type Meta struct {
 // decide what the caller may see.
 type RawEnvelope struct {
 	Data json.RawMessage `json:"data"`
-	Meta *Meta           `json:"meta"`
+	Meta json.RawMessage `json:"meta"`
 }
 
 // CommentAuthor is the resolved author of a task comment / activity entry.

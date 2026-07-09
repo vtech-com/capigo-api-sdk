@@ -44,6 +44,39 @@ type Meta struct {
 	// ServerTime is the X-Server-Time header. The caller never sees that header,
 	// so this is the only place the value exists for them.
 	ServerTime string `json:"server_time,omitempty"`
+
+	// Extra is whatever else the API put in its own meta. GET /mission/boards/{id}
+	// sends `list_count`; nothing else does today, and the next one to appear
+	// should not need a release here.
+	//
+	// The CLI does not model the API's responses. That rule was applied to `data`
+	// and forgotten for `meta`, so `boards get` silently dropped list_count while
+	// every field check said "match" — the checks compared `data`.
+	Extra map[string]any `json:"-"`
+}
+
+// MarshalJSON writes the known keys in a fixed order, then whatever else the API
+// sent. Ordering is not semantics, but a caller reading a page and a response
+// side by side should not have to hunt.
+func (m Meta) MarshalJSON() ([]byte, error) {
+	type meta Meta // shed this method, keep the tags
+	known, err := json.Marshal(meta(m))
+	if err != nil {
+		return nil, err
+	}
+	if len(m.Extra) == 0 {
+		return known, nil
+	}
+	extra, err := json.Marshal(m.Extra)
+	if err != nil {
+		return nil, err
+	}
+	if string(known) == "{}" {
+		return extra, nil
+	}
+	// `{a}` + `{b}` -> `{a,b}`
+	out := append(known[:len(known)-1], ',')
+	return append(out, extra[1:]...), nil
 }
 
 // meta carries only what the caller cannot work out for itself. The tenant and

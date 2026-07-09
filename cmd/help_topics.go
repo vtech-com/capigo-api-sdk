@@ -40,7 +40,7 @@ RESOLUTION ORDER
 WHICH COMMANDS REQUIRE A TENANT
   Always      products, variants, brands, categories, product-types, units
               — every verb. With no tenant resolved the command exits 5.
-  Always      tasks create, tasks subtasks
+  Always      tasks create, tasks subtasks create
   Optional    tasks list/get, boards list/get, members list/get.
               Omitting --tenant reads across every tenant the key can reach.
               meta then names no tenant, because there was no single one to
@@ -109,6 +109,9 @@ META
 
       server_time    the server clock at the time of the call, for delta sync
 
+  Anything else in meta is the API's own, passed through: boards get sends
+  list_count. The CLI does not decide which of the API's fields you see.
+
   meta carries only what a caller cannot work out for itself. The tenant comes
   from a resolution order internal to this CLI; the server clock comes from a
   header the caller never sees. Anything a caller can compute from what it sent
@@ -119,7 +122,8 @@ FAILURE
   on stdout, so a caller that parses stdout unconditionally reads a diagnosis
   rather than a parse error:
 
-      { "error": { "code": …, "message": …, "next": …, "request_id": … }}
+      { "error": { "code": …, "message": …, "next": …,
+                  "request_id": … } }
 
   A one-line summary also goes to stderr.
 

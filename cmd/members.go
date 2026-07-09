@@ -200,7 +200,7 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		return output.Write(os.Stdout, rawItem(envelope.Data), itemMeta(tenant, memberGetTenant))
+		return output.Write(os.Stdout, rawItem(envelope.Data), itemMeta(tenant, memberGetTenant, envelope.Meta))
 	},
 }
 

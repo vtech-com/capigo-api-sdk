@@ -2,8 +2,6 @@ package cmd
 
 import (
 	"testing"
-
-	"github.com/vtech-com/capigo-api-sdk/internal/api"
 )
 
 // GET /tenants sends no meta. Decoded into a value type, its absence became a
@@ -20,11 +18,24 @@ func TestListMetaOmitsPaginationWhenTheAPISendsNone(t *testing.T) {
 // And when the API does send one, every field survives — including a real zero,
 // which is the answer to "how many are there?" on an empty tenant.
 func TestListMetaKeepsARealZero(t *testing.T) {
-	m := listMeta(nil, "", &api.Meta{Page: 1, Limit: 20, Total: 0, HasMore: false})
+	m := listMeta(nil, "", []byte(`{"page":1,"limit":20,"total":0,"has_more":false}`))
 	if m.Total == nil || *m.Total != 0 {
 		t.Errorf("a real total of zero was dropped: %+v", m.Total)
 	}
 	if m.Page == nil || *m.Page != 1 {
 		t.Errorf("page lost: %+v", m.Page)
+	}
+}
+
+// The API's meta is the API's. GET /mission/boards/{id} sends `list_count`, and
+// the CLI has no business deciding a caller may not see it — the rule it applies
+// to `data`, applied to `meta`.
+func TestListMetaCarriesTheAPIsOwnKeys(t *testing.T) {
+	m := listMeta(nil, "", []byte(`{"list_count":5}`))
+	if m.Extra["list_count"] != float64(5) {
+		t.Errorf("list_count dropped: %+v", m.Extra)
+	}
+	if m.Page != nil || m.Total != nil {
+		t.Errorf("invented pagination out of a meta that had none: %+v", m)
 	}
 }

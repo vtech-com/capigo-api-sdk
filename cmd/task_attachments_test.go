@@ -72,7 +72,7 @@ func TestAttachmentDownloadEnvelope(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := output.Write(&buf, data, itemMeta(&tenant, "acme")); err != nil {
+	if err := output.Write(&buf, data, itemMeta(&tenant, "acme", nil)); err != nil {
 		t.Fatalf("output.Write: %v", err)
 	}
 

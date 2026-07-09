@@ -55,7 +55,7 @@ func runAttachmentDownload(client *api.Client, tenant *string, tenantFlag, path,
 		"size_bytes": meta.SizeBytes,
 		"saved_path": destPath,
 	}
-	return output.Write(os.Stdout, data, itemMeta(tenant, tenantFlag))
+	return output.Write(os.Stdout, data, itemMeta(tenant, tenantFlag, nil))
 }
 
 // tasks attachments (group) + download flags

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 
 	"github.com/spf13/viper"
-	"github.com/vtech-com/capigo-api-sdk/internal/api"
 	"github.com/vtech-com/capigo-api-sdk/internal/output"
 )
 
@@ -35,8 +34,10 @@ func tenantSource(tenant *string, tenantFlag string) string {
 }
 
 // itemMeta is the meta of a single-item response: a get, or a successful write.
-func itemMeta(tenant *string, tenantFlag string) output.Meta {
-	m := output.Meta{}
+// raw is the API's own meta, which may be absent, and whose keys the CLI has no
+// business filtering.
+func itemMeta(tenant *string, tenantFlag string, raw json.RawMessage) output.Meta {
+	m := mergeAPIMeta(raw)
 	if tenant != nil {
 		m.Tenant = *tenant
 		m.TenantSource = tenantSource(tenant, tenantFlag)
@@ -44,22 +45,68 @@ func itemMeta(tenant *string, tenantFlag string) output.Meta {
 	return m
 }
 
-// listMeta is itemMeta plus the API's pagination. Page, limit and total are
-// always emitted for a list, including when the list is empty — a caller that
-// asks "how many are there" must not have to distinguish a zero from a
-// missing key.
-func listMeta(tenant *string, tenantFlag string, m *api.Meta) output.Meta {
-	out := itemMeta(tenant, tenantFlag)
-	if m == nil {
-		// The endpoint sent no pagination. Emitting zeros here would answer
-		// "how many are there?" with 0 while data[] holds rows.
-		return out
+// listMeta is itemMeta by another name. Pagination is not something the CLI adds
+// — it is four of the API's own meta keys, and they arrive the same way
+// `list_count` does on a board.
+func listMeta(tenant *string, tenantFlag string, raw json.RawMessage) output.Meta {
+	return itemMeta(tenant, tenantFlag, raw)
+}
+
+// knownMetaKeys are the ones output.Meta names explicitly, so they render in a
+// fixed order rather than wherever a map iteration puts them.
+var knownMetaKeys = map[string]bool{
+	"page": true, "limit": true, "total": true, "has_more": true,
+}
+
+// mergeAPIMeta lifts the API's meta into ours: the four pagination keys into
+// their fields, everything else into Extra, untouched.
+//
+// An absent meta stays absent. GET /tenants sends none, and a meta of zeros is
+// not the same answer as no meta — `capigo tenants list` once printed
+// "total": 0 beside a row of data because a value type could not tell them apart.
+func mergeAPIMeta(raw json.RawMessage) output.Meta {
+	var m output.Meta
+	if len(raw) == 0 || string(raw) == "null" {
+		return m
 	}
-	out.Page = output.Ptr(m.Page)
-	out.Limit = output.Ptr(m.Limit)
-	out.Total = output.Ptr(m.Total)
-	out.HasMore = output.Ptr(m.HasMore)
-	return out
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return m
+	}
+	for k, v := range fields {
+		if !knownMetaKeys[k] {
+			var any_ any
+			if json.Unmarshal(v, &any_) == nil {
+				if m.Extra == nil {
+					m.Extra = map[string]any{}
+				}
+				m.Extra[k] = any_
+			}
+			continue
+		}
+		switch k {
+		case "page":
+			m.Page = intPtr(v)
+		case "limit":
+			m.Limit = intPtr(v)
+		case "total":
+			m.Total = intPtr(v)
+		case "has_more":
+			var b bool
+			if json.Unmarshal(v, &b) == nil {
+				m.HasMore = output.Ptr(b)
+			}
+		}
+	}
+	return m
+}
+
+func intPtr(v json.RawMessage) *int {
+	var n int
+	if json.Unmarshal(v, &n) != nil {
+		return nil
+	}
+	return output.Ptr(n)
 }
 
 // rawList is the API's `data` array, passed through untouched. An absent array

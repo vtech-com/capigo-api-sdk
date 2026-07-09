@@ -398,6 +398,14 @@ def check_help_samples(c, cli, ids):
                                    capture_output=True, text=True).stdout
 
         missing = sorted(f for f in rec if f'"{f}"' not in page)
+
+        # The API's meta is part of the answer too. GET /mission/boards/{id} sends
+        # `list_count`, and the CLI dropped it for weeks while every field check
+        # said "match" — because every field check compared `data`.
+        api_meta = body.get("meta") or {}
+        pagination = {"page", "limit", "total", "has_more"}
+        missing += sorted(f"meta.{k}" for k in api_meta
+                          if k not in pagination and f'"{k}"' not in page)
         if missing:
             print(f"  {' '.join(cmd):<22} SAMPLE OMITS " + ",".join(missing))
             failures += 1

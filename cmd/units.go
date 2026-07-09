@@ -193,7 +193,7 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		return output.Write(os.Stdout, rawItem(envelope.Data), itemMeta(tenant, unitGetTenant))
+		return output.Write(os.Stdout, rawItem(envelope.Data), itemMeta(tenant, unitGetTenant, envelope.Meta))
 	},
 }
 
@@ -313,7 +313,7 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		meta := itemMeta(tenant, unitCreateTenant)
+		meta := itemMeta(tenant, unitCreateTenant, envelope.Meta)
 		meta.ServerTime = resp.ServerTime
 		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},
@@ -438,7 +438,7 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		meta := itemMeta(tenant, unitUpdateTenant)
+		meta := itemMeta(tenant, unitUpdateTenant, envelope.Meta)
 		meta.ServerTime = resp.ServerTime
 		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},
@@ -563,7 +563,7 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		meta := itemMeta(tenant, unitReplaceTenant)
+		meta := itemMeta(tenant, unitReplaceTenant, envelope.Meta)
 		meta.ServerTime = resp.ServerTime
 		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},

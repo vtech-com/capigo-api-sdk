@@ -11,6 +11,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed — BREAKING
 
+- **`meta` passes the API's own keys through too.** The passthrough rule was applied to `data` and
+  forgotten for `meta`. `GET /mission/boards/{id}` sends `list_count`; the CLI dropped it, and every
+  field check said "match" — because every field check compared `data`.
+
+  `api.Meta` is deleted with the habit. Pagination was never the CLI's to model: `page`, `limit`,
+  `total` and `has_more` are four of the API's meta keys, and they arrive exactly the way
+  `list_count` does. The CLI adds `tenant`, `tenant_source` and `server_time`, and merges the rest
+  untouched. `verify-api` now checks a page's sample against the API's meta as well as its data, and
+  says `SAMPLE OMITS meta.list_count` when it should.
+
 - **The CLI stops re-modelling the API's responses.** Every command decoded the body into a Go
   struct and marshalled it again. That silently dropped every field the struct did not declare,
   and invented every field it declared that the API did not send.
