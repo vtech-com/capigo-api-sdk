@@ -66,6 +66,14 @@ The tap ships a **cask** (not a formula):
 brew install --cask vtech-com/tap/capigo
 ```
 
+To update an existing installation:
+
+```bash
+brew update
+brew upgrade --cask capigo
+capigo version
+```
+
 If you previously installed `capigo` as a formula (pre-cask migration), remove it first or the
 cask install will conflict:
 
