@@ -273,7 +273,7 @@ capigo products list --tenant <code>           # Tenant required for /pcms/*
 
 ```bash
 # 1. Install (see Section 8 for details)
-brew install vtech-com/tap/capigo
+brew install --cask vtech-com/tap/capigo
 
 # 2. Login (paste key created from Capigo web)
 capigo auth login --key csk_abc123...
@@ -593,7 +593,7 @@ Maintain in README:
 
 | Channel | Effort | Priority |
 |---|---|---|
-| **Homebrew tap** (`brew install vtech-com/tap/capigo`) | 1 day | P1 |
+| **Homebrew tap** (`brew install --cask vtech-com/tap/capigo`) | 1 day | P1 |
 | **Scoop bucket** (Windows) | 1 day | P1 |
 | **APT/RPM repo** (Linux enterprise) | 2-3 days | P2 |
 

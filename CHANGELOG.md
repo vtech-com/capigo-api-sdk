@@ -7,7 +7,29 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+
 ## [Unreleased]
+
+### Changed
+
+- **Rebuilt the bundled `capigo-api` skill around live CLI discovery.** The skill now begins
+  with `capigo version`, recommends an official installation path when the binary is missing,
+  and treats root/group/leaf `--help` plus the cross-cutting help topics as the authoritative
+  command reference. Removed the duplicated command catalogue and 561-line flag reference in
+  favor of a compact stable-conventions reference and a single special-case guide for simple
+  versus options/variants product creation. The public OpenAPI specification is now consulted
+  only for explicit API work, SDK development, version diagnosis, or a help-confirmed CLI gap.
+
+### Fixed
+
+- **README's Go-install instructions now state the real installed binary name.** `go install
+  github.com/vtech-com/capigo-api-sdk@latest` produces a binary named `capigo-api-sdk` — Go
+  names it after the module path — not `capigo` as the README previously claimed. The section
+  now shows the rename step alongside the install command.
+
+- **`capigo help soft-delete` no longer refers to "table footers" in its SEE ALSO line.** The
+  CLI has only ever had one output mode — JSON on stdout — so a footer belonging to a mode that
+  never shipped could not be a real cross-reference.
 
 ## [0.20.3] — 2026-07-10
 

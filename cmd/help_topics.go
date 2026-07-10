@@ -229,10 +229,10 @@ VARIANTS
 EVERY OTHER RESOURCE
   brands, categories, product-types, units, members, tasks and boards do not
   expose a deletion flag through this CLI. Their responses carry no is_deleted
-  field and their table output carries no deletion marker.
+  field; there is no table output.
 
 SEE ALSO
-  capigo help output   the JSON contract and table footers`,
+  capigo help output   the envelope, and which stream carries what`,
 }
 
 var versioningTopicCmd = &cobra.Command{
