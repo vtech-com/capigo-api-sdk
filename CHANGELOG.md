@@ -9,6 +9,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.20.2] — 2026-07-10
+
+### Changed
+
+- **Docs:** Refreshed README for v0.20.1 (install fixes, removed Docker section, de-dup sections).
+- **Docs:** Corrected `auth whoami` behavior in guides and removed stale "pre-staged" warnings since the endpoints are now live.
+- **CI:** Bumped Go version to 1.26.5 to fix standard library vulnerability (GO-2026-5856 / `crypto/tls`).
+
 ## [0.20.1] — 2026-07-08
 
 ### Fixed
@@ -519,7 +527,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-[Unreleased]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.20.2...HEAD
+[0.20.2]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.20.1...v0.20.2
+[0.20.1]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.20.0...v0.20.1
 [0.4.0]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.3.4...v0.4.0
 [0.3.4]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.3.2...v0.3.3
