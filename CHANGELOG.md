@@ -7,6 +7,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
+
 ## [Unreleased]
 
 ### Changed
@@ -19,24 +20,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   versus options/variants product creation. The public OpenAPI specification is now consulted
   only for explicit API work, SDK development, version diagnosis, or a help-confirmed CLI gap.
 
-- **`api/openapi.json` synced to production (v1.26.1).** 25 paths became 39; 57 operations in all.
-  Nothing was removed and no existing operation changed shape, so nothing the CLI calls today
-  breaks. What arrived: a read-only **WMS** module (warehouses, inbound receipts, outbound
-  shipments, internal transfers — list and by-`code` for each), **task addressing by `code`**
-  rather than UUID, `GET /pcms/variants/sku/{sku}`, and a `GET` beside the `POST` on
-  `/mission/tasks/{id}/subtasks`.
+### Fixed
 
-  Sixteen of the fifty-seven operations are unwrapped, each recorded with a reason in
-  `unimplementedOps`. None is a gap in the platform; each is a decision this CLI has not made yet.
+- **README's Go-install instructions now state the real installed binary name.** `go install
+  github.com/vtech-com/capigo-api-sdk@latest` produces a binary named `capigo-api-sdk` — Go
+  names it after the module path — not `capigo` as the README previously claimed. The section
+  now shows the rename step alongside the install command.
 
-- **The OpenAPI coverage guard counts operations, not paths.** It used to track "paths not
-  method+path pairs" — by design, and documented as such — so a verb appearing on a path the CLI
-  already called was invisible to it. That is exactly what happened: prod added
-  `GET /mission/tasks/{id}/subtasks` beside the `POST`, and the guard stayed green while a
-  capability went unwrapped.
+- **`capigo help soft-delete` no longer refers to "table footers" in its SEE ALSO line.** The
+  CLI has only ever had one output mode — JSON on stdout — so a footer belonging to a mode that
+  never shipped could not be a real cross-reference.
 
-  The guard now enumerates every `METHOD path` in the spec and fails until each is either wrapped
-  or listed with a reason. A second test rejects a reason too short to be one.
+## [0.20.3] — 2026-07-10
 
 ### Changed — BREAKING
 
@@ -327,16 +322,28 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   it looks like a UUID would send a sku shaped like one to the wrong endpoint, quietly. The sku is
   path-escaped, so a sku containing a slash addresses a variant rather than a different route.
 
+### Changed
+
+- **`api/openapi.json` synced to production (v1.26.1).** 25 paths became 39; 57 operations in all.
+  Nothing was removed and no existing operation changed shape, so nothing the CLI calls today
+  breaks. What arrived: a read-only **WMS** module (warehouses, inbound receipts, outbound
+  shipments, internal transfers — list and by-`code` for each), **task addressing by `code`**
+  rather than UUID, `GET /pcms/variants/sku/{sku}`, and a `GET` beside the `POST` on
+  `/mission/tasks/{id}/subtasks`.
+
+  Sixteen of the fifty-seven operations are unwrapped, each recorded with a reason in
+  `unimplementedOps`. None is a gap in the platform; each is a decision this CLI has not made yet.
+
+- **The OpenAPI coverage guard counts operations, not paths.** It used to track "paths not
+  method+path pairs" — by design, and documented as such — so a verb appearing on a path the CLI
+  already called was invisible to it. That is exactly what happened: prod added
+  `GET /mission/tasks/{id}/subtasks` beside the `POST`, and the guard stayed green while a
+  capability went unwrapped.
+
+  The guard now enumerates every `METHOD path` in the spec and fails until each is either wrapped
+  or listed with a reason. A second test rejects a reason too short to be one.
+
 ### Fixed
-
-- **README's Go-install instructions now state the real installed binary name.** `go install
-  github.com/vtech-com/capigo-api-sdk@latest` produces a binary named `capigo-api-sdk` — Go
-  names it after the module path — not `capigo` as the README previously claimed. The section
-  now shows the rename step alongside the install command.
-
-- **`capigo help soft-delete` no longer refers to "table footers" in its SEE ALSO line.** The
-  CLI has only ever had one output mode — JSON on stdout — so a footer belonging to a mode that
-  never shipped could not be a real cross-reference.
 
 - **`capigo tenants list` reported `"total": 0` beside a row of data.** `GET /tenants` sends no
   meta — the OpenAPI document says so, correctly — but `api.Envelope.Meta` was a value type, so an
@@ -463,6 +470,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   Note the bundled skill was already correct on this point (`single-item commands return the bare
   object`) — the drift was help-side, introduced by restating a cross-cutting contract inside
   nineteen separate command pages instead of stating it once.
+
+## [0.20.2] — 2026-07-10
+
+### Changed
+
+- **Docs:** Refreshed README for v0.20.1 (install fixes, removed Docker section, de-dup sections).
+- **Docs:** Corrected `auth whoami` behavior in guides and removed stale "pre-staged" warnings since the endpoints are now live.
+- **CI:** Bumped Go version to 1.26.5 to fix standard library vulnerability (GO-2026-5856 / `crypto/tls`).
 
 ## [0.20.1] — 2026-07-08
 
@@ -974,7 +989,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-[Unreleased]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.20.3...HEAD
+[0.20.3]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.20.2...v0.20.3
+[0.20.2]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.20.1...v0.20.2
+[0.20.1]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.20.0...v0.20.1
 [0.4.0]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.3.4...v0.4.0
 [0.3.4]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.3.3...v0.3.4
 [0.3.3]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.3.2...v0.3.3

@@ -134,15 +134,17 @@ capigo tenants list      List tenants you can access
 capigo tasks list                    List tasks (--query/-q, --status, --priority, --assignee-id,
                                       --owner-id, --board-id, --board-list-id, --due-after/--due-before,
                                       --created-after/--created-before, --parent-task-id, --page, --limit)
-capigo tasks get <id>                 Get task by ID
-capigo tasks comments <id>            List a task's comment + activity timeline (--type comment|activity,
-                                       --sort asc|desc, --page, --limit)
-capigo tasks attachments download <task-id> <attachment-id>          Download a task-level attachment
-capigo tasks comments attachments download <task-id> <attachment-id> Download a comment/activity attachment
+capigo tasks get <id|--code>           Get task by ID or code (--code requires --tenant)
+capigo tasks comments <id|--code>      List a task's comment + activity timeline (--type comment|activity,
+                                       --sort asc|desc, --page, --limit; --code requires --tenant)
+capigo tasks attachments download <task-id|--code> <attachment-id>          Download a task-level attachment
+capigo tasks comments attachments download <task-id|--code> <attachment-id> Download a comment/activity attachment
 capigo tasks update <id>              Partial update a task (PATCH; --tenant optional; at least one field required)
 capigo tasks create                   Create a new task (--title + --tenant required; --follower-id repeatable;
                                        --subtasks-json to create subtasks atomically)
-capigo tasks subtasks <parent-id>     Add subtask(s) to an existing task (--title, or --from-json for a batch)
+capigo tasks subtasks list <id|--code>     List a task's subtasks (--code requires --tenant)
+capigo tasks subtasks create <id|--code>   Add subtask(s) to an existing task (--title, or --from-json for a batch;
+                                       --code requires --tenant)
 
 capigo boards list       List boards (supports --query/-q, --page, --limit)
 capigo boards get <id>   Get board by ID (includes its `lists` array)
@@ -180,8 +182,8 @@ capigo units create         Create a unit (--name and --abbreviation required)
 capigo units update <id>    Partial update a unit (PATCH)
 capigo units replace <id>   Full replace a unit (PUT, all fields required)
 
-capigo variants list         List variants by barcode prefix (supports --barcode-prefix, --sort)
-capigo variants get <id>     Get a variant by ID
+capigo variants list            List variants by barcode prefix (supports --barcode-prefix, --sort)
+capigo variants get <id|--sku>  Get a variant by ID or SKU (--sku requires --tenant)
 
 capigo version           Print version info
 ```
@@ -197,7 +199,7 @@ Run `capigo <group> <command> --help` for the complete, authoritative flag list 
 
 `--tenant <code>` appears as a local flag on commands that require or accept a tenant scope (e.g. `capigo products list --tenant acme`). It is not a global flag. The active config profile is always read from `~/.capigo/config.json` and cannot be overridden at runtime.
 
-Every PCMS command (`products`, `variants`, `brands`, `categories`, `product-types`, `units`) **requires** a tenant on every verb. `tasks list`/`get`, `boards list`/`get`, and `members list`/`get` accept an *optional* `--tenant` — omit it to read across every tenant you can access (`meta.tenant` is then absent — there is no single tenant to name). `tasks create` and `tasks subtasks` always require a tenant.
+Every PCMS command (`products`, `variants`, `brands`, `categories`, `product-types`, `units`) **requires** a tenant on every verb. `tasks list`/`get`, `boards list`/`get`, and `members list`/`get` accept an *optional* `--tenant` — omit it to read across every tenant you can access (`meta.tenant` is then absent — there is no single tenant to name). `tasks create` and `tasks subtasks create` always require a tenant; `tasks subtasks list` requires a tenant only when addressed by `--code`.
 
 ## Products
 
@@ -236,7 +238,7 @@ capigo products update <id> --tenant acme --tags "clearance"
 Notes:
 
 - `products create`/`update` also accept `--from-json -` for options + variants in one call (mutually exclusive with individual field flags).
-- `products update` is the **only** write verb for updates (PUT-style full replace of the provided fields) — unlike reference data, products has no separate `replace` command.
+- `products update` is the **only** write verb for updates — it sends PUT with partial semantics (only the fields you provide are changed; omitted fields are left as-is). Unlike reference data, products has no separate `replace` command.
 - Soft-deleted products still appear in list results. Check `is_deleted` on the product object — the plain `status` field does not reveal deletion on its own.
 - `--all` streams every row it fetches even if it fails mid-pagination; the rows appear beneath an `error` key and the command exits non-zero.
 - `--ids` exits 4 when a requested id does not come back; the rows that did are still printed, beneath an `error` key naming the ones that did not.
@@ -270,6 +272,9 @@ capigo product-types replace <id> --tenant acme --name "Phone" --no-description
 
 # List variants by barcode prefix (top-1 highest barcode for auto-increment)
 capigo variants list --tenant acme --barcode-prefix 620111 --sort -barcode --limit 1
+
+# Get a variant by SKU instead of UUID
+capigo variants get --sku "SKU-001" --tenant acme
 ```
 
 | Command | Key flags | Description |
@@ -302,8 +307,14 @@ capigo variants list --tenant acme --barcode-prefix 620111 --sort -barcode --lim
 # Filter tasks
 capigo tasks list --status To-Do --priority high
 
+# Get a task by its human-readable code instead of UUID
+capigo tasks get --code ACMEC-68 --tenant acme
+
 # Read a task's comment + activity timeline
 capigo tasks comments <task-uuid> --type comment
+
+# List subtasks
+capigo tasks subtasks list <task-uuid> --tenant acme
 
 # Create a task
 capigo tasks create --tenant acme --title "Fix login bug" --priority high
@@ -314,14 +325,14 @@ echo '[{"title":"Subtask A"},{"title":"Subtask B"}]' \
 
 # Add subtasks to an existing task
 echo '[{"title":"Design"},{"title":"Build","priority":"High"}]' \
-  | capigo tasks subtasks <parent-uuid> --tenant acme --from-json -
+  | capigo tasks subtasks create <parent-uuid> --tenant acme --from-json -
 
 # Download an attachment (task-level or from a comment/activity entry)
 capigo tasks attachments download <task-uuid> <attachment-uuid> --dest ./downloads/
 capigo tasks comments attachments download <task-uuid> <attachment-uuid>
 ```
 
-Attachment downloads fetch a signed, single-use URL (5-minute lifetime) and write the bytes to
+Attachment downloads fetch a signed, short-lived URL (5-minute lifetime) and write the bytes to
 disk in the same call — there's no separate "get the URL" step, and the CLI never prints the
 raw URL. Run the download command right before you need the file; without `--dest`, it lands in
 the current directory under its original name.
