@@ -23,7 +23,7 @@ The repo ships a full working Go CLI binary (`capigo`). All commands documented 
 
 ## Agent ergonomics — output design rule
 
-The primary consumer of this CLI is an AI agent (Tấm, DeepSeek-based) that reads **stdout** and routinely forgets its instruction skill. Settled principle: **truth must be salient on stdout** — totals, the resolved tenant, deleted state, partial/incomplete results, and missing-ID reconciliation are printed where the agent actually looks (table-mode stdout footers/lines, plus additive JSON `meta` fields), never only on stderr, in an exit code, or in documentation. When changing any command's output, ask: *if an agent read only stdout, could it reach a confidently wrong conclusion?* If yes, fix the output, not the manual. (Background: a stderr-only pagination nudge made the agent report a 43-brand tenant as "20" — see CHANGELOG v0.11.0–v0.13.0.)
+The primary consumer of this CLI is an AI agent (Tấm, DeepSeek-based) that reads **stdout** and routinely forgets its instruction skill. Settled principle: **truth must be salient on stdout** — totals, the resolved tenant, deleted state, partial/incomplete results, and missing-ID reconciliation are printed where the agent actually looks (on stdout, in the JSON document itself — salient `data`/`meta`/`error` fields), never only on stderr, in an exit code, or in documentation. When changing any command's output, ask: *if an agent read only stdout, could it reach a confidently wrong conclusion?* If yes, fix the output, not the manual. (Background: a stderr-only pagination nudge made the agent report a 43-brand tenant as "20" — see CHANGELOG v0.11.0–v0.13.0.)
 
 ## Bundled skill stays in sync
 

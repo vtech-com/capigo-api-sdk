@@ -9,6 +9,35 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Rebuilt the bundled `capigo-api` skill around live CLI discovery.** The skill now begins
+  with `capigo version`, recommends an official installation path when the binary is missing,
+  and treats root/group/leaf `--help` plus the cross-cutting help topics as the authoritative
+  command reference. Removed the duplicated command catalogue and 561-line flag reference in
+  favor of a compact stable-conventions reference and a single special-case guide for simple
+  versus options/variants product creation. The public OpenAPI specification is now consulted
+  only for explicit API work, SDK development, version diagnosis, or a help-confirmed CLI gap.
+
+- **`api/openapi.json` synced to production (v1.26.1).** 25 paths became 39; 57 operations in all.
+  Nothing was removed and no existing operation changed shape, so nothing the CLI calls today
+  breaks. What arrived: a read-only **WMS** module (warehouses, inbound receipts, outbound
+  shipments, internal transfers — list and by-`code` for each), **task addressing by `code`**
+  rather than UUID, `GET /pcms/variants/sku/{sku}`, and a `GET` beside the `POST` on
+  `/mission/tasks/{id}/subtasks`.
+
+  Sixteen of the fifty-seven operations are unwrapped, each recorded with a reason in
+  `unimplementedOps`. None is a gap in the platform; each is a decision this CLI has not made yet.
+
+- **The OpenAPI coverage guard counts operations, not paths.** It used to track "paths not
+  method+path pairs" — by design, and documented as such — so a verb appearing on a path the CLI
+  already called was invisible to it. That is exactly what happened: prod added
+  `GET /mission/tasks/{id}/subtasks` beside the `POST`, and the guard stayed green while a
+  capability went unwrapped.
+
+  The guard now enumerates every `METHOD path` in the spec and fails until each is either wrapped
+  or listed with a reason. A second test rejects a reason too short to be one.
+
 ### Changed — BREAKING
 
 - **`meta` passes the API's own keys through too.** The passthrough rule was applied to `data` and
@@ -298,28 +327,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   it looks like a UUID would send a sku shaped like one to the wrong endpoint, quietly. The sku is
   path-escaped, so a sku containing a slash addresses a variant rather than a different route.
 
-### Changed
-
-- **`api/openapi.json` synced to production (v1.26.1).** 25 paths became 39; 57 operations in all.
-  Nothing was removed and no existing operation changed shape, so nothing the CLI calls today
-  breaks. What arrived: a read-only **WMS** module (warehouses, inbound receipts, outbound
-  shipments, internal transfers — list and by-`code` for each), **task addressing by `code`**
-  rather than UUID, `GET /pcms/variants/sku/{sku}`, and a `GET` beside the `POST` on
-  `/mission/tasks/{id}/subtasks`.
-
-  Sixteen of the fifty-seven operations are unwrapped, each recorded with a reason in
-  `unimplementedOps`. None is a gap in the platform; each is a decision this CLI has not made yet.
-
-- **The OpenAPI coverage guard counts operations, not paths.** It used to track "paths not
-  method+path pairs" — by design, and documented as such — so a verb appearing on a path the CLI
-  already called was invisible to it. That is exactly what happened: prod added
-  `GET /mission/tasks/{id}/subtasks` beside the `POST`, and the guard stayed green while a
-  capability went unwrapped.
-
-  The guard now enumerates every `METHOD path` in the spec and fails until each is either wrapped
-  or listed with a reason. A second test rejects a reason too short to be one.
-
 ### Fixed
+
+- **README's Go-install instructions now state the real installed binary name.** `go install
+  github.com/vtech-com/capigo-api-sdk@latest` produces a binary named `capigo-api-sdk` — Go
+  names it after the module path — not `capigo` as the README previously claimed. The section
+  now shows the rename step alongside the install command.
+
+- **`capigo help soft-delete` no longer refers to "table footers" in its SEE ALSO line.** The
+  CLI has only ever had one output mode — JSON on stdout — so a footer belonging to a mode that
+  never shipped could not be a real cross-reference.
 
 - **`capigo tenants list` reported `"total": 0` beside a row of data.** `GET /tenants` sends no
   meta — the OpenAPI document says so, correctly — but `api.Envelope.Meta` was a value type, so an

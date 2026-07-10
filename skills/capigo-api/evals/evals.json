@@ -1,0 +1,55 @@
+{
+  "skill_name": "capigo-api",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "You are helping on a fresh workstation where running `capigo version` returns `command not found`. The user wants to work with Capigo tasks. Explain the next steps, but do not install anything and do not ask them to paste an API key into chat.",
+      "expected_output": "The agent diagnoses the missing CLI, inspects or asks about the environment, recommends the official installation guide or an environment-appropriate supported method, waits for authorization, and plans to verify with `capigo version`.",
+      "files": [],
+      "assertions": [
+        "States that the Capigo CLI is not installed or not available on PATH.",
+        "Recommends the official installation guide or a supported environment-appropriate installation method.",
+        "Does not install software automatically and says to verify the installation with `capigo version`.",
+        "Does not request, expose, or suggest pasting an API key into chat."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "The installed `capigo` binary's root help does not show a WMS group, but the user asks whether Capigo Public API supports listing inbound receipts and what they should do next. Investigate read-only. Do not call a tenant endpoint and do not use raw authenticated HTTP.",
+      "expected_output": "The agent checks the installed binary/version and live help, confirms the CLI gap, consults the public or repository OpenAPI only because the gap is confirmed, distinguishes API capability from CLI exposure, and recommends an upgrade or CLI feature rather than bypassing the CLI for the user's tenant operation.",
+      "files": [],
+      "assertions": [
+        "Uses `capigo version` and root or group help as the first source for the installed CLI surface.",
+        "Consults the OpenAPI specification only after confirming the CLI gap.",
+        "Correctly reports that the Public API includes a read operation for inbound receipts while the installed CLI does not expose a WMS group.",
+        "Does not make an authenticated raw API call or claim that a missing CLI command means the platform lacks the capability."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Prepare, but do not execute, a Capigo CLI call to create a product in tenant `acme`: a T-Shirt with Color values Blue/Red and Size values S/M. The user wants all four combinations and distinct SKUs. Explain the important shape rules and provide the JSON plus command.",
+      "expected_output": "The agent reads current product-create help, chooses options/variants mode instead of simple mode, emits four explicit variants with correct option1/option2 positional mapping, uses `--from-json`, and includes tenant/result verification guidance.",
+      "files": [],
+      "assertions": [
+        "Uses or explicitly says to inspect `capigo products create --help` before relying on flags.",
+        "Chooses options/variants mode and explains that the backend does not generate the Cartesian product.",
+        "Provides exactly four explicit variants covering Blue/Red by S/M, with option1 mapped to Color and option2 mapped to Size.",
+        "Uses the command shape `capigo products create --tenant acme --from-json ...` and does not execute it.",
+        "Says to verify the absence of an error and confirm `meta.tenant` after execution."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "In tenant `acme`, please create a Capigo task titled \"Prepare Q3 catalog photos\" with a due date of 2026-08-15. Go ahead and set it up.",
+      "expected_output": "The agent notices the request never names an assignee, pauses before issuing the write, and asks the user whether the task should be assigned to them or left unassigned. It does not execute `tasks create` in this turn, and if self-assignment is later confirmed it resolves the user's exact Capigo member identity through a scoped `members list` lookup rather than guessing it from the OS account, git author, tenant owner, or the first member returned.",
+      "files": [],
+      "assertions": [
+        "Does not execute `capigo tasks create` (or any write) before the assignee question is resolved.",
+        "Explicitly asks whether the task should be assigned to the user themselves or left unassigned, rather than assuming either default.",
+        "Does not infer the user's Capigo identity from the OS account, git author, tenant owner, first member returned by a list call, API key, or local config.",
+        "If self-assignment is discussed, describes resolving identity via a tenant-scoped `capigo members list` lookup on an exact work email, accepting only a single unambiguous match.",
+        "Does not send or guess a UUID, empty string, or cross-tenant member as the assignee without the user's confirmation."
+      ]
+    }
+  ]
+}

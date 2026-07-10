@@ -36,7 +36,14 @@ Capigo exposes a stable Public API, but integrating it today requires implementi
 go install github.com/vtech-com/capigo-api-sdk@latest
 ```
 
-The binary is named `capigo`. Requires Go 1.26.5+.
+Go names the installed binary after the module path, so it lands as `capigo-api-sdk`, not
+`capigo`. Rename it:
+
+```bash
+mv "$(go env GOPATH)/bin/capigo-api-sdk" "$(go env GOPATH)/bin/capigo"
+```
+
+Requires Go 1.26.5+.
 
 ### GitHub Releases (recommended for most users)
 
@@ -476,18 +483,23 @@ capigo tasks list
 ### Bundled agent skill
 
 This repo ships an agent **skill** under [`skills/capigo-api/`](./skills/capigo-api/) — a
-self-contained guide (`SKILL.md` + `references/`) that teaches an AI agent how to drive the
-`capigo` CLI correctly: auth, tenant handling, exit codes, output modes, and the full command
-surface (Tasks, Boards, Members, Products, Variants, and reference data).
+self-contained, CLI-first guide (`SKILL.md` + `references/`) for operating Capigo safely.
+The skill first checks whether `capigo` is installed and records the active binary/version. If
+the binary is missing, it recommends an installation path appropriate to the environment rather
+than assuming the command exists or installing software without approval.
 
-It is meant to be consumed by skill-aware agent runtimes. Because the skill lives next to the
-CLI it documents, anyone with access to this repo (including partners using the public API with
-their own auth token) gets the same operating instructions the CLI author intended — no need to
-reverse-engineer raw API calls.
+When the binary is available, the skill treats `capigo --help`, group help, leaf-command help,
+and the bundled help topics as the authoritative command reference. It deliberately does not
+copy the full command tree or every flag into the skill: the Public API and CLI can expand
+without making a static command catalogue stale. Bundled references cover only stable shared
+contracts (tenant resolution, filters, pagination, JSON output, errors) and genuinely special
+workflows such as simple-versus-variants product creation.
 
-The skill deliberately covers **CLI mechanics only**. How your organisation assigns product
-codes, allocates barcodes, or governs its reference data is policy that belongs in your own
-catalogue skill, layered on top of this one.
+For normal tenant operations, the agent stays on the CLI. It consults the public OpenAPI spec
+only when the user asks about the API contract, when developing the SDK, when diagnosing a
+version mismatch, or after live help confirms a CLI capability gap. How your organisation
+assigns product codes, allocates barcodes, or governs reference data remains policy for your own
+catalogue skill layered on top of this one.
 
 **Install it** with the [`skills`](https://github.com/vercel-labs/skills) CLI, which pulls the
 skill straight from this repo and drops it into your agent's skills directory (Claude Code,
