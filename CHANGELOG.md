@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.20.3] — 2026-07-10
+
 ### Changed — BREAKING
 
 - **`meta` passes the API's own keys through too.** The passthrough rule was applied to `data` and
@@ -965,7 +967,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-[Unreleased]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.20.2...HEAD
+[Unreleased]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.20.3...HEAD
+[0.20.3]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.20.2...v0.20.3
 [0.20.2]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.20.1...v0.20.2
 [0.20.1]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.20.0...v0.20.1
 [0.4.0]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.3.4...v0.4.0
