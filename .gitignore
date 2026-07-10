@@ -9,3 +9,7 @@ coverage.out
 
 # JetBrains IDE
 .idea/
+
+# Python bytecode from scripts/
+__pycache__/
+*.pyc

@@ -1,136 +1,194 @@
 // Package cmd — openapi_path_coverage_test.go
 //
-// Guard test (SOFT): OpenAPI paths ⟶ implemented or intentionally skipped
+// Guard test: every OpenAPI operation is either wrapped by a CLI command or
+// listed as deliberately unwrapped, with a reason.
 //
-// This test does NOT enforce a 1:1 mapping between spec paths and CLI commands —
-// the CLI is a curated subset. Instead it asserts that every path in openapi.json
-// is either:
+// The unit is the operation — METHOD + path — not the path alone. A path-only
+// guard cannot see a verb appear on a path it already knows: prod added
+// `GET /mission/tasks/{id}/subtasks` beside the POST the CLI already called,
+// and the old test, which tracked "paths not method+path pairs" by design,
+// stayed green while a whole capability went unwrapped.
 //
-//	(a) in implementedPaths — a path the CLI actually calls, or
-//	(b) in unimplementedPaths — a path deliberately not wrapped (with a rationale).
+// The test asserts:
+//   - every operation in the spec is in exactly one of the two maps
+//   - the two maps are disjoint
+//   - neither map names an operation the spec does not declare (no stale entries)
 //
-// The test fails ONLY when a NEW spec path appears that is in neither set, turning
-// `make update-spec` (which pulls new endpoints) into a visible, must-acknowledge
-// signal. A developer who adds a new spec path must consciously decide whether to
-// implement it or add it to the unimplementedPaths allowlist.
-//
-// Additional integrity checks:
-//   - implementedPaths ∩ unimplementedPaths = ∅ (disjoint)
-//   - Every path in implementedPaths actually exists in the spec (no stale entries)
-//   - Every path in unimplementedPaths actually exists in the spec (no stale entries)
-//
-// Paths are OpenAPI path strings (e.g. "/mission/tasks", "/pcms/brands/{id}").
-// A single path may have multiple methods (GET, POST, PATCH, PUT); we track paths
-// not method+path pairs because the CLI maps a resource (e.g. "brands") to a group
-// of methods — if we have brands create/update/replace we have all write methods.
+// When the spec grows, this test fails until someone decides what the growth
+// means. The failure is the decision, not noise to be silenced.
 package cmd
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+	"sort"
+	"strings"
 	"testing"
 )
 
-// implementedPaths is every OpenAPI path the CLI actually calls.
-// Derived by reading cmd/*.go and internal/api/client.go for literal paths passed to
-// client.Do / built in client methods. Update this set when adding new commands.
-var implementedPaths = map[string]string{
-	// Auth / identity
-	"/tenants": "tenants list — GET /tenants",
+// implementedOps is every OpenAPI operation the CLI actually calls. Derived by
+// reading cmd/*.go and internal/api/client.go for the literal methods and paths
+// passed to client.Do.
+var implementedOps = map[string]string{
+	"GET /tenants": "tenants list",
 
-	// Members
-	"/members":      "members list — GET /members",
-	"/members/{id}": "members get — GET /members/{id} (pre-staged from develop; not yet on prod)",
+	"GET /members":      "members list",
+	"GET /members/{id}": "members get",
 
-	// Mission
-	"/mission/boards":                                         "boards list — GET /mission/boards",
-	"/mission/boards/{id}":                                    "boards get — GET /mission/boards/{id}",
-	"/mission/tasks":                                          "tasks list + tasks create — GET + POST /mission/tasks",
-	"/mission/tasks/{id}":                                     "tasks get + tasks update — GET + PATCH /mission/tasks/{id} (PATCH pre-staged from develop; not yet on prod)",
-	"/mission/tasks/{id}/comments":                            "tasks comments — GET /mission/tasks/{id}/comments",
-	"/mission/tasks/{id}/subtasks":                            "tasks subtasks — POST /mission/tasks/{id}/subtasks (batch create subtasks)",
-	"/mission/tasks/with-subtasks":                            "tasks create --subtasks-json — POST /mission/tasks/with-subtasks (atomic parent+subtasks)",
-	"/mission/tasks/{id}/attachments/{attachmentId}/download": "tasks attachments download — GET /mission/tasks/{id}/attachments/{attachmentId}/download",
-	"/mission/tasks/{id}/comments/attachments/{attachmentId}/download": "tasks comments attachments download — GET /mission/tasks/{id}/comments/attachments/{attachmentId}/download",
+	"GET /mission/boards":      "boards list",
+	"GET /mission/boards/{id}": "boards get",
 
-	// PCMS products
-	"/pcms/products":               "products list + products create — GET + POST /pcms/products",
-	"/pcms/products/{id}":          "products get + products update — GET (pre-staged from develop; not yet on prod) + PUT /pcms/products/{id}",
-	"/pcms/products/{id}/variants": "products variants — PUT /pcms/products/{id}/variants",
-	"/pcms/variants":               "variants list — GET /pcms/variants",
-	"/pcms/variants/{id}":          "variants get — GET /pcms/variants/{id} (pre-staged from develop; not yet on prod)",
+	"GET /mission/tasks":                                                   "tasks list",
+	"POST /mission/tasks":                                                  "tasks create",
+	"GET /mission/tasks/{id}":                                              "tasks get",
+	"PATCH /mission/tasks/{id}":                                            "tasks update",
+	"GET /mission/tasks/{id}/comments":                                     "tasks comments",
+	"GET /mission/tasks/{id}/subtasks":                                     "tasks subtasks list",
+	"POST /mission/tasks/{id}/subtasks":                                    "tasks subtasks create (batch)",
+	"POST /mission/tasks/with-subtasks":                                    "tasks create --subtasks-json (atomic parent + subtasks)",
+	"GET /mission/tasks/{id}/attachments/{attachmentId}/download":          "tasks attachments download",
+	"GET /mission/tasks/{id}/comments/attachments/{attachmentId}/download": "tasks comments attachments download",
 
-	// PCMS ref data — brands
-	"/pcms/brands":      "brands list + brands create — GET + POST /pcms/brands",
-	"/pcms/brands/{id}": "brands get + brands update + brands replace — GET + PATCH + PUT /pcms/brands/{id}",
+	// The same five capabilities, addressed by a task's code instead of its id.
+	// One flag on each existing command, not five more commands.
+	"GET /mission/tasks/code/{code}":                                              "tasks get --code",
+	"GET /mission/tasks/code/{code}/comments":                                     "tasks comments --code",
+	"GET /mission/tasks/code/{code}/subtasks":                                     "tasks subtasks list --code",
+	"POST /mission/tasks/code/{code}/subtasks":                                    "tasks subtasks create --code",
+	"GET /mission/tasks/code/{code}/attachments/{attachmentId}/download":          "tasks attachments download --code",
+	"GET /mission/tasks/code/{code}/comments/attachments/{attachmentId}/download": "tasks comments attachments download --code",
 
-	// PCMS ref data — categories
-	"/pcms/categories":      "categories list + categories create — GET + POST /pcms/categories",
-	"/pcms/categories/{id}": "categories get + categories update + categories replace — GET + PATCH + PUT /pcms/categories/{id}",
+	"GET /pcms/products":               "products list",
+	"POST /pcms/products":              "products create",
+	"GET /pcms/products/{id}":          "products get",
+	"PUT /pcms/products/{id}":          "products update — note this PUT takes a partial body, unlike the ref-data PUTs",
+	"PUT /pcms/products/{id}/variants": "products variants (upsert)",
+	"GET /pcms/variants":               "variants list",
+	"GET /pcms/variants/{id}":          "variants get <id>",
+	"GET /pcms/variants/sku/{sku}":     "variants get --sku <sku> — the same record, addressed by its natural key",
 
-	// PCMS ref data — product-types
-	"/pcms/product-types":      "product-types list + product-types create — GET + POST /pcms/product-types",
-	"/pcms/product-types/{id}": "product-types get + product-types update + product-types replace — GET + PATCH + PUT /pcms/product-types/{id}",
+	"GET /pcms/brands":        "brands list",
+	"POST /pcms/brands":       "brands create",
+	"GET /pcms/brands/{id}":   "brands get",
+	"PATCH /pcms/brands/{id}": "brands update",
+	"PUT /pcms/brands/{id}":   "brands replace",
 
-	// PCMS ref data — units
-	"/pcms/units":      "units list + units create — GET + POST /pcms/units",
-	"/pcms/units/{id}": "units get + units update + units replace — GET + PATCH + PUT /pcms/units/{id}",
+	"GET /pcms/categories":        "categories list",
+	"POST /pcms/categories":       "categories create",
+	"GET /pcms/categories/{id}":   "categories get",
+	"PATCH /pcms/categories/{id}": "categories update",
+	"PUT /pcms/categories/{id}":   "categories replace",
+
+	"GET /pcms/product-types":        "product-types list",
+	"POST /pcms/product-types":       "product-types create",
+	"GET /pcms/product-types/{id}":   "product-types get",
+	"PATCH /pcms/product-types/{id}": "product-types update",
+	"PUT /pcms/product-types/{id}":   "product-types replace",
+
+	"GET /pcms/units":        "units list",
+	"POST /pcms/units":       "units create",
+	"GET /pcms/units/{id}":   "units get",
+	"PATCH /pcms/units/{id}": "units update",
+	"PUT /pcms/units/{id}":   "units replace",
 }
 
-// unimplementedPaths is every OpenAPI path the CLI deliberately does not wrap.
-// Document a rationale for each entry. Update this set — rather than implementedPaths —
-// when a path is intentionally left as a no-CLI-command.
-// Currently empty: every spec path is wrapped by a CLI command. Add an entry here
-// (rather than implementedPaths) when a path is intentionally left without a command.
-var unimplementedPaths = map[string]string{}
+// unimplementedOps is every operation the CLI deliberately does not wrap, each
+// with a reason. Add here — rather than to implementedOps — when an operation is
+// left without a command on purpose.
+var unimplementedOps = map[string]string{
 
-// openAPIPathOnlySpec is the minimal subset of OpenAPI 3.0 needed for path enumeration.
+	// WMS: a new read-only module, addressed by code rather than by id. Held out
+	// deliberately — the API surface is not settled yet, and a CLI that wraps an
+	// unsettled surface teaches its callers a shape that will move under them.
+	// Revisit when the module stabilises.
+	"GET /wms/warehouses":                "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+	"GET /wms/warehouses/{code}":         "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+	"GET /wms/inbound-receipts":          "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+	"GET /wms/inbound-receipts/{code}":   "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+	"GET /wms/outbound-shipments":        "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+	"GET /wms/outbound-shipments/{code}": "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+	"GET /wms/internal-transfers":        "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+	"GET /wms/internal-transfers/{code}": "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+}
+
+// openAPIPathOnlySpec is the minimal subset of OpenAPI 3.0 needed to enumerate
+// operations: a path, and the methods hanging off it.
 type openAPIPathOnlySpec struct {
-	Paths map[string]json.RawMessage `json:"paths"`
+	Paths map[string]map[string]json.RawMessage `json:"paths"`
 }
 
-func TestOpenAPIPathCoverage(t *testing.T) {
-	data, err := os.ReadFile("../api/openapi.json")
+var httpMethods = map[string]bool{
+	"get": true, "post": true, "put": true, "patch": true, "delete": true,
+}
+
+func specOperations(t *testing.T) map[string]bool {
+	t.Helper()
+	raw, err := os.ReadFile("../api/openapi.json")
 	if err != nil {
 		t.Fatalf("read api/openapi.json: %v", err)
 	}
-
 	var spec openAPIPathOnlySpec
-	if err := json.Unmarshal(data, &spec); err != nil {
+	if err := json.Unmarshal(raw, &spec); err != nil {
 		t.Fatalf("parse api/openapi.json: %v", err)
 	}
+	ops := map[string]bool{}
+	for path, item := range spec.Paths {
+		for method := range item {
+			if httpMethods[method] {
+				ops[fmt.Sprintf("%s %s", strings.ToUpper(method), path)] = true
+			}
+		}
+	}
+	if len(ops) == 0 {
+		t.Fatal("openapi.json declares no operations; this guard would pass vacuously")
+	}
+	return ops
+}
 
-	// Integrity check 1: implementedPaths and unimplementedPaths must be disjoint.
-	for path := range implementedPaths {
-		if _, inUnimpl := unimplementedPaths[path]; inUnimpl {
-			t.Errorf("path %q appears in BOTH implementedPaths and unimplementedPaths; remove it from one", path)
+func TestOpenAPIPathCoverage(t *testing.T) {
+	ops := specOperations(t)
+
+	for op := range implementedOps {
+		if _, dup := unimplementedOps[op]; dup {
+			t.Errorf("%q is in both implementedOps and unimplementedOps; remove it from one", op)
 		}
 	}
 
-	// Integrity check 2: every path in implementedPaths must exist in the spec.
-	for path := range implementedPaths {
-		if _, inSpec := spec.Paths[path]; !inSpec {
-			t.Errorf("implementedPaths contains %q but that path does not exist in openapi.json; remove the stale entry", path)
+	// No stale entries: an operation the API dropped must not linger in either
+	// map, claiming a command wraps something that is gone.
+	for _, m := range []struct {
+		name string
+		set  map[string]string
+	}{{"implementedOps", implementedOps}, {"unimplementedOps", unimplementedOps}} {
+		for op := range m.set {
+			if !ops[op] {
+				t.Errorf("%s lists %q, which openapi.json does not declare; remove the stale entry", m.name, op)
+			}
 		}
 	}
 
-	// Integrity check 3: every path in unimplementedPaths must exist in the spec.
-	for path, rationale := range unimplementedPaths {
-		if _, inSpec := spec.Paths[path]; !inSpec {
-			t.Errorf("unimplementedPaths contains %q (rationale: %q) but that path does not exist in openapi.json; remove the stale entry", path, rationale)
+	var uncovered []string
+	for op := range ops {
+		_, impl := implementedOps[op]
+		_, unimpl := unimplementedOps[op]
+		if !impl && !unimpl {
+			uncovered = append(uncovered, op)
 		}
 	}
+	sort.Strings(uncovered)
+	for _, op := range uncovered {
+		t.Errorf("openapi.json declares %q, which is in neither implementedOps nor unimplementedOps; "+
+			"wrap it in a CLI command and list it in implementedOps, OR add it to unimplementedOps with a reason", op)
+	}
+}
 
-	// Primary assertion: every spec path must be in implementedPaths OR unimplementedPaths.
-	for path := range spec.Paths {
-		_, implemented := implementedPaths[path]
-		_, unimplemented := unimplementedPaths[path]
-		if !implemented && !unimplemented {
-			t.Errorf(
-				"openapi.json contains path %q which is in neither implementedPaths nor unimplementedPaths; "+
-					"add a CLI command and list it in implementedPaths, OR add it to unimplementedPaths with a rationale",
-				path,
-			)
+// A reason that says nothing is a reason nobody revisits. Every entry in
+// unimplementedOps carries one, and "TODO" is not one.
+func TestUnimplementedOpsCarryAReason(t *testing.T) {
+	for op, reason := range unimplementedOps {
+		if len(reason) < 25 {
+			t.Errorf("%q is listed as unimplemented without a real reason: %q", op, reason)
 		}
 	}
 }

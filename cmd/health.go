@@ -7,16 +7,31 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/vtech-com/capigo-api-sdk/internal/api"
 	"github.com/vtech-com/capigo-api-sdk/internal/output"
 )
 
 var healthCmd = &cobra.Command{
 	Use:   "health",
 	Short: "Check API connectivity and that the API key is accepted",
-	Long: `Call GET /health as a preflight. A zero exit confirms the API is reachable
-and the configured API key is valid; a non-zero exit code (e.g. 2 for auth)
-tells an automated caller exactly why it failed before running real work.`,
+	Long: `Check that the API is reachable and the key is accepted.
+
+PURPOSE
+  The preflight to run before a batch of work. Exit 0 means the API answered
+  and accepted the stored key. It is not tenant-scoped, and unlike auth
+  whoami it does not depend on the /me endpoint — run this one first.
+
+USAGE
+  capigo health
+
+FLAGS
+  This command takes no flags.
+
+OUTPUT
+  { "data": { "ok": true, "timestamp": "2026-07-09T10:15:00Z" }, "meta": {} }
+
+  Exit 2 when the key is rejected, exit 6 when the API cannot be reached.
+
+  capigo help exit-codes  what each non-zero exit means`,
 	Args: cobra.NoArgs,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		client, _, err := buildClient()
@@ -30,21 +45,14 @@ tells an automated caller exactly why it failed before running real work.`,
 			return handleErr(err)
 		}
 
-		var health api.Health
-		if err := json.Unmarshal(resp.Body, &health); err != nil {
-			return handleErr(fmt.Errorf("decode response: %w", err))
+		// /health answers with a bare object, not an envelope. Passed through as
+		// it arrived: this command reports what the API said, not a Go struct's
+		// idea of it.
+		if !json.Valid(resp.Body) {
+			return handleErr(fmt.Errorf("decode response: not JSON"))
 		}
 
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, health)
-		}
-
-		status := "ok"
-		if !health.OK {
-			status = "not ok"
-		}
-		_, _ = fmt.Fprintf(os.Stdout, "%s\t%s\n", status, health.Timestamp)
-		return nil
+		return output.Write(os.Stdout, json.RawMessage(resp.Body), output.Meta{})
 	},
 }
 

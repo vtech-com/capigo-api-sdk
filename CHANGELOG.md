@@ -9,6 +9,444 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed — BREAKING
+
+- **`meta` passes the API's own keys through too.** The passthrough rule was applied to `data` and
+  forgotten for `meta`. `GET /mission/boards/{id}` sends `list_count`; the CLI dropped it, and every
+  field check said "match" — because every field check compared `data`.
+
+  `api.Meta` is deleted with the habit. Pagination was never the CLI's to model: `page`, `limit`,
+  `total` and `has_more` are four of the API's meta keys, and they arrive exactly the way
+  `list_count` does. The CLI adds `tenant`, `tenant_source` and `server_time`, and merges the rest
+  untouched. `verify-api` now checks a page's sample against the API's meta as well as its data, and
+  says `SAMPLE OMITS meta.list_count` when it should.
+
+- **The CLI stops re-modelling the API's responses.** Every command decoded the body into a Go
+  struct and marshalled it again. That silently dropped every field the struct did not declare,
+  and invented every field it declared that the API did not send.
+
+  Both happened, and neither was announced. `tasks get` discarded `parent` and printed a
+  `parent_task_id` no response has ever carried. `variants list` truncated its rows to five
+  fields, so `manufacturer_code` was readable through `variants get` and absent through
+  `variants list` — an agent looking one up through the list would have concluded the product
+  had none.
+
+  `data` is now passed through byte for byte. Measured against a running API across nine
+  endpoints: zero fields lost, zero invented. Every field the platform adds from now on appears
+  in this CLI without a release.
+
+  This is the same defect the display models had, one layer down. Deleting `output.Product` and
+  friends removed the second copy of every resource; `internal/api/models.go` was the first.
+  Fifteen response types and the generic `Envelope[T]` are gone with it. Request bodies stay —
+  the CLI builds those, so it is entitled to a type for them.
+
+  A test now forbids `api.Envelope[` and `Data api.` in any command file. Reading a value the
+  command's own logic needs — an id, a tenant code — goes through a narrow local struct that
+  never decides what the caller sees.
+
+- **One output shape. Table and quiet output are gone, and so is `-o/--output`.** Every command
+  that succeeds prints exactly one thing to stdout:
+
+      { "data": …, "meta": { … } }
+
+  `data` is an array for a list and an object for a single item. There is no flag to ask for
+  another shape, and no default to reason about.
+
+- **The CLI no longer unwraps the API's envelope.** `get`, `create`, `update`, `replace` and
+  `products variants` used to print a bare object, so `.id` worked on them and `.data[].id` on a
+  list. Now every command answers to `.data`. **This breaks every caller that reached for `.id`.**
+
+  The unwrapping was deliberate, and it cost more than it saved: two shapes meant every page had
+  to say which one it emitted, and nineteen of them said it wrongly.
+
+- **`meta` names the tenant.** `meta.tenant` and `meta.tenant_source` (`flag`, `env`, `config`)
+  are on every response from a tenant-scoped command, read or write.
+
+  This is the one fact the old table mode carried that JSON did not. It used to be a line of
+  prose printed in one mode out of three:
+
+      Tenant: acme (from CAPIGO_TENANT)
+
+  A write into the wrong tenant is not an error the server can raise — the request was valid, and
+  it succeeded. The only defence is a caller that can *read* which tenant it hit, so the fact now
+  lives in the shape a caller parses rather than in prose it might notice.
+
+- **`meta.server_time`** replaces the `Server time:` line. It is the CLI's, not the API's — the
+  value comes from a response header the caller never sees.
+
+  `meta` now carries only what a caller cannot work out for itself. The tenant comes from a
+  resolution order internal to this CLI; the server clock comes from that header. The old
+  `Requested N ids · missing:` line and the `INCOMPLETE — aborted at page N` footer became
+  `meta.missing_ids` and `meta.complete` for one release, and are gone: a caller holds the ids it
+  passed to `--ids` and the ids that came back, so the difference is its own subtraction, and a
+  sweep that aborted is already announced by a non-zero exit.
+
+- **`products list --ids` exits 4 when a requested id does not come back.** It used to exit 0 with
+  fewer rows, which answers a different question than the one asked. The rows that did come back
+  are printed first — they are real — and the exit code carries the shortfall.
+
+- **stdout carries exactly one JSON document.** A command that had already printed its envelope
+  and then failed — a `--all` sweep aborting part-way — appended an error object to it, so
+  `json.load` on the pair raised `Extra data`: the precise failure the single-shape contract
+  exists to remove.
+
+  A command that fails after fetching real rows now prints one document carrying both, error
+  first: `{"error": {…}, "data": […], "meta": {…}}`. The rows are not discarded — an `--all`
+  sweep that aborts on page 41 still holds forty real pages — and they are not printed under a
+  clean envelope either, because a `--ids` result missing two ids reports `"total": 1` and
+  `"has_more": false`, which is exactly what success looks like.
+
+  **The presence of the `error` key is the completeness test.** A caller never has to consult the
+  exit code, or read stderr, to know it is holding a prefix of the truth.
+
+- **A failure prints JSON on stdout** — `{"error": {…}}`, carrying `code`, `message`, `meaning`,
+  `next`, `capability_note`, `raw`, `request_id` and `http_status` — plus the one-line summary on
+  stderr. A caller may now parse stdout unconditionally: a failed command yields a diagnosis, not
+  a parse error stacked on top of an API error.
+
+- **`is_deleted` is the only deletion marker.** The `ACTIVE (DELETED)` status suffix was a table
+  artifact. `status` alone never revealed deletion and still does not.
+
+### Removed
+
+- **The `-o json` nudge on stderr, and `CAPIGO_NO_HINTS`.** The nudge existed to catch a caller
+  redirecting table text and parsing it as JSON. stdout is JSON now, so redirecting it is always
+  correct and there is nothing left to warn about. `cmd/output_hint.go` is deleted.
+
+- **`internal/output`'s table renderer, quiet renderer, display models, and list-summary
+  footers** — and with them the `go-pretty` dependency. The package is one file: an envelope and
+  an error shape.
+
+  The display models were a second definition of every resource, maintained in parallel with the
+  API's own. Deleting them deleted a class of bug: a field present in the API response, absent
+  from the display struct, and therefore invisible in a mode the caller happened to be using.
+
+### Added
+
+- **Cross-cutting help topics.** `capigo help tenancy`, `help output`, `help exit-codes`,
+  `help soft-delete` and `help versioning` are documentation pages that ship inside the binary.
+  Cobra lists them under "Additional help topics"; they have no `Run` and never execute.
+
+  They exist so that a fact true of many commands is stated in exactly one place, and referenced
+  from a command page rather than restated on it. Restating a cross-cutting contract on every
+  command page is precisely how the `Response: {"data": …}` error below reached nineteen pages.
+
+  `help versioning` publishes the OpenAPI specification URL and states the relationship plainly:
+  a capability present in the spec and absent from this CLI is a gap in the CLI, not in the
+  platform. Withholding that link never prevented a caller from reaching the API directly — the
+  key, the base URL and `--verbose` were always at hand — it only made the resulting bug report
+  less accurate.
+
+- **Every help page now ends with the build it came from** — `capigo <version> (built <date>) ·
+  capigo help versioning`. Help ships inside the binary, so a page cannot disagree with the
+  binary that printed it; it can, however, describe an older surface than the one deployed. The
+  footer lets the reader tell which. A local `go build` omits the meaningless `(built unknown)`.
+
+- The root help lists the command groups, the global flags, and the topics. The group list and the
+  flag list are generated — from the tree and from the flag definitions — because hand-writing
+  either would be a second copy of it.
+
+- **Every command page rebuilt on a four-section shape** — `PURPOSE · USAGE · FLAGS · OUTPUT`, in
+  that order, which is the order a caller needs them in: what is this for, how do I spell the
+  call, what does each flag do, what comes back.
+
+  `USAGE` is a git-style synopsis, so bracket grammar carries what a sentence used to:
+  `[--ids <uuid,...> | --all]` says the two cannot be combined. `FLAGS` absorbed the old `INPUT`
+  section, which was the flag list under another name, and each flag now carries its own examples
+  and its own traps — a caveat about `--query` is met while deciding whether to use `--query`.
+  `OUTPUT` shows the real table and the real JSON rather than describing them.
+
+  Cross-cutting mechanics (the JSON envelope, list footers, stream placement, tenant resolution,
+  exit codes, soft-delete) are referenced from the help topics rather than restated.
+
+- **Cobra no longer appends `Usage:` and `Flags:` blocks to a command page** (`cmd/help_render.go`
+  replaces the help function). Those blocks restated, in different words, what the page had just
+  said — the two copies of `--query`'s length limit had already drifted to `2-500` and `2–500`.
+  A command page is now its `Long` text and the build footer, and nothing else; a group page adds
+  the generated list of its children.
+
+### Removed
+
+- **`GETTING STARTED` from the root page, and `CAVEATS`, `EXAMPLES` and `SEE ALSO` from every
+  command page.** They were written for a reader who might not have read a skill file, not for a
+  reader of CLI help. A caveat now lives in the flag it qualifies, an example beside the flag it
+  demonstrates, and the command tree already lists the siblings that `SEE ALSO` pointed at.
+
+  Facts newly written down, each verified against the code or the API rather than inherited from
+  the previous text: `products variants` returns the whole product, not the variants you sent;
+  it is not atomic, so a failed call may have applied some items; an omitted field is left
+  unchanged while an explicit `null` clears it; table mode never surfaces `variant_id`;
+  `option1..option3` are positional against the product's `options[]`; `--aliases` and `--tags`
+  replace the array rather than append to it.
+
+- **Reference-data help pages rebuilt on the same shape** — `brands`, `categories`,
+  `product-types` and `units`, twenty pages across five verbs. Each now states the object it
+  returns.
+
+- **`tasks` help pages rebuilt on the same skeleton**, including the two attachment-download
+  commands. `tasks list`, `tasks get` and `tasks create` had no long help at all.
+
+  Three output shapes that no page described are now written down: `tasks create` returns a bare
+  task, *unless* `--subtasks-json` is given, in which case it returns `{task, subtasks[]}`;
+  `tasks subtasks` returns `{parent_task, subtasks[]}`, which is neither a bare object nor a list
+  envelope. A timeline entry's `kind` has four values — `comment`, `activity`, `card`,
+  `artifact` — where the page named two.
+
+- **The remaining groups rebuilt on the same shape** — `boards`, `members`, `tenants`, `auth`,
+  `config`, `health`, `version`.
+
+  `config get`, `config set`, `version` and `auth logout` say plainly that they ignore
+  `--output` and print the same text in every mode — verified by running each. An agent that
+  reaches for `.data` on their output is reaching for something that was never there.
+
+- **Commands are listed in the order a caller meets them**, not alphabetically: `list` before
+  `create`, read before write (`cobra.EnableCommandSorting = false`). `help` and `completion`,
+  which document the CLI rather than the API, no longer sit among the domains.
+
+- **Five tests hold the shape in place**, so it survives the next person who adds a command.
+  They assert the four sections are present, as bare headers, in order; that no retired heading
+  reappears; that `FLAGS` documents every flag the command defines *and* names no flag it does
+  not; and that `USAGE` spells the command it belongs to. The flag checks matter more now that
+  cobra prints no flag table: a flag missing from `FLAGS` is a flag documented nowhere.
+
+### Added
+
+- **`make verify-api`.** Every guard in this repo checks the CLI against `api/openapi.json`. Nothing
+  checked the document against the API — and the document is hand-written and served statically, so
+  it drifts from the routes beside it.
+
+  The target calls a running server and reports, per endpoint, the fields the spec omits (`EXTRA`)
+  and the fields it declares that never arrive (`MISSING`). Against the dev API it finds three:
+  `description` on product-types, and `manufacturer_code` / `legacy_code` / `extra_data` on variants.
+  It also names the two paths the CLI calls that the spec has never heard of — `/health`, which
+  answers 200, and `/me`, which answers 404 because no such route exists.
+
+  A second pass checks each help page's `OUTPUT` sample against a real response — thirty-five pages,
+  every one that reads a record. It caught two. `variants get` never showed `product`, the nested
+  reference that lets a lookup by sku reach the parent product without a second call. `products
+  list` named nine of a product's seventeen fields and said nothing about the eight it dropped.
+  Every other check had said "match", because every other check compared the CLI to the API and
+  never the page to either.
+
+  A page may defer — "the same shape as `products get`" — rather than copy a sample that would then
+  drift from it. The guard follows the pointer, because stating a fact once is this repo's rule and
+  a guard that punishes it would teach the wrong lesson.
+
+  Forty-five of the forty-nine command pages are checked against a real response. Three are exempt:
+  `config set`, `config set-default-tenant` and `config unset-default-tenant` print nothing on
+  success, so a sample there would be the lie. `auth login`, `auth logout` and `config get` run under
+  a throwaway `HOME` — a script that edited the operator's credentials to check a help page would be
+  a poor trade. The two `attachments download` commands are driven for real, into a throwaway
+  directory.
+
+  One page is left: `auth whoami`, which calls an endpoint the API does not implement.
+
+  A field the server returns that the spec never declared is reported, and does not fail the run:
+  that is the document's defect, and a target that is always red is a target nobody runs. A field
+  the spec promises and the server never sends does fail — a page written from the document would
+  describe something that never arrives.
+
+- **`tasks subtasks create` said `parent_task` is "trimmed — id, code, and title only, not the full
+  task shape".** It is the full task. The OpenAPI document declares the trimmed shape, and the page
+  followed it; the handler builds the parent with `toPublicTaskResponse`, and the server returns all
+  sixteen fields with `has_subtasks` now true. Confirmed by minting a temporary owner key, posting one
+  subtask, reading the response, and deleting both. The page now says which of the two is wrong.
+
+  Read-only. It makes no writes and creates nothing.
+
+- **`tasks subtasks list` — and `tasks subtasks` becomes a group.** Reading a task's children and
+  creating them are separate calls to the API, so they are separate commands: `tasks subtasks
+  list` and `tasks subtasks create`. Both take `<parent-id>` or `--code`.
+
+  **BREAKING:** `tasks subtasks <parent-id> --title …` is now `tasks subtasks create <parent-id>
+  --title …`. One command carrying two verbs, switched by a flag, is a command whose behaviour a
+  reader cannot predict from its name.
+
+  `tasks subtasks list` is not `tasks list --parent-task-id <id>`, though it was once dismissed
+  here as a duplicate of it. Against a running API: for a parent that does not exist, the endpoint
+  exits 4 while the filter returns 200 with zero rows — so through the filter, *"this task has no
+  subtasks"* and *"there is no such task"* are the same answer. It also returns every subtask in
+  one response, and stamps each row with the `parent` reference the filter does not add.
+
+  The pagination in its `meta` is nominal — `page` is always 1, `has_more` always false, `limit` is
+  simply the row count — and the page says so, because a caller who pages it will page forever.
+
+- **Tasks addressed by their code: `--code` on five commands.** `tasks get`, `tasks comments`,
+  `tasks subtasks`, and both `attachments download` commands now take `--code ACMEC-68` in place of
+  a UUID, reaching the `/mission/tasks/code/{code}/…` routes.
+
+  One flag on each existing command, not five new commands — the same principle `variants get
+  --sku` set. A bare argument is never sniffed: give an id or `--code`, never both, and never
+  neither. Both addresses are path-escaped.
+
+  **`--code` requires a tenant, and the CLI says so rather than letting the server decide.** A task
+  code is unique within a tenant, not across them, and `loadAccessibleTaskByCode` rejects a lookup
+  that resolves to none. Whether it resolves depends on the API key: a *tenant-scoped* key carries
+  a tenant even with no header, a *global* key does not, and the CLI cannot see which it holds. So
+  the tenant is demanded up front, with a message that explains why, instead of a 400 that arrives
+  for some keys and not others.
+
+  `PATCH` by code is deliberately absent from the API, so `tasks update --code` does not exist.
+  `GET /mission/tasks/code/{code}/subtasks` stays unwrapped, alongside its by-id twin.
+
+- **`variants get --sku <sku>`.** A variant has two addresses — its id, and its sku, unique within
+  a tenant — and `GET /pcms/variants/sku/{sku}` returns the same record as `GET /pcms/variants/{id}`,
+  field for field, verified against a running API.
+
+  So this is one command with two addresses, not two commands: `capigo variants get (<id> | --sku
+  <sku>)`. Giving both, or neither, exits 5. A bare argument is never guessed at — sniffing whether
+  it looks like a UUID would send a sku shaped like one to the wrong endpoint, quietly. The sku is
+  path-escaped, so a sku containing a slash addresses a variant rather than a different route.
+
+### Changed
+
+- **`api/openapi.json` synced to production (v1.26.1).** 25 paths became 39; 57 operations in all.
+  Nothing was removed and no existing operation changed shape, so nothing the CLI calls today
+  breaks. What arrived: a read-only **WMS** module (warehouses, inbound receipts, outbound
+  shipments, internal transfers — list and by-`code` for each), **task addressing by `code`**
+  rather than UUID, `GET /pcms/variants/sku/{sku}`, and a `GET` beside the `POST` on
+  `/mission/tasks/{id}/subtasks`.
+
+  Sixteen of the fifty-seven operations are unwrapped, each recorded with a reason in
+  `unimplementedOps`. None is a gap in the platform; each is a decision this CLI has not made yet.
+
+- **The OpenAPI coverage guard counts operations, not paths.** It used to track "paths not
+  method+path pairs" — by design, and documented as such — so a verb appearing on a path the CLI
+  already called was invisible to it. That is exactly what happened: prod added
+  `GET /mission/tasks/{id}/subtasks` beside the `POST`, and the guard stayed green while a
+  capability went unwrapped.
+
+  The guard now enumerates every `METHOD path` in the spec and fails until each is either wrapped
+  or listed with a reason. A second test rejects a reason too short to be one.
+
+### Fixed
+
+- **`capigo tenants list` reported `"total": 0` beside a row of data.** `GET /tenants` sends no
+  meta — the OpenAPI document says so, correctly — but `api.Envelope.Meta` was a value type, so an
+  absent meta decoded into a meta of zeros and the CLI printed them as fact.
+
+  This CLI's own rule, stated in its help and in the bundled skill, is: *read `meta.total`, do not
+  count `data[]`*. A caller following that rule concluded it had access to no tenants. The rule was
+  right; the number was invented.
+
+  `Envelope.Meta` is now `*Meta`, so absence is representable, and `listMeta` emits no pagination
+  when there is none. A real `total: 0` still survives — that is the answer for an empty tenant,
+  and it must not be dropped along with the fabricated one.
+
+- **Mission endpoints cap `--limit` at 50, not 100.** Measured against a running API: `tasks list`,
+  `tasks comments`, `boards list` and `members list` reject 51 with exit 5, while the PCMS lists
+  accept up to 100. The OpenAPI document declares no maximum at all. Three of those four pages
+  never mentioned a bound.
+
+- **The `replace` pages describe PUT correctly, at last.** They used to say a field you do not
+  send is "reset rather than preserved". Then, on the authority of the OpenAPI document — which
+  declares no required body fields and says "At least one field must be provided" — they were
+  rewritten to say the opposite: that PUT changes only what you send, like PATCH.
+
+  Both were wrong, and the second more so. Against a running API:
+
+      PUT /pcms/brands/{id}  {"name":"x"}                  → 400  VALIDATION_ERROR "Required"
+      PUT /pcms/brands/{id}  {"name":"x","logo_url":null}  → 200
+      PATCH /pcms/brands/{id} {"name":"x"}                 → 200
+
+  PUT is a true replace, enforced by the server: every field must be present, and a nullable one
+  must be sent as `null` rather than omitted. `apps/platform/src/lib/api/dto/brand-write-params.ts`
+  says so in as many words — `// PUT (full replace) — all fields required`. The same holds for
+  categories, units and product-types. The published OpenAPI document is wrong on this point, and
+  reading its prose as behaviour is what produced the second error.
+
+  `products` is the exception: its `PUT /pcms/products/{id}` parses with the *partial* schema, so
+  the same verb means "full replace" on reference data and "partial update" on products.
+
+  The CLI itself was never wrong — `replace` has always required every field flag, which is
+  exactly what the server demands. Only the pages lied. (So did nothing in the bundled skill,
+  which has said `PUT — all fields required` throughout.)
+
+- **`auth whoami` calls an endpoint that does not exist.** The pages said `/me` "is not deployed
+  on production". There is no `/me` route in the API at all — the request reaches the platform's
+  not-found handler and returns HTML. The command exits 4 on every call, and its page now says
+  so, rather than describing a success it cannot produce.
+
+- **`product-types` responses carry `description`.** Every sample on those five pages omitted it,
+  because the OpenAPI document's `PublicProductTypeResponse` declares only `id` and `name`. The
+  server returns the field; the document is incomplete. The pages now show it, and say why.
+
+- **`products update` was labelled PATCH and sends PUT.** `/pcms/products/{id}` exposes only
+  `get` and `put`; there is no PATCH to send. The word had been copied from the reference-data
+  groups, which do have both.
+
+- **`config set` never accepted `default_tenant`.** Its key switch handles `api_url` and
+  `default_profile`, and anything else exits 5 — yet the group page and the `set` page both
+  listed `default_tenant` among the recognised keys. It is settable only through
+  `config set-default-tenant`. (`config get` does read all three, so that page was right.)
+
+- **`config set`, `config set-default-tenant` and `config unset-default-tenant` print nothing on
+  success.** All three pages promised "a one-line confirmation". Only `config get` prints. The
+  pages now say: exit 0 and silence, confirm with `config get`.
+
+- **`config set-default-tenant` does not validate the tenant.** It makes no API call and stores
+  the code as given, while the old help called it "the same thing, with tenant validation".
+
+- **`tenants list` prints no summary footer**, unlike every other list command. Its page said
+  nothing, so a reader who had learned the pattern from `capigo help output` would look for a
+  `Total:` line that is never printed.
+
+- **`auth whoami` calls an endpoint that production does not serve.** `GET /me` is absent from the
+  OpenAPI document and 404s on prod, which the page now states along with the consequence: exit 4
+  here is the endpoint missing, not the key being rejected (that is exit 2). `health` is the
+  preflight that works.
+
+- **The attachment-download pages claimed the signed URL is "single-use".** The OpenAPI
+  description says short-lived (five minutes); nothing in the spec or the code says single-use.
+  The claim is gone.
+
+- **`meta.server_time`, `meta.missing_ids` and `meta.complete` are added by the CLI, not sent by
+  the API.** The `MetaPagination` schema carries exactly four fields — `page`, `limit`, `total`,
+  `has_more`. The pages that mention the other three now say who produces them.
+
+- **`--page 0` is a CLI sentinel**, not a page. It means "send no page parameter"; pages start at
+  1. The old text read `0 = server default`, which invited a caller to believe 0 was a page the
+  server understood.
+
+- **`capigo auth logout` emitted a spurious `-o json` nudge**, for the same reason `capigo help`
+  did: it ignores `--output` and prints plain text, so the nudge was a false positive. Joined
+  `version`, `config` and `help` in `hintExemptGroups`.
+
+- **Twelve reference-data help pages said `--from-json` makes the field flags "ignored". It
+  rejects them.** `create`, `update` and `replace` on all four groups exit 5 with "mutually
+  exclusive" when both are passed — verified by running each. The only command in the CLI that
+  genuinely ignores its field flags is `products create`, and the twelve pages had copied its
+  sentence. Each page now describes its own command.
+
+- **`products update` help claimed the wrong behaviour for `--from-json`.** It said "all
+  individual field flags are ignored". They are not ignored — passing both `--from-json` and a
+  field flag exits 5 with "mutually exclusive". `products create` genuinely does ignore them, and
+  the update page had been describing the create page's behaviour. The two now say what each
+  does, and each names the other's difference.
+
+- **`variants get` help listed the variant shape but omitted three of its fields** —
+  `manufacturer_code`, `legacy_code` and `extra_data`, all present in the response.
+
+- **`capigo help …` emitted a spurious `-o json` nudge on stderr.** The `--help` *flag* never
+  reached the hint (cobra short-circuits before `PersistentPreRunE`), but the `help` *command* is
+  runnable and did, so asking for documentation produced a warning about parsing JSON. A hint
+  that is wrong where it does not belong trains the reader to ignore it where it does. `help` now
+  joins `version` and `config` in `hintExemptGroups`. Present since v0.16.0; surfaced by the new
+  topics, which make `capigo help <topic>` a first-class path.
+
+- **Help text described the API's HTTP response instead of the CLI's stdout.** Nineteen
+  single-item commands (`get` / `create` / `update` / `replace` across `brands`, `categories`,
+  `product-types`, `units`, plus `members get`, `products get`, `variants get`) documented their
+  result as `Response: { "data": { … } }`. The CLI unwraps that envelope — every one of these
+  commands calls `output.WriteJSONObject(os.Stdout, envelope.Data)` and prints the **bare
+  object**. An agent that read the help and then reached for `.data.id` got `null`.
+  The lines now read `Output (-o json): { … }`, naming the stream that the reader actually sees
+  and dropping the wrapper. Doc-only; no behavior change.
+
+  Note the bundled skill was already correct on this point (`single-item commands return the bare
+  object`) — the drift was help-side, introduced by restating a cross-cutting contract inside
+  nineteen separate command pages instead of stating it once.
+
 ## [0.20.1] — 2026-07-08
 
 ### Fixed

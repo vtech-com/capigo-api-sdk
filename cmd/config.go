@@ -5,46 +5,65 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"github.com/vtech-com/capigo-api-sdk/internal/api"
 	"github.com/vtech-com/capigo-api-sdk/internal/config"
 	"github.com/vtech-com/capigo-api-sdk/internal/output"
 )
 
-// configValidationErr exits with code 5 (validation) via the standard error path.
-func configValidationErr(msg string) {
-	e := &api.APIError{Code: "VALIDATION_ERROR", Message: msg, HTTPStatus: 400}
-	output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-	os.Exit(api.ExitCodeFor(e))
-}
-
 // configNotFoundErr exits with code 4 (not found) via the standard error path.
 func configNotFoundErr(msg string) {
-	e := &api.APIError{Code: "NOT_FOUND", Message: msg, HTTPStatus: 404}
-	output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-	os.Exit(api.ExitCodeFor(e))
+	fail("NOT_FOUND", msg, 404)
 }
 
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Manage capigo CLI configuration",
+	Long: `Local settings for this CLI.
+
+Every command here reads and writes ~/.capigo/config.json (file mode 600)
+directly; none of them calls the API. There is exactly one active profile;
+this CLI takes no --profile flag. Settings apply to that active profile.
+
+USAGE
+  capigo config <command> [<args>]`,
 }
 
 var configSetCmd = &cobra.Command{
 	Use:   "set <key> <value>",
 	Short: "Set a configuration key",
-	Long: `Set a configuration key in the active profile.
+	Long: `Set a configuration value.
 
-Supported keys:
-  api_url          - Override the API base URL
-  default_profile  - Set the active profile name`,
+PURPOSE
+  Write one setting into ~/.capigo/config.json. default_tenant is not
+  settable here — use config set-default-tenant instead.
+
+USAGE
+  capigo config set <key> <value>
+
+FLAGS
+  <key>
+      One of api_url, default_profile. Positional, required. An unrecognised
+      key — including default_tenant — exits 5 and names the keys that are
+      recognised.
+
+  <value>
+      The value to store. Positional, required.
+
+        capigo config set api_url https://platform.capigo.app/api/v1
+        capigo config set default_profile staging
+
+OUTPUT
+  Nothing on success: exit 0 and silence. Confirm with config get <key>.
+
+  Exit 5 for an unrecognised key, or when default_profile names a profile
+  that does not exist. Exit 4 when api_url is set before any profile exists —
+  run auth login first.`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		key, value := args[0], args[1]
 
 		cfg, err := config.Load()
 		if err != nil {
-			output.RenderError(os.Stderr, outputMode, "CONFIG_LOAD_ERROR", err.Error(), "")
-			os.Exit(api.ExitCodeFor(err))
+			fail("CONFIG_LOAD_ERROR", err.Error(), 0)
 		}
 
 		switch key {
@@ -62,16 +81,15 @@ Supported keys:
 
 		case "default_profile":
 			if err := config.SetProfile(cfg, value); err != nil {
-				configValidationErr(err.Error())
+				failValidation("%s", err.Error())
 			}
 
 		default:
-			configValidationErr(fmt.Sprintf("unknown key %q; supported: api_url, default_profile", key))
+			failValidation("unknown key %q; supported: api_url, default_profile", key)
 		}
 
 		if err := config.Save(cfg); err != nil {
-			output.RenderError(os.Stderr, outputMode, "CONFIG_SAVE_ERROR", err.Error(), "")
-			os.Exit(1)
+			fail("CONFIG_SAVE_ERROR", err.Error(), 0)
 		}
 		return nil
 	},
@@ -80,62 +98,104 @@ Supported keys:
 var configGetCmd = &cobra.Command{
 	Use:   "get <key>",
 	Short: "Get a configuration value",
-	Long: `Print the value of a configuration key from the active profile.
+	Long: `Read a configuration value.
 
-Supported keys:
-  api_url          - The API base URL
-  default_profile  - The active profile name
-  default_tenant   - The default tenant code for the active profile`,
+PURPOSE
+  Print one setting from ~/.capigo/config.json. To change it, use config set
+  or config set-default-tenant.
+
+USAGE
+  capigo config get <key>
+
+FLAGS
+  <key>
+      One of api_url, default_profile, default_tenant. Positional, required.
+      An unrecognised key exits 5 and names the keys that are recognised.
+
+        capigo config get default_tenant
+        capigo config get api_url
+
+OUTPUT
+  The key and its value are at .data:
+
+      { "data": { "key": "default_tenant", "value": "acme" }, "meta": {} }
+
+  value is "" when the key exists but is unset (e.g. no default_tenant has
+  been stored yet) — never null.
+
+  Exit 4 if the active profile itself is not in the config file yet.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		key := args[0]
 
 		cfg, err := config.Load()
 		if err != nil {
-			output.RenderError(os.Stderr, outputMode, "CONFIG_LOAD_ERROR", err.Error(), "")
-			os.Exit(api.ExitCodeFor(err))
+			fail("CONFIG_LOAD_ERROR", err.Error(), 0)
 		}
 
+		var value string
 		switch key {
 		case "default_profile":
-			name := cfg.ActiveProfile
-			if name == "" {
-				name = "default"
+			value = cfg.ActiveProfile
+			if value == "" {
+				value = "default"
 			}
-			fmt.Println(name)
 
 		case "api_url":
 			p, err := config.ActiveProfile(cfg)
 			if err != nil {
 				configNotFoundErr(err.Error())
 			}
-			fmt.Println(p.APIURL)
+			value = p.APIURL
 
 		case "default_tenant":
 			p, err := config.ActiveProfile(cfg)
 			if err != nil {
 				configNotFoundErr(err.Error())
 			}
-			fmt.Println(p.DefaultTenant)
+			value = p.DefaultTenant
 
 		default:
-			configValidationErr(fmt.Sprintf("unknown key %q; supported: api_url, default_profile, default_tenant", key))
+			failValidation("unknown key %q; supported: api_url, default_profile, default_tenant", key)
 		}
-		return nil
+
+		return output.Write(os.Stdout, map[string]string{"key": key, "value": value}, output.Meta{})
 	},
 }
 
 var configSetDefaultTenantCmd = &cobra.Command{
 	Use:   "set-default-tenant <code>",
 	Short: "Set the default tenant for the active profile",
-	Args:  cobra.ExactArgs(1),
+	Long: `Set the tenant used when --tenant is omitted.
+
+PURPOSE
+  Store default_tenant as the last fallback in tenant resolution: --tenant,
+  then CAPIGO_TENANT, then this value. See capigo help tenancy for the full
+  order.
+
+USAGE
+  capigo config set-default-tenant <code>
+
+FLAGS
+  <code>
+      A tenant code. Positional, required. Stored as given: this command does
+      not call the API, so it does not check that the tenant exists. Confirm
+      the code first with tenants list.
+
+        capigo config set-default-tenant acme
+
+OUTPUT
+  Nothing on success: exit 0 and silence. Confirm with config get
+  default_tenant.
+
+  Exit 4 if the active profile itself is not in the config file yet.`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		code := args[0]
 
 		cfg, err := config.Load()
 		if err != nil {
-			output.RenderError(os.Stderr, outputMode, "CONFIG_LOAD_ERROR", err.Error(), "")
-			os.Exit(api.ExitCodeFor(err))
+			fail("CONFIG_LOAD_ERROR", err.Error(), 0)
 		}
 
 		profileName := cfg.ActiveProfile
@@ -150,8 +210,7 @@ var configSetDefaultTenantCmd = &cobra.Command{
 		cfg.Profiles[profileName] = p
 
 		if err := config.Save(cfg); err != nil {
-			output.RenderError(os.Stderr, outputMode, "CONFIG_SAVE_ERROR", err.Error(), "")
-			os.Exit(1)
+			fail("CONFIG_SAVE_ERROR", err.Error(), 0)
 		}
 		return nil
 	},
@@ -160,12 +219,29 @@ var configSetDefaultTenantCmd = &cobra.Command{
 var configUnsetDefaultTenantCmd = &cobra.Command{
 	Use:   "unset-default-tenant",
 	Short: "Clear the default tenant for the active profile",
-	Args:  cobra.NoArgs,
+	Long: `Clear the default tenant.
+
+PURPOSE
+  Remove default_tenant, so that every command which needs a tenant must be
+  given one explicitly via --tenant or CAPIGO_TENANT. See capigo help
+  tenancy for the full resolution order.
+
+USAGE
+  capigo config unset-default-tenant
+
+FLAGS
+  (none)
+
+OUTPUT
+  Nothing on success: exit 0 and silence. Confirm with config get
+  default_tenant, which then reports value: "".
+
+  Exit 4 if the active profile itself is not in the config file yet.`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cfg, err := config.Load()
 		if err != nil {
-			output.RenderError(os.Stderr, outputMode, "CONFIG_LOAD_ERROR", err.Error(), "")
-			os.Exit(api.ExitCodeFor(err))
+			fail("CONFIG_LOAD_ERROR", err.Error(), 0)
 		}
 
 		profileName := cfg.ActiveProfile
@@ -180,16 +256,15 @@ var configUnsetDefaultTenantCmd = &cobra.Command{
 		cfg.Profiles[profileName] = p
 
 		if err := config.Save(cfg); err != nil {
-			output.RenderError(os.Stderr, outputMode, "CONFIG_SAVE_ERROR", err.Error(), "")
-			os.Exit(1)
+			fail("CONFIG_SAVE_ERROR", err.Error(), 0)
 		}
 		return nil
 	},
 }
 
 func init() {
-	configCmd.AddCommand(configSetCmd)
 	configCmd.AddCommand(configGetCmd)
+	configCmd.AddCommand(configSetCmd)
 	configCmd.AddCommand(configSetDefaultTenantCmd)
 	configCmd.AddCommand(configUnsetDefaultTenantCmd)
 	rootCmd.AddCommand(configCmd)

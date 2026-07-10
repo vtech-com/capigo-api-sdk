@@ -15,6 +15,13 @@ import (
 var brandsCmd = &cobra.Command{
 	Use:   "brands",
 	Short: "Manage PCMS brands",
+	Long: `Brands, part of the Capigo Product Catalog Management System (PCMS).
+
+Brands are tenant-scoped reference data. Every command here requires a
+tenant, and every response names the tenant it resolved to, in meta.
+
+USAGE
+  capigo brands <command> --tenant <code> [<args>]`,
 }
 
 // --------------------------------------------------------------------------
@@ -31,10 +38,60 @@ var (
 var brandsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List brands",
-	Long: `List brands from the PCMS catalog. Tenant is required.
+	Long: `List brands.
 
-Use --query / -q for a name-contains search (case-insensitive, max 200 chars).
-Each brand in the response has: id, name, logo_url (string or null).`,
+PURPOSE
+  Read the brands defined for a tenant, optionally narrowed by name. To
+  resolve a name to an id before creating or updating a product, this is the
+  command to run. For one brand in full, use brands get.
+
+USAGE
+  capigo brands list --tenant <code> [-q <term>] [--page <n>] [--limit <n>]
+
+FLAGS
+  --tenant <code>
+      Tenant to read from. Required.
+
+        capigo brands list --tenant acme
+
+  -q, --query <term>
+      Name-contains filter, case-insensitive, max 200 characters. Empty or
+      omitted means no filter.
+
+        capigo brands list --tenant acme -q nike
+
+  --page <n>
+      Page to fetch. Pages start at 1. The default, 0, sends no page
+      parameter and lets the server choose.
+
+  --limit <n>
+      Rows per page, 1 to 100. Defaults to 20.
+
+        capigo brands list --tenant acme --page 2 --limit 100
+
+OUTPUT
+  The brands are at .data[]:
+
+      {
+        "data": [
+          { "id": "4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb", "name": "Coolmate",
+            "logo_url": null },
+          { "id": "8f2e0a91-6c3d-4b17-9e2a-1f5d7c8b0e44", "name": "Nike",
+            "logo_url": "https://cdn.capigo.app/b/nike.png" }
+        ],
+        "meta": {
+          "tenant": "acme",
+          "tenant_source": "flag",
+          "page": 1, "limit": 20, "total": 2, "has_more": false
+        }
+      }
+
+  Read meta.total rather than counting .data[]: a page never holds more than
+  --limit, so a full count needs meta, not arithmetic.
+
+  meta.tenant is the tenant this call actually ran against, and
+  meta.tenant_source says whether that came from the flag, from CAPIGO_TENANT,
+  or from the config file. See capigo help tenancy.`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -49,15 +106,7 @@ Each brand in the response has: id, name, logo_url (string or null).`,
 		}
 
 		tenant := resolveTenant(brandListTenant, profile)
-		if tenant == nil {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "brands commands require a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
-		}
+		requireTenant(tenant, "brands commands")
 
 		validatePCMSLimit(brandListLimit)
 
@@ -66,48 +115,12 @@ Each brand in the response has: id, name, logo_url (string or null).`,
 			return handleErr(err)
 		}
 
-		var envelope api.Envelope[[]api.Brand]
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if outputMode == "json" {
-			data := envelope.Data
-			if data == nil {
-				data = []api.Brand{}
-			}
-			return output.WriteJSONList(os.Stdout, data, envelope.Meta)
-		}
-
-		items := make([]output.Brand, len(envelope.Data))
-		for i, b := range envelope.Data {
-			items[i] = output.Brand{
-				ID:      b.ID,
-				Name:    b.Name,
-				LogoURL: b.LogoURL,
-			}
-		}
-
-		if err := output.Render(os.Stdout, outputMode, items, output.RenderOpts{
-			GlobalMode:   false,
-			ResourceKind: "brand",
-		}); err != nil {
-			return handleErr(err)
-		}
-
-		if outputMode == "table" {
-			output.WriteListSummary(os.Stdout, output.ListSummary{
-				Tenant:     derefTenant(tenant),
-				TenantNote: tenantNote(tenant, brandListTenant),
-				Shown:      len(envelope.Data),
-				Page:       envelope.Meta.Page,
-				Limit:      envelope.Meta.Limit,
-				Total:      envelope.Meta.Total,
-				HasMore:    envelope.Meta.HasMore,
-			})
-		}
-
-		return nil
+		return output.Write(os.Stdout, rawList(envelope.Data), listMeta(tenant, brandListTenant, envelope.Meta))
 	},
 }
 
@@ -125,17 +138,57 @@ var (
 var brandsCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a new brand",
-	Long: `Create a new brand in PCMS. Tenant is required.
+	Long: `Create a brand.
 
-Provide --name and optional --logo-url, or supply the full request body
-with --from-json <file> (use - to read from stdin). When --from-json is
-set, all individual field flags are ignored.
+PURPOSE
+  Add a brand to this tenant's reference data. A URL-safe slug is generated
+  from the name server-side. Check brands list -q first: the server rejects
+  a name whose slug collides with an existing brand.
 
-JSON body (--from-json):
-  { "name": "Nike", "logo_url": "https://example.com/logo.png" }
-  { "name": "No Brand" }
+USAGE
+  capigo brands create --tenant <code> (--name <text> [--logo-url <url>]
+                       | --from-json <path|->)
 
-Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" } }`,
+FLAGS
+  --tenant <code>
+      Tenant to create the brand in. Required.
+
+  --name <text>
+      Brand name, 1 to 500 characters. Required unless --from-json is used.
+
+        capigo brands create --tenant acme --name Nike
+
+  --logo-url <url>
+      Logo URL. Optional; a brand with no logo is created if omitted.
+
+  --from-json <path|->
+      Send the whole request body from a file, or - for stdin. Mutually
+      exclusive with --name and --logo-url: passing both exits 5.
+
+      Body:
+
+          { "name": "Nike", "logo_url": "https://example.com/logo.png" }
+          { "name": "No Brand" }
+
+        echo '{"name":"No Brand"}' \
+            | capigo brands create --tenant acme --from-json -
+
+OUTPUT
+  The created brand is at .data:
+
+      {
+        "data": { "id": "8f2e0a91-6c3d-4b17-9e2a-1f5d7c8b0e44",
+                  "name": "Nike", "logo_url": null },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-07-09T04:12:33Z" }
+      }
+
+  meta.tenant is the tenant the brand was written to. Read it: a write that
+  landed in the wrong tenant looks exactly like a write that succeeded.
+
+  Exit 5 if --name is missing (and --from-json is not used), or if
+  --from-json is combined with a field flag. Exit 8 if a brand with the same
+  name (slug) already exists in the tenant.`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -150,28 +203,13 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 		}
 
 		tenant := resolveTenant(brandCreateTenant, profile)
-		defer echoTenant(tenant, brandCreateTenant)
-		if tenant == nil {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "brands commands require a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
-		}
+		requireTenant(tenant, "brands commands")
 
 		var body any
 		if brandCreateFromJSON != "" {
 			for _, f := range []string{"name", "logo-url"} {
 				if cmd.Flags().Changed(f) {
-					e := &api.APIError{
-						Code:       "VALIDATION_ERROR",
-						Message:    fmt.Sprintf("--from-json and --%s are mutually exclusive", f),
-						HTTPStatus: 400,
-					}
-					output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-					os.Exit(api.ExitCodeFor(e))
+					failValidation("--from-json and --%s are mutually exclusive", f)
 				}
 			}
 			raw, err := readJSONInput(brandCreateFromJSON)
@@ -181,9 +219,7 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 			body = json.RawMessage(raw)
 		} else {
 			if brandCreateName == "" {
-				e := &api.APIError{Code: "VALIDATION_ERROR", Message: "--name is required", HTTPStatus: 400}
-				output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-				os.Exit(api.ExitCodeFor(e))
+				failValidation("--name is required")
 			}
 			req := api.CreateBrandRequest{Name: brandCreateName}
 			if brandCreateLogoURL != "" {
@@ -197,24 +233,14 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.Brand `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		emitServerTime(resp.ServerTime, "")
-
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		return output.Render(os.Stdout, outputMode, output.Brand{
-			ID:      envelope.Data.ID,
-			Name:    envelope.Data.Name,
-			LogoURL: envelope.Data.LogoURL,
-		}, output.RenderOpts{GlobalMode: false, ResourceKind: "brand"})
+		meta := itemMeta(tenant, brandCreateTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},
 }
 
@@ -232,22 +258,68 @@ var (
 
 var brandsUpdateCmd = &cobra.Command{
 	Use:   "update <id>",
-	Short: "Partial update of an existing brand (PATCH)",
-	Long: `Partial update (PATCH) of an existing brand in PCMS. Tenant is required.
+	Short: "Change some fields of a brand",
+	Long: `Update a brand. Fields you do not send are left unchanged.
 
-All fields are optional; at least one must be provided. Fields not specified
-are left unchanged on the server. Use --clear-logo to explicitly set logo_url
-to null (removing the logo).
+PURPOSE
+  Change one or a few fields of a brand without restating the rest. This is
+  PATCH: the API accepts any subset, so long as it is not empty, and leaves
+  every field you do not send unchanged.
 
-Use --from-json to supply the full update body as JSON (file path or - for
-stdin). When --from-json is set, all individual field flags are ignored.
+  brands replace <id> is the other half of the pair. It sends PUT, which the
+  API refuses unless every field is present — use it when you want the whole
+  record stated.
 
-JSON body (--from-json):
-  { "name": "Nike Inc" }
-  { "logo_url": "https://example.com/new-logo.png" }
-  { "logo_url": null }
+USAGE
+  capigo brands update <id> --tenant <code>
+                       ([--name <text>] [--logo-url <url> | --clear-logo]
+                       | --from-json <path|->)
+                      
 
-Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" } }`,
+FLAGS
+  <id>
+      Brand id, a UUID. Positional, required.
+
+  --tenant <code>
+      Tenant the brand belongs to. Required. Exits 4 if the brand is not in
+      it.
+
+  --name <text>
+      New name, 1 to 500 characters. Renaming recomputes the slug, so it can
+      collide with another brand's name (exit 8).
+
+        capigo brands update 4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb \
+            --tenant acme --name "Nike Vietnam"
+
+  --logo-url <url>
+      New logo URL. Mutually exclusive with --clear-logo.
+
+  --clear-logo
+      Set logo_url to null. Mutually exclusive with --logo-url.
+
+        capigo brands update 4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb \
+            --tenant acme --clear-logo
+
+  --from-json <path|->
+      Send the whole request body from a file, or - for stdin. Mutually
+      exclusive with --name, --logo-url and --clear-logo: passing both
+      exits 5.
+
+OUTPUT
+  The brand as it now stands is at .data:
+
+      {
+        "data": { "id": "4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
+                  "name": "Nike Vietnam", "logo_url": null },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-07-09T04:12:33Z" }
+      }
+
+  meta.tenant is the tenant the write landed in. See capigo help tenancy.
+
+  Exit 5 if no field flag is given (and --from-json is not used), or if
+  --from-json is combined with a field flag. Exit 4 if <id> is not in the
+  resolved tenant. Exit 8 on a name collision.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -264,18 +336,13 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 		}
 
 		tenant := resolveTenant(brandUpdateTenant, profile)
-		defer echoTenant(tenant, brandUpdateTenant)
-		if tenant == nil {
-			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "brands commands require a tenant; pass --tenant <code> or set default", "")
-			os.Exit(5)
-		}
+		requireTenant(tenant, "brands commands")
 
 		var body any
 		if brandUpdateFromJSON != "" {
 			for _, f := range []string{"name", "logo-url", "clear-logo"} {
 				if cmd.Flags().Changed(f) {
-					output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", fmt.Sprintf("--from-json and --%s are mutually exclusive", f), "")
-					os.Exit(5)
+					failValidation("--from-json and --%s are mutually exclusive", f)
 				}
 			}
 			raw, err := readJSONInput(brandUpdateFromJSON)
@@ -294,8 +361,7 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 				m["logo_url"] = brandUpdateLogoURL
 			}
 			if len(m) == 0 {
-				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "at least one field must be provided for update", "")
-				os.Exit(5)
+				failValidation("at least one field must be provided for update")
 			}
 			body = m
 		}
@@ -305,24 +371,14 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.Brand `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		emitServerTime(resp.ServerTime, "")
-
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		return output.Render(os.Stdout, outputMode, output.Brand{
-			ID:      envelope.Data.ID,
-			Name:    envelope.Data.Name,
-			LogoURL: envelope.Data.LogoURL,
-		}, output.RenderOpts{GlobalMode: false, ResourceKind: "brand"})
+		meta := itemMeta(tenant, brandUpdateTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},
 }
 
@@ -334,11 +390,41 @@ var brandGetTenant string
 
 var brandsGetCmd = &cobra.Command{
 	Use:   "get <id>",
-	Short: "Get a brand by ID",
-	Long: `Get a single brand by ID from PCMS. Tenant is required.
+	Short: "Get a brand by id",
+	Long: `Get one brand by id.
 
-Returns 404 for both not-found and cross-tenant resources (no info leakage).
-Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" } }`,
+PURPOSE
+  Read a single brand, addressed by id only. To find that id from a name, use
+  brands list --query.
+
+USAGE
+  capigo brands get <id> --tenant <code>
+
+FLAGS
+  <id>
+      Brand id, a UUID. Positional, required.
+
+  --tenant <code>
+      Tenant the brand belongs to. Required. Exits 4 if the brand is not in it.
+
+        capigo brands get 4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb --tenant acme
+
+OUTPUT
+  The brand is at .data — an object, where a list puts an array. The envelope
+  is the same either way:
+
+      {
+        "data": {
+          "id": "4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
+          "name": "Coolmate",
+          "logo_url": "https://cdn.capigo.app/b/coolmate.png"
+        },
+        "meta": { "tenant": "acme", "tenant_source": "flag" }
+      }
+
+  A single-item read carries no pagination meta; there is nothing to page.
+
+  Exit 4 when no such brand exists in the resolved tenant.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -354,32 +440,19 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 		}
 
 		tenant := resolveTenant(brandGetTenant, profile)
-		if tenant == nil {
-			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "brands commands require a tenant; pass --tenant <code> or set default", "")
-			os.Exit(5)
-		}
+		requireTenant(tenant, "brands commands")
 
 		resp, err := client.Do(ctx, "GET", "/pcms/brands/"+args[0], nil, tenant)
 		if err != nil {
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.Brand `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		return output.Render(os.Stdout, outputMode, output.Brand{
-			ID:      envelope.Data.ID,
-			Name:    envelope.Data.Name,
-			LogoURL: envelope.Data.LogoURL,
-		}, output.RenderOpts{GlobalMode: false, ResourceKind: "brand"})
+		return output.Write(os.Stdout, rawItem(envelope.Data), itemMeta(tenant, brandGetTenant, envelope.Meta))
 	},
 }
 
@@ -397,20 +470,67 @@ var (
 
 var brandsReplaceCmd = &cobra.Command{
 	Use:   "replace <id>",
-	Short: "Full replace of a brand (PUT)",
-	Long: `Full replace (PUT) of an existing brand in PCMS. Tenant is required.
+	Short: "Send a brand's full field set at once",
+	Long: `Replace a brand by sending every field at once.
 
-All fields are required by the server. You must provide either --logo-url <url>
-or --no-logo (to set logo_url to null); these flags are mutually exclusive.
+PURPOSE
+  Send the brand's whole field set in one call. PUT is a true replace: the
+  API requires every field on the request and rejects one that leaves any out,
+  with exit 5 and the message "Required". logo_url may be null, but it must be
+  sent. This command's flags mirror that rule — --name, and one of --logo-url
+  or --no-logo, on every call — so an incomplete record is refused here rather
+  than at the server. To change one field and leave the rest alone, use
+  brands update <id>, which sends PATCH.
 
-Use --from-json to supply the full request body as JSON (file path or - for
-stdin). When --from-json is set, all individual field flags are ignored.
+USAGE
+  capigo brands replace <id> --tenant <code>
+                       (--name <text> (--logo-url <url> | --no-logo)
+                       | --from-json <path|->)
+                      
 
-JSON body (--from-json):
-  { "name": "Nike", "logo_url": "https://example.com/logo.png" }
-  { "name": "No Brand", "logo_url": null }
+FLAGS
+  <id>
+      Brand id, a UUID. Positional, required.
 
-Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" } }`,
+  --tenant <code>
+      Tenant the brand belongs to. Required. Exits 4 if the brand is not in
+      it.
+
+  --name <text>
+      New name, 1 to 500 characters. Required unless --from-json is used.
+      Renaming recomputes the slug, so it can collide with another brand's
+      name (exit 8).
+
+  --logo-url <url>
+      New logo URL. Exactly one of --logo-url and --no-logo is required
+      unless --from-json is used; they are mutually exclusive.
+
+  --no-logo
+      Set logo_url to null. Mutually exclusive with --logo-url.
+
+        capigo brands replace 4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb \
+            --tenant acme --name Nike --no-logo
+
+  --from-json <path|->
+      Send the whole request body from a file, or - for stdin. Mutually
+      exclusive with --name, --logo-url and --no-logo: passing both exits 5.
+
+OUTPUT
+  The brand as it now stands is at .data:
+
+      {
+        "data": { "id": "4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
+                  "name": "Nike", "logo_url": null },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-07-09T04:12:33Z" }
+      }
+
+  meta.tenant is the tenant the write landed in. See capigo help tenancy.
+
+  Exit 5 if --name or a logo flag is missing (and --from-json is not used),
+  if both --logo-url and --no-logo are given, or if --from-json is combined
+  with a field flag. Exit 4 if <id> is not in the resolved tenant. Exit 8 on
+  a name collision.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -427,18 +547,13 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 		}
 
 		tenant := resolveTenant(brandReplaceTenant, profile)
-		defer echoTenant(tenant, brandReplaceTenant)
-		if tenant == nil {
-			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "brands commands require a tenant; pass --tenant <code> or set default", "")
-			os.Exit(5)
-		}
+		requireTenant(tenant, "brands commands")
 
 		var body any
 		if brandReplaceFromJSON != "" {
 			for _, f := range []string{"name", "logo-url", "no-logo"} {
 				if cmd.Flags().Changed(f) {
-					output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", fmt.Sprintf("--from-json and --%s are mutually exclusive", f), "")
-					os.Exit(5)
+					failValidation("--from-json and --%s are mutually exclusive", f)
 				}
 			}
 			raw, err := readJSONInput(brandReplaceFromJSON)
@@ -448,17 +563,14 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 			body = json.RawMessage(raw)
 		} else {
 			if brandReplaceName == "" {
-				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "--name is required for replace", "")
-				os.Exit(5)
+				failValidation("--name is required for replace")
 			}
 			logoSet := cmd.Flags().Changed("logo-url")
 			if logoSet && brandReplaceNoLogo {
-				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "--logo-url and --no-logo are mutually exclusive", "")
-				os.Exit(5)
+				failValidation("--logo-url and --no-logo are mutually exclusive")
 			}
 			if !logoSet && !brandReplaceNoLogo {
-				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "one of --logo-url or --no-logo is required for replace", "")
-				os.Exit(5)
+				failValidation("one of --logo-url or --no-logo is required for replace")
 			}
 			req := api.ReplaceBrandRequest{Name: brandReplaceName}
 			if !brandReplaceNoLogo {
@@ -472,24 +584,14 @@ Response: { "data": { "id": "uuid", "name": "string", "logo_url": "string|null" 
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.Brand `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		emitServerTime(resp.ServerTime, "")
-
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		return output.Render(os.Stdout, outputMode, output.Brand{
-			ID:      envelope.Data.ID,
-			Name:    envelope.Data.Name,
-			LogoURL: envelope.Data.LogoURL,
-		}, output.RenderOpts{GlobalMode: false, ResourceKind: "brand"})
+		meta := itemMeta(tenant, brandReplaceTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},
 }
 
@@ -518,6 +620,6 @@ func init() {
 	brandsReplaceCmd.Flags().BoolVar(&brandReplaceNoLogo, "no-logo", false, "set logo_url to null (mutually exclusive with --logo-url)")
 	brandsReplaceCmd.Flags().StringVar(&brandReplaceFromJSON, "from-json", "", "path to JSON file with full request body (use - for stdin); mutually exclusive with individual field flags")
 
-	brandsCmd.AddCommand(brandsListCmd, brandsCreateCmd, brandsUpdateCmd, brandsGetCmd, brandsReplaceCmd)
+	brandsCmd.AddCommand(brandsListCmd, brandsGetCmd, brandsCreateCmd, brandsUpdateCmd, brandsReplaceCmd)
 	rootCmd.AddCommand(brandsCmd)
 }

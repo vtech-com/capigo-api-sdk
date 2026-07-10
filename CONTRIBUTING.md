@@ -88,9 +88,9 @@ whole job. These make targets are for development and for the internal Tấm hos
 ```
 cmd/            Cobra commands — one file per command group
 internal/
-  api/          HTTP client, error mapping, response types
+  api/          HTTP client, error mapping, request types (never response types)
   config/       Read/write ~/.capigo/config.json
-  output/       table | json | yaml | quiet renderer
+  output/       The one JSON envelope, and the error shape
 pkg/            Public packages (empty in Phase 1)
 api/
   openapi.json  OpenAPI spec — source of truth for all endpoints
@@ -124,9 +124,57 @@ docs/           Additional documentation
 - Standard Go formatting — `gofmt` enforced by CI
 - Error messages: lowercase, no period at end (Go convention)
 - Exit codes: always use the constants in `internal/api/errors.go` — never hardcode integers
-- Output: all user-facing output goes through `internal/output/formatter.go`; never `fmt.Println` directly in commands
+- Output: everything a command prints goes through `internal/output`; never `fmt.Println` in a command
+- Responses: never decode one into a typed model. `data` passes through byte for byte — see `api.RawEnvelope`, and the test that forbids the alternative
 - Tenant handling: follow the precedence rules in `internal/config/store.go` — do not duplicate logic in command files
 - Secrets: never log or print API key values, even in `--verbose` mode
+
+### Writing a command's help
+
+Cobra prints a command's `Long` text and nothing else — no generated `Usage:` or `Flags:` block
+(see `cmd/help_render.go`). A flag your `Long` forgets is a flag documented nowhere, and the tests
+in `cmd/help_skeleton_test.go` will say so.
+
+Every runnable command carries four sections, in this order, as bare uppercase headers on their
+own line:
+
+- `PURPOSE` — why this command and not its neighbour
+- `USAGE` — a git-style synopsis; `[a | b]` says the two cannot be combined
+- `FLAGS` — one entry per flag and per positional, with its constraints, its traps, and one or
+  two runnable examples indented beneath it
+- `OUTPUT` — the real table and the real JSON, not a description of them
+
+There is no `INPUT`, `CAVEATS`, `EXAMPLES` or `SEE ALSO` section. A caveat belongs to the flag it
+qualifies; an example belongs beside the flag it demonstrates; the command tree already lists the
+siblings. A fact true of many commands belongs in a help topic (`cmd/help_topics.go`), referenced
+from the page rather than restated on it.
+
+Groups and help topics are prose, plus a generated list of children. Register a group's children
+in the order a caller meets them — `list` first, then `get`, then the writes; command sorting is
+off, so registration order *is* display order.
+
+Verify a claim before you write it — and know what each source is worth. `api/openapi.json` is a
+hand-written file the platform serves statically; it has been wrong about PUT semantics, has omitted
+`/health` entirely, and does not declare `description` on `PublicProductTypeResponse`. The command's
+own `RunE` says what the CLI sends. Only a running API says what the API does.
+
+`make verify-api` asks it. Point it at any server with a key and a tenant; it calls every GET the
+spec declares and checks that each help page's `OUTPUT` sample names every field the response
+actually carries. Forty-five of the forty-nine pages are covered.
+
+A field the server returns that the spec never declared is reported and does not fail the run — the
+document is hand-written and incomplete, and a target that is always red is a target nobody runs. A
+field the spec promises and the server never sends does fail: a page written from the document would
+describe something that never arrives.
+
+It writes nothing, except the two `attachments download` commands, which it drives into a throwaway
+directory because a page describing what a download prints cannot be checked without one.
+
+    CAPIGO_API_URL=http://127.0.0.1:3999/api/v1 CAPIGO_API_KEY=csk_... \
+    CAPIGO_TENANT=acme-corp make verify-api
+
+An `OUTPUT` sample is a promise about a shape. Show real data, not a schema name: a reader cannot
+picture `full PublicProductVariantResponse shape`, and cannot notice a field it forgot to mention.
 
 ---
 
@@ -140,7 +188,7 @@ Follow [Conventional Commits](https://www.conventionalcommits.org/):
 feat: add tasks update command
 fix: correct exit code for rate limit errors
 docs: update quick start example
-chore: bump go-pretty to v6.5.4
+chore: sync api/openapi.json to prod
 test: add pagination edge case coverage
 ```
 

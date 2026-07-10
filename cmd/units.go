@@ -15,6 +15,14 @@ import (
 var unitsCmd = &cobra.Command{
 	Use:   "units",
 	Short: "Manage PCMS units",
+	Long: `Units of measure for products, in the Capigo Product Catalog Management
+System (PCMS).
+
+Units are tenant-scoped reference data. Every command here requires a
+tenant, and every response names the tenant it resolved to, in meta.
+
+USAGE
+  capigo units <command> --tenant <code> [<args>]`,
 }
 
 // --------------------------------------------------------------------------
@@ -31,10 +39,57 @@ var (
 var unitsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List units",
-	Long: `List product units from the PCMS catalog. Tenant is required.
+	Long: `List units.
 
-Use --query / -q for a name-contains search (case-insensitive, max 200 chars).
-Each unit in the response has: id, name, abbreviation.`,
+PURPOSE
+  Read the units defined for a tenant, optionally narrowed by name. To read
+  a single unit whose id you already have, use units get.
+
+USAGE
+  capigo units list --tenant <code> [-q <term>] [--page <n>] [--limit <n>]
+
+FLAGS
+  --tenant <code>
+      Tenant to read from. Required.
+
+        capigo units list --tenant acme
+
+  -q, --query <term>
+      Name-contains filter, case-insensitive, up to 200 characters.
+
+        capigo units list --tenant acme -q kilo
+
+  --page <n>
+      Page to fetch. Pages start at 1. The default, 0, sends no page
+      parameter and lets the server choose.
+
+  --limit <n>
+      Rows per page, 1 to 100. Defaults to 20.
+
+        capigo units list --tenant acme --page 2 --limit 100
+
+OUTPUT
+  The units are at .data[]:
+
+      {
+        "data": [
+          { "id": "7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10", "name": "Kilogram",
+            "abbreviation": "kg" },
+          { "id": "9ab2c744-1e3a-4b8c-9f10-5c1e2a4d9f10", "name": "Piece",
+            "abbreviation": "pc" }
+        ],
+        "meta": {
+          "tenant": "acme", "tenant_source": "flag",
+          "page": 1, "limit": 20, "total": 2, "has_more": false
+        }
+      }
+
+  Read meta.total rather than counting .data[]: a page never holds more than
+  --limit, so a full count needs meta, not arithmetic.
+
+  meta.tenant is the tenant this call actually ran against, and
+  meta.tenant_source says whether that came from the flag, from CAPIGO_TENANT,
+  or from the config file. See capigo help tenancy.`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -49,15 +104,7 @@ Each unit in the response has: id, name, abbreviation.`,
 		}
 
 		tenant := resolveTenant(unitListTenant, profile)
-		if tenant == nil {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "units commands require a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
-		}
+		requireTenant(tenant, "units commands")
 
 		validatePCMSLimit(unitListLimit)
 
@@ -66,48 +113,87 @@ Each unit in the response has: id, name, abbreviation.`,
 			return handleErr(err)
 		}
 
-		var envelope api.Envelope[[]api.Unit]
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if outputMode == "json" {
-			data := envelope.Data
-			if data == nil {
-				data = []api.Unit{}
-			}
-			return output.WriteJSONList(os.Stdout, data, envelope.Meta)
-		}
+		return output.Write(os.Stdout, rawList(envelope.Data), listMeta(tenant, unitListTenant, envelope.Meta))
+	},
+}
 
-		items := make([]output.Unit, len(envelope.Data))
-		for i, u := range envelope.Data {
-			items[i] = output.Unit{
-				ID:           u.ID,
-				Name:         u.Name,
-				Abbreviation: u.Abbreviation,
-			}
-		}
+// --------------------------------------------------------------------------
+// units get
+// --------------------------------------------------------------------------
 
-		if err := output.Render(os.Stdout, outputMode, items, output.RenderOpts{
-			GlobalMode:   false,
-			ResourceKind: "unit",
-		}); err != nil {
+var unitGetTenant string
+
+var unitsGetCmd = &cobra.Command{
+	Use:   "get <id>",
+	Short: "Get a unit by id",
+	Long: `Get one unit by id.
+
+PURPOSE
+  Read a single unit, addressed by id only. To find that id from a name, use
+  units list --query.
+
+USAGE
+  capigo units get <id> --tenant <code>
+
+FLAGS
+  <id>
+      Unit id, a UUID. Positional, required.
+
+  --tenant <code>
+      Tenant the unit belongs to. Required. Exits 4 if the unit is not in
+      it.
+
+        capigo units get 4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb --tenant acme
+
+OUTPUT
+  The unit is at .data — an object, where a list puts an array. The envelope
+  is the same either way:
+
+      {
+        "data": {
+          "id": "4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
+          "name": "Kilogram",
+          "abbreviation": "kg"
+        },
+        "meta": { "tenant": "acme", "tenant_source": "flag" }
+      }
+
+  A single-item read carries no pagination meta; there is nothing to page.
+
+  Exit 4 when no such unit exists in the resolved tenant.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		client, cfg, err := buildClient()
+		if err != nil {
 			return handleErr(err)
 		}
 
-		if outputMode == "table" {
-			output.WriteListSummary(os.Stdout, output.ListSummary{
-				Tenant:     derefTenant(tenant),
-				TenantNote: tenantNote(tenant, unitListTenant),
-				Shown:      len(envelope.Data),
-				Page:       envelope.Meta.Page,
-				Limit:      envelope.Meta.Limit,
-				Total:      envelope.Meta.Total,
-				HasMore:    envelope.Meta.HasMore,
-			})
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
 		}
 
-		return nil
+		tenant := resolveTenant(unitGetTenant, profile)
+		requireTenant(tenant, "units commands")
+
+		resp, err := client.Do(ctx, "GET", "/pcms/units/"+args[0], nil, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope api.RawEnvelope
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		return output.Write(os.Stdout, rawItem(envelope.Data), itemMeta(tenant, unitGetTenant, envelope.Meta))
 	},
 }
 
@@ -125,18 +211,57 @@ var (
 var unitsCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a new unit",
-	Long: `Create a new product unit in PCMS. Tenant is required.
+	Long: `Create a unit.
 
-Both --name and --abbreviation are required, or supply the full request body
-with --from-json <file> (use - to read from stdin). When --from-json is
-set, all individual field flags are ignored. Abbreviation is normalized to
-lowercase by the server.
+PURPOSE
+  Add a unit to this tenant's reference data.
 
-JSON body (--from-json):
-  { "name": "Kilogram", "abbreviation": "kg" }
-  { "name": "Piece", "abbreviation": "pc" }
+USAGE
+  capigo units create --tenant <code>
+                      (--name <text> --abbreviation <text>
+                       | --from-json <path|->)
 
-Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" } }`,
+FLAGS
+  --tenant <code>
+      Tenant to create in. Required.
+
+        capigo units create --tenant acme --name Kilogram --abbreviation kg
+
+  --name <text>
+      Unit name, 1 to 500 characters. Required, unless --from-json is used.
+
+  --abbreviation <text>
+      Unit abbreviation, 1 to 20 characters, e.g. kg. Required, unless
+      --from-json is used. The server lowercases it. An abbreviation that
+      duplicates an existing unit's abbreviation in this tenant exits 8.
+
+  --from-json <path|->
+      Send the whole request body from a file, or - for stdin. Mutually
+      exclusive with --name and --abbreviation: passing both exits 5.
+
+      Body:
+
+          { "name": "Kilogram", "abbreviation": "kg" }
+          { "name": "Piece", "abbreviation": "pc" }
+
+        echo '{"name":"Piece","abbreviation":"pc"}' \
+          | capigo units create --tenant acme --from-json -
+
+OUTPUT
+  The created unit is at .data:
+
+      {
+        "data": { "id": "...", "name": "Kilogram", "abbreviation": "kg" },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-07-09T04:12:33Z" }
+      }
+
+  meta.tenant is the tenant the unit was written to. Read it: a write that
+  landed in the wrong tenant looks exactly like a write that succeeded.
+
+  Exit 5 if --name or --abbreviation is missing (and --from-json is not
+  used), or if --from-json is combined with a field flag. Exit 8 if a unit
+  with the same abbreviation already exists in the tenant.`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -151,28 +276,13 @@ Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" }
 		}
 
 		tenant := resolveTenant(unitCreateTenant, profile)
-		defer echoTenant(tenant, unitCreateTenant)
-		if tenant == nil {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "units commands require a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
-		}
+		requireTenant(tenant, "units commands")
 
 		var body any
 		if unitCreateFromJSON != "" {
 			for _, f := range []string{"name", "abbreviation"} {
 				if cmd.Flags().Changed(f) {
-					e := &api.APIError{
-						Code:       "VALIDATION_ERROR",
-						Message:    fmt.Sprintf("--from-json and --%s are mutually exclusive", f),
-						HTTPStatus: 400,
-					}
-					output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-					os.Exit(api.ExitCodeFor(e))
+					failValidation("--from-json and --%s are mutually exclusive", f)
 				}
 			}
 			raw, err := readJSONInput(unitCreateFromJSON)
@@ -182,14 +292,10 @@ Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" }
 			body = json.RawMessage(raw)
 		} else {
 			if unitCreateName == "" {
-				e := &api.APIError{Code: "VALIDATION_ERROR", Message: "--name is required", HTTPStatus: 400}
-				output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-				os.Exit(api.ExitCodeFor(e))
+				failValidation("--name is required")
 			}
 			if unitCreateAbbreviation == "" {
-				e := &api.APIError{Code: "VALIDATION_ERROR", Message: "--abbreviation is required", HTTPStatus: 400}
-				output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-				os.Exit(api.ExitCodeFor(e))
+				failValidation("--abbreviation is required")
 			}
 			body = api.CreateUnitRequest{
 				Name:         unitCreateName,
@@ -202,24 +308,14 @@ Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" }
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.Unit `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		emitServerTime(resp.ServerTime, "")
-
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		return output.Render(os.Stdout, outputMode, output.Unit{
-			ID:           envelope.Data.ID,
-			Name:         envelope.Data.Name,
-			Abbreviation: envelope.Data.Abbreviation,
-		}, output.RenderOpts{GlobalMode: false, ResourceKind: "unit"})
+		meta := itemMeta(tenant, unitCreateTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},
 }
 
@@ -236,21 +332,58 @@ var (
 
 var unitsUpdateCmd = &cobra.Command{
 	Use:   "update <id>",
-	Short: "Partial update of an existing unit (PATCH)",
-	Long: `Partial update (PATCH) of an existing product unit in PCMS. Tenant is required.
+	Short: "Change some fields of a unit",
+	Long: `Update a unit. Fields you do not send are left unchanged.
 
-All fields are optional; at least one must be provided. Fields not specified
-are left unchanged on the server.
+PURPOSE
+  Change one or a few fields of a unit without restating the rest. This is
+  PATCH: the API accepts any subset, so long as it is not empty, and leaves
+  every field you do not send unchanged. A unit has no nullable field.
 
-Use --from-json to supply the full update body as JSON (file path or - for
-stdin). When --from-json is set, all individual field flags are ignored.
+  units replace <id> is the other half of the pair. It sends PUT, which the
+  API refuses unless both fields are present.
 
-JSON body (--from-json):
-  { "name": "Kilogram" }
-  { "abbreviation": "kg" }
-  { "name": "Kilogram", "abbreviation": "kg" }
+USAGE
+  capigo units update <id> --tenant <code>
+                      ([--name <text>] [--abbreviation <text>]
+                       | --from-json <path|->)
 
-Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" } }`,
+FLAGS
+  <id>
+      Unit id, a UUID. Positional, required.
+
+  --tenant <code>
+      Tenant the unit belongs to. Required. Exits 4 if the unit is not in
+      it.
+
+  --name <text>
+      A new name, 1 to 500 characters.
+
+  --abbreviation <text>
+      A new abbreviation, 1 to 20 characters. The server lowercases it. An
+      abbreviation that duplicates another unit's abbreviation in this
+      tenant exits 8.
+
+        capigo units update <uuid> --tenant acme --abbreviation KG
+
+  --from-json <path|->
+      Send the whole request body from a file, or - for stdin. Mutually
+      exclusive with --name and --abbreviation: passing both exits 5.
+
+OUTPUT
+  The unit as it now stands is at .data:
+
+      {
+        "data": { "id": "...", "name": "Kilogram", "abbreviation": "kg" },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-07-09T04:12:33Z" }
+      }
+
+  meta.tenant is the tenant the write landed in. See capigo help tenancy.
+
+  Exit 5 if no field flag is given (and --from-json is not used), or if
+  --from-json is combined with a field flag. Exit 4 if <id> is not in the
+  resolved tenant. Exit 8 on an abbreviation collision.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -267,18 +400,13 @@ Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" }
 		}
 
 		tenant := resolveTenant(unitUpdateTenant, profile)
-		defer echoTenant(tenant, unitUpdateTenant)
-		if tenant == nil {
-			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "units commands require a tenant; pass --tenant <code> or set default", "")
-			os.Exit(5)
-		}
+		requireTenant(tenant, "units commands")
 
 		var body any
 		if unitUpdateFromJSON != "" {
 			for _, f := range []string{"name", "abbreviation"} {
 				if cmd.Flags().Changed(f) {
-					output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", fmt.Sprintf("--from-json and --%s are mutually exclusive", f), "")
-					os.Exit(5)
+					failValidation("--from-json and --%s are mutually exclusive", f)
 				}
 			}
 			raw, err := readJSONInput(unitUpdateFromJSON)
@@ -295,8 +423,7 @@ Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" }
 				m["abbreviation"] = unitUpdateAbbreviation
 			}
 			if len(m) == 0 {
-				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "at least one field must be provided for update", "")
-				os.Exit(5)
+				failValidation("at least one field must be provided for update")
 			}
 			body = m
 		}
@@ -306,81 +433,14 @@ Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" }
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.Unit `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		emitServerTime(resp.ServerTime, "")
-
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		return output.Render(os.Stdout, outputMode, output.Unit{
-			ID:           envelope.Data.ID,
-			Name:         envelope.Data.Name,
-			Abbreviation: envelope.Data.Abbreviation,
-		}, output.RenderOpts{GlobalMode: false, ResourceKind: "unit"})
-	},
-}
-
-// --------------------------------------------------------------------------
-// units get
-// --------------------------------------------------------------------------
-
-var unitGetTenant string
-
-var unitsGetCmd = &cobra.Command{
-	Use:   "get <id>",
-	Short: "Get a unit by ID",
-	Long: `Get a single product unit by ID from PCMS. Tenant is required.
-
-Returns 404 for both not-found and cross-tenant resources (no info leakage).
-Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" } }`,
-	Args: cobra.ExactArgs(1),
-	RunE: func(_ *cobra.Command, args []string) error {
-		ctx := context.Background()
-
-		client, cfg, err := buildClient()
-		if err != nil {
-			return handleErr(err)
-		}
-
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
-
-		tenant := resolveTenant(unitGetTenant, profile)
-		if tenant == nil {
-			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "units commands require a tenant; pass --tenant <code> or set default", "")
-			os.Exit(5)
-		}
-
-		resp, err := client.Do(ctx, "GET", "/pcms/units/"+args[0], nil, tenant)
-		if err != nil {
-			return handleErr(err)
-		}
-
-		var envelope struct {
-			Data api.Unit `json:"data"`
-		}
-		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
-			return handleErr(fmt.Errorf("decode response: %w", err))
-		}
-
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		return output.Render(os.Stdout, outputMode, output.Unit{
-			ID:           envelope.Data.ID,
-			Name:         envelope.Data.Name,
-			Abbreviation: envelope.Data.Abbreviation,
-		}, output.RenderOpts{GlobalMode: false, ResourceKind: "unit"})
+		meta := itemMeta(tenant, unitUpdateTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},
 }
 
@@ -397,18 +457,59 @@ var (
 
 var unitsReplaceCmd = &cobra.Command{
 	Use:   "replace <id>",
-	Short: "Full replace of a unit (PUT)",
-	Long: `Full replace (PUT) of an existing product unit in PCMS. Tenant is required.
+	Short: "Overwrite every field of a unit",
+	Long: `Replace a unit's name and abbreviation in one call.
 
-All fields are required by the server: --name and --abbreviation must both be provided.
+PURPOSE
+  Send the unit's whole field set in one call. PUT is a true replace: the API
+  requires both fields on the request and rejects one that leaves either out,
+  with exit 5 and the message "Required". This command's flags mirror that
+  rule — --name and --abbreviation on every call — so an incomplete record is
+  refused here rather than at the server. To change one field without retyping
+  the other, use units update <id>, which sends PATCH.
 
-Use --from-json to supply the full request body as JSON (file path or - for
-stdin). When --from-json is set, all individual field flags are ignored.
+USAGE
+  capigo units replace <id> --tenant <code>
+                       (--name <text> --abbreviation <text>
+                        | --from-json <path|->)
 
-JSON body (--from-json):
-  { "name": "Kilogram", "abbreviation": "kg" }
+FLAGS
+  <id>
+      Unit id, a UUID. Positional, required.
 
-Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" } }`,
+  --tenant <code>
+      Tenant the unit belongs to. Required. Exits 4 if the unit is not in
+      it.
+
+  --name <text>
+      Unit name, 1 to 500 characters. Required, unless --from-json is used.
+
+  --abbreviation <text>
+      Unit abbreviation, 1 to 20 characters. Required, unless --from-json is
+      used; the server lowercases it. An abbreviation that duplicates
+      another unit's abbreviation in this tenant exits 8.
+
+        capigo units replace <uuid> --tenant acme --name Kilogram \
+          --abbreviation kg
+
+  --from-json <path|->
+      Send the whole request body from a file, or - for stdin. Mutually
+      exclusive with --name and --abbreviation: passing both exits 5.
+
+OUTPUT
+  The unit as it now stands is at .data:
+
+      {
+        "data": { "id": "...", "name": "Kilogram", "abbreviation": "kg" },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-07-09T04:12:33Z" }
+      }
+
+  meta.tenant is the tenant the write landed in. See capigo help tenancy.
+
+  Exit 5 if --name or --abbreviation is missing (and --from-json is not
+  used), or if --from-json is combined with a field flag. Exit 4 if <id> is
+  not in the resolved tenant. Exit 8 on an abbreviation collision.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -425,18 +526,13 @@ Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" }
 		}
 
 		tenant := resolveTenant(unitReplaceTenant, profile)
-		defer echoTenant(tenant, unitReplaceTenant)
-		if tenant == nil {
-			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "units commands require a tenant; pass --tenant <code> or set default", "")
-			os.Exit(5)
-		}
+		requireTenant(tenant, "units commands")
 
 		var body any
 		if unitReplaceFromJSON != "" {
 			for _, f := range []string{"name", "abbreviation"} {
 				if cmd.Flags().Changed(f) {
-					output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", fmt.Sprintf("--from-json and --%s are mutually exclusive", f), "")
-					os.Exit(5)
+					failValidation("--from-json and --%s are mutually exclusive", f)
 				}
 			}
 			raw, err := readJSONInput(unitReplaceFromJSON)
@@ -446,12 +542,10 @@ Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" }
 			body = json.RawMessage(raw)
 		} else {
 			if unitReplaceName == "" {
-				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "--name is required for replace", "")
-				os.Exit(5)
+				failValidation("--name is required for replace")
 			}
 			if unitReplaceAbbreviation == "" {
-				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "--abbreviation is required for replace", "")
-				os.Exit(5)
+				failValidation("--abbreviation is required for replace")
 			}
 			body = api.ReplaceUnitRequest{
 				Name:         unitReplaceName,
@@ -464,24 +558,14 @@ Response: { "data": { "id": "uuid", "name": "string", "abbreviation": "string" }
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.Unit `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		emitServerTime(resp.ServerTime, "")
-
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		return output.Render(os.Stdout, outputMode, output.Unit{
-			ID:           envelope.Data.ID,
-			Name:         envelope.Data.Name,
-			Abbreviation: envelope.Data.Abbreviation,
-		}, output.RenderOpts{GlobalMode: false, ResourceKind: "unit"})
+		meta := itemMeta(tenant, unitReplaceTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},
 }
 
@@ -508,6 +592,6 @@ func init() {
 	unitsReplaceCmd.Flags().StringVar(&unitReplaceAbbreviation, "abbreviation", "", "unit abbreviation, e.g. kg (required)")
 	unitsReplaceCmd.Flags().StringVar(&unitReplaceFromJSON, "from-json", "", "path to JSON file with full request body (use - for stdin); mutually exclusive with individual field flags")
 
-	unitsCmd.AddCommand(unitsListCmd, unitsCreateCmd, unitsUpdateCmd, unitsGetCmd, unitsReplaceCmd)
+	unitsCmd.AddCommand(unitsListCmd, unitsGetCmd, unitsCreateCmd, unitsUpdateCmd, unitsReplaceCmd)
 	rootCmd.AddCommand(unitsCmd)
 }

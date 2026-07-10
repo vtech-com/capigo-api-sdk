@@ -72,7 +72,7 @@ which then tempts a wrong "the API can't do this" conclusion. The right command 
   every variant write is an upsert through `products variants`.
 - **Get a product by its Product Code / SKU / barcode?** → there is **no "get by code"**.
   Use `products list --query "<code>"`, then act on the returned `.id`.
-- **Count "how many X"?** → read `meta.total` from any `list -o json`. **Never count `data[]`**
+- **Count "how many X"?** → read `meta.total` from any `list`. **Never count `data[]`**
   — that's one page (≤20).
 
 ## Capability map
@@ -101,7 +101,7 @@ command are in [`references/cli_basics.md`](./references/cli_basics.md); this ma
 | Command | Reach for it when you want to… |
 |---|---|
 | `variants list --barcode-prefix <p> --sort -barcode --limit 1` | find the highest barcode under a prefix (allocation/counters) |
-| `variants get <id>` | see one variant's full detail. UUID only |
+| `variants get <id>` / `variants get --sku <sku>` | see one variant's full detail. Two addresses for the same record; `--sku` is tenant-scoped. Give one, never both |
 | ↳ **change or add a variant** | → use **`products variants`** (Products block above). There is no `variants update`/`create`/`replace`. |
 
 ### Tasks  *(tenant optional for reads; required for `create`/`subtasks`)*
@@ -109,8 +109,8 @@ command are in [`references/cli_basics.md`](./references/cli_basics.md); this ma
 | Command | Reach for it when you want to… |
 |---|---|
 | `tasks list [--status/--priority/--assignee-id/--board-id/--due-*…]` | list tasks, optionally filtered |
-| `tasks get <id>` | see one task in full. UUID only |
-| `tasks comments <id>` | read a task's timeline (comments + activity). For the **current** status trust `tasks get`, not the latest activity line |
+| `tasks get <id>` / `tasks get --code ACMEC-68` | see one task in full. Two addresses for the same task; `--code` needs `--tenant` (a code is unique **within** a tenant). Give one, never both |
+| `tasks comments <id>` (or `--code`) | read a task's timeline (comments + activity). For the **current** status trust `tasks get`, not the latest activity line |
 | `tasks create --title … --tenant …` | create a task; add `--subtasks-json -` to create it with subtasks atomically |
 | `tasks update <id>` | change status / assignee / board / title (≥1 flag; `--assignee ""` unassigns) |
 | `tasks subtasks <parent-id> --from-json -` | add subtasks under an existing task (all-or-nothing; max 25) |
@@ -139,7 +139,7 @@ command are in [`references/cli_basics.md`](./references/cli_basics.md); this ma
 |---|---|
 | `tenants list` | list the tenants you can reach |
 | `capigo health` | **preflight** — is the key accepted and API reachable? (exit 0 = ok). Use this before a batch of work, not `auth whoami` |
-| `capigo auth whoami` / `login --key csk_…` / `logout` | check identity / log in / out. ⚠️ `whoami` (GET `/me`) may **404** where it isn't deployed — it is *not* a reliable preflight; use `health`. On **exit 2** the key is bad — ask the *user* to re-login; don't retry |
+| `capigo auth whoami` / `login --key csk_…` / `logout` | check identity / log in / out. ⚠️ `whoami` calls GET `/me`, which the API **does not implement** — it always exits 4. Use `health` as the preflight. On **exit 2** the key is bad — ask the *user* to re-login; don't retry |
 
 ## When you can't find a command (Gate 1 — a hard rule)
 
@@ -216,10 +216,11 @@ global); resolution order: `--tenant` flag → `CAPIGO_TENANT` env → `default_
 - **Mission/Members reads** (`tasks/boards/members list/get`) may omit `--tenant` to span all
   accessible tenants. `tasks create` requires one.
 
-**Check the tenant the CLI echoes.** Every table-mode list footer and every successful write
-prints `Tenant: <code>` (with `(from CAPIGO_TENANT)` / `(from config default_tenant)` when
-resolved implicitly). If it isn't the tenant the user meant, the data you read — or wrote — is in
-the wrong place: stop and redo with an explicit `--tenant`.
+**Check `meta.tenant` after every write.** Every response carries `meta.tenant` and
+`meta.tenant_source` (`flag` / `env` / `config`). If it isn't the tenant the user meant, the data
+you read — or wrote — is in the wrong place: stop and redo with an explicit `--tenant`. A write
+into the wrong tenant is not an error the server can raise; the request was valid, and it
+succeeded.
 
 If the tenant isn't clear and the user didn't name one, ask before any fetch — offer their
 default (`default_tenant`) or the list from `capigo tenants list`.
@@ -242,19 +243,44 @@ barcode allocation — live in your catalogue-policy skill, not here.)
   fragment or use `products list --all`.)
 - **Don't silently change identifiers.** Changing an existing `sku`, `barcode`, or alias on a
   live record breaks whatever references it — only do so when the user explicitly asks.
-- **Never report a soft-deleted record as available.** In table mode Status shows e.g. `ACTIVE
-  (DELETED)`; in JSON check `is_deleted` (the `status` field alone does not reveal deletion).
+- **Never report a soft-deleted record as available.** Check `is_deleted` on the product object.
+  The `status` field alone does not reveal deletion — a deleted product still reads `ACTIVE`.
 
-## Output modes (pick before you act)
+## Output: one shape, always
 
-- **`table`** (default) — human prose for reading on screen. **Never redirect (`>`) or pipe
-  (`|`) table output**: it's text, not JSON, so `json.load()` / `jq` on it fails. The moment you
-  add `>` or `|`, also add `-o json`.
-- **`-o json`** — for anything you'll parse, store, or pipe. A `-o json` stream is pure JSON
-  (the `Server time:` line moves to stderr, so there's no prefix to strip). Contract: every
-  `list` returns `{"data":[…],"meta":{…}}` (read `.data[]`); single-item commands return the
-  bare object.
-- **`quiet`** — prints just an id.
+There is **no output flag**. Every command that succeeds prints exactly one thing to stdout:
+
+```json
+{ "data": …, "meta": { … } }
+```
+
+- `data` is an **array** for a `list`, an **object** for a single item (`get`, `create`,
+  `update`, `replace`). Read `.data[]` or `.data` — never the top level, never a bare object.
+- `meta` always names the tenant: `meta.tenant` and `meta.tenant_source` (`flag` / `env` /
+  `config`). A list also carries `page`, `limit`, `total`, `has_more`.
+- Redirecting (`>`) or piping (`|`) is always safe: stdout is JSON and nothing else is ever
+  written to it. There is no prefix line to strip.
+- A **failure** prints `{"error": {…}}` — still JSON, still stdout. Parse stdout unconditionally.
+- A command that fails *after* fetching rows (`--all` aborting mid-sweep, `--ids` missing an id)
+  prints **one** document with all three keys: `{"error": {…}, "data": […], "meta": {…}}`. The
+  rows are real; the answer is incomplete.
+- **`if "error" in doc` is the completeness test.** Run it before you report anything. A `--ids`
+  result missing two ids reports `"total": 1, "has_more": false` — indistinguishable from success
+  unless you check for the key.
+
+**Cross-cutting mechanics now ship inside the binary as help topics** — pull one when you need
+it, instead of trusting your memory of this file:
+
+```
+capigo help tenancy      how --tenant resolves; which commands require it
+capigo help output       output modes, the JSON contract, which stream carries what
+capigo help exit-codes   what each exit code means; the on-error diagnosis block
+capigo help soft-delete  how deleted records appear in reads
+capigo help versioning   how this CLI relates to the API it calls
+```
+
+**Where a topic and this skill disagree, the topic wins.** It is versioned with the binary that
+printed it; this file is not.
 
 Deeper mechanics — pagination, delta sync, `--from-json`, per-command flags, code-vs-UUID
 lookup — are in [`references/cli_basics.md`](./references/cli_basics.md). Reach for it when the

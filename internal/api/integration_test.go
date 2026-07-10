@@ -122,13 +122,16 @@ func TestIntegration_GetTenants_NoTenantHeader(t *testing.T) {
 	// tenants list must NOT send X-Tenant-Code.
 	assertCommonHeaders(t, capturedReq, nil)
 
-	// Response body must decode into Envelope[[]Tenant].
-	var envelope Envelope[[]Tenant]
+	// The client hands the body on untouched. It decodes into the envelope, and
+	// data stays exactly as the API sent it — no Go struct decides which of a
+	// tenant's fields survive the trip.
+	var envelope RawEnvelope
 	if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 		t.Fatalf("decode tenants: %v", err)
 	}
-	if len(envelope.Data) != 1 || envelope.Data[0].TenantCode != "acme" {
-		t.Errorf("unexpected tenants data: %v", envelope.Data)
+	if !strings.Contains(string(envelope.Data), `"tenant_code": "acme"`) &&
+		!strings.Contains(string(envelope.Data), `"tenant_code":"acme"`) {
+		t.Errorf("unexpected tenants data: %s", envelope.Data)
 	}
 }
 
@@ -162,12 +165,12 @@ func TestIntegration_GetBoards_SendsTenantHeader(t *testing.T) {
 	// boards list with resolved tenant must include X-Tenant-Code.
 	assertCommonHeaders(t, capturedReq, strPtr("acme"))
 
-	var envelope Envelope[[]Board]
+	var envelope RawEnvelope
 	if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 		t.Fatalf("decode boards: %v", err)
 	}
-	if len(envelope.Data) != 1 || envelope.Data[0].ID != "brd_001" {
-		t.Errorf("unexpected boards data: %v", envelope.Data)
+	if !strings.Contains(string(envelope.Data), "brd_001") {
+		t.Errorf("unexpected boards data: %s", envelope.Data)
 	}
 }
 
@@ -200,12 +203,12 @@ func TestIntegration_GetTasks_WithTenantHeader(t *testing.T) {
 
 	assertCommonHeaders(t, capturedReq, strPtr("acme"))
 
-	var envelope Envelope[[]Task]
+	var envelope RawEnvelope
 	if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 		t.Fatalf("decode tasks: %v", err)
 	}
-	if len(envelope.Data) == 0 || envelope.Data[0].ID != "tsk_001" {
-		t.Errorf("unexpected tasks data: %v", envelope.Data)
+	if !strings.Contains(string(envelope.Data), "tsk_001") {
+		t.Errorf("unexpected tasks data: %s", envelope.Data)
 	}
 }
 
@@ -238,14 +241,12 @@ func TestIntegration_GetTask_ByID(t *testing.T) {
 		t.Errorf("path = %q; want suffix /mission/tasks/%s", capturedPath, taskID)
 	}
 
-	var envelope struct {
-		Data Task `json:"data"`
-	}
+	var envelope RawEnvelope
 	if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 		t.Fatalf("decode task: %v", err)
 	}
-	if envelope.Data.ID != taskID {
-		t.Errorf("task ID = %q; want %q", envelope.Data.ID, taskID)
+	if !strings.Contains(string(envelope.Data), taskID) {
+		t.Errorf("task body %s does not name %q", envelope.Data, taskID)
 	}
 }
 

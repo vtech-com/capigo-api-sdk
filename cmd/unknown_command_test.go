@@ -194,9 +194,6 @@ func TestGroupLevelTypoSuggestsSibling(t *testing.T) {
 // real renderCLIError, and confirm error.next appears on stdout under
 // -o json — the same field an agent would read.
 func TestRenderCLIErrorEmitsNextForVariantsUpdate(t *testing.T) {
-	prevMode := outputMode
-	outputMode = "json"
-	defer func() { outputMode = prevMode }()
 
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -234,5 +231,29 @@ func TestRenderCLIErrorEmitsNextForVariantsUpdate(t *testing.T) {
 	}
 	if got.Error.CapabilityNote {
 		t.Errorf("capability_note must stay false for a client-side/cobra redirect")
+	}
+}
+
+// A caller — a script, an agent, a habit — that still passes the flag we
+// deleted must be told the flag is gone, not shown cobra's "unknown shorthand
+// flag: 'o'", which reads like a typo and invites a retry.
+func TestRemovedOutputFlagExplainsItself(t *testing.T) {
+	for _, msg := range []string{
+		"unknown shorthand flag: 'o' in -o",
+		"unknown flag: --output",
+	} {
+		next, ok := nextForRemovedFlag(msg)
+		if !ok {
+			t.Errorf("no hint for %q", msg)
+			continue
+		}
+		for _, want := range []string{"no --output flag", ".data", "meta.tenant"} {
+			if !strings.Contains(next, want) {
+				t.Errorf("hint for %q omits %q: %s", msg, want, next)
+			}
+		}
+	}
+	if _, ok := nextForRemovedFlag(`unknown command "foo" for "capigo"`); ok {
+		t.Error("an unknown command must not be answered with the removed-flag hint")
 	}
 }

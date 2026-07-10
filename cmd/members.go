@@ -17,6 +17,14 @@ import (
 var memberCmd = &cobra.Command{
 	Use:   "members",
 	Short: "Manage members",
+	Long: `Workspace members in Capigo Mission.
+
+--tenant is optional on both commands here: list and get search across every
+tenant this key can reach when it is omitted.
+  capigo help tenancy
+
+USAGE
+  capigo members <command> [--tenant <code>] [<args>]`,
 }
 
 var (
@@ -29,6 +37,60 @@ var (
 var membersListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List workspace members",
+	Long: `List workspace members.
+
+PURPOSE
+  Find the people in a workspace — most often to turn a name into the UUID
+  that tasks create --assignee and tasks list --assignee-id expect.
+
+USAGE
+  capigo members list [--tenant <code>] [-q <term>] [--page <n>]
+                       [--limit <n>]
+
+FLAGS
+  --tenant <code>
+      Tenant to search. Optional — omit it to span every tenant this key can
+      reach; meta.tenant is then empty.
+      See capigo help tenancy.
+
+        capigo members list --tenant acme
+
+  -q, --query <term>
+      Filter by member display name or email.
+
+        capigo members list --tenant acme -q tram
+
+  --page <n>
+      Page to fetch. Pages start at 1. The default, 0, sends no page
+      parameter and lets the server choose.
+
+  --limit <n>
+      Items per page, 1 to 50. The default, 0, sends no limit parameter; the
+      server then applies its own default of 20. Above 50 the server rejects
+      the call with exit 5.
+
+        capigo members list --tenant acme --page 2 --limit 50
+
+OUTPUT
+  The members are at .data[]:
+
+      {
+        "data": [
+          { "id": "4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
+            "display_name": "Tram Nguyen", "email": "tram@acme.vn",
+            "role": "owner", "avatar_url": null }
+        ],
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "page": 1, "limit": 20, "total": 1, "has_more": false }
+      }
+
+  Read meta.total rather than counting .data[]: a page never holds more than
+  --limit, so a full count needs meta, not arithmetic. role is owner or
+  member.
+
+  With --tenant omitted, meta.tenant and meta.tenant_source are absent: the
+  results span every tenant this key can reach, and a member does not name its
+  own tenant either. Pass --tenant when you need to know where a member lives.`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -65,49 +127,12 @@ var membersListCmd = &cobra.Command{
 			return handleErr(err)
 		}
 
-		var envelope api.Envelope[[]api.Member]
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if outputMode == "json" {
-			data := envelope.Data
-			if data == nil {
-				data = []api.Member{}
-			}
-			return output.WriteJSONList(os.Stdout, data, envelope.Meta)
-		}
-
-		items := make([]output.Member, len(envelope.Data))
-		for i, m := range envelope.Data {
-			items[i] = output.Member{
-				ID:    m.ID,
-				Name:  m.DisplayName,
-				Email: m.Email,
-				Role:  m.Role,
-			}
-		}
-
-		if err := output.Render(os.Stdout, outputMode, items, output.RenderOpts{
-			GlobalMode:   tenant == nil,
-			ResourceKind: "member",
-		}); err != nil {
-			return handleErr(err)
-		}
-
-		if outputMode == "table" {
-			output.WriteListSummary(os.Stdout, output.ListSummary{
-				Tenant:     derefTenant(tenant),
-				TenantNote: tenantNote(tenant, memberListTenant),
-				Shown:      len(envelope.Data),
-				Page:       envelope.Meta.Page,
-				Limit:      envelope.Meta.Limit,
-				Total:      envelope.Meta.Total,
-				HasMore:    envelope.Meta.HasMore,
-			})
-		}
-
-		return nil
+		return output.Write(os.Stdout, rawList(envelope.Data), listMeta(tenant, memberListTenant, envelope.Meta))
 	},
 }
 
@@ -115,14 +140,40 @@ var memberGetTenant string
 
 var membersGetCmd = &cobra.Command{
 	Use:   "get <id>",
-	Short: "Get a member by ID",
-	Long: `Get a single workspace member by UUID. Optional --tenant scopes the lookup.
+	Short: "Get a member by id",
+	Long: `Get one member by id.
 
-If --tenant is omitted the member is resolved across all tenants the caller belongs to.
-Returns 404 if the member is not found in any accessible tenant.
+PURPOSE
+  Read a single member. This command addresses a member by id only; to find
+  that id from a name or an email, use members list --query.
 
-Response: { "data": { "id": "uuid", "display_name": "string", "email": "string",
-  "role": "owner|member", "avatar_url": "string|null" } }`,
+USAGE
+  capigo members get <id> [--tenant <code>]
+
+FLAGS
+  <id>
+      Member UUID. Positional, required.
+
+  --tenant <code>
+      Tenant to scope the lookup to. Optional; omit it to search every
+      tenant this key can reach.
+
+        capigo members get 4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb --tenant acme
+
+OUTPUT
+  The member is at .data:
+
+      {
+        "data": { "id": "4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
+                  "display_name": "Tram Nguyen", "email": "tram@acme.vn",
+                  "role": "owner", "avatar_url": null },
+        "meta": { "tenant": "acme", "tenant_source": "flag" }
+      }
+
+  With --tenant omitted, meta.tenant and meta.tenant_source are both empty.
+
+  Exit 4 when the member is not reachable — including a member who exists in
+  a tenant this key cannot see.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -144,30 +195,12 @@ Response: { "data": { "id": "uuid", "display_name": "string", "email": "string",
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.Member `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		if err := output.Render(os.Stdout, outputMode, output.Member{
-			ID:    envelope.Data.ID,
-			Name:  envelope.Data.DisplayName,
-			Email: envelope.Data.Email,
-			Role:  envelope.Data.Role,
-		}, output.RenderOpts{
-			GlobalMode:   tenant == nil,
-			ResourceKind: "member",
-		}); err != nil {
-			return handleErr(err)
-		}
-
-		return nil
+		return output.Write(os.Stdout, rawItem(envelope.Data), itemMeta(tenant, memberGetTenant, envelope.Meta))
 	},
 }
 

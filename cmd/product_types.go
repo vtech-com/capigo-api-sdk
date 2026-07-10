@@ -15,6 +15,13 @@ import (
 var productTypesCmd = &cobra.Command{
 	Use:   "product-types",
 	Short: "Manage PCMS product types",
+	Long: `Product types in the Capigo Product Catalog Management System (PCMS).
+
+Product types are tenant-scoped reference data. Every command here requires a
+tenant, and every response names the tenant it resolved to, in meta.
+
+USAGE
+  capigo product-types <command> --tenant <code> [<args>]`,
 }
 
 // --------------------------------------------------------------------------
@@ -31,10 +38,63 @@ var (
 var productTypesListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List product types",
-	Long: `List product types from the PCMS catalog. Tenant is required.
+	Long: `List product types.
 
-Use --query / -q for a name-contains search (case-insensitive, max 200 chars).
-Each product type in the response has: id, name, description (string or null).`,
+PURPOSE
+  Read the product types defined for a tenant, optionally narrowed by name.
+  To find the id of one by name, this is the command; to read it by id, use
+  product-types get.
+
+USAGE
+  capigo product-types list --tenant <code> [-q <term>]
+                            [--page <n>] [--limit <n>]
+
+FLAGS
+  --tenant <code>
+      Tenant to read from. Required. Falls back to CAPIGO_TENANT, then to
+      default_tenant in the config file. Exits 5 if none resolves.
+
+        capigo product-types list --tenant acme
+
+  -q, --query <term>
+      Name-contains filter, case-insensitive. 1 to 200 characters.
+
+        capigo product-types list --tenant acme -q pin
+
+  --page <n>
+      Page to fetch. Pages start at 1. The default, 0, sends no page
+      parameter and lets the server choose.
+
+  --limit <n>
+      Rows per page, 1 to 100. Defaults to 20.
+
+        capigo product-types list --tenant acme --page 2 --limit 100
+
+OUTPUT
+  The product types are at .data[]:
+
+      {
+        "data": [
+          { "id": "3e91b0a2-4c7d-4f11-9a8e-6d5b1c2f9e33",
+            "name": "Pin Lien Cap",
+            "description": "Pin va cap lien khoi" }
+        ],
+        "meta": {
+          "tenant": "acme",
+          "tenant_source": "flag",
+          "page": 1, "limit": 20, "total": 1, "has_more": false
+        }
+      }
+
+  Read meta.total rather than counting .data[]: a page never holds more than
+  --limit, so a full count needs meta, not arithmetic.
+
+  description is returned, and may be null. The published OpenAPI document
+  does not declare it — the field is real; the document is incomplete.
+
+  meta.tenant is the tenant this call actually ran against, and
+  meta.tenant_source says whether that came from the flag, from CAPIGO_TENANT,
+  or from the config file. See capigo help tenancy.`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -49,15 +109,7 @@ Each product type in the response has: id, name, description (string or null).`,
 		}
 
 		tenant := resolveTenant(productTypeListTenant, profile)
-		if tenant == nil {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "product-types commands require a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
-		}
+		requireTenant(tenant, "product-types commands")
 
 		validatePCMSLimit(productTypeListLimit)
 
@@ -66,48 +118,12 @@ Each product type in the response has: id, name, description (string or null).`,
 			return handleErr(err)
 		}
 
-		var envelope api.Envelope[[]api.ProductType]
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if outputMode == "json" {
-			data := envelope.Data
-			if data == nil {
-				data = []api.ProductType{}
-			}
-			return output.WriteJSONList(os.Stdout, data, envelope.Meta)
-		}
-
-		items := make([]output.ProductType, len(envelope.Data))
-		for i, pt := range envelope.Data {
-			items[i] = output.ProductType{
-				ID:          pt.ID,
-				Name:        pt.Name,
-				Description: pt.Description,
-			}
-		}
-
-		if err := output.Render(os.Stdout, outputMode, items, output.RenderOpts{
-			GlobalMode:   false,
-			ResourceKind: "product_type",
-		}); err != nil {
-			return handleErr(err)
-		}
-
-		if outputMode == "table" {
-			output.WriteListSummary(os.Stdout, output.ListSummary{
-				Tenant:     derefTenant(tenant),
-				TenantNote: tenantNote(tenant, productTypeListTenant),
-				Shown:      len(envelope.Data),
-				Page:       envelope.Meta.Page,
-				Limit:      envelope.Meta.Limit,
-				Total:      envelope.Meta.Total,
-				HasMore:    envelope.Meta.HasMore,
-			})
-		}
-
-		return nil
+		return output.Write(os.Stdout, rawList(envelope.Data), listMeta(tenant, productTypeListTenant, envelope.Meta))
 	},
 }
 
@@ -125,17 +141,57 @@ var (
 var productTypesCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a new product type",
-	Long: `Create a new product type in PCMS. Tenant is required.
+	Long: `Create a product type.
 
-Provide --name and optional --description, or supply the full request body
-with --from-json <file> (use - to read from stdin). When --from-json is
-set, all individual field flags are ignored.
+PURPOSE
+  Add a product type to this tenant's reference data.
 
-JSON body (--from-json):
-  { "name": "Smartphone" }
-  { "name": "Laptop", "description": "Portable computers" }
+USAGE
+  capigo product-types create --tenant <code>
+                              (--name <text> [--description <text>]
+                               | --from-json <path|->)
 
-Response: { "data": { "id": "uuid", "name": "string", "description": "string|null" } }`,
+FLAGS
+  --tenant <code>
+      Tenant to create in. Required.
+
+  --name <text>
+      Product type name. Required, unless --from-json is used.
+
+        capigo product-types create --tenant acme --name "Pin Lien Cap"
+
+  --description <text>
+      Free-text description. Optional, max 2000 characters.
+
+  --from-json <path|->
+      Send the whole request body from a file, or - for stdin. Mutually
+      exclusive with --name and --description: passing both exits 5.
+
+      Body:
+
+          { "name": "Pin Lien Cap", "description": "Pin va cap lien khoi" }
+          { "name": "Pin Lien Cap" }
+
+        echo '{"name":"Pin Lien Cap"}' \
+          | capigo product-types create --tenant acme --from-json -
+
+OUTPUT
+  The created product type is at .data:
+
+      {
+        "data": { "id": "3e91b0a2-4c7d-4f11-9a8e-6d5b1c2f9e33",
+                  "name": "Pin Lien Cap",
+                  "description": "Pin va cap lien khoi" },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-07-09T04:12:33Z" }
+      }
+
+  meta.tenant is the tenant the product type was written to. Read it: a
+  write that landed in the wrong tenant looks exactly like a write that
+  succeeded.
+
+  Exit 5 if --name is missing (and --from-json is not used), or if
+  --from-json is combined with a field flag.`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -150,28 +206,13 @@ Response: { "data": { "id": "uuid", "name": "string", "description": "string|nul
 		}
 
 		tenant := resolveTenant(productTypeCreateTenant, profile)
-		defer echoTenant(tenant, productTypeCreateTenant)
-		if tenant == nil {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "product-types commands require a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
-		}
+		requireTenant(tenant, "product-types commands")
 
 		var body any
 		if productTypeCreateFromJSON != "" {
 			for _, f := range []string{"name", "description"} {
 				if cmd.Flags().Changed(f) {
-					e := &api.APIError{
-						Code:       "VALIDATION_ERROR",
-						Message:    fmt.Sprintf("--from-json and --%s are mutually exclusive", f),
-						HTTPStatus: 400,
-					}
-					output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-					os.Exit(api.ExitCodeFor(e))
+					failValidation("--from-json and --%s are mutually exclusive", f)
 				}
 			}
 			raw, err := readJSONInput(productTypeCreateFromJSON)
@@ -181,9 +222,7 @@ Response: { "data": { "id": "uuid", "name": "string", "description": "string|nul
 			body = json.RawMessage(raw)
 		} else {
 			if productTypeCreateName == "" {
-				e := &api.APIError{Code: "VALIDATION_ERROR", Message: "--name is required", HTTPStatus: 400}
-				output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-				os.Exit(api.ExitCodeFor(e))
+				failValidation("--name is required")
 			}
 			req := api.CreateProductTypeRequest{Name: productTypeCreateName}
 			if productTypeCreateDescription != "" {
@@ -197,24 +236,14 @@ Response: { "data": { "id": "uuid", "name": "string", "description": "string|nul
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.ProductType `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		emitServerTime(resp.ServerTime, "")
-
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		return output.Render(os.Stdout, outputMode, output.ProductType{
-			ID:          envelope.Data.ID,
-			Name:        envelope.Data.Name,
-			Description: envelope.Data.Description,
-		}, output.RenderOpts{GlobalMode: false, ResourceKind: "product_type"})
+		meta := itemMeta(tenant, productTypeCreateTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},
 }
 
@@ -232,22 +261,67 @@ var (
 
 var productTypesUpdateCmd = &cobra.Command{
 	Use:   "update <id>",
-	Short: "Partial update of an existing product type (PATCH)",
-	Long: `Partial update (PATCH) of an existing product type in PCMS. Tenant is required.
+	Short: "Change some fields of a product type",
+	Long: `Update a product type. Fields you do not send are left unchanged.
 
-All fields are optional; at least one must be provided. Fields not specified
-are left unchanged on the server. Use --clear-description to explicitly set
-description to null.
+PURPOSE
+  Change part of a product type without deciding every field. This is PATCH:
+  the API accepts any subset, so long as it is not empty, and leaves every
+  field you do not send unchanged.
 
-Use --from-json to supply the full update body as JSON (file path or - for
-stdin). When --from-json is set, all individual field flags are ignored.
+  product-types replace <id> is the other half of the pair. It sends PUT,
+  which the API refuses unless both fields are present.
 
-JSON body (--from-json):
-  { "name": "New Name" }
-  { "description": "Updated description" }
-  { "description": null }
+USAGE
+  capigo product-types update <id> --tenant <code>
+                                   ([--name <text>]
+                                    [--description <text> | --clear-description]
+                                   | --from-json <path|->)
 
-Response: { "data": { "id": "uuid", "name": "string", "description": "string|null" } }`,
+FLAGS
+  <id>
+      Product type id, a UUID. Positional, required.
+
+  --tenant <code>
+      Tenant the product type belongs to. Required. Exits 4 if the product
+      type is not in it.
+
+  --name <text>
+      A new name.
+
+  --description <text>
+      A new description, max 2000 characters. Mutually exclusive with
+      --clear-description.
+
+  --clear-description
+      Set description to null. Mutually exclusive with --description.
+
+        capigo product-types update <uuid> --tenant acme --description "Pin roi"
+        capigo product-types update <uuid> --tenant acme --clear-description
+
+      At least one field is required; sending none exits 5.
+
+  --from-json <path|->
+      Send the whole request body from a file, or - for stdin. Mutually
+      exclusive with --name, --description and --clear-description: passing
+      both exits 5.
+
+OUTPUT
+  The product type as it now stands is at .data:
+
+      {
+        "data": { "id": "3e91b0a2-4c7d-4f11-9a8e-6d5b1c2f9e33",
+                  "name": "Pin Lien Cap",
+                  "description": "Pin va cap lien khoi" },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-07-09T04:12:33Z" }
+      }
+
+  meta.tenant is the tenant the write landed in. See capigo help tenancy.
+
+  Exit 5 if no field flag is given (and --from-json is not used), or if
+  --from-json is combined with a field flag. Exit 4 if <id> is not in the
+  resolved tenant.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -264,18 +338,13 @@ Response: { "data": { "id": "uuid", "name": "string", "description": "string|nul
 		}
 
 		tenant := resolveTenant(productTypeUpdateTenant, profile)
-		defer echoTenant(tenant, productTypeUpdateTenant)
-		if tenant == nil {
-			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "product-types commands require a tenant; pass --tenant <code> or set default", "")
-			os.Exit(5)
-		}
+		requireTenant(tenant, "product-types commands")
 
 		var body any
 		if productTypeUpdateFromJSON != "" {
 			for _, f := range []string{"name", "description", "clear-description"} {
 				if cmd.Flags().Changed(f) {
-					output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", fmt.Sprintf("--from-json and --%s are mutually exclusive", f), "")
-					os.Exit(5)
+					failValidation("--from-json and --%s are mutually exclusive", f)
 				}
 			}
 			raw, err := readJSONInput(productTypeUpdateFromJSON)
@@ -294,8 +363,7 @@ Response: { "data": { "id": "uuid", "name": "string", "description": "string|nul
 				m["description"] = productTypeUpdateDescription
 			}
 			if len(m) == 0 {
-				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "at least one field must be provided for update", "")
-				os.Exit(5)
+				failValidation("at least one field must be provided for update")
 			}
 			body = m
 		}
@@ -305,24 +373,14 @@ Response: { "data": { "id": "uuid", "name": "string", "description": "string|nul
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.ProductType `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		emitServerTime(resp.ServerTime, "")
-
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		return output.Render(os.Stdout, outputMode, output.ProductType{
-			ID:          envelope.Data.ID,
-			Name:        envelope.Data.Name,
-			Description: envelope.Data.Description,
-		}, output.RenderOpts{GlobalMode: false, ResourceKind: "product_type"})
+		meta := itemMeta(tenant, productTypeUpdateTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},
 }
 
@@ -334,11 +392,41 @@ var productTypeGetTenant string
 
 var productTypesGetCmd = &cobra.Command{
 	Use:   "get <id>",
-	Short: "Get a product type by ID",
-	Long: `Get a single product type by ID from PCMS. Tenant is required.
+	Short: "Get a product type by id",
+	Long: `Get one product type by id.
 
-Returns 404 for both not-found and cross-tenant resources (no info leakage).
-Response: { "data": { "id": "uuid", "name": "string", "description": "string|null" } }`,
+PURPOSE
+  Read a single product type, addressed by id only. To find that id from a
+  name, use product-types list --query.
+
+USAGE
+  capigo product-types get <id> --tenant <code>
+
+FLAGS
+  <id>
+      Product type id, a UUID. Positional, required.
+
+  --tenant <code>
+      Tenant the product type belongs to. Required. Exits 4 if the product
+      type is not in it.
+
+        capigo product-types get 3e91b0a2-4c7d-4f11-9a8e-6d5b1c2f9e33 \
+            --tenant acme
+
+OUTPUT
+  The product type is at .data — an object, where a list puts an array. The
+  envelope is the same either way:
+
+      {
+        "data": { "id": "3e91b0a2-4c7d-4f11-9a8e-6d5b1c2f9e33",
+                  "name": "Pin Lien Cap",
+                  "description": "Pin va cap lien khoi" },
+        "meta": { "tenant": "acme", "tenant_source": "flag" }
+      }
+
+  A single-item read carries no pagination meta; there is nothing to page.
+
+  Exit 4 when no such product type exists in the resolved tenant.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -354,32 +442,19 @@ Response: { "data": { "id": "uuid", "name": "string", "description": "string|nul
 		}
 
 		tenant := resolveTenant(productTypeGetTenant, profile)
-		if tenant == nil {
-			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "product-types commands require a tenant; pass --tenant <code> or set default", "")
-			os.Exit(5)
-		}
+		requireTenant(tenant, "product-types commands")
 
 		resp, err := client.Do(ctx, "GET", "/pcms/product-types/"+args[0], nil, tenant)
 		if err != nil {
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.ProductType `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		return output.Render(os.Stdout, outputMode, output.ProductType{
-			ID:          envelope.Data.ID,
-			Name:        envelope.Data.Name,
-			Description: envelope.Data.Description,
-		}, output.RenderOpts{GlobalMode: false, ResourceKind: "product_type"})
+		return output.Write(os.Stdout, rawItem(envelope.Data), itemMeta(tenant, productTypeGetTenant, envelope.Meta))
 	},
 }
 
@@ -397,20 +472,66 @@ var (
 
 var productTypesReplaceCmd = &cobra.Command{
 	Use:   "replace <id>",
-	Short: "Full replace of a product type (PUT)",
-	Long: `Full replace (PUT) of an existing product type in PCMS. Tenant is required.
+	Short: "Overwrite every field of a product type",
+	Long: `Replace a product type.
 
-All fields are required by the server. You must provide either --description <text>
-or --no-description (to set description to null); these flags are mutually exclusive.
+PURPOSE
+  Rewrite a product type's name and description together in one call. PUT is
+  a true replace: the API requires both fields on the request and rejects one
+  that leaves either out, with exit 5 and the message "Required". description
+  may be null — that is what --no-description sends — but it must be sent.
+  This command's flags mirror that rule. To change one field without deciding
+  the other, use product-types update <id>, which sends PATCH.
 
-Use --from-json to supply the full request body as JSON (file path or - for
-stdin). When --from-json is set, all individual field flags are ignored.
+USAGE
+  capigo product-types replace <id> --tenant <code>
+                                    (--name <text>
+                                     (--description <text> | --no-description)
+                                     | --from-json <path|->)
 
-JSON body (--from-json):
-  { "name": "Smartphone", "description": "Mobile phones and tablets" }
-  { "name": "Laptop", "description": null }
+FLAGS
+  <id>
+      Product type id, a UUID. Positional, required.
 
-Response: { "data": { "id": "uuid", "name": "string", "description": "string|null" } }`,
+  --tenant <code>
+      Tenant the product type belongs to. Required. Exits 4 if the product
+      type is not in it.
+
+  --name <text>
+      Product type name. Required unless --from-json is used.
+
+  --description <text>
+      The description, max 2000 characters. Mutually exclusive with
+      --no-description; exactly one of the two is required unless
+      --from-json is used.
+
+  --no-description
+      Set description to null. Mutually exclusive with --description.
+
+        capigo product-types replace <uuid> --tenant acme --name "Pin" \
+            --no-description
+
+  --from-json <path|->
+      Send the whole request body from a file, or - for stdin. Mutually
+      exclusive with --name, --description and --no-description: passing
+      both exits 5.
+
+OUTPUT
+  The product type as it now stands is at .data:
+
+      {
+        "data": { "id": "3e91b0a2-4c7d-4f11-9a8e-6d5b1c2f9e33", "name": "Pin",
+                  "description": null },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-07-09T04:12:33Z" }
+      }
+
+  meta.tenant is the tenant the write landed in. See capigo help tenancy.
+
+  Exit 5 if --name or a description flag is missing (and --from-json is not
+  used), if both --description and --no-description are given, or if
+  --from-json is combined with a field flag. Exit 4 if <id> is not in the
+  resolved tenant.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -427,18 +548,13 @@ Response: { "data": { "id": "uuid", "name": "string", "description": "string|nul
 		}
 
 		tenant := resolveTenant(productTypeReplaceTenant, profile)
-		defer echoTenant(tenant, productTypeReplaceTenant)
-		if tenant == nil {
-			output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "product-types commands require a tenant; pass --tenant <code> or set default", "")
-			os.Exit(5)
-		}
+		requireTenant(tenant, "product-types commands")
 
 		var body any
 		if productTypeReplaceFromJSON != "" {
 			for _, f := range []string{"name", "description", "no-description"} {
 				if cmd.Flags().Changed(f) {
-					output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", fmt.Sprintf("--from-json and --%s are mutually exclusive", f), "")
-					os.Exit(5)
+					failValidation("--from-json and --%s are mutually exclusive", f)
 				}
 			}
 			raw, err := readJSONInput(productTypeReplaceFromJSON)
@@ -448,17 +564,14 @@ Response: { "data": { "id": "uuid", "name": "string", "description": "string|nul
 			body = json.RawMessage(raw)
 		} else {
 			if productTypeReplaceName == "" {
-				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "--name is required for replace", "")
-				os.Exit(5)
+				failValidation("--name is required for replace")
 			}
 			descSet := cmd.Flags().Changed("description")
 			if descSet && productTypeReplaceNoDescription {
-				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "--description and --no-description are mutually exclusive", "")
-				os.Exit(5)
+				failValidation("--description and --no-description are mutually exclusive")
 			}
 			if !descSet && !productTypeReplaceNoDescription {
-				output.RenderError(os.Stderr, outputMode, "VALIDATION_ERROR", "one of --description or --no-description is required for replace", "")
-				os.Exit(5)
+				failValidation("one of --description or --no-description is required for replace")
 			}
 			req := api.ReplaceProductTypeRequest{Name: productTypeReplaceName}
 			if !productTypeReplaceNoDescription {
@@ -472,24 +585,14 @@ Response: { "data": { "id": "uuid", "name": "string", "description": "string|nul
 			return handleErr(err)
 		}
 
-		var envelope struct {
-			Data api.ProductType `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		emitServerTime(resp.ServerTime, "")
-
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		return output.Render(os.Stdout, outputMode, output.ProductType{
-			ID:          envelope.Data.ID,
-			Name:        envelope.Data.Name,
-			Description: envelope.Data.Description,
-		}, output.RenderOpts{GlobalMode: false, ResourceKind: "product_type"})
+		meta := itemMeta(tenant, productTypeReplaceTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},
 }
 
@@ -518,6 +621,6 @@ func init() {
 	productTypesReplaceCmd.Flags().BoolVar(&productTypeReplaceNoDescription, "no-description", false, "set description to null (mutually exclusive with --description)")
 	productTypesReplaceCmd.Flags().StringVar(&productTypeReplaceFromJSON, "from-json", "", "path to JSON file with full request body (use - for stdin); mutually exclusive with individual field flags")
 
-	productTypesCmd.AddCommand(productTypesListCmd, productTypesCreateCmd, productTypesUpdateCmd, productTypesGetCmd, productTypesReplaceCmd)
+	productTypesCmd.AddCommand(productTypesListCmd, productTypesGetCmd, productTypesCreateCmd, productTypesUpdateCmd, productTypesReplaceCmd)
 	rootCmd.AddCommand(productTypesCmd)
 }

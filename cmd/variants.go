@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
-	"strconv"
 
 	"github.com/spf13/cobra"
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
@@ -15,7 +15,16 @@ import (
 
 var variantsCmd = &cobra.Command{
 	Use:   "variants",
-	Short: "Query PCMS variants",
+	Short: "Query PCMS variants (read-only)",
+	Long: `Product variants in the Capigo Product Catalog Management System (PCMS).
+
+This group is read-only. Variants are written through products variants,
+which upserts them onto their product; this group only reads them back.
+Every command here requires a tenant, and every response names the tenant
+it resolved to, in meta.
+
+USAGE
+  capigo variants <command> --tenant <code> [<args>]`,
 }
 
 // --------------------------------------------------------------------------
@@ -33,12 +42,70 @@ var (
 var variantsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List variants by barcode prefix",
-	Long: `List product variants from the PCMS catalog.
+	Long: `List product variants, filtered by the leading digits of their barcode.
 
-Use --barcode-prefix to filter variants whose barcode starts with the given string.
-Use --sort to control sort order: "barcode" (ascending) or "-barcode" (descending).
-The primary use case is finding the highest barcode in a prefix namespace; use
---limit 1 --sort -barcode to get the top result.`,
+PURPOSE
+  Find variants whose barcode begins with a given string. The usual reason is
+  allocation: read the highest barcode already taken under a prefix, so the
+  next one can be chosen.
+
+USAGE
+  capigo variants list --tenant <code> [--barcode-prefix <p>] [--sort <order>]
+                       [--page <n>] [--limit <n>]
+
+FLAGS
+  --tenant <code>
+      Tenant to read from. Required. Falls back to CAPIGO_TENANT, then to
+      default_tenant in the config file. Exits 5 if none resolves.
+
+  --barcode-prefix <p>
+      Match variants whose barcode starts with p. The special characters %
+      and _ are treated literally, not as wildcards. Omit it to list all
+      variants in the tenant.
+
+        capigo variants list --tenant acme --barcode-prefix 634007
+
+  --sort <order>
+      barcode for ascending, -barcode for descending. Any other value exits
+      5. Defaults to -barcode.
+
+        # The highest barcode already used under a prefix
+        capigo variants list --tenant acme --barcode-prefix 634007 \
+          --sort -barcode --limit 1 | jq -r '.data[0].barcode'
+
+  --page <n>
+      Page to fetch. Pages start at 1. The default, 0, sends no page
+      parameter and lets the server choose.
+
+  --limit <n>
+      Rows per page, 1 to 100. Defaults to 20.
+
+OUTPUT
+  The rows are at .data[], exactly as the API sends them. They carry less
+  than variants get returns — no price, no options, no timestamps — but
+  everything this endpoint has:
+
+      {
+        "data": [
+          { "id": "6f1c9a3d-8b2e-4f01-9c77-1a3d5e7f9b21", "barcode": "634007",
+            "sku": "AT-001-S", "name": "Áo thun / S",
+            "product_id": "7c1f2e88-3a4b-4c5d-9e6f-1a2b3c4d5e6f",
+            "manufacturer_code": null, "legacy_code": null,
+            "extra_data": null }
+        ],
+        "meta": {
+          "tenant": "acme",
+          "tenant_source": "flag",
+          "page": 1, "limit": 20, "total": 1, "has_more": false
+        }
+      }
+
+  Read meta.total rather than counting .data[]: a page never holds more than
+  --limit, so a full count needs meta, not arithmetic.
+
+  meta.tenant is the tenant this call actually ran against, and
+  meta.tenant_source says whether that came from the flag, from CAPIGO_TENANT,
+  or from the config file. See capigo help tenancy.`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -46,13 +113,7 @@ The primary use case is finding the highest barcode in a prefix namespace; use
 
 		validSorts := map[string]bool{"barcode": true, "-barcode": true}
 		if variantListSort != "" && !validSorts[variantListSort] {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "--sort must be one of: barcode, -barcode",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
+			failValidation("--sort must be one of: barcode, -barcode")
 		}
 
 		client, cfg, err := buildClient()
@@ -66,73 +127,19 @@ The primary use case is finding the highest barcode in a prefix namespace; use
 		}
 
 		tenant := resolveTenant(variantListTenant, profile)
-		if tenant == nil {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "variants commands require a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
-		}
+		requireTenant(tenant, "variants commands")
 
 		resp, err := client.ListVariants(ctx, tenant, variantListBarcodePrefix, variantListSort, variantListPage, variantListLimit)
 		if err != nil {
 			return handleErr(err)
 		}
 
-		var envelope api.Envelope[[]api.VariantRecord]
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		if outputMode == "json" {
-			data := envelope.Data
-			if data == nil {
-				data = []api.VariantRecord{}
-			}
-			return output.WriteJSONList(os.Stdout, data, envelope.Meta)
-		}
-
-		items := make([]output.VariantRecord, len(envelope.Data))
-		for i, v := range envelope.Data {
-			barcode := ""
-			if v.Barcode != nil {
-				barcode = *v.Barcode
-			}
-			sku := ""
-			if v.SKU != nil {
-				sku = *v.SKU
-			}
-			items[i] = output.VariantRecord{
-				ID:        v.ID,
-				Barcode:   barcode,
-				SKU:       sku,
-				Name:      v.Name,
-				ProductID: v.ProductID,
-			}
-		}
-
-		if err := output.Render(os.Stdout, outputMode, items, output.RenderOpts{
-			GlobalMode:   false,
-			ResourceKind: "variant_record",
-		}); err != nil {
-			return handleErr(err)
-		}
-
-		if outputMode == "table" {
-			output.WriteListSummary(os.Stdout, output.ListSummary{
-				Tenant:     derefTenant(tenant),
-				TenantNote: tenantNote(tenant, variantListTenant),
-				Shown:      len(envelope.Data),
-				Page:       envelope.Meta.Page,
-				Limit:      envelope.Meta.Limit,
-				Total:      envelope.Meta.Total,
-				HasMore:    envelope.Meta.HasMore,
-			})
-		}
-
-		return nil
+		return output.Write(os.Stdout, rawList(envelope.Data), listMeta(tenant, variantListTenant, envelope.Meta))
 	},
 }
 
@@ -140,21 +147,95 @@ The primary use case is finding the highest barcode in a prefix namespace; use
 // variants get
 // --------------------------------------------------------------------------
 
-var variantGetTenant string
+var (
+	variantGetTenant string
+	variantGetSKU    string
+)
 
 var variantsGetCmd = &cobra.Command{
-	Use:   "get <id>",
-	Short: "Get a variant by ID",
-	Long: `Get a single product variant by UUID from PCMS. Tenant is required.
+	Use:   "get [<id>]",
+	Short: "Get a variant by id or by sku",
+	Long: `Get one variant, addressed by id or by sku.
 
-Returns the full variant shape (id, name, sku, barcode, price, compare_at_price,
-currency, weight, dimensions, option1/2/3, variant_type, created_at, updated_at).
-Orphaned, soft-deleted, and cross-tenant variants return 404.
+PURPOSE
+  Read a single variant in full. A variant has two addresses — its id, and its
+  sku, which is unique within a tenant — and both return the same record. Use
+  --sku when the sku is what you have; it is the key a person quotes.
 
-Response: { "data": { ... } } — full PublicProductVariantResponse shape.`,
-	Args: cobra.ExactArgs(1),
+  To find an id, use variants list --barcode-prefix, or read the variants[]
+  array of products get <id>.
+
+USAGE
+  capigo variants get (<id> | --sku <sku>) --tenant <code>
+
+FLAGS
+  <id>
+      Variant id, a UUID. Positional. Give this or --sku, never both: a bare
+      argument is never guessed at, so a sku shaped like a UUID cannot be sent
+      to the wrong address. Giving neither, or both, exits 5.
+
+  --sku <sku>
+      Address the variant by its sku instead. Tenant-scoped: the same sku may
+      exist in another tenant, and that one is not found here.
+
+        capigo variants get --sku AT-001-S --tenant acme
+
+  --tenant <code>
+      Tenant the variant belongs to. Required. Exits 4 if the variant is not
+      in it.
+
+        capigo variants get 6f1c9a3d-8b2e-4f01-9c77-1a3d5e7f9b21 --tenant acme
+
+OUTPUT
+  The variant is at .data — an object, where a list puts an array. This is
+  the full record, unlike the flat rows variants list returns:
+
+      {
+        "data": {
+          "id": "6f1c9a3d-8b2e-4f01-9c77-1a3d5e7f9b21", "name": "Áo thun / S",
+          "sku": "AT-001-S", "barcode": "634007", "price": 120000,
+          "compare_at_price": null, "currency": "VND", "weight": 180,
+          "dimensions": null, "option1": "S", "option2": null, "option3": null,
+          "manufacturer_code": null, "legacy_code": null,
+          "extra_data": { "seeded_from": "pcms" },
+          "variant_type": "manual",
+          "product": { "id": "7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10",
+                       "name": "Áo thun basic", "slug": "ao-thun-basic",
+                       "aliases": ["VVD013"], "tags": ["hè"] },
+          "created_at": "2026-06-01T08:00:00Z",
+          "updated_at": "2026-06-01T08:00:00Z"
+        },
+        "meta": { "tenant": "acme", "tenant_source": "flag" }
+      }
+
+  option1..option3 hold the option values in the order the product declares
+  them; products get <id> shows that order in options[]. dimensions, when
+  present, is { "l": ..., "w": ..., "h": ... }.
+
+  product names the variant's parent — id, name, slug, aliases, tags — so a
+  lookup by sku reaches the product without a second call. The rows of
+  variants list carry a bare product_id instead.
+
+  A single-item read carries no pagination meta; there is nothing to page.
+
+  Exit 4 when no such variant exists in the resolved tenant — by either
+  address, and including one that is orphaned, soft-deleted, or belongs to
+  another tenant. Unlike a product, a deleted variant is not returned and
+  marked; it is simply absent, and an unknown sku and a deleted one give the
+  same answer. See capigo help soft-delete.`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
+
+		// One address or the other, never both and never neither. Guessing which
+		// a bare argument is — a UUID or a sku that happens to look like one —
+		// would put a request on the wrong endpoint and say nothing about it.
+		switch {
+		case len(args) == 1 && variantGetSKU != "":
+			failValidation("give an id or --sku, not both")
+		case len(args) == 0 && variantGetSKU == "":
+			failValidation("a variant address is required: an id, or --sku <sku>")
+		}
 
 		client, cfg, err := buildClient()
 		if err != nil {
@@ -167,64 +248,28 @@ Response: { "data": { ... } } — full PublicProductVariantResponse shape.`,
 		}
 
 		tenant := resolveTenant(variantGetTenant, profile)
-		if tenant == nil {
-			e := &api.APIError{
-				Code:       "VALIDATION_ERROR",
-				Message:    "variants commands require a tenant; pass --tenant <code> or set default",
-				HTTPStatus: 400,
-			}
-			output.RenderError(os.Stderr, outputMode, e.Code, e.Message, "")
-			os.Exit(api.ExitCodeFor(e))
+		requireTenant(tenant, "variants commands")
+
+		// A sku is a value someone typed. Escaped, so one containing a slash
+		// addresses a variant rather than a different endpoint.
+		var path string
+		if variantGetSKU != "" {
+			path = "/pcms/variants/sku/" + url.PathEscape(variantGetSKU)
+		} else {
+			path = "/pcms/variants/" + url.PathEscape(args[0])
 		}
 
-		resp, err := client.Do(ctx, "GET", "/pcms/variants/"+args[0], nil, tenant)
+		resp, err := client.Do(ctx, "GET", path, nil, tenant)
 		if err != nil {
 			return handleErr(err)
 		}
 
-		// The endpoint returns the full PublicProductVariantResponse shape;
-		// decode into api.ProductVariant so JSON mode emits every field
-		// (price, dimensions, options, variant_type, timestamps, etc.).
-		var envelope struct {
-			Data api.ProductVariant `json:"data"`
-		}
+		var envelope api.RawEnvelope
 		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		emitServerTime(resp.ServerTime, "")
-
-		if outputMode == "json" {
-			return output.WriteJSONObject(os.Stdout, envelope.Data)
-		}
-
-		barcode := ""
-		if envelope.Data.Barcode != nil {
-			barcode = *envelope.Data.Barcode
-		}
-		sku := ""
-		if envelope.Data.SKU != nil {
-			sku = *envelope.Data.SKU
-		}
-		price := ""
-		if envelope.Data.Price != nil {
-			price = strconv.FormatFloat(*envelope.Data.Price, 'f', -1, 64)
-		}
-		if err := output.Render(os.Stdout, outputMode, output.Variant{
-			ID:          envelope.Data.ID,
-			Name:        envelope.Data.Name,
-			SKU:         sku,
-			Barcode:     barcode,
-			Price:       price,
-			VariantType: envelope.Data.VariantType,
-		}, output.RenderOpts{
-			GlobalMode:   false,
-			ResourceKind: "variant",
-		}); err != nil {
-			return handleErr(err)
-		}
-
-		return nil
+		return output.Write(os.Stdout, rawItem(envelope.Data), itemMeta(tenant, variantGetTenant, envelope.Meta))
 	},
 }
 
@@ -236,6 +281,7 @@ func init() {
 	variantsListCmd.Flags().IntVar(&variantListLimit, "limit", 20, "items per page (1-100, default 20)")
 
 	variantsGetCmd.Flags().StringVar(&variantGetTenant, "tenant", "", "tenant code (required)")
+	variantsGetCmd.Flags().StringVar(&variantGetSKU, "sku", "", "address the variant by sku instead of by id")
 
 	variantsCmd.AddCommand(variantsListCmd, variantsGetCmd)
 	rootCmd.AddCommand(variantsCmd)
