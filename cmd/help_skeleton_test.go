@@ -188,7 +188,7 @@ func TestNoPageAdvertisesAnOutputMode(t *testing.T) {
 
 	var walk func(c *cobra.Command)
 	walk = func(c *cobra.Command) {
-		if !(cobraAuthoredCommands[c.Name()] && c.Parent() == rootCmd) {
+		if !cobraAuthoredCommands[c.Name()] || c.Parent() != rootCmd {
 			for _, line := range strings.Split(c.Long+"\n"+c.Short, "\n") {
 				// The house rule in help_topics.go names the banned phrases in
 				// order to ban them; it is a comment, not a page.
