@@ -10,6 +10,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.21.0] — 2026-07-13
+
 ### Added
 
 - **Linux install channels for servers and VPS hosts.** Releases now ship a `.deb` package
@@ -1017,7 +1019,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-[Unreleased]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.20.3...HEAD
+[Unreleased]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.20.3...v0.21.0
 [0.20.3]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.20.2...v0.20.3
 [0.20.2]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.20.1...v0.20.2
 [0.20.1]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.20.0...v0.20.1
