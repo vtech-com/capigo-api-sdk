@@ -16,6 +16,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   imposes a self-versus-unassigned prompt or chooses a board list; product creation now separates
   tenant, variant, and identifier invariants from each catalogue's own operating policy.
 
+- **Split bundled relationship guidance by domain.** Products, tasks, and boards now have separate
+  compact references; creation rules live in their owning domain, so future domains can document
+  their own data invariants without making the main skill grow into a catalogue.
+
+- **Constrained the bundled skill's product model to two option axes.** Product guidance uses only
+  `option1` and `option2`.
+
 - **Rebuilt the bundled `capigo-api` skill around live CLI discovery.** The skill now begins
   with `capigo version`, recommends an official installation path when the binary is missing,
   and treats root/group/leaf `--help` plus the cross-cutting help topics as the authoritative
