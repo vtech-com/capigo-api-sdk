@@ -30,6 +30,56 @@ Capigo exposes a stable Public API, but integrating it today requires implementi
 
 ## Installation
 
+### Linux (install script) — recommended for servers and VPS hosts
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/vtech-com/capigo-api-sdk/main/scripts/install.sh | sh
+```
+
+The script detects your OS and architecture, downloads the matching release archive, **verifies it
+against the release's `checksums.txt`**, and installs the binary to `/usr/local/bin/capigo`. It
+refuses to install anything that fails verification.
+
+To upgrade, run the same command again — the binary is replaced in place.
+
+If piping a script into a shell is against your policy, download it, read it, then run it:
+
+```bash
+curl -fsSL -O https://raw.githubusercontent.com/vtech-com/capigo-api-sdk/main/scripts/install.sh
+less install.sh
+sh install.sh
+```
+
+Two environment variables control it:
+
+| Variable | Purpose |
+|----------|---------|
+| `CAPIGO_VERSION` | Install a specific version (e.g. `v0.20.3`) instead of the latest release |
+| `CAPIGO_BIN_DIR` | Install somewhere other than `/usr/local/bin` (useful to avoid `sudo`) |
+
+```bash
+# Pin a version, install without sudo
+CAPIGO_VERSION=v0.20.3 CAPIGO_BIN_DIR="$HOME/.local/bin" sh install.sh
+```
+
+Works on Linux and macOS, amd64 and arm64.
+
+### Debian / Ubuntu (`.deb`)
+
+Every release ships a `.deb` alongside the tarballs, so the system package manager tracks the
+binary (clean uninstall, `dpkg -l capigo`):
+
+```bash
+VERSION=0.20.3   # without the leading "v"
+curl -fsSLO "https://github.com/vtech-com/capigo-api-sdk/releases/download/v${VERSION}/capigo_${VERSION}_linux_amd64.deb"
+sudo apt install "./capigo_${VERSION}_linux_amd64.deb"
+```
+
+Upgrading means installing the newer `.deb` the same way. There is no APT repository, so
+`apt upgrade` will not pull new versions on its own.
+
+To remove it: `sudo apt remove capigo`.
+
 ### Go install
 
 ```bash
@@ -65,9 +115,10 @@ make build
 
 Requires Go 1.26.5+.
 
-### Homebrew (macOS / Linux)
+### Homebrew (macOS only)
 
-The tap ships a **cask** (not a formula):
+The tap ships a **cask**, and casks are macOS-only — `brew install --cask` does not work on
+Linuxbrew. On Linux, use the install script or the `.deb` above.
 
 ```bash
 brew install --cask vtech-com/tap/capigo
@@ -371,6 +422,22 @@ AI agents can inject credentials via environment variables without writing a con
 ```bash
 CAPIGO_API_KEY=csk_... CAPIGO_TENANT=acme capigo tasks list
 ```
+
+### Headless hosts (VPS, CI, agent runners)
+
+On a machine with no human at the keyboard, **do not use `capigo auth login`** — it exists to write
+`~/.capigo/config.json` interactively. Provision the environment instead; the env vars above take
+precedence over the config file, so no login step is needed at all:
+
+```bash
+export CAPIGO_API_KEY=csk_...
+export CAPIGO_TENANT=acme
+capigo health   # exit 0 = API reachable and key accepted
+```
+
+Source the key from whatever your host already uses for secrets (a systemd unit's
+`EnvironmentFile=`, the CI secret store, your process manager's env block) rather than committing it
+to a shell profile. `capigo health` is the preflight that tells you the provisioning worked.
 
 To point at a different environment (staging, local dev) without touching the config file:
 

@@ -10,6 +10,25 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.21.0] — 2026-07-13
+
+### Added
+
+- **Linux install channels for servers and VPS hosts.** Releases now ship a `.deb` package
+  (Debian/Ubuntu, amd64 and arm64) alongside the existing tarballs, and `scripts/install.sh`
+  installs the binary on Linux or macOS with one command. The script resolves the latest release,
+  **verifies the archive against the release's `checksums.txt`**, and refuses to install anything
+  that fails verification. It is re-runnable, which is how upgrades are performed. `CAPIGO_VERSION`
+  pins a version; `CAPIGO_BIN_DIR` changes the install directory. There is deliberately no APT
+  repository: upgrades are manual, so an APT repo would buy nothing while committing us to hosting
+  a signed package index forever.
+
+### Fixed
+
+- **The README claimed Homebrew installs on Linux.** The tap ships a cask, and casks are macOS-only,
+  so anyone following that section on a Linux host hit a hard failure. The section is now marked
+  macOS-only and points Linux users at the install script or the `.deb`.
+
 ### Changed
 
 - **Grounded bundled creation guidance in Capigo domain constraints.** Task creation no longer
@@ -1000,7 +1019,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-[Unreleased]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.20.3...HEAD
+[Unreleased]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.21.0...HEAD
+[0.21.0]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.20.3...v0.21.0
 [0.20.3]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.20.2...v0.20.3
 [0.20.2]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.20.1...v0.20.2
 [0.20.1]: https://github.com/vtech-com/capigo-api-sdk/compare/v0.20.0...v0.20.1
