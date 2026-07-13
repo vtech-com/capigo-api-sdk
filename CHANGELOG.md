@@ -10,6 +10,19 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.22.0] — 2026-07-13
+
+### Changed
+
+- **Told the truth about the API's two-option cap on product writes.** The API now accepts at most
+  two option axes and rejects a variant object carrying any key it does not name — `option3`
+  included, and a misspelled field with it. Nothing is stripped silently any more. Help pages,
+  the bundled skill, and the request models said otherwise and would have walked a caller into a
+  rejected write: `option3` is gone from `CreateProductVariantItem` and `UpsertVariantItem`, the
+  `products create` / `products variants` help pages state the cap and the strict-key rule, and
+  E9446 stops suggesting an `option3` that cannot be sent. Reads are untouched — a variant written
+  before the cap still returns its `option3`, and `ProductVariant` still carries the field.
+
 ## [0.21.0] — 2026-07-13
 
 ### Added
