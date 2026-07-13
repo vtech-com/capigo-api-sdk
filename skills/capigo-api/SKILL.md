@@ -160,15 +160,14 @@ Most operations need no bundled domain guide: leaf help is sufficient.
 
 For **creating a product**, read
 [`references/product-creation.md`](./references/product-creation.md) after reading
-`capigo products create --help`. It explains the two materially different request shapes:
-simple products and products with options/variants.
+`capigo products create --help`. It defines the catalogue invariants that supplement live help:
+the two request shapes, tenant-scoped references, variant identity, and safe retry behavior.
 
 For **creating a task or subtask**, read
 [`references/task-creation.md`](./references/task-creation.md) after reading
-the relevant leaf help. It defines the required pause when the assignee is omitted or unclear,
-the safe way to resolve the user when they choose self-assignment, and how to place a task on
-a board — resolving the board's lists, defaulting sensibly when the user names no list, and
-reporting the placement so the user can ask for a move.
+the relevant leaf help. It defines the task-domain constraints that help cannot infer: assignment
+defaults, unambiguous board placement, and the structural rules for subtasks. It does not impose
+an organisation's workflow or choose a board list on the user's behalf.
 
 Do not load these references for listing, searching, or updating unrelated resources.
 

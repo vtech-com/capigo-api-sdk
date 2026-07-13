@@ -12,6 +12,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **Grounded bundled creation guidance in Capigo domain constraints.** Task creation no longer
+  imposes a self-versus-unassigned prompt or chooses a board list; product creation now separates
+  tenant, variant, and identifier invariants from each catalogue's own operating policy.
+
 - **Rebuilt the bundled `capigo-api` skill around live CLI discovery.** The skill now begins
   with `capigo version`, recommends an official installation path when the binary is missing,
   and treats root/group/leaf `--help` plus the cross-cutting help topics as the authoritative

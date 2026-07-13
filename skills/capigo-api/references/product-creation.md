@@ -6,29 +6,25 @@ Use this reference only when creating a product. First run:
 capigo products create --help
 ```
 
-The leaf help is authoritative here: it documents both request shapes (flag mode, where
-`--sku`/`--barcode`/`--price` populate the default variant, and `--from-json` for a product with
-options), the `option1`..`option3` positional mapping, and that the backend never auto-generates
-the option matrix — every variant must be sent explicitly. This guide only adds the judgment and
-workflow the help cannot give you.
+The leaf help is authoritative for flags and limits. This guide records catalogue invariants; do
+not invent the tenant's code, barcode, naming, approval, or duplicate-product policy.
 
-## Before writing
+## Apply catalogue constraints
 
-1. Resolve the tenant and pass `--tenant <code>` explicitly when there is any doubt.
-2. Search for the intended name, alias, SKU, or barcode with `products list` so an accidental
-   duplicate can be discussed before writing.
-3. Resolve referenced brand, category, product type, and unit IDs through their CLI groups.
-   Never guess UUIDs.
-4. Decide whether the product has one sellable form (simple mode) or needs an explicit option
-   matrix (variants mode via `--from-json`).
+- Resolve the tenant and every brand, category, product type, and unit ID within it. Never guess a
+  UUID or create reference data merely to complete a product request.
+- Choose one shape: a simple product has one default variant populated by the simple fields; a
+  product with options uses `--from-json` and sends every intended variant explicitly.
+- In variants mode, `option1` through `option3` map positionally to `options[]`. Use only declared
+  option values, and validate the requested combinations are complete and unique before sending:
+  the backend does not generate the matrix for the caller.
+- A SKU is unique within a tenant and an option combination is unique within a product. A barcode
+  is not guaranteed unique. Let the user's policy decide what codes to supply.
+- Keep the platform default status unless the user explicitly requests a lifecycle state. Aliases
+  are alternate names or codes; tags are product-level labels, not variant attributes.
 
-Use the user's own organization policy for codes, barcodes, naming, and whether duplicates are
-acceptable — this skill does not invent that policy.
-
-## Before sending a variants-mode payload
-
-Validate that the requested variant combinations are complete and not accidentally missing or
-duplicated. Neither the CLI nor the backend will catch a combination you forgot or sent twice.
+Do not preflight-search by name merely to impose a no-duplicates policy. Search before retrying an
+ambiguous failed write, or when the user explicitly requires uniqueness.
 
 ## Verify the result
 
@@ -39,5 +35,5 @@ duplicated. Neither the CLI nor the backend will catch a combination you forgot 
 4. If subsequent variant changes are needed, discover and use `capigo products variants --help`;
    do not guess a command under the read-only `variants` group.
 
-If product creation fails after a network interruption, search for the product before retrying.
-The write may have committed even if the response did not reach the client.
+After a network interruption, search before retrying: the write may have committed even though its
+response did not reach the client.
