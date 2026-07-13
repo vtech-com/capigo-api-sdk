@@ -221,6 +221,27 @@
           },
           "name": {
             "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "HealthCheckResponse": {
+        "type": "object",
+        "required": [
+          "ok",
+          "timestamp"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "example": true
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -2449,6 +2470,45 @@
     }
   ],
   "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "tags": [
+          "Health"
+        ],
+        "description": "Returns API health status after proxy authentication. Used to verify API keys and connectivity.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "API is healthy and authentication succeeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — missing or invalid API key"
+          }
+        }
+      }
+    },
     "/members": {
       "get": {
         "summary": "List Members",
@@ -3817,7 +3877,7 @@
         "tags": [
           "PCMS"
         ],
-        "description": "Update an existing brand. At least one field must be provided. Updating `name` automatically recomputes the slug.",
+        "description": "Update an existing brand. At least one field must be provided. Fields not provided are left unchanged. Updating `name` automatically recomputes the slug.",
         "parameters": [
           {
             "name": "id",
@@ -4646,7 +4706,7 @@
         "tags": [
           "PCMS"
         ],
-        "description": "Update an existing product type. At least one field must be provided. Name must be unique (case-insensitive) within the tenant.",
+        "description": "Update an existing product type. At least one field must be provided. Fields not provided are left unchanged. Name must be unique (case-insensitive) within the tenant.",
         "parameters": [
           {
             "name": "id",
@@ -4870,7 +4930,7 @@
         "tags": [
           "PCMS"
         ],
-        "description": "Create a new product within the tenant identified by `X-Tenant-Code`.\n\nSupports two creation modes:\n- **Simple mode**: omit `options` and `variants`. A single default variant is created from `sku`, `barcode`, and `price` on the product body.\n- **Variant mode**: supply 1–3 entries in `options` (e.g. Color, Size) plus a `variants` array. Each variant must populate `option1`/`option2`/`option3` with the chosen value for the corresponding option (positions match `options[]` order). The backend does not auto-generate the cartesian product — clients are responsible for sending the exact list of variants to create.",
+        "description": "Create a new product within the tenant identified by `X-Tenant-Code`.\n\nSupports two creation modes:\n- **Simple mode**: omit `options` and `variants`. A single default variant is created from `sku`, `barcode`, and `price` on the product body.\n- **Variant mode**: supply 1–2 entries in `options` (e.g. Color, Size) plus a `variants` array. Each variant must populate `option1`/`option2` with the chosen value for the corresponding option (positions match `options[]` order). The backend does not auto-generate the cartesian product — clients are responsible for sending the exact list of variants to create.",
         "parameters": [
           {
             "name": "X-Tenant-Code",
@@ -4989,8 +5049,8 @@
                   },
                   "options": {
                     "type": "array",
-                    "maxItems": 3,
-                    "description": "Variant mode: defines the option axes (e.g. Color, Size). Up to 3 options; their order determines which `option1/2/3` slot each value maps to.",
+                    "maxItems": 2,
+                    "description": "Variant mode: defines the option axes (e.g. Color, Size). Up to 2 options; their order determines which `option1/2` slot each value maps to.",
                     "items": {
                       "type": "object",
                       "required": [
@@ -5012,7 +5072,7 @@
                   },
                   "variants": {
                     "type": "array",
-                    "description": "Variant mode: explicit list of variants to create. Each variant must set `option1`/`option2`/`option3` matching the values declared in `options[]` (by position).",
+                    "description": "Variant mode: explicit list of variants to create. Each variant must set `option1`/`option2` matching the values declared in `options[]` (by position).",
                     "items": {
                       "type": "object",
                       "required": [
@@ -5043,11 +5103,6 @@
                           "type": "string",
                           "nullable": true,
                           "description": "Value for `options[1]`."
-                        },
-                        "option3": {
-                          "type": "string",
-                          "nullable": true,
-                          "description": "Value for `options[2]`."
                         },
                         "manufacturer_code": {
                           "type": "string",
@@ -5168,7 +5223,7 @@
         "tags": [
           "PCMS"
         ],
-        "description": "Update the core details of a product. Variant-level fields (`sku`, `barcode`, `price`, option values) are intentionally **not** editable through this endpoint — use `PUT /pcms/products/{id}/variants` to modify variants.",
+        "description": "Update the core details of a product. At least one field must be provided. Fields not provided are left unchanged. Variant-level fields (`sku`, `barcode`, `price`, option values) are intentionally **not** editable through this endpoint — use `PUT /pcms/products/{id}/variants` to modify variants.",
         "parameters": [
           {
             "name": "id",
@@ -5299,7 +5354,7 @@
         "tags": [
           "PCMS"
         ],
-        "description": "Upsert variants of a product. The request body is an array of items.\n\n- Items **with** `variant_id` (UUID) → update the existing variant.\n- Items **without** `variant_id` → create a new variant (`name` is required; `option1`/`option2`/`option3` should match the product's option matrix).\n\nA single request may mix create and update items. Variants **not** included in the payload are left untouched (this endpoint does not delete variants). Unknown `variant_id` values return 404.",
+        "description": "Upsert variants of a product. The request body is an array of items.\n\n- Items **with** `variant_id` (UUID) → update the existing variant.\n- Items **without** `variant_id` → create a new variant (`name` is required; `option1`/`option2` should match the product's option matrix).\n\nA single request may mix create and update items. Variants **not** included in the payload are left untouched (this endpoint does not delete variants). Unknown `variant_id` values return 404.",
         "parameters": [
           {
             "name": "id",
@@ -5357,10 +5412,6 @@
                       "description": "Used when creating a new variant on a matrix product."
                     },
                     "option2": {
-                      "type": "string",
-                      "nullable": true
-                    },
-                    "option3": {
                       "type": "string",
                       "nullable": true
                     },
@@ -5758,7 +5809,7 @@
         "tags": [
           "PCMS"
         ],
-        "description": "Update an existing product unit. At least one field must be provided. The `abbreviation` is normalized to lowercase automatically.",
+        "description": "Update an existing product unit. At least one field must be provided. Fields not provided are left unchanged. The `abbreviation` is normalized to lowercase automatically.",
         "parameters": [
           {
             "name": "id",
