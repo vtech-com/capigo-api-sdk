@@ -33,6 +33,23 @@ archives:
       - README.md
       - CHANGELOG.md
 
+nfpms:
+  - id: capigo
+    ids:
+      - capigo
+    package_name: capigo
+    file_name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - deb
+    vendor: VTech
+    homepage: "https://capigo.app"
+    maintainer: "VTech <dev@capigo.app>"
+    description: "CLI tool and Go SDK for the Capigo platform"
+    license: MIT
+    bindir: /usr/bin
+    section: utils
+    priority: optional
+
 checksum:
   name_template: checksums.txt
   algorithm: sha256
