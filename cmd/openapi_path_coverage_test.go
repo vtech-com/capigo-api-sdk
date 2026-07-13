@@ -31,6 +31,8 @@ import (
 // reading cmd/*.go and internal/api/client.go for the literal methods and paths
 // passed to client.Do.
 var implementedOps = map[string]string{
+	"GET /health": "health",
+
 	"GET /tenants": "tenants list",
 
 	"GET /members":      "members list",
