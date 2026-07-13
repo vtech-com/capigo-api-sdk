@@ -149,7 +149,9 @@ type CreateProductOptionItem struct {
 }
 
 // CreateProductVariantItem is one variant entry in POST /pcms/products.
-// Option1/2/3 reference the values of the corresponding option axes.
+// Option1/2 reference the values of the corresponding option axes. There is no
+// Option3: the API caps a product at two option axes and rejects a variant that
+// carries any key not listed here.
 type CreateProductVariantItem struct {
 	Name    string   `json:"name"`
 	SKU     *string  `json:"sku,omitempty"`
@@ -157,7 +159,6 @@ type CreateProductVariantItem struct {
 	Price   *float64 `json:"price,omitempty"`
 	Option1 *string  `json:"option1,omitempty"`
 	Option2 *string  `json:"option2,omitempty"`
-	Option3 *string  `json:"option3,omitempty"`
 }
 
 // CreateProductRequest is the body for POST /pcms/products.
@@ -200,6 +201,8 @@ type UpdateProductRequest struct {
 // UpsertVariantItem is one element of the PUT /pcms/products/{id}/variants array.
 // VariantID present -> UPDATE the existing variant.
 // VariantID absent  -> CREATE a new variant (Name is required in that case).
+// These are all the keys the API accepts on a variant: it rejects the request
+// when an item carries any other key, Option3 included.
 type UpsertVariantItem struct {
 	VariantID        *string        `json:"variant_id,omitempty"`
 	Name             *string        `json:"name,omitempty"`
@@ -208,7 +211,6 @@ type UpsertVariantItem struct {
 	Price            *float64       `json:"price,omitempty"`
 	Option1          *string        `json:"option1,omitempty"`
 	Option2          *string        `json:"option2,omitempty"`
-	Option3          *string        `json:"option3,omitempty"`
 	ManufacturerCode *string        `json:"manufacturer_code,omitempty"`
 	LegacyCode       *string        `json:"legacy_code,omitempty"`
 	ExtraData        map[string]any `json:"extra_data,omitempty"`

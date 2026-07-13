@@ -48,7 +48,7 @@ var errorCatalog = map[string]ErrorInfo{
 		CapabilityNote: true,
 	},
 	"E9446": {
-		Next:           "Change option1/option2/option3 so the combination is unique.",
+		Next:           "Change option1/option2 so the combination is unique.",
 		CapabilityNote: true,
 	},
 	"E9447": {

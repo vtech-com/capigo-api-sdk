@@ -385,9 +385,12 @@ OUTPUT
         "meta": { "tenant": "acme", "tenant_source": "flag" }
       }
 
-  options[] carries the product's option names in order. That order is what
-  option1, option2 and option3 refer to when writing variants with
+  options[] carries the product's option names in order — at most two. That
+  order is what option1 and option2 refer to when writing variants with
   products variants.
+
+  A variant created before the two-axis cap may still carry an option3 value,
+  and reads return it. Writes do not accept it.
 
   A single-item read carries no pagination meta; there is nothing to page.
 
@@ -517,8 +520,10 @@ FLAGS
 
       Body with options and variants. If options is present, variants is
       REQUIRED: the backend does not generate the cartesian matrix from
-      options alone. option1..option3 are positional and line up with
-      options[] in order:
+      options alone. A product carries AT MOST TWO option axes: a third one
+      exits 5. option1 and option2 are positional and line up with options[]
+      in order. A variant rejects any key beyond the ones shown here — an
+      option3, or a misspelled field, exits 5 rather than being dropped:
 
           { "name": "T-Shirt",
             "options": [ {"name": "Color", "values": ["Blue", "Red"]},
@@ -878,16 +883,21 @@ FLAGS
         sku                string   variant code. Unique per tenant (server)
         barcode            string   numeric barcode. Not enforced unique
         price              number
-        option1..option3   string   positional. The position is NOT inferred
+        option1, option2   string   positional. The position is NOT inferred
                                     from the label — read the product's
                                     options[] with products get <id> and
-                                    match by index.
+                                    match by index. There is no option3.
         manufacturer_code  string
         legacy_code        string
         extra_data         object   arbitrary key-value metadata
 
+      That table is the whole accepted set. The API rejects a variant object
+      carrying any other key — an option3, or a field you misspelled — and the
+      call exits 5 having written nothing. Nothing is silently dropped: a key
+      the API does not name is an error, not a no-op.
+
       On an UPDATE, a field you OMIT is left unchanged, and a field you send
-      as NULL is cleared. Unknown fields are forwarded to the API untouched.
+      as NULL is cleared.
 
       This call is not atomic. Creates are committed before updates are
       applied, and there is no rollback. If it fails partway, some variants
@@ -895,7 +905,7 @@ FLAGS
       products get <id> before retrying: resending the same array can create
       duplicates of what already landed.
 
-        # Read the option order before writing option1..option3
+        # Read the option order before writing option1 / option2
         capigo products get 8f2a1c07-... --tenant acme | jq '.data.options'
 
         # One update, one create in the same call

@@ -17,8 +17,13 @@ preserve.
 
 ## Options and variants
 
-- This skill's supported catalogue model has at most **two** option axes. Use `options[0]` →
-  `option1` and `options[1]` → `option2`.
+- A product has at most **two** option axes — the API enforces this, it is not merely a convention.
+  Use `options[0]` → `option1` and `options[1]` → `option2`. A third axis, or an `option3` on a
+  variant, is rejected. Reads still return `option3` on variants written before the cap; that is
+  legacy data, not a field you may write back.
+- A variant object accepts only the keys the API names. Any other key — an `option3`, a misspelling
+  — fails the whole request; it is never quietly dropped. So a rejected write is a claim about the
+  *payload*, not evidence that the operation is unsupported: read the error, fix the key, resend.
 - Every variant option value must be declared by its corresponding option. The caller supplies the
   intended combinations; the backend does not generate a matrix.
 - Treat a stated option matrix as complete unless the user explicitly requests only selected
