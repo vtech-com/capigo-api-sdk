@@ -208,9 +208,11 @@ OUTPUT
         "meta": { "tenant": "acme", "tenant_source": "flag" }
       }
 
-  option1..option3 hold the option values in the order the product declares
-  them; products get <id> shows that order in options[]. dimensions, when
-  present, is { "l": ..., "w": ..., "h": ... }.
+  option1 and option2 hold the option values in the order the product declares
+  them; products get <id> shows that order in options[]. option3 is read-only
+  legacy: a product now carries at most two option axes, so only a variant
+  written before that cap can have a non-null option3, and no write accepts the
+  field. dimensions, when present, is { "l": ..., "w": ..., "h": ... }.
 
   product names the variant's parent — id, name, slug, aliases, tags — so a
   lookup by sku reaches the product without a second call. The rows of
