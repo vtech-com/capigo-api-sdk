@@ -158,19 +158,19 @@ integration and that work is separately authorized.
 
 Most operations need no bundled domain guide: leaf help is sufficient.
 
-For **creating a product**, read
-[`references/product-creation.md`](./references/product-creation.md) after reading
-`capigo products create --help`. It explains the two materially different request shapes:
-simple products and products with options/variants.
+For an operation that creates, traverses, or changes a relationship, load only the relevant
+domain reference after reading leaf help:
 
-For **creating a task or subtask**, read
-[`references/task-creation.md`](./references/task-creation.md) after reading
-the relevant leaf help. It defines the required pause when the assignee is omitted or unclear,
-the safe way to resolve the user when they choose self-assignment, and how to place a task on
-a board — resolving the board's lists, defaulting sensibly when the user names no list, and
-reporting the placement so the user can ask for a move.
+- [`references/domains/products.md`](./references/domains/products.md) for products, variants, and
+  product references;
+- [`references/domains/tasks.md`](./references/domains/tasks.md) for tasks, assignees, and
+  subtasks;
+- [`references/domains/boards.md`](./references/domains/boards.md) when placing a task on a board
+  or list.
 
-Do not load these references for listing, searching, or updating unrelated resources.
+For product creation, read `products.md` after `capigo products create --help`. For task or subtask
+creation, read `tasks.md` after the relevant leaf help; read `boards.md` as well only for board
+placement. Do not load a domain reference for unrelated listing or search work.
 
 ## Scope boundary
 
