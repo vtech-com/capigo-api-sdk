@@ -74,7 +74,7 @@ homebrew_casks:
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
     homepage: "https://capigo.app"
     description: "CLI tool and Go SDK for the Capigo platform"
-    binary: "capigo"
+    binaries: ["capigo"]
     hooks:
       post:
         install: 'system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/capigo"]'
