@@ -604,6 +604,49 @@
           }
         }
       },
+      "PublicMediaEntry": {
+        "type": "object",
+        "description": "A single product/variant image. `url` is a signed, time-limited Supabase Storage URL (valid until `expiresAt`) — re-fetch the parent product/variant to get a fresh link after it expires.",
+        "required": [
+          "id",
+          "url",
+          "position",
+          "isDefault",
+          "altText",
+          "expiresAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Underlying product_media row id."
+          },
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Signed storage URL to the image, valid until `expiresAt`.",
+            "example": "https://xxxxx.supabase.co/storage/v1/object/sign/product-media/acme/3fa85f64-5717-4562-b3fc-2c963f66afa6.jpg?token=..."
+          },
+          "position": {
+            "type": "integer",
+            "description": "Gallery ordering, ascending."
+          },
+          "isDefault": {
+            "type": "boolean",
+            "description": "Whether this image is the default/cover image."
+          },
+          "altText": {
+            "type": "string",
+            "nullable": true,
+            "description": "Accessibility alt text, if set by the uploader."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When `url` stops working. Re-fetch the parent product/variant for a fresh link."
+          }
+        }
+      },
       "PublicProductVariantResponse": {
         "type": "object",
         "properties": {
@@ -711,6 +754,13 @@
               }
             ],
             "nullable": true
+          },
+          "media": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicMediaEntry"
+            },
+            "description": "The variant's own assigned images (position ASC), falling back to the parent product's single default image when the variant has none of its own. `[]` when neither exists."
           }
         }
       },
@@ -914,6 +964,13 @@
             "items": {
               "$ref": "#/components/schemas/PublicProductVariantResponse"
             }
+          },
+          "media": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicMediaEntry"
+            },
+            "description": "Every active image for this product, ordered by gallery position. `[]` when the product has no images."
           }
         }
       },
@@ -5135,7 +5192,8 @@
               "schema": {
                 "type": "object",
                 "required": [
-                  "name"
+                  "name",
+                  "unit_id"
                 ],
                 "properties": {
                   "name": {
@@ -5164,8 +5222,7 @@
                   },
                   "unit_id": {
                     "type": "string",
-                    "format": "uuid",
-                    "nullable": true
+                    "format": "uuid"
                   },
                   "status": {
                     "type": "string",
@@ -5464,8 +5521,7 @@
                   },
                   "unit_id": {
                     "type": "string",
-                    "format": "uuid",
-                    "nullable": true
+                    "format": "uuid"
                   },
                   "status": {
                     "type": "string",
@@ -6188,6 +6244,13 @@
                           "product_id": {
                             "type": "string",
                             "format": "uuid"
+                          },
+                          "media": {
+                            "type": "array",
+                            "items": {
+                              "$ref": "#/components/schemas/PublicMediaEntry"
+                            },
+                            "description": "The variant's own assigned images (position ASC), falling back to the parent product's single default image when the variant has none of its own. `[]` when neither exists."
                           }
                         }
                       }
