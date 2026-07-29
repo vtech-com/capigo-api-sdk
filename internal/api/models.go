@@ -162,8 +162,8 @@ type CreateProductVariantItem struct {
 }
 
 // CreateProductRequest is the body for POST /pcms/products.
-// Only Name is required. When Options are provided, Variants must also be provided;
-// the backend does not auto-generate the Cartesian matrix.
+// Name and UnitID are required. When Options are provided, Variants must
+// also be provided; the backend does not auto-generate the Cartesian matrix.
 type CreateProductRequest struct {
 	Name          string                     `json:"name"`
 	Description   *string                    `json:"description,omitempty"`

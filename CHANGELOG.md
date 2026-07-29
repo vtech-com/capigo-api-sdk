@@ -10,6 +10,19 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.23.1] — 2026-07-29
+
+### Changed
+
+- **`products create` now requires `--unit-id`.** Prod (capigo#469, live in v1.27.3) rejects a
+  product with no unit; the CLI validated this locally only for `--name`. `--unit-id` now fails
+  fast (exit 5) in flag mode instead of round-tripping to a 400. `--from-json` is unaffected — the
+  server still validates that body.
+- Product and variant reads now carry `media[]` (capigo#462, live in v1.27.3): signed, time-limited
+  image URLs. No CLI change needed — responses pass through untouched — but the bundled skill now
+  says not to cache or hand out a `media[].url`.
+- Synced `api/openapi.json` with prod after capigo#462, #469.
+
 ## [0.23.0] — 2026-07-29
 
 ### Added

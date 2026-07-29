@@ -507,12 +507,12 @@ PURPOSE
   variants, use --from-json.
 
 USAGE
-  capigo products create --tenant <code> --name <name>
+  capigo products create --tenant <code> --name <name> --unit-id <uuid>
                          [--sku <sku>] [--barcode <code>] [--price <n>]
                          [--currency <code>] [--description <text>]
                          [--status <status>]
                          [--brand-id <uuid>] [--category-id <uuid>]
-                         [--product-type-id <uuid>] [--unit-id <uuid>]
+                         [--product-type-id <uuid>]
                          [--aliases <text>]... [--tags <text>]...
   capigo products create --tenant <code> --from-json <path|->
 
@@ -522,10 +522,15 @@ FLAGS
       then to default_tenant in the config file. Exits 5 if none resolves.
 
         capigo products create --tenant acme --name "Blue T-Shirt" \
-          --sku SKU-001 --price 299000
+          --unit-id 7c1f2e88-... --sku SKU-001 --price 299000
 
   --name <name>
       Product name. Required in flag mode, unless --from-json is used.
+
+  --unit-id <uuid>
+      Unit of measure. Required in flag mode, unless --from-json is used —
+      the API rejects a product with no unit. Resolve it with
+      capigo units list; never guess or invent one.
 
   --sku <sku>, --barcode <code>, --price <n>
       Fields of the auto-created default variant. Ignored if the product ends
@@ -539,8 +544,8 @@ FLAGS
   --status <status>
       DRAFT, ACTIVE, or ARCHIVED. Default DRAFT.
 
-  --brand-id <uuid>, --category-id <uuid>, --product-type-id <uuid>,
-  --unit-id <uuid>
+  --brand-id <uuid>, --category-id <uuid>, --product-type-id <uuid>
+      Optional.
 
   --aliases <text>
       Alternative names and product codes. Repeatable: --aliases foo --aliases
@@ -622,6 +627,9 @@ OUTPUT
 		} else {
 			if productCreateName == "" {
 				failValidation("--name is required")
+			}
+			if productCreateUnitID == "" {
+				failValidation("--unit-id is required")
 			}
 
 			req := api.CreateProductRequest{
@@ -1068,7 +1076,7 @@ func init() {
 	productsCreateCmd.Flags().StringVar(&productCreateBrandID, "brand-id", "", "brand UUID")
 	productsCreateCmd.Flags().StringVar(&productCreateCategoryID, "category-id", "", "category UUID")
 	productsCreateCmd.Flags().StringVar(&productCreateProductTypeID, "product-type-id", "", "product type UUID")
-	productsCreateCmd.Flags().StringVar(&productCreateUnitID, "unit-id", "", "unit UUID")
+	productsCreateCmd.Flags().StringVar(&productCreateUnitID, "unit-id", "", "unit UUID (required unless --from-json is used)")
 	productsCreateCmd.Flags().StringArrayVar(&productCreateAliases, "aliases", nil, "product aliases / alternative search names (repeatable: --aliases foo --aliases bar)")
 	productsCreateCmd.Flags().StringArrayVar(&productCreateTags, "tags", nil, "free-form product tags (repeatable: --tags foo --tags bar)")
 	productsCreateCmd.Flags().StringVar(&productCreateFromJSON, "from-json", "", "path to JSON file with full request body (use - for stdin)")
