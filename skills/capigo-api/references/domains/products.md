@@ -7,8 +7,9 @@ preserve.
 ## Create flow
 
 1. Resolve the tenant first. Every product, variant, and reference lookup is tenant-scoped.
-2. Resolve optional brand, category, product type, and unit IDs in that same tenant. Never guess an
-   ID or create reference data merely to complete a product request.
+2. Resolve a unit ID in that tenant — creation fails without one. Resolve brand, category, and
+   product type IDs too when the request names them; they stay optional. Never guess an ID or
+   create reference data merely to complete a product request.
 3. Choose exactly one shape:
    - **Simple product:** use the simple fields. Capigo creates one default variant; its SKU,
      barcode, and price remain variant data even when supplied as product convenience fields.
@@ -30,6 +31,12 @@ preserve.
   combinations. Ask rather than silently omit or invent combinations.
 - A SKU is unique within a tenant; an option combination is unique within its product. A barcode is
   not guaranteed unique. These rules do not define the tenant's code or duplicate-product policy.
+
+## Images
+
+- Product and variant reads carry `media[]`: signed, time-limited URLs (`expiresAt`), not permanent
+  links. Do not cache or hand out a `media[].url` for later use — re-read the product or variant to
+  get a fresh one when the old one may have expired.
 
 ## Metadata and recovery
 
