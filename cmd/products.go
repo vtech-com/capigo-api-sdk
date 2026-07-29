@@ -34,13 +34,17 @@ USAGE
 // --------------------------------------------------------------------------
 
 var (
-	productListTenant       string
-	productListUpdatedSince string
-	productListQuery        string
-	productListPage         int
-	productListLimit        int
-	productListAll          bool
-	productListIDs          string
+	productListTenant         string
+	productListUpdatedSince   string
+	productListQuery          string
+	productListPage           int
+	productListLimit          int
+	productListAll            bool
+	productListIDs            string
+	productListBrandIDs       string
+	productListCategoryIDs    string
+	productListProductTypeIDs string
+	productListUnitIDs        string
 )
 
 var productsListCmd = &cobra.Command{
@@ -61,6 +65,8 @@ USAGE
   capigo products list --tenant <code> [-q <term>]
                        [--ids <uuid,...> | --all]
                        [--updated-since <timestamp>]
+                       [--brand-ids <uuid,...>] [--category-ids <uuid,...>]
+                       [--product-type-ids <uuid,...>] [--unit-ids <uuid,...>]
                        [--page <n>] [--limit <n>]
 
 FLAGS
@@ -93,6 +99,18 @@ FLAGS
       delta.
 
         capigo products list --tenant acme --updated-since 2026-07-01T00:00:00Z
+
+  --brand-ids <uuid,...>
+  --category-ids <uuid,...>
+  --product-type-ids <uuid,...>
+  --unit-ids <uuid,...>
+      Restrict to products whose brand/category/product type/unit matches one
+      of the listed UUIDs, comma-separated, at most 50 each. AND-composes with
+      every other filter, including each other and --query. The server
+      rejects a malformed value — not a UUID, empty, or more than 50 — with
+      exit 5.
+
+        capigo products list --tenant acme --brand-ids 7c1f2e88-...,9ab2c744-...
 
   --all
       Fetch every page. All pages are held in memory before anything prints, so
@@ -214,6 +232,18 @@ OUTPUT
 		if productListIDs != "" {
 			params.Set("ids", productListIDs)
 		}
+		if productListBrandIDs != "" {
+			params.Set("brand_ids", productListBrandIDs)
+		}
+		if productListCategoryIDs != "" {
+			params.Set("category_ids", productListCategoryIDs)
+		}
+		if productListProductTypeIDs != "" {
+			params.Set("product_type_ids", productListProductTypeIDs)
+		}
+		if productListUnitIDs != "" {
+			params.Set("unit_ids", productListUnitIDs)
+		}
 		if productListPage > 0 {
 			params.Set("page", strconv.Itoa(productListPage))
 		}
@@ -278,6 +308,18 @@ func productsListAll(ctx context.Context, client *api.Client, tenant *string) er
 		}
 		if productListUpdatedSince != "" {
 			params.Set("updated_since", productListUpdatedSince)
+		}
+		if productListBrandIDs != "" {
+			params.Set("brand_ids", productListBrandIDs)
+		}
+		if productListCategoryIDs != "" {
+			params.Set("category_ids", productListCategoryIDs)
+		}
+		if productListProductTypeIDs != "" {
+			params.Set("product_type_ids", productListProductTypeIDs)
+		}
+		if productListUnitIDs != "" {
+			params.Set("unit_ids", productListUnitIDs)
 		}
 		params.Set("page", strconv.Itoa(page))
 		if productListLimit > 0 {
@@ -1009,6 +1051,10 @@ func init() {
 	productsListCmd.Flags().IntVar(&productListLimit, "limit", 0, "items per page (1–100, default 20)")
 	productsListCmd.Flags().BoolVar(&productListAll, "all", false, "fetch all pages automatically (loads all pages into memory before output; for large catalogs prefer paginating manually)")
 	productsListCmd.Flags().StringVar(&productListIDs, "ids", "", "comma-separated list of product UUIDs to fetch (max 50); mutually exclusive with --all")
+	productsListCmd.Flags().StringVar(&productListBrandIDs, "brand-ids", "", "comma-separated list of brand UUIDs to filter by (max 50)")
+	productsListCmd.Flags().StringVar(&productListCategoryIDs, "category-ids", "", "comma-separated list of category UUIDs to filter by (max 50)")
+	productsListCmd.Flags().StringVar(&productListProductTypeIDs, "product-type-ids", "", "comma-separated list of product type UUIDs to filter by (max 50)")
+	productsListCmd.Flags().StringVar(&productListUnitIDs, "unit-ids", "", "comma-separated list of unit UUIDs to filter by (max 50)")
 
 	// products create flags
 	productsCreateCmd.Flags().StringVar(&productCreateTenant, "tenant", "", "tenant code (required)")

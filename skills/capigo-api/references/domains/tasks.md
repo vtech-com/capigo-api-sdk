@@ -15,6 +15,15 @@ Read this only when creating or changing tasks, assignees, followers, or subtask
 5. If placing the task on a board, resolve its exact board and list through `boards.md`; otherwise
    omit both fields.
 
+## Comments
+
+- `tasks comments create` posts a comment; `tasks comments` (no `create`) only reads the timeline.
+  Confirm which one a request needs before acting.
+- Attachments are referenced by pre-uploaded id, not uploaded by this CLI. Only pass
+  `--attachments-json` when the caller already has attachment ids from another channel (the web
+  app); otherwise post `--content` alone.
+- Addressing works the same as everywhere else in this domain: an id, or `--code` plus `--tenant`.
+
 ## Subtasks
 
 - A top-level task can have subtasks. Each subtask has exactly one top-level parent, cannot have
