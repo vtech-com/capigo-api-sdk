@@ -10,6 +10,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.23.0] — 2026-07-29
+
 ### Added
 
 - **`tasks comments create`.** Posts a comment to a task's timeline — content, attachments, or
