@@ -10,6 +10,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.23.1] — 2026-07-29
+
 ### Changed
 
 - **`products create` now requires `--unit-id`.** Prod (capigo#469, live in v1.27.3) rejects a
