@@ -164,6 +164,51 @@
           }
         }
       },
+      "PostTaskCommentRequest": {
+        "type": "object",
+        "description": "Request body for creating a task comment. At least one of content or attachments must be provided.",
+        "properties": {
+          "content": {
+            "type": "string",
+            "description": "Comment text. Can be empty if attachments are provided."
+          },
+          "attachments": {
+            "type": "object",
+            "description": "Pre-uploaded attachment references keyed by attachment UUID.",
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "file_name",
+                "mime_type",
+                "size_bytes"
+              ],
+              "properties": {
+                "file_name": {
+                  "type": "string"
+                },
+                "mime_type": {
+                  "type": "string"
+                },
+                "size_bytes": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "anyOf": [
+          {
+            "required": [
+              "content"
+            ]
+          },
+          {
+            "required": [
+              "attachments"
+            ]
+          }
+        ]
+      },
       "PublicBrandResponse": {
         "type": "object",
         "required": [
@@ -221,6 +266,27 @@
           },
           "name": {
             "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "HealthCheckResponse": {
+        "type": "object",
+        "required": [
+          "ok",
+          "timestamp"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "example": true
+          },
+          "timestamp": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -490,6 +556,18 @@
                 "size_bytes": {
                   "type": "integer"
                 }
+              }
+            }
+          },
+          "meta_data": {
+            "type": "object",
+            "description": "Auto-computed metadata. Server-authoritative — callers cannot override.",
+            "properties": {
+              "url": {
+                "type": "string",
+                "format": "uri",
+                "description": "Canonical task URL built from tenant code and task code.",
+                "example": "https://acme-corp.capigo.app/mission/tasks/TASK-123"
               }
             }
           },
@@ -2449,6 +2527,45 @@
     }
   ],
   "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "tags": [
+          "Health"
+        ],
+        "description": "Returns API health status after proxy authentication. Used to verify API keys and connectivity.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "API is healthy and authentication succeeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized — missing or invalid API key"
+          }
+        }
+      }
+    },
     "/members": {
       "get": {
         "summary": "List Members",
@@ -3185,6 +3302,71 @@
             "description": "Task not found"
           }
         }
+      },
+      "post": {
+        "summary": "Create Task Comment",
+        "description": "Add a text-and-attachment comment to a task by its UUID. At least content (non-empty string) or one attachment entry must be provided.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Task UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostTaskCommentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Comment created",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicTaskCommentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body (missing content and attachments, or non-JSON)"
+          },
+          "403": {
+            "description": "Caller lacks task visibility"
+          },
+          "404": {
+            "description": "Task not found"
+          }
+        }
       }
     },
     "/mission/tasks/{id}/comments/attachments/{attachmentId}/download": {
@@ -3817,7 +3999,7 @@
         "tags": [
           "PCMS"
         ],
-        "description": "Update an existing brand. At least one field must be provided. Updating `name` automatically recomputes the slug.",
+        "description": "Update an existing brand. At least one field must be provided. Fields not provided are left unchanged. Updating `name` automatically recomputes the slug.",
         "parameters": [
           {
             "name": "id",
@@ -4646,7 +4828,7 @@
         "tags": [
           "PCMS"
         ],
-        "description": "Update an existing product type. At least one field must be provided. Name must be unique (case-insensitive) within the tenant.",
+        "description": "Update an existing product type. At least one field must be provided. Fields not provided are left unchanged. Name must be unique (case-insensitive) within the tenant.",
         "parameters": [
           {
             "name": "id",
@@ -4775,6 +4957,70 @@
             "example": "11111111-1111-4111-8111-111111111111,22222222-2222-4222-8222-222222222222"
           },
           {
+            "name": "brand_ids",
+            "in": "query",
+            "description": "Comma-separated list of brand UUIDs. When provided, only products whose `brand_id` matches one of the listed UUIDs are returned. AND-composes with all other filters. Returns `400 INVALID_BRAND_IDS` for malformed input (non-UUID token, empty value, more than 50 IDs).",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "maxItems": 50,
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "style": "form",
+            "explode": false
+          },
+          {
+            "name": "category_ids",
+            "in": "query",
+            "description": "Comma-separated list of category UUIDs. When provided, only products whose `category_id` matches one of the listed UUIDs are returned. AND-composes with all other filters. Returns `400 INVALID_CATEGORY_IDS` for malformed input (non-UUID token, empty value, more than 50 IDs).",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "maxItems": 50,
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "style": "form",
+            "explode": false
+          },
+          {
+            "name": "product_type_ids",
+            "in": "query",
+            "description": "Comma-separated list of product type UUIDs. When provided, only products whose `product_type_id` matches one of the listed UUIDs are returned. AND-composes with all other filters. Returns `400 INVALID_PRODUCT_TYPE_IDS` for malformed input (non-UUID token, empty value, more than 50 IDs).",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "maxItems": 50,
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "style": "form",
+            "explode": false
+          },
+          {
+            "name": "unit_ids",
+            "in": "query",
+            "description": "Comma-separated list of unit UUIDs. When provided, only products whose `unit_id` matches one of the listed UUIDs are returned. AND-composes with all other filters. Returns `400 INVALID_UNIT_IDS` for malformed input (non-UUID token, empty value, more than 50 IDs).",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "maxItems": 50,
+              "items": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "style": "form",
+            "explode": false
+          },
+          {
             "name": "q",
             "in": "query",
             "description": "Free-text search fragment (2–500 characters). Matches case-insensitive substring (`ILIKE %q%`) against six columns for active (non-deleted) products: product name, product aliases, product tags, variant name, variant SKU, and variant barcode. When a variant matches, the full parent product is returned with all non-orphaned variants. For soft-deleted (tombstone) products, search is limited to product name, aliases, and tags only — variant fields (name, SKU, barcode) are not searchable because variant data for deleted products is not indexed. To retrieve all tombstones, omit `q` and use `updated_since` or a full sync instead. Composes with `ids` (which is independently capped at 50 UUIDs) and `updated_since` as a strict intersection — supplying all three narrows the result. Special characters `%` and `_` inside `q` are treated literally (escaped), not as wildcards. Control characters and Unicode-whitespace-only values are rejected with `INVALID_SEARCH`.",
@@ -4870,7 +5116,7 @@
         "tags": [
           "PCMS"
         ],
-        "description": "Create a new product within the tenant identified by `X-Tenant-Code`.\n\nSupports two creation modes:\n- **Simple mode**: omit `options` and `variants`. A single default variant is created from `sku`, `barcode`, and `price` on the product body.\n- **Variant mode**: supply 1–3 entries in `options` (e.g. Color, Size) plus a `variants` array. Each variant must populate `option1`/`option2`/`option3` with the chosen value for the corresponding option (positions match `options[]` order). The backend does not auto-generate the cartesian product — clients are responsible for sending the exact list of variants to create.",
+        "description": "Create a new product within the tenant identified by `X-Tenant-Code`.\n\nSupports two creation modes:\n- **Simple mode**: omit `options` and `variants`. A single default variant is created from `sku`, `barcode`, and `price` on the product body.\n- **Variant mode**: supply 1–2 entries in `options` (e.g. Color, Size) plus a `variants` array. Each variant must populate `option1`/`option2` with the chosen value for the corresponding option (positions match `options[]` order). The backend does not auto-generate the cartesian product — clients are responsible for sending the exact list of variants to create.",
         "parameters": [
           {
             "name": "X-Tenant-Code",
@@ -4989,8 +5235,8 @@
                   },
                   "options": {
                     "type": "array",
-                    "maxItems": 3,
-                    "description": "Variant mode: defines the option axes (e.g. Color, Size). Up to 3 options; their order determines which `option1/2/3` slot each value maps to.",
+                    "maxItems": 2,
+                    "description": "Variant mode: defines the option axes (e.g. Color, Size). Up to 2 options; their order determines which `option1/2` slot each value maps to.",
                     "items": {
                       "type": "object",
                       "required": [
@@ -5012,7 +5258,7 @@
                   },
                   "variants": {
                     "type": "array",
-                    "description": "Variant mode: explicit list of variants to create. Each variant must set `option1`/`option2`/`option3` matching the values declared in `options[]` (by position).",
+                    "description": "Variant mode: explicit list of variants to create. Each variant must set `option1`/`option2` matching the values declared in `options[]` (by position).",
                     "items": {
                       "type": "object",
                       "required": [
@@ -5043,11 +5289,6 @@
                           "type": "string",
                           "nullable": true,
                           "description": "Value for `options[1]`."
-                        },
-                        "option3": {
-                          "type": "string",
-                          "nullable": true,
-                          "description": "Value for `options[2]`."
                         },
                         "manufacturer_code": {
                           "type": "string",
@@ -5168,7 +5409,7 @@
         "tags": [
           "PCMS"
         ],
-        "description": "Update the core details of a product. Variant-level fields (`sku`, `barcode`, `price`, option values) are intentionally **not** editable through this endpoint — use `PUT /pcms/products/{id}/variants` to modify variants.",
+        "description": "Update the core details of a product. At least one field must be provided. Fields not provided are left unchanged. Variant-level fields (`sku`, `barcode`, `price`, option values) are intentionally **not** editable through this endpoint — use `PUT /pcms/products/{id}/variants` to modify variants.",
         "parameters": [
           {
             "name": "id",
@@ -5299,7 +5540,7 @@
         "tags": [
           "PCMS"
         ],
-        "description": "Upsert variants of a product. The request body is an array of items.\n\n- Items **with** `variant_id` (UUID) → update the existing variant.\n- Items **without** `variant_id` → create a new variant (`name` is required; `option1`/`option2`/`option3` should match the product's option matrix).\n\nA single request may mix create and update items. Variants **not** included in the payload are left untouched (this endpoint does not delete variants). Unknown `variant_id` values return 404.",
+        "description": "Upsert variants of a product. The request body is an array of items.\n\n- Items **with** `variant_id` (UUID) → update the existing variant.\n- Items **without** `variant_id` → create a new variant (`name` is required; `option1`/`option2` should match the product's option matrix).\n\nA single request may mix create and update items. Variants **not** included in the payload are left untouched (this endpoint does not delete variants). Unknown `variant_id` values return 404.",
         "parameters": [
           {
             "name": "id",
@@ -5357,10 +5598,6 @@
                       "description": "Used when creating a new variant on a matrix product."
                     },
                     "option2": {
-                      "type": "string",
-                      "nullable": true
-                    },
-                    "option3": {
                       "type": "string",
                       "nullable": true
                     },
@@ -5758,7 +5995,7 @@
         "tags": [
           "PCMS"
         ],
-        "description": "Update an existing product unit. At least one field must be provided. The `abbreviation` is normalized to lowercase automatically.",
+        "description": "Update an existing product unit. At least one field must be provided. Fields not provided are left unchanged. The `abbreviation` is normalized to lowercase automatically.",
         "parameters": [
           {
             "name": "id",
@@ -6970,7 +7207,127 @@
             "description": "Task not found"
           }
         },
-        "description": "Retrieve a single task by UUID."
+        "description": "Retrieve a single task by code."
+      },
+      "patch": {
+        "summary": "Update Task (by Code)",
+        "description": "Partial update of a task by its natural code. Any subset of fields may be provided; at least one is required. Same contract as PATCH /mission/tasks/{id}.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task code (e.g. ACME-42)"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": false,
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "Pending",
+                      "To-Do",
+                      "Doing",
+                      "Done",
+                      "Closed",
+                      "Cancelled"
+                    ]
+                  },
+                  "assignee_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true,
+                    "description": "Set to null to unassign."
+                  },
+                  "board_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true,
+                    "description": "Must be provided together with board_list_id. Both null removes the task from its board."
+                  },
+                  "board_list_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true,
+                    "description": "Must be provided together with board_id."
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 10000,
+                    "nullable": true
+                  },
+                  "follower_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "description": "Additive: listed users are added as followers (idempotent)."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated task",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (empty body, invalid status, invalid assignee/followers, board mismatch)"
+          },
+          "403": {
+            "description": "Insufficient permission to perform the update"
+          },
+          "404": {
+            "description": "Task not found"
+          }
+        }
       }
     },
     "/mission/tasks/code/{code}/comments": {
@@ -7079,6 +7436,70 @@
           },
           "400": {
             "description": "Invalid query parameter (type, sort, page, or limit)"
+          },
+          "404": {
+            "description": "Task not found"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create Task Comment (by Code)",
+        "description": "Add a text-and-attachment comment to a task by its taskCode. Same contract as POST /mission/tasks/{id}/comments, keyed by taskCode instead of UUID.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task code (e.g., ACME-42)"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostTaskCommentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Comment created",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicTaskCommentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body (missing content and attachments, or non-JSON)"
+          },
+          "403": {
+            "description": "Caller lacks task visibility"
           },
           "404": {
             "description": "Task not found"

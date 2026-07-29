@@ -442,9 +442,151 @@ OUTPUT
 	},
 }
 
+// tasks comments create flags
+var (
+	taskCommentsCreateTenant          string
+	taskCommentsCreateCode            string
+	taskCommentsCreateContent         string
+	taskCommentsCreateAttachmentsJSON string
+)
+
+var tasksCommentsCreateCmd = &cobra.Command{
+	Use:   "create [<id>]",
+	Short: "Post a comment to a task",
+	Long: `Add a comment to a task's discussion timeline.
+
+PURPOSE
+  Post a comment, with text, attachments, or both. To read what is already
+  there, use tasks comments. Attachments are referenced by id, not uploaded
+  by this command: this endpoint takes pre-uploaded attachment references, and
+  the public API has no upload endpoint, so --attachments-json only works with
+  attachment ids that were uploaded through another channel (the web app).
+
+USAGE
+  capigo tasks comments create (<id> | --code <code>) [--tenant <code>]
+                                [--content <text>]
+                                [--attachments-json <path|->]
+
+FLAGS
+  <id>
+      Task UUID. Positional. Give this or --code, never both.
+
+  --code <code>
+      Address the task by its code — the key a person quotes, like ACMEC-68.
+      A code is unique within a tenant, not across them, so --code needs a
+      tenant: pass --tenant, or set a default.
+
+        capigo tasks comments create --code ACMEC-68 --tenant acme --content "Done"
+
+  --tenant <code>
+      Tenant to scope the lookup to. Optional with an id; required with
+      --code.
+
+  --content <text>
+      Comment text. May be empty (or omitted) if --attachments-json is given;
+      at least one of the two is required.
+
+        capigo tasks comments create <uuid> --content "Reproduced on staging."
+
+  --attachments-json <path|->
+      Path to a JSON file (or - for stdin) holding an object keyed by
+      attachment UUID, each value carrying file_name, mime_type and
+      size_bytes:
+
+        {
+          "3fa85f64-5717-4562-b3fc-2c963f66afa6": {
+            "file_name": "screenshot.png",
+            "mime_type": "image/png",
+            "size_bytes": 48213
+          }
+        }
+
+      | echo '{"3fa85f64-...": {"file_name":"a.png","mime_type":"image/png","size_bytes":100}}' \
+        | capigo tasks comments create <uuid> --attachments-json -
+
+  At least one of --content and --attachments-json is required; sending
+  neither exits 5.
+
+OUTPUT
+  The created comment is at .data, the same shape as one row of tasks
+  comments:
+
+      {
+        "data": { "id": "...", "author": {...}, "kind": "comment",
+                  "content": "Reproduced on staging.", "ui_data": null,
+                  "attachments": [...], "parent_id": null,
+                  "created_at": "2026-07-08T09:12:00Z" },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-07-09T04:12:33Z" }
+      }
+
+  meta.tenant is the tenant the write landed in, when --tenant was given or
+  resolved from CAPIGO_TENANT/config; it is absent when the id alone found
+  the task with no tenant resolved.`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		var id string
+		if len(args) == 1 {
+			id = args[0]
+		}
+
+		hasContent := cmd.Flags().Changed("content") && taskCommentsCreateContent != ""
+		hasAttachments := taskCommentsCreateAttachmentsJSON != ""
+		if !hasContent && !hasAttachments {
+			failValidation("at least one of --content or --attachments-json is required")
+		}
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(taskCommentsCreateTenant, profile)
+		requireOneTaskAddress(id, taskCommentsCreateCode, tenant)
+
+		body := map[string]any{}
+		if cmd.Flags().Changed("content") {
+			body["content"] = taskCommentsCreateContent
+		}
+		if taskCommentsCreateAttachmentsJSON != "" {
+			raw, err := readJSONInput(taskCommentsCreateAttachmentsJSON)
+			if err != nil {
+				return handleErr(fmt.Errorf("read --attachments-json: %w", err))
+			}
+			var attachments map[string]any
+			if err := json.Unmarshal(raw, &attachments); err != nil {
+				return handleErr(fmt.Errorf("--attachments-json must be a JSON object keyed by attachment UUID: %w", err))
+			}
+			body["attachments"] = attachments
+		}
+
+		path := taskPath(id, taskCommentsCreateCode) + "/comments"
+		resp, err := client.Do(ctx, "POST", path, body, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		// Unlike tasks update, this endpoint's response is not enveloped in
+		// {"data": ...} — the created comment is the whole body. rawItem
+		// expects an envelope's data field, so the body is passed through
+		// directly instead.
+		meta := itemMeta(tenant, taskCommentsCreateTenant, nil)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, json.RawMessage(resp.Body), meta)
+	},
+}
+
 // tasks update flags
 var (
 	taskUpdateTenant      string
+	taskUpdateCode        string
 	taskUpdateTitle       string
 	taskUpdateDescription string
 	taskUpdateStatus      string
@@ -455,7 +597,7 @@ var (
 )
 
 var tasksUpdateCmd = &cobra.Command{
-	Use:   "update <id>",
+	Use:   "update [<id>]",
 	Short: "Change a task's title, status, assignee, board or followers",
 	Long: `Change some fields of a task. Fields you do not send are left unchanged.
 
@@ -465,18 +607,26 @@ PURPOSE
   before changing them.
 
 USAGE
-  capigo tasks update <id> [--tenant <code>] [--title <text>]
+  capigo tasks update (<id> | --code <code>) [--tenant <code>]
+                           [--title <text>]
                            [--description <text>] [--status <text>]
                            [--assignee <uuid>] [--board <uuid> --list <uuid>]
                            [--follower-id <uuid>]...
 
 FLAGS
   <id>
-      Task UUID. Positional, required.
+      Task UUID. Positional. Give this or --code, never both.
+
+  --code <code>
+      Address the task by its code — the key a person quotes, like ACMEC-68.
+      A code is unique within a tenant, not across them, so --code needs a
+      tenant: pass --tenant, or set a default.
+
+        capigo tasks update --code ACMEC-68 --tenant acme --status Done
 
   --tenant <code>
-      Tenant to scope the lookup to. Optional; the id alone finds the task
-      regardless of tenant.
+      Tenant to scope the lookup to. Optional with an id; required with
+      --code.
 
   --title <text>
       New title.
@@ -522,11 +672,14 @@ OUTPUT
   resolved from CAPIGO_TENANT/config; it is absent when the id alone found
   the task with no tenant resolved. A write into the wrong tenant looks
   exactly like a write that succeeded — read meta.tenant.`,
-	Args: cobra.ExactArgs(1),
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
 
-		id := args[0]
+		var id string
+		if len(args) == 1 {
+			id = args[0]
+		}
 
 		client, cfg, err := buildClient()
 		if err != nil {
@@ -539,6 +692,7 @@ OUTPUT
 		}
 
 		tenant := resolveTenant(taskUpdateTenant, profile)
+		requireOneTaskAddress(id, taskUpdateCode, tenant)
 
 		// Build the PATCH body as a map so we can express the tri-state the
 		// API needs: a field is absent (omitted), set to a value, or explicitly
@@ -580,7 +734,7 @@ OUTPUT
 			failValidation("at least one field must be provided for update")
 		}
 
-		resp, err := client.Do(ctx, "PATCH", "/mission/tasks/"+id, body, tenant)
+		resp, err := client.Do(ctx, "PATCH", taskPath(id, taskUpdateCode), body, tenant)
 		if err != nil {
 			return handleErr(err)
 		}
@@ -1143,8 +1297,16 @@ func init() {
 	tasksCommentsCmd.Flags().IntVar(&taskCommentsPage, "page", 0, "page number (1-based)")
 	tasksCommentsCmd.Flags().IntVar(&taskCommentsLimit, "limit", 0, "items per page (max 50)")
 
+	// tasks comments create flags
+	tasksCommentsCreateCmd.Flags().StringVar(&taskCommentsCreateTenant, "tenant", "", "scope to this tenant code")
+	tasksCommentsCreateCmd.Flags().StringVar(&taskCommentsCreateCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
+	tasksCommentsCreateCmd.Flags().StringVar(&taskCommentsCreateContent, "content", "", "comment text (required unless --attachments-json is used)")
+	tasksCommentsCreateCmd.Flags().StringVar(&taskCommentsCreateAttachmentsJSON, "attachments-json", "", "path to a JSON object of pre-uploaded attachment references keyed by UUID (use - for stdin)")
+	tasksCommentsCmd.AddCommand(tasksCommentsCreateCmd)
+
 	// tasks update flags
 	tasksUpdateCmd.Flags().StringVar(&taskUpdateTenant, "tenant", "", "scope to this tenant code")
+	tasksUpdateCmd.Flags().StringVar(&taskUpdateCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
 	tasksUpdateCmd.Flags().StringVar(&taskUpdateTitle, "title", "", "new task title")
 	tasksUpdateCmd.Flags().StringVar(&taskUpdateDescription, "description", "", "new task description (set to empty string to clear)")
 	tasksUpdateCmd.Flags().StringVar(&taskUpdateStatus, "status", "", "new status (Pending, To-Do, Doing, Done, Closed, Cancelled)")

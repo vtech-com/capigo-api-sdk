@@ -10,6 +10,22 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.23.0] — 2026-07-29
+
+### Added
+
+- **`tasks comments create`.** Posts a comment to a task's timeline — content, attachments, or
+  both — by id or by `--code`. Previously `tasks comments` could only read the timeline; there was
+  no way to write to it. Attachments are referenced by pre-uploaded id via `--attachments-json`
+  (the public API has no upload endpoint of its own).
+- **`tasks update --code`.** Update now addresses a task by code, not only by UUID, matching
+  `tasks get`/`tasks comments`/`tasks subtasks list`.
+- **`products list --brand-ids/--category-ids/--product-type-ids/--unit-ids`.** Comma-separated
+  UUID filters (max 50 each), AND-composing with every other filter including each other and
+  `--query`.
+- Synced `api/openapi.json` with prod after capigo#432 (task comment write + attachments, task
+  update by code, task `meta_data.url`) and the relation-filter additions to `GET /pcms/products`.
+
 ## [0.22.0] — 2026-07-13
 
 ### Changed

@@ -31,6 +31,8 @@ import (
 // reading cmd/*.go and internal/api/client.go for the literal methods and paths
 // passed to client.Do.
 var implementedOps = map[string]string{
+	"GET /health": "health",
+
 	"GET /tenants": "tenants list",
 
 	"GET /members":      "members list",
@@ -44,6 +46,7 @@ var implementedOps = map[string]string{
 	"GET /mission/tasks/{id}":                                              "tasks get",
 	"PATCH /mission/tasks/{id}":                                            "tasks update",
 	"GET /mission/tasks/{id}/comments":                                     "tasks comments",
+	"POST /mission/tasks/{id}/comments":                                    "tasks comments create",
 	"GET /mission/tasks/{id}/subtasks":                                     "tasks subtasks list",
 	"POST /mission/tasks/{id}/subtasks":                                    "tasks subtasks create (batch)",
 	"POST /mission/tasks/with-subtasks":                                    "tasks create --subtasks-json (atomic parent + subtasks)",
@@ -53,7 +56,9 @@ var implementedOps = map[string]string{
 	// The same five capabilities, addressed by a task's code instead of its id.
 	// One flag on each existing command, not five more commands.
 	"GET /mission/tasks/code/{code}":                                              "tasks get --code",
+	"PATCH /mission/tasks/code/{code}":                                            "tasks update --code",
 	"GET /mission/tasks/code/{code}/comments":                                     "tasks comments --code",
+	"POST /mission/tasks/code/{code}/comments":                                    "tasks comments create --code",
 	"GET /mission/tasks/code/{code}/subtasks":                                     "tasks subtasks list --code",
 	"POST /mission/tasks/code/{code}/subtasks":                                    "tasks subtasks create --code",
 	"GET /mission/tasks/code/{code}/attachments/{attachmentId}/download":          "tasks attachments download --code",
