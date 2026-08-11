@@ -10,6 +10,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Removed
+
+- **`make skill-install-tam`, and the `TAM_HOST` / `TAM_SKILLS_DIR` variables with it.** The target
+  pushed the bundled skill to a private host over SSH, so a public repo carried an internal SSH
+  alias and a path that only meant something inside VTech. It also installed into openclaw's
+  `plugin-skills` directory, which openclaw fills with symlinks from installed plugins — a copy
+  placed there by hand competes with the one the `skills` CLI manages in `.agents/skills/`, and
+  nothing reports the conflict. Install with
+  `npx skills add vtech-com/capigo-api-sdk --skill capigo-api`, which records source and version in
+  the host's lockfile. `make skill-package` stays for runtimes the `skills` CLI does not support.
+
 ## [0.23.1] — 2026-07-29
 
 ### Changed
