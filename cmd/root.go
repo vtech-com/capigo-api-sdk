@@ -29,7 +29,17 @@ USAGE
   capigo [--api-url <url>] [-v] <group> <command> [<args>]
 
   capigo <group> --help          the commands in that group
-  capigo <group> <cmd> --help    purpose, usage, flags, output`,
+  capigo <group> <cmd> --help    purpose, usage, flags, output
+
+GETTING STARTED
+  Every command below the auth and config groups needs an API key. Store one
+  once, then confirm the API accepts it:
+
+      $ capigo auth login --key csk_...
+      $ capigo health
+
+  Without a key, commands exit 2 and say so. CAPIGO_API_KEY, if set,
+  overrides the stored key and needs no login.`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }

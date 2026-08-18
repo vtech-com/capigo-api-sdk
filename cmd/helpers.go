@@ -25,12 +25,33 @@ func buildClient() (*api.Client, *config.Config, error) {
 
 	profile, err := config.ActiveProfile(cfg)
 	if err != nil {
-		return nil, nil, fmt.Errorf("get active profile: %w", err)
+		if len(cfg.Profiles) > 0 {
+			// active_profile names a profile that was never written. That is a
+			// real config fault, and its own message says so.
+			return nil, nil, fmt.Errorf("get active profile: %w", err)
+		}
+		// No profiles at all: auth login has never run here. "profile default
+		// not found" describes the config file's insides; the caller's actual
+		// situation is that there is no key, which the check below reports in
+		// those terms. An env-supplied key still works from a bare machine.
+		profile = &config.Profile{}
 	}
 
 	apiKey := profile.APIKey
 	if k := viper.GetString("api_key"); k != "" {
 		apiKey = k
+	}
+	if apiKey == "" {
+		// Sending "Authorization: Bearer " with nothing after it costs a round
+		// trip to learn what is already known here, and comes back as
+		// AUTH_INVALID_FORMAT — "the header was malformed" — which points at the
+		// wrong repair. Diagnose it locally, as the condition it is.
+		return nil, nil, &api.APIError{
+			Code:           "AUTH_MISSING_HEADER",
+			Message:        "no API key configured — this CLI has not been logged in (nothing in ~/.capigo/config.json, and CAPIGO_API_KEY is unset)",
+			HTTPStatus:     401,
+			LocalDiagnosis: true,
+		}
 	}
 
 	baseURL := profile.APIURL
@@ -76,7 +97,7 @@ func renderCLIError(err error) {
 	// brake) when the server actually responded. Locally-constructed and cobra
 	// arg-validation errors never round-tripped, so the brake — "a failed write
 	// is not a missing capability" — would be misleading noise there.
-	if serverResponded {
+	if serverResponded || (apiErr != nil && apiErr.LocalDiagnosis) {
 		if info, ok := api.LookupError(detail.Code); ok {
 			detail.Meaning = info.Meaning
 			detail.Next = info.Next
