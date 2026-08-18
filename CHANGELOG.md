@@ -10,6 +10,28 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A missing API key is now reported as a missing API key.** On a machine where `auth login` had
+  never run, every API-backed command failed with `get active profile: profile "default" not found`
+  and exit 1 — a message about the insides of a config file the caller has never seen, carrying no
+  remedy, under the exit code reserved for errors the CLI could not classify. `capigo help
+  exit-codes` has always promised exit 2 for exactly this ("the API key is missing"). The condition
+  is now detected before a client is built and raised as `AUTH_MISSING_HEADER`, whose catalog entry
+  already reads *"the CLI is not logged in — ask the user to run capigo auth login … do not retry
+  until a key is configured"*. Exit 2, no network round trip. The post-logout variant (profile
+  present, key empty) previously took a different route to a different wrong answer: an empty key
+  still produced `Authorization: Bearer `, which came back as `AUTH_INVALID_FORMAT` — "the header
+  was malformed" — pointing at a repair that does not apply. It now lands on the same local
+  diagnosis. An `active_profile` naming a profile that was never written stays a distinct config
+  fault with its own message, and `CAPIGO_API_KEY` alone now works on a machine with no config file
+  at all.
+
+### Added
+
+- Root help gains a **GETTING STARTED** section. `auth login` was previously mentioned only inside
+  `capigo help exit-codes`.
+
 ### Removed
 
 - **`make skill-install-tam`, and the `TAM_HOST` / `TAM_SKILLS_DIR` variables with it.** The target
