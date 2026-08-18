@@ -30,7 +30,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ### Added
 
 - Root help gains a **GETTING STARTED** section. `auth login` was previously mentioned only inside
-  `capigo help exit-codes`.
+  `capigo help exit-codes`. The root page is the only page that describes the phase before the CLI
+  talks to the API at all, and that phase is now a real boundary: `api.NewClient` has exactly one
+  call site, behind the key check, so with no key configured no command reaches the server. The
+  section says which commands need a key — `auth whoami` does, despite sitting in the auth group —
+  and that a failure there is local, not an answer from the API.
 
 ### Removed
 
