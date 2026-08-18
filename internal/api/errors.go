@@ -38,6 +38,13 @@ type APIError struct {
 	// It is surfaced on error so callers (especially AI agents) see the real
 	// server response without having to re-run with --verbose.
 	RawBody []byte
+	// LocalDiagnosis marks an error the CLI diagnosed itself, without a round
+	// trip, but whose Code is nonetheless a real catalog code the caller should
+	// get the full interpretation for. The renderer normally withholds the
+	// catalog from errors the server never answered — a cobra arg-validation
+	// failure carries no server truth to interpret — so a locally-detected
+	// condition that IS the catalog condition has to say so explicitly.
+	LocalDiagnosis bool
 }
 
 func (e *APIError) Error() string {
