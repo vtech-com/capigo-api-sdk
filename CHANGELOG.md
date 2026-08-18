@@ -10,6 +10,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.24.0] — 2026-08-18
+
 ### Fixed
 
 - **A missing API key is now reported as a missing API key.** On a machine where `auth login` had
@@ -35,6 +37,22 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   call site, behind the key check, so with no key configured no command reaches the server. The
   section says which commands need a key — `auth whoami` does, despite sitting in the auth group —
   and that a failure there is local, not an answer from the API.
+
+### Security
+
+- **Release binaries are built with Go 1.26.6, not 1.26.5.** `govulncheck` — already a CI step —
+  reported four standard-library vulnerabilities in the pinned toolchain, all fixed in 1.26.6:
+  GO-2026-6218 (`net/url`), GO-2026-6090 (`crypto/tls`), GO-2026-5972 (`encoding/asn1`) and
+  GO-2026-5026 (`net/http`). The last is reachable, not theoretical: govulncheck traces it to
+  `api.Client.Do`, the call every command goes through. The pin lives in four places that have to
+  agree — the `ci.yml` matrix, the `setup-go` step inside `codeql.yml`, `release.yml`, and the `go`
+  directive in `go.mod` — and all four now say 1.26.6.
+
+### Changed
+
+- **CI and CodeQL run on `develop`, not only `main`.** Work targets `develop` and reaches `main`
+  through a release PR, so no change was ever tested at the point it was reviewed — only later, in
+  a batch, under a PR about cutting a version. Both workflows now trigger on `develop` as well.
 
 ### Removed
 
