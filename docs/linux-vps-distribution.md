@@ -81,7 +81,7 @@ Neither A nor B touches the binary, the command surface, or the output contract 
 Installing the binary is the easy half. For an agent host, two more things must be answered before anyone calls this done:
 
 1. **Unattended auth.** `capigo auth login --key` writes `~/.capigo/config.json` interactively. The CLI already honours **`CAPIGO_API_KEY`** (and `CAPIGO_TENANT`, `CAPIGO_API_URL`), so a VPS can be provisioned with no interactive login at all. Whichever install path we ship should document the env-var route as the *first-class* one for a headless box, not the interactive login.
-2. **Who upgrades, and when.** ~~Open.~~ **Settled: a human, manually** — the same shape as `brew upgrade` on `vtech:tam` today. This is what kills option C. The install script must therefore be safely re-runnable over an existing install (idempotent: overwrite the binary in place, don't append to PATH twice, don't fail if `/usr/local/bin/capigo` already exists).
+2. **Who upgrades, and when.** ~~Open.~~ **Settled: a human, manually** — the same shape as a `brew upgrade` on a package-managed host. This is what kills option C. The install script must therefore be safely re-runnable over an existing install (idempotent: overwrite the binary in place, don't append to PATH twice, don't fail if `/usr/local/bin/capigo` already exists).
 
 ---
 

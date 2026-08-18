@@ -594,8 +594,7 @@ automatically.
 
 The skill content is location-independent (all internal links are relative), so it works the
 same whether installed into an agent runtime, read in-repo, or browsed on GitHub. (Contributors:
-see [CONTRIBUTING.md](CONTRIBUTING.md) for the `make skill-package` / `skill-install-tam`
-development targets.)
+see [CONTRIBUTING.md](CONTRIBUTING.md) for the `make skill-package` development target.)
 
 ## API Reference
 

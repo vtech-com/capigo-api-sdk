@@ -10,6 +10,61 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.24.0] — 2026-08-18
+
+### Fixed
+
+- **A missing API key is now reported as a missing API key.** On a machine where `auth login` had
+  never run, every API-backed command failed with `get active profile: profile "default" not found`
+  and exit 1 — a message about the insides of a config file the caller has never seen, carrying no
+  remedy, under the exit code reserved for errors the CLI could not classify. `capigo help
+  exit-codes` has always promised exit 2 for exactly this ("the API key is missing"). The condition
+  is now detected before a client is built and raised as `AUTH_MISSING_HEADER`, whose catalog entry
+  already reads *"the CLI is not logged in — ask the user to run capigo auth login … do not retry
+  until a key is configured"*. Exit 2, no network round trip. The post-logout variant (profile
+  present, key empty) previously took a different route to a different wrong answer: an empty key
+  still produced `Authorization: Bearer `, which came back as `AUTH_INVALID_FORMAT` — "the header
+  was malformed" — pointing at a repair that does not apply. It now lands on the same local
+  diagnosis. An `active_profile` naming a profile that was never written stays a distinct config
+  fault with its own message, and `CAPIGO_API_KEY` alone now works on a machine with no config file
+  at all.
+
+### Added
+
+- Root help gains a **GETTING STARTED** section. `auth login` was previously mentioned only inside
+  `capigo help exit-codes`. The root page is the only page that describes the phase before the CLI
+  talks to the API at all, and that phase is now a real boundary: `api.NewClient` has exactly one
+  call site, behind the key check, so with no key configured no command reaches the server. The
+  section says which commands need a key — `auth whoami` does, despite sitting in the auth group —
+  and that a failure there is local, not an answer from the API.
+
+### Security
+
+- **Release binaries are built with Go 1.26.6, not 1.26.5.** `govulncheck` — already a CI step —
+  reported four standard-library vulnerabilities in the pinned toolchain, all fixed in 1.26.6:
+  GO-2026-6218 (`net/url`), GO-2026-6090 (`crypto/tls`), GO-2026-5972 (`encoding/asn1`) and
+  GO-2026-5026 (`net/http`). The last is reachable, not theoretical: govulncheck traces it to
+  `api.Client.Do`, the call every command goes through. The pin lives in four places that have to
+  agree — the `ci.yml` matrix, the `setup-go` step inside `codeql.yml`, `release.yml`, and the `go`
+  directive in `go.mod` — and all four now say 1.26.6.
+
+### Changed
+
+- **CI and CodeQL run on `develop`, not only `main`.** Work targets `develop` and reaches `main`
+  through a release PR, so no change was ever tested at the point it was reviewed — only later, in
+  a batch, under a PR about cutting a version. Both workflows now trigger on `develop` as well.
+
+### Removed
+
+- **`make skill-install-tam`, and the `TAM_HOST` / `TAM_SKILLS_DIR` variables with it.** The target
+  pushed the bundled skill to a private host over SSH, so a public repo carried an internal SSH
+  alias and a path that only meant something inside VTech. It also installed into openclaw's
+  `plugin-skills` directory, which openclaw fills with symlinks from installed plugins — a copy
+  placed there by hand competes with the one the `skills` CLI manages in `.agents/skills/`, and
+  nothing reports the conflict. Install with
+  `npx skills add vtech-com/capigo-api-sdk --skill capigo-api`, which records source and version in
+  the host's lockfile. `make skill-package` stays for runtimes the `skills` CLI does not support.
+
 ## [0.23.1] — 2026-07-29
 
 ### Changed

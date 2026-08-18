@@ -59,7 +59,6 @@ make fmt             # Format code (gofmt + goimports)
 make check           # lint + test (run before pushing)
 make clean           # Remove build artifacts
 make skill-package   # Zip the bundled agent skill to ./dist/capigo-api-skill.zip
-make skill-install-tam  # Package + install the skill onto the Tấm openclaw host over SSH
 ```
 
 ### Running against a local API
@@ -73,13 +72,12 @@ CAPIGO_API_URL=http://localhost:3999 ./dist/capigo tasks list
 End users install the `skills/capigo-api/` skill with the [`skills`](https://github.com/vercel-labs/skills)
 CLI, which reads it straight from this repo (see the README's **Bundled agent skill** section).
 There is nothing to publish — keeping `skills/capigo-api/SKILL.md` correct in the repo is the
-whole job. These make targets are for development and for the internal Tấm host:
+whole job.
 
-- `make skill-package` zips the skill to `dist/capigo-api-skill.zip` (idempotent) — handy for a
-  manual copy into a runtime the `skills` CLI doesn't support.
-- `make skill-install-tam` packages and installs it onto the internal Tấm openclaw host over
-  SSH, idempotently. Override the target with `TAM_HOST` / `TAM_SKILLS_DIR`, e.g.
-  `make skill-install-tam TAM_HOST=other-host`.
+`make skill-package` zips the skill to `dist/capigo-api-skill.zip` (idempotent) — handy for a
+manual copy into a runtime the `skills` CLI doesn't support. Prefer the `skills` CLI wherever it
+runs: it records the source and version in the host's lockfile, while an unpacked zip is invisible
+to it, so the two can end up disagreeing about which version is installed.
 
 ---
 

@@ -29,7 +29,20 @@ USAGE
   capigo [--api-url <url>] [-v] <group> <command> [<args>]
 
   capigo <group> --help          the commands in that group
-  capigo <group> <cmd> --help    purpose, usage, flags, output`,
+  capigo <group> <cmd> --help    purpose, usage, flags, output
+
+GETTING STARTED
+  Every command that reaches the API needs a key — which is all of them but
+  version, config, and auth login/logout. Store one once, then confirm the API
+  accepts it:
+
+      $ capigo auth login --key csk_...
+      $ capigo health
+
+  Until a key is configured the CLI does not contact the server at all: it
+  fails locally with exit 2 and AUTH_MISSING_HEADER, so nothing you read here
+  is an answer from the API. CAPIGO_API_KEY, if set, overrides the stored key
+  and needs no login.`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }

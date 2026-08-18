@@ -54,7 +54,9 @@ Interpret it by exit code and its stdout `error` object:
 - Exit `0`: the API is reachable and the configured key was accepted. Continue.
 - Exit `2`: the key is missing, malformed, or rejected. Run `capigo auth login --help`, tell the
   user to create or retrieve their key while signed in at <https://platform.capigo.app>, and ask
-  them to run the supported login command locally. Then retry `capigo health`.
+  them to run the supported login command locally. Then retry `capigo health`. Code
+  `AUTH_MISSING_HEADER` is the first-run case — no key is configured at all, so the CLI never
+  reached the API. Nothing about it is transient: do not retry until the user has logged in.
 - Exit `6`: connectivity failed. Diagnose DNS, network access, or the configured API URL; do not
   mislabel it as an authentication problem or ask the user to log in again.
 - Any other non-zero exit: read the error object and `capigo help exit-codes` before recommending
