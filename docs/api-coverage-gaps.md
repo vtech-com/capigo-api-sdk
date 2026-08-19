@@ -13,6 +13,16 @@ The authoritative source is the actual route handlers, not a spec file:
 
 > ⚠️ **Do not trust the checked-in `apps/platform/src/lib/api/openapi.json` for gap analysis.** On 2026-06-04 it was stale: it listed `/pcms/{brands,categories,product-types,units}/{id}` as `PUT`-only, but the real handlers expose `GET,PATCH,PUT` (and the SDK already wraps get/update/replace from the **prod** openapi). The SDK syncs from prod (`make update-spec` ← `https://platform.capigo.app/api/openapi`), which is accurate; the checked-in file is hand-maintained and drifts. **Recommendation to backend: regenerate `openapi.json` from the routes.**
 
+## Spec drift observed via verify-api (2026-08-19)
+
+`make verify-api` against prod (tenant `vtech-group`) reported the published spec still
+incomplete versus the live server:
+
+- `/pcms/variants` returns `extra_data`, `legacy_code`, and `manufacturer_code` that
+  `api/openapi.json` never declares. This is the **spec's** defect — report it to the API
+  team; do not hand-wrap these in the CLI.
+- `/health` (200) and `/me` (404) are still absent from the spec, though the CLI calls both.
+
 ## SDK vs. existing API: essentially complete
 
 The CLI wraps every endpoint that currently exists, with one exception:

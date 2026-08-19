@@ -31,6 +31,8 @@ preserve.
   combinations. Ask rather than silently omit or invent combinations.
 - A SKU is unique within a tenant; an option combination is unique within its product. A barcode is
   not guaranteed unique. These rules do not define the tenant's code or duplicate-product policy.
+- A variant carries `status`: `active` or `inactive` — the SKU's lifecycle state. It is distinct
+  from the product's own lifecycle state and is not a soft delete; it defaults to `active`.
 
 ## Images
 
@@ -42,6 +44,8 @@ preserve.
 
 - Aliases are alternate names or codes. Tags are product-level labels shared by all variants; they
   are not variant attributes.
+- Product reads carry `notes[]` — internal staff notes (`id`, `content`, `tag`, `author`,
+  timestamps). Read-only: no write accepts or mutates them; `[]` means the product has no notes.
 - After a write, check `error`, `meta.tenant`, `.data.options`, and `.data.variants` rather than
   assuming the submitted payload was stored unchanged. Use `capigo products variants --help` for
   later variant changes.
