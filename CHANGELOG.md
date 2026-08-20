@@ -21,8 +21,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- **The bundled `capigo-api` skill gains a task record schema** (`followers`, `meta_data`) and
-  documents product `notes` and variant `status`, matching the CLI help above.
+- **The bundled `capigo-api` skill documents product `notes` and variant `status`**, matching
+  the CLI help above.
 
 ## [0.24.0] — 2026-08-18
 
