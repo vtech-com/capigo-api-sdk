@@ -213,6 +213,7 @@ type UpsertVariantItem struct {
 	Option2          *string        `json:"option2,omitempty"`
 	ManufacturerCode *string        `json:"manufacturer_code,omitempty"`
 	LegacyCode       *string        `json:"legacy_code,omitempty"`
+	Status           *string        `json:"status,omitempty"`
 	ExtraData        map[string]any `json:"extra_data,omitempty"`
 }
 

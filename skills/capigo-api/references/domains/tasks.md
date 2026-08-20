@@ -3,48 +3,6 @@
 Read this only when creating or changing tasks, assignees, followers, or subtasks. Read
 `boards.md` as well when board placement is involved.
 
-## Task record schema
-
-The authoritative field reference for task records returned by the API.
-
-| Field | Type | Notes |
-|---|---|---|
-| `id` | UUID | Machine identifier for API calls |
-| `code` | string | Stable human reference, e.g. `VTECH-10064`. Unique within a tenant. |
-| `title` | string | |
-| `description` | string | |
-| `status` | string | `Pending`, `To-Do`, `Doing`, `Done`, `Closed`, `Cancelled` |
-| `priority` | string | `Low`, `Normal`, `High`, `Urgent` — capitalised. No `Medium`. |
-| `assignee` | object \| null | `{id, display_name, member_code}` — nested object, **not** `assignee_id`/`assignee_name` |
-| `owner` | object \| null | `{id, display_name, member_code}` |
-| `board_id` | UUID \| null | Must travel with `board_list_id`; set both or neither |
-| `board_list_id` | UUID \| null | **Not** `list_id` |
-| `due_date` | string \| null | ISO-8601 date |
-| `has_subtasks` | boolean | |
-| `attachments` | array | Metadata only — `id`, `file_name`, `mime_type`, `size_bytes`. No download URL. |
-| `followers` | array | `[{id, display_name, member_code}]` |
-| `parent` | object \| null | Nested `{id, code, title}` on detail endpoints (`tasks get`) |
-| `parent_task_id` | UUID \| null | Flat field on `tasks list` only |
-| `meta_data` | object \| null | Extra metadata. Contains `url` — the browser-accessible link to the task. |
-| `created_at` | string | ISO-8601 timestamp |
-| `updated_at` | string | ISO-8601 timestamp |
-
-### Comment / activity entry
-
-| Field | Type | Notes |
-|---|---|---|
-| `kind` | string | `comment` or `activity` |
-| `content` | string | The message body or rendered event text. There is no `body` or `description` field. |
-| `author` | object | `{id, name, type}` |
-| `created_at` | string | ISO-8601 timestamp |
-| `attachments` | array | |
-| `parent_id` | UUID \| null | Set on a reply |
-| `ui_data` | object | |
-
-Comments come from humans and bots; activity entries are system events (status
-transitions, field changes, creation). The timeline is history, not state — the
-authoritative current status lives on the task itself.
-
 ## Create flow
 
 1. Read the relevant `tasks create` or `tasks subtasks create` help and resolve the tenant.

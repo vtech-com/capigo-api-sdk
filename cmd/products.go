@@ -943,6 +943,7 @@ FLAGS
                                     match by index. There is no option3.
         manufacturer_code  string
         legacy_code        string
+        status             string   active | inactive. SKU lifecycle state (defaults to active).
         extra_data         object   arbitrary key-value metadata
 
       That table is the whole accepted set. The API rejects a variant object

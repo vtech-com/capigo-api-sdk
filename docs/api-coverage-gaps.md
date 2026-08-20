@@ -23,6 +23,12 @@ incomplete versus the live server:
   team; do not hand-wrap these in the CLI.
 - `/health` (200) and `/me` (404) are still absent from the spec, though the CLI calls both.
 
+**Guard gap (not a spec defect):** `verify_api.py` reads only `responses["200"]`, and
+`openapi_body_coverage_test.go` skips per-field checks when a command has `--from-json`.
+A new request-body field (e.g. `status` on `PUT /pcms/products/{id}/variants`) can
+therefore slip past both guards. The read side is covered; the write side is not — tracked
+as a follow-up.
+
 ## SDK vs. existing API: essentially complete
 
 The CLI wraps every endpoint that currently exists, with one exception:
