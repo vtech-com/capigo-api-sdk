@@ -1094,6 +1094,160 @@
           }
         }
       },
+      "CreateBoardListItem": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true,
+            "description": "Optional WIP limit for the list."
+          }
+        }
+      },
+      "CreateBoardListRequest": {
+        "type": "object",
+        "required": [
+          "tenant_code",
+          "name"
+        ],
+        "properties": {
+          "tenant_code": {
+            "type": "string",
+            "description": "The tenant/workspace code where the list will be created."
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true,
+            "description": "Optional WIP limit for the list."
+          }
+        }
+      },
+      "UpdateBoardListRequest": {
+        "type": "object",
+        "required": [
+          "tenant_code"
+        ],
+        "properties": {
+          "tenant_code": {
+            "type": "string",
+            "description": "The tenant/workspace code."
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true,
+            "description": "Optional WIP limit for the list. Pass null to clear it."
+          },
+          "is_archived": {
+            "type": "boolean",
+            "description": "Archive (true) or unarchive (false) the list."
+          }
+        }
+      },
+      "UpdateBoardListItem": {
+        "type": "object",
+        "description": "A list operation within an update-board request. Omit `id` to create a new list; provide `id` to update an existing list.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true
+          },
+          "is_archived": {
+            "type": "boolean"
+          }
+        }
+      },
+      "UpdateBoardRequest": {
+        "type": "object",
+        "required": [
+          "tenant_code"
+        ],
+        "properties": {
+          "tenant_code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 10000,
+            "nullable": true
+          },
+          "is_public": {
+            "type": "boolean"
+          },
+          "lists": {
+            "type": "array",
+            "maxItems": 50,
+            "description": "Optional list operations. Entries without `id` create new lists; entries with `id` update existing lists.",
+            "items": {
+              "$ref": "#/components/schemas/UpdateBoardListItem"
+            }
+          }
+        }
+      },
+      "CreateBoardRequest": {
+        "type": "object",
+        "required": [
+          "tenant_code",
+          "name"
+        ],
+        "properties": {
+          "tenant_code": {
+            "type": "string",
+            "description": "The tenant/workspace code where the board will be created."
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 10000,
+            "nullable": true
+          },
+          "is_public": {
+            "type": "boolean",
+            "description": "Visibility flag. Defaults to true when omitted."
+          },
+          "lists": {
+            "type": "array",
+            "maxItems": 50,
+            "description": "Optional lists to create under the board (up to 50).",
+            "items": {
+              "$ref": "#/components/schemas/CreateBoardListItem"
+            }
+          }
+        }
+      },
       "CreateTaskRequest": {
         "type": "object",
         "required": [
@@ -2930,6 +3084,54 @@
             }
           }
         }
+      },
+      "post": {
+        "summary": "Create Board",
+        "tags": [
+          "Boards"
+        ],
+        "description": "Create a new board, optionally together with its lists, in a single request. When `lists` is provided, each list is created under the board and returned in the response.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBoardRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Board created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicBoardDetailResponse"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "list_count": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "403": {
+            "$ref": "#/components/schemas/Error"
+          }
+        }
       }
     },
     "/mission/boards/{id}": {
@@ -2983,6 +3185,189 @@
           },
           "404": {
             "description": "Board not found"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update Board",
+        "tags": [
+          "Boards"
+        ],
+        "description": "Update a board together with its lists in a single request. Lists without an `id` are created; lists with an `id` are updated.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBoardRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Board updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicBoardDetailResponse"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "list_count": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "403": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "404": {
+            "description": "Board not found"
+          }
+        }
+      }
+    },
+    "/mission/boards/{id}/lists": {
+      "post": {
+        "summary": "Add List to Board",
+        "tags": [
+          "Boards"
+        ],
+        "description": "Create a single list under an existing public board.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBoardListRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "List created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicBoardListResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "403": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "404": {
+            "description": "Board not found"
+          }
+        }
+      }
+    },
+    "/mission/boards/{id}/lists/{listId}": {
+      "patch": {
+        "summary": "Update List in Board",
+        "tags": [
+          "Boards"
+        ],
+        "description": "Apply a partial update to a list under an existing public board. At least one of `name`, `limit`, or `is_archived` must be provided.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "listId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBoardListRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "List updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicBoardListResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "403": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "404": {
+            "description": "Board or list not found"
           }
         }
       }
@@ -3261,6 +3646,12 @@
                     "type": "string",
                     "maxLength": 10000,
                     "nullable": true
+                  },
+                  "due_date": {
+                    "type": "string",
+                    "format": "date-time",
+                    "nullable": true,
+                    "description": "Set to null to clear the due date. Must be today or in the future."
                   },
                   "follower_ids": {
                     "type": "array",
@@ -7474,6 +7865,12 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 500
+                  },
+                  "due_date": {
+                    "type": "string",
+                    "format": "date-time",
+                    "nullable": true,
+                    "description": "Set to null to clear the due date. Must be today or in the future."
                   },
                   "description": {
                     "type": "string",
