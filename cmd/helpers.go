@@ -208,6 +208,17 @@ func resolveTenant(tenantFlag string, profile *config.Profile) *string {
 	return api.ResolveTenant(tenantFlag, viper.GetString("tenant"), profile.DefaultTenant)
 }
 
+// activeProfileOrEmpty returns the active profile, or an empty profile when none
+// exists yet (auth login has never run; the key and tenant come from env vars).
+// buildClient already rejects a named-but-missing profile as a real config fault,
+// so a failure here can only mean "no profiles at all" — the env-only case.
+func activeProfileOrEmpty(cfg *config.Config) *config.Profile {
+	if p, err := config.ActiveProfile(cfg); err == nil {
+		return p
+	}
+	return &config.Profile{}
+}
+
 // validatePCMSLimit checks that limit does not exceed 100 for PCMS list endpoints
 // (which declare maximum: 100 in the OpenAPI spec). Call before making the HTTP
 // request; it exits with code 5 (VALIDATION_ERROR) on violation.

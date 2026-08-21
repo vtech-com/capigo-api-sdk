@@ -273,11 +273,7 @@ OUTPUT
 		if err != nil {
 			return handleErr(err)
 		}
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
-		tenant := resolveTenant(boardCreateTenant, profile)
+		tenant := resolveTenant(boardCreateTenant, activeProfileOrEmpty(cfg))
 		requireTenant(tenant, "boards create")
 
 		var body any
@@ -289,6 +285,9 @@ OUTPUT
 			var m map[string]any
 			if err := json.Unmarshal(raw, &m); err != nil {
 				return handleErr(fmt.Errorf("--from-json must be a JSON object: %w", err))
+			}
+			if m == nil {
+				failValidation("--from-json must be a JSON object, not null")
 			}
 			m["tenant_code"] = *tenant
 			body = m
@@ -306,7 +305,7 @@ OUTPUT
 			body = req
 		}
 
-		resp, err := client.Do(ctx, "POST", "/mission/boards", body, tenant)
+		resp, err := client.CreateBoard(ctx, body, tenant)
 		if err != nil {
 			return handleErr(err)
 		}
@@ -390,11 +389,7 @@ OUTPUT
 		if err != nil {
 			return handleErr(err)
 		}
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
-		tenant := resolveTenant(boardUpdateTenant, profile)
+		tenant := resolveTenant(boardUpdateTenant, activeProfileOrEmpty(cfg))
 		requireTenant(tenant, "boards update")
 
 		var body any
@@ -406,6 +401,9 @@ OUTPUT
 			var m map[string]any
 			if err := json.Unmarshal(raw, &m); err != nil {
 				return handleErr(fmt.Errorf("--from-json must be a JSON object: %w", err))
+			}
+			if m == nil {
+				failValidation("--from-json must be a JSON object, not null")
 			}
 			m["tenant_code"] = *tenant
 			body = m
@@ -426,7 +424,7 @@ OUTPUT
 			body = req
 		}
 
-		resp, err := client.Do(ctx, "PATCH", "/mission/boards/"+args[0], body, tenant)
+		resp, err := client.UpdateBoard(ctx, args[0], body, tenant)
 		if err != nil {
 			return handleErr(err)
 		}
@@ -510,11 +508,7 @@ OUTPUT
 		if err != nil {
 			return handleErr(err)
 		}
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
-		tenant := resolveTenant(boardListsCreateTenant, profile)
+		tenant := resolveTenant(boardListsCreateTenant, activeProfileOrEmpty(cfg))
 		requireTenant(tenant, "boards lists create")
 
 		var body any
@@ -526,6 +520,9 @@ OUTPUT
 			var m map[string]any
 			if err := json.Unmarshal(raw, &m); err != nil {
 				return handleErr(fmt.Errorf("--from-json must be a JSON object: %w", err))
+			}
+			if m == nil {
+				failValidation("--from-json must be a JSON object, not null")
 			}
 			m["tenant_code"] = *tenant
 			body = m
@@ -540,7 +537,7 @@ OUTPUT
 			body = req
 		}
 
-		resp, err := client.Do(ctx, "POST", "/mission/boards/"+args[0]+"/lists", body, tenant)
+		resp, err := client.CreateBoardList(ctx, args[0], body, tenant)
 		if err != nil {
 			return handleErr(err)
 		}
@@ -618,11 +615,7 @@ OUTPUT
 		if err != nil {
 			return handleErr(err)
 		}
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
-		tenant := resolveTenant(boardListsUpdateTenant, profile)
+		tenant := resolveTenant(boardListsUpdateTenant, activeProfileOrEmpty(cfg))
 		requireTenant(tenant, "boards lists update")
 
 		var body any
@@ -634,6 +627,9 @@ OUTPUT
 			var m map[string]any
 			if err := json.Unmarshal(raw, &m); err != nil {
 				return handleErr(fmt.Errorf("--from-json must be a JSON object: %w", err))
+			}
+			if m == nil {
+				failValidation("--from-json must be a JSON object, not null")
 			}
 			m["tenant_code"] = *tenant
 			body = m
@@ -654,7 +650,7 @@ OUTPUT
 			body = req
 		}
 
-		resp, err := client.Do(ctx, "PATCH", "/mission/boards/"+args[0]+"/lists/"+args[1], body, tenant)
+		resp, err := client.UpdateBoardList(ctx, args[0], args[1], body, tenant)
 		if err != nil {
 			return handleErr(err)
 		}

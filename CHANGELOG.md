@@ -19,6 +19,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   `data` through unchanged — but a field the help page never named is a field an agent could
   not know existed. `make verify-api` now reports every checked page agrees with the server.
 
+- **Board and board-list write commands.** `boards create`, `boards update`,
+  `boards lists create`, and `boards lists update` wrap the four write operations the API now
+  exposes for boards and their lists. `tasks update` also gains `--due-date` (RFC3339; an empty
+  string clears it). Every mission write injects `tenant_code` into the body from `--tenant`.
+
 ### Changed
 
 - **The bundled `capigo-api` skill documents product `notes` and variant `status`**, matching
