@@ -602,6 +602,7 @@ var (
 	taskUpdateBoard       string
 	taskUpdateList        string
 	taskUpdateFollowerIDs []string
+	taskUpdateDueDate     string
 )
 
 var tasksUpdateCmd = &cobra.Command{
@@ -619,7 +620,7 @@ USAGE
                            [--title <text>]
                            [--description <text>] [--status <text>]
                            [--assignee <uuid>] [--board <uuid> --list <uuid>]
-                           [--follower-id <uuid>]...
+                           [--due-date <ts>] [--follower-id <uuid>]...
 
 FLAGS
   <id>
@@ -664,6 +665,12 @@ FLAGS
   --follower-id <uuid>
       Add a follower. Repeatable. Additive and idempotent — this endpoint
       cannot remove a follower.
+
+  --due-date <ts>
+      New due date, RFC3339. An empty string clears it (sends null). Must be
+      today or in the future.
+
+        capigo tasks update <uuid> --due-date "2026-08-31T00:00:00Z"
 
   At least one field flag is required; sending none exits 5.
 
@@ -737,6 +744,9 @@ OUTPUT
 		}
 		if len(taskUpdateFollowerIDs) > 0 {
 			body["follower_ids"] = taskUpdateFollowerIDs
+		}
+		if cmd.Flags().Changed("due-date") {
+			body["due_date"] = nullableID(taskUpdateDueDate)
 		}
 
 		if len(body) == 0 {
@@ -1326,6 +1336,7 @@ func init() {
 	tasksUpdateCmd.Flags().StringVar(&taskUpdateBoard, "board", "", `board UUID; sent together with --list (pass --board "" --list "" to remove from board)`)
 	tasksUpdateCmd.Flags().StringVar(&taskUpdateList, "list", "", "board list UUID; sent together with --board")
 	tasksUpdateCmd.Flags().StringArrayVar(&taskUpdateFollowerIDs, "follower-id", nil, "follower user UUID (repeatable: --follower-id <uuid>); additive — removes are not supported")
+	tasksUpdateCmd.Flags().StringVar(&taskUpdateDueDate, "due-date", "", "due date (RFC3339; empty string clears it)")
 
 	// tasks create flags
 	tasksCreateCmd.Flags().StringVar(&taskCreateTenant, "tenant", "", "tenant code (required)")
