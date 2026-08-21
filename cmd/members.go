@@ -78,7 +78,8 @@ OUTPUT
         "data": [
           { "id": "4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
             "display_name": "Tram Nguyen", "email": "tram@acme.vn",
-            "role": "owner", "avatar_url": null }
+            "role": "owner", "avatar_url": null,
+            "title": null, "department": null, "birthday": null }
         ],
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "page": 1, "limit": 20, "total": 1, "has_more": false }
@@ -86,7 +87,8 @@ OUTPUT
 
   Read meta.total rather than counting .data[]: a page never holds more than
   --limit, so a full count needs meta, not arithmetic. role is owner or
-  member.
+  member. title, department and birthday come from extra_data and are null
+  when that data was never set.
 
   With --tenant omitted, meta.tenant and meta.tenant_source are absent: the
   results span every tenant this key can reach, and a member does not name its
@@ -166,7 +168,8 @@ OUTPUT
       {
         "data": { "id": "4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
                   "display_name": "Tram Nguyen", "email": "tram@acme.vn",
-                  "role": "owner", "avatar_url": null },
+                  "role": "owner", "avatar_url": null,
+                  "title": null, "department": null, "birthday": null },
         "meta": { "tenant": "acme", "tenant_source": "flag" }
       }
 

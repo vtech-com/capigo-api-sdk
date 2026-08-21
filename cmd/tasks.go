@@ -138,10 +138,14 @@ OUTPUT
           {
             "id": "7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10",
             "code": "TASK-104", "title": "Fix login bug", "description": "...",
-            "status": "To-Do", "priority": "high", "assignee": {...},
+            "status": "To-Do", "priority": "High", "assignee": {...},
             "owner": {...}, "board_id": "...", "board_list_id": "...",
             "due_date": "...", "parent": null, "has_subtasks": false,
-            "attachments": [...], "created_at": "...", "updated_at": "..."
+            "attachments": [...],
+            "followers": [ { "id": "...", "display_name": "Minh",
+                             "member_code": "NV001" } ],
+            "meta_data": { "url": "https://acme.capigo.app/mission/tasks/TASK-104" },
+            "created_at": "...", "updated_at": "..."
           }
         ],
         "meta": {
@@ -251,10 +255,14 @@ OUTPUT
         "data": {
           "id": "7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10",
           "code": "TASK-104", "title": "Fix login bug", "description": "...",
-          "status": "To-Do", "priority": "high", "assignee": {...},
+          "status": "To-Do", "priority": "High", "assignee": {...},
           "owner": {...}, "board_id": "...", "board_list_id": "...",
           "due_date": "...", "parent": null, "has_subtasks": false,
-          "attachments": [...], "created_at": "...", "updated_at": "..."
+          "attachments": [...],
+          "followers": [ { "id": "...", "display_name": "Minh",
+                           "member_code": "NV001" } ],
+          "meta_data": { "url": "https://acme.capigo.app/mission/tasks/TASK-104" },
+          "created_at": "...", "updated_at": "..."
         },
         "meta": { "tenant": "acme", "tenant_source": "flag" }
       }
@@ -663,7 +671,8 @@ OUTPUT
   The task as it now stands is at .data, the same shape as tasks get:
 
       {
-        "data": { "id": "...", "code": "TASK-104", "title": "...", ... },
+        "data": { "id": "...", "code": "TASK-104", "title": "...",
+                  "followers": [...], "meta_data": {...}, ... },
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "server_time": "2026-07-09T04:12:33Z" }
       }
@@ -826,12 +835,13 @@ OUTPUT
         "data": [
           { "id": "9ab2c744-16fe-4d09-8a52-3ef0b7c61d84",
             "code": "ACMEC-69", "title": "Write the migration",
-            "description": "...", "status": "To-Do", "priority": "high",
+            "description": "...", "status": "To-Do", "priority": "High",
             "assignee": {...}, "owner": {...},
             "board_id": "...", "board_list_id": "...", "due_date": null,
             "parent": { "id": "7c1f2e88-...", "code": "ACMEC-68",
                         "title": "Fix login bug" },
             "has_subtasks": false, "attachments": [],
+            "followers": [...], "meta_data": {...},
             "created_at": "...", "updated_at": "..." }
         ],
         "meta": { "tenant": "acme", "tenant_source": "flag",
@@ -971,7 +981,8 @@ OUTPUT
   tasks get:
 
       {
-        "data": { "id": "...", "code": "TASK-104", "title": "...", ... },
+        "data": { "id": "...", "code": "TASK-104", "title": "...",
+                  "followers": [...], "meta_data": {...}, ... },
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "server_time": "2026-07-09T04:12:33Z" }
       }
@@ -1183,9 +1194,10 @@ OUTPUT
       {
         "data": {
           "parent_task": { "id": "...", "code": "TASK-104", "title": "...",
-                           "has_subtasks": true, ... },
+                           "has_subtasks": true, "followers": [...],
+                           "meta_data": {...}, ... },
           "subtasks": [ { "id": "...", "code": "TASK-105", "title": "Design",
-                          ... } ]
+                          "followers": [...], "meta_data": {...}, ... } ]
         },
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "server_time": "2026-07-09T04:12:33Z" }

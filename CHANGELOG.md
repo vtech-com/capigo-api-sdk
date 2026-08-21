@@ -10,6 +10,20 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Command help now names the response fields the API returns.** `members list`/`get`
+  document `title`, `department` and `birthday`; `tasks` commands document `followers` and
+  `meta_data`; `products` commands document `notes` and `media`; `variants` commands document
+  `status` and `media`. These fields were already present in the JSON output — the CLI passes
+  `data` through unchanged — but a field the help page never named is a field an agent could
+  not know existed. `make verify-api` now reports every checked page agrees with the server.
+
+### Changed
+
+- **The bundled `capigo-api` skill documents product `notes` and variant `status`**, matching
+  the CLI help above.
+
 ## [0.24.0] — 2026-08-18
 
 ### Fixed

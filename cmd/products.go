@@ -150,6 +150,7 @@ OUTPUT
             "unit": { "id": "...", "name": "Cái" },
             "options": [],
             "variants": [ { "id": "...", "sku": "AT-001-S", ... } ],
+            "media": [], "notes": [],
             "created_at": "2026-06-01T08:00:00Z",
             "updated_at": "2026-06-01T08:00:00Z"
           }
@@ -422,7 +423,8 @@ OUTPUT
           "aliases": ["VVD013"], "tags": ["hè"], "is_deleted": false,
           "created_at": "...", "updated_at": "...",
           "brand": {...}, "category": {...}, "product_type": {...},
-          "unit": {...}, "options": [...], "variants": [...]
+          "unit": {...}, "options": [...], "variants": [...],
+          "media": [], "notes": []
         },
         "meta": { "tenant": "acme", "tenant_source": "flag" }
       }
@@ -591,7 +593,8 @@ OUTPUT
 
       {
         "data": { "id": "8f2a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
-                  "name": "Blue T-Shirt", "status": "DRAFT", ... },
+                  "name": "Blue T-Shirt", "status": "DRAFT",
+                  "media": [], "notes": [], ... },
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "server_time": "2026-07-09T04:12:33Z" }
       }
@@ -775,7 +778,8 @@ OUTPUT
 
       {
         "data": { "id": "8f2a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
-                  "status": "ACTIVE", "tags": ["summer"], ... },
+                  "status": "ACTIVE", "tags": ["summer"],
+                  "media": [], "notes": [], ... },
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "server_time": "2026-07-09T04:12:33Z" }
       }
@@ -939,6 +943,7 @@ FLAGS
                                     match by index. There is no option3.
         manufacturer_code  string
         legacy_code        string
+        status             string   active | inactive. SKU lifecycle state (defaults to active).
         extra_data         object   arbitrary key-value metadata
 
       That table is the whole accepted set. The API rejects a variant object
@@ -971,7 +976,7 @@ OUTPUT
 
       {
         "data": { "id": "8f2a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
-                  "variants": [...], ... },
+                  "variants": [...], "media": [], "notes": [], ... },
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "server_time": "2026-07-09T04:12:33Z" }
       }
