@@ -38,8 +38,12 @@ var implementedOps = map[string]string{
 	"GET /members":      "members list",
 	"GET /members/{id}": "members get",
 
-	"GET /mission/boards":      "boards list",
-	"GET /mission/boards/{id}": "boards get",
+	"GET /mission/boards":                       "boards list",
+	"GET /mission/boards/{id}":                  "boards get",
+	"POST /mission/boards":                      "boards create",
+	"PATCH /mission/boards/{id}":                "boards update",
+	"POST /mission/boards/{id}/lists":           "boards lists create",
+	"PATCH /mission/boards/{id}/lists/{listId}": "boards lists update",
 
 	"GET /mission/tasks":                                                   "tasks list",
 	"POST /mission/tasks":                                                  "tasks create",
@@ -115,14 +119,6 @@ var unimplementedOps = map[string]string{
 	"GET /wms/outbound-shipments/{code}": "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
 	"GET /wms/internal-transfers":        "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
 	"GET /wms/internal-transfers/{code}": "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
-
-	// Board writes: the API just grew POST/PATCH on boards and their lists. Held
-	// out deliberately — board create/update and board-list create/update are a
-	// new command family that deserves its own PR, not a side addition here.
-	"POST /mission/boards":                      "unwrapped: board and board-list writes are a separate feature, not yet designed",
-	"PATCH /mission/boards/{id}":                "unwrapped: board and board-list writes are a separate feature, not yet designed",
-	"POST /mission/boards/{id}/lists":           "unwrapped: board and board-list writes are a separate feature, not yet designed",
-	"PATCH /mission/boards/{id}/lists/{listId}": "unwrapped: board and board-list writes are a separate feature, not yet designed",
 }
 
 // openAPIPathOnlySpec is the minimal subset of OpenAPI 3.0 needed to enumerate
