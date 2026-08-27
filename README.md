@@ -199,6 +199,10 @@ capigo tasks subtasks create <id|--code>   Add subtask(s) to an existing task (-
 
 capigo boards list       List boards (supports --query/-q, --page, --limit)
 capigo boards get <id>   Get board by ID (includes its `lists` array)
+capigo boards create     Create a board (--name + --tenant required, or --from-json)
+capigo boards update <id>        Partial update a board (PATCH; --tenant required; at least one field required)
+capigo boards lists create <board-id>        Create a list in a board (--name + --tenant required)
+capigo boards lists update <board-id> <list-id>  Update a list in a board (PATCH; --tenant required)
 
 capigo members list      List workspace members (supports --query/-q, --page, --limit)
 capigo members get <id>  Get a member by ID
@@ -250,7 +254,7 @@ Run `capigo <group> <command> --help` for the complete, authoritative flag list 
 
 `--tenant <code>` appears as a local flag on commands that require or accept a tenant scope (e.g. `capigo products list --tenant acme`). It is not a global flag. The active config profile is always read from `~/.capigo/config.json` and cannot be overridden at runtime.
 
-Every PCMS command (`products`, `variants`, `brands`, `categories`, `product-types`, `units`) **requires** a tenant on every verb. `tasks list`/`get`, `boards list`/`get`, and `members list`/`get` accept an *optional* `--tenant` — omit it to read across every tenant you can access (`meta.tenant` is then absent — there is no single tenant to name). `tasks create` and `tasks subtasks create` always require a tenant; `tasks subtasks list` requires a tenant only when addressed by `--code`.
+Every PCMS command (`products`, `variants`, `brands`, `categories`, `product-types`, `units`) **requires** a tenant on every verb. `tasks list`/`get`, `boards list`/`get`, and `members list`/`get` accept an *optional* `--tenant` — omit it to read across every tenant you can access (`meta.tenant` is then absent — there is no single tenant to name). `tasks create` and `tasks subtasks create` always require a tenant; `tasks subtasks list` requires a tenant only when addressed by `--code`. Board writes — `boards create`, `boards update`, `boards lists create`, `boards lists update` — always require a tenant.
 
 ## Products
 

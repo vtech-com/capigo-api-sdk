@@ -1094,6 +1094,160 @@
           }
         }
       },
+      "CreateBoardListItem": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true,
+            "description": "Optional WIP limit for the list."
+          }
+        }
+      },
+      "CreateBoardListRequest": {
+        "type": "object",
+        "required": [
+          "tenant_code",
+          "name"
+        ],
+        "properties": {
+          "tenant_code": {
+            "type": "string",
+            "description": "The tenant/workspace code where the list will be created."
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true,
+            "description": "Optional WIP limit for the list."
+          }
+        }
+      },
+      "UpdateBoardListRequest": {
+        "type": "object",
+        "required": [
+          "tenant_code"
+        ],
+        "properties": {
+          "tenant_code": {
+            "type": "string",
+            "description": "The tenant/workspace code."
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true,
+            "description": "Optional WIP limit for the list. Pass null to clear it."
+          },
+          "is_archived": {
+            "type": "boolean",
+            "description": "Archive (true) or unarchive (false) the list."
+          }
+        }
+      },
+      "UpdateBoardListItem": {
+        "type": "object",
+        "description": "A list operation within an update-board request. Omit `id` to create a new list; provide `id` to update an existing list.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 0,
+            "nullable": true
+          },
+          "is_archived": {
+            "type": "boolean"
+          }
+        }
+      },
+      "UpdateBoardRequest": {
+        "type": "object",
+        "required": [
+          "tenant_code"
+        ],
+        "properties": {
+          "tenant_code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 10000,
+            "nullable": true
+          },
+          "is_public": {
+            "type": "boolean"
+          },
+          "lists": {
+            "type": "array",
+            "maxItems": 50,
+            "description": "Optional list operations. Entries without `id` create new lists; entries with `id` update existing lists.",
+            "items": {
+              "$ref": "#/components/schemas/UpdateBoardListItem"
+            }
+          }
+        }
+      },
+      "CreateBoardRequest": {
+        "type": "object",
+        "required": [
+          "tenant_code",
+          "name"
+        ],
+        "properties": {
+          "tenant_code": {
+            "type": "string",
+            "description": "The tenant/workspace code where the board will be created."
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 10000,
+            "nullable": true
+          },
+          "is_public": {
+            "type": "boolean",
+            "description": "Visibility flag. Defaults to true when omitted."
+          },
+          "lists": {
+            "type": "array",
+            "maxItems": 50,
+            "description": "Optional lists to create under the board (up to 50).",
+            "items": {
+              "$ref": "#/components/schemas/CreateBoardListItem"
+            }
+          }
+        }
+      },
       "CreateTaskRequest": {
         "type": "object",
         "required": [
@@ -2168,6 +2322,973 @@
             }
           }
         }
+      },
+      "PublicWmsWarehouseTransferTimelineEntry": {
+        "type": "object",
+        "required": [
+          "source",
+          "status",
+          "created_at",
+          "created_by_name"
+        ],
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "coordination",
+              "outbound",
+              "inbound"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_by_name": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "PublicWmsWarehouseTransferLine": {
+        "type": "object",
+        "required": [
+          "id",
+          "product_variant",
+          "qty_requested",
+          "is_unplanned"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "product_variant": {
+            "$ref": "#/components/schemas/PublicWmsProductVariantReference"
+          },
+          "qty_requested": {
+            "type": "number"
+          },
+          "qty_exported": {
+            "type": "number",
+            "nullable": true
+          },
+          "qty_received": {
+            "type": "number",
+            "nullable": true
+          },
+          "is_unplanned": {
+            "type": "boolean"
+          }
+        }
+      },
+      "PublicWmsWarehouseTransferResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "code",
+          "status",
+          "source_warehouse",
+          "destination_warehouse",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string",
+            "example": "WT-SRC-00001"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "PENDING_APPROVAL",
+              "APPROVED",
+              "IN_TRANSIT",
+              "COMPLETED",
+              "REJECTED",
+              "CANCELLED"
+            ]
+          },
+          "source_warehouse": {
+            "$ref": "#/components/schemas/PublicWmsWarehouseReference"
+          },
+          "destination_warehouse": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PublicWmsWarehouseReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "exported_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "destination_receipt_code": {
+            "type": "string",
+            "nullable": true
+          },
+          "hours_in_transit": {
+            "type": "number",
+            "nullable": true
+          },
+          "is_abnormal": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "abnormal_resolved": {
+            "type": "boolean",
+            "nullable": true
+          }
+        }
+      },
+      "PublicWmsWarehouseTransferDetailResponse": {
+        "type": "object",
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PublicWmsWarehouseTransferResponse"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "direction": {
+                "type": "string",
+                "enum": [
+                  "PUSH",
+                  "PULL"
+                ]
+              },
+              "transfer_ref": {
+                "type": "string"
+              },
+              "external_ref": {
+                "type": "string",
+                "nullable": true
+              },
+              "notes": {
+                "type": "string",
+                "nullable": true
+              },
+              "submitted_at": {
+                "type": "string",
+                "format": "date-time",
+                "nullable": true
+              },
+              "approved_at": {
+                "type": "string",
+                "format": "date-time",
+                "nullable": true
+              },
+              "completed_at": {
+                "type": "string",
+                "format": "date-time",
+                "nullable": true
+              },
+              "rejected_at": {
+                "type": "string",
+                "format": "date-time",
+                "nullable": true
+              },
+              "rejection_reason": {
+                "type": "string",
+                "nullable": true
+              },
+              "cancelled_at": {
+                "type": "string",
+                "format": "date-time",
+                "nullable": true
+              },
+              "cancellation_reason": {
+                "type": "string",
+                "nullable": true
+              },
+              "updated_at": {
+                "type": "string",
+                "format": "date-time",
+                "nullable": true
+              },
+              "generated_outbound_shipment": {
+                "type": "object",
+                "nullable": true,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "code": {
+                    "type": "string"
+                  }
+                }
+              },
+              "generated_inbound_receipt": {
+                "type": "object",
+                "nullable": true,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "code": {
+                    "type": "string"
+                  }
+                }
+              },
+              "lines": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/PublicWmsWarehouseTransferLine"
+                }
+              },
+              "timeline": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/PublicWmsWarehouseTransferTimelineEntry"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "WmsInboundReceiptLineInput": {
+        "type": "object",
+        "description": "Inbound receipt line. Supply `product_variant_id` or `sku` (one is required; both must resolve to the same variant).",
+        "properties": {
+          "product_variant_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Canonical variant UUID.",
+            "nullable": true
+          },
+          "sku": {
+            "type": "string",
+            "description": "Tenant-scoped SKU alias resolved via PCMS.",
+            "nullable": true
+          },
+          "qty_expected": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Expected quantity."
+          },
+          "unit_cost": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Unit cost (receipts only).",
+            "nullable": true
+          }
+        }
+      },
+      "WmsOutboundShipmentLineInput": {
+        "type": "object",
+        "description": "Outbound shipment line. Supply `product_variant_id` or `sku` (one is required; both must resolve to the same variant).",
+        "properties": {
+          "product_variant_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Canonical variant UUID.",
+            "nullable": true
+          },
+          "sku": {
+            "type": "string",
+            "description": "Tenant-scoped SKU alias resolved via PCMS.",
+            "nullable": true
+          },
+          "qty_ordered": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Ordered quantity."
+          }
+        }
+      },
+      "WmsWarehouseTransferLineInput": {
+        "type": "object",
+        "description": "Warehouse-transfer (W2W) line. Supply `product_variant_id` or `sku` (one is required; both must resolve to the same variant).",
+        "properties": {
+          "product_variant_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Canonical variant UUID.",
+            "nullable": true
+          },
+          "sku": {
+            "type": "string",
+            "description": "Tenant-scoped SKU alias resolved via PCMS.",
+            "nullable": true
+          },
+          "qty_requested": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Requested transfer quantity."
+          }
+        }
+      },
+      "WmsInternalTransferLineInput": {
+        "type": "object",
+        "description": "Internal location-transfer line. Supply `product_variant_id` or `sku` (one is required; both must resolve to the same variant).",
+        "properties": {
+          "product_variant_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Canonical variant UUID.",
+            "nullable": true
+          },
+          "sku": {
+            "type": "string",
+            "description": "Tenant-scoped SKU alias resolved via PCMS.",
+            "nullable": true
+          },
+          "qty": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Quantity to move."
+          },
+          "from_location_code": {
+            "type": "string",
+            "description": "Source location code inside the acting warehouse."
+          },
+          "to_location_code": {
+            "type": "string",
+            "description": "Destination location code inside the acting warehouse."
+          }
+        }
+      },
+      "CreateInboundReceiptRequest": {
+        "type": "object",
+        "description": "Create an inbound receipt draft. Header + lines are persisted atomically.",
+        "required": [
+          "lines"
+        ],
+        "properties": {
+          "warehouse_code": {
+            "type": "string",
+            "description": "Acting warehouse (alternative to ?warehouse_code= / X-Warehouse-Code; must match the resolved acting warehouse if supplied).",
+            "nullable": true
+          },
+          "external_ref": {
+            "type": "string",
+            "description": "Non-unique external business reference.",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "description": "Free-text notes.",
+            "nullable": true
+          },
+          "extra_data": {
+            "type": "object",
+            "description": "Free-form JSON metadata.",
+            "nullable": true
+          },
+          "rel_type": {
+            "type": "string",
+            "description": "Opaque caller reference type.",
+            "nullable": true
+          },
+          "rel_id": {
+            "type": "string",
+            "description": "Opaque caller reference id.",
+            "nullable": true
+          },
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/WmsInboundReceiptLineInput"
+            }
+          }
+        }
+      },
+      "CreateOutboundShipmentRequest": {
+        "type": "object",
+        "description": "Create an outbound shipment draft. Header + lines are persisted atomically.",
+        "required": [
+          "lines"
+        ],
+        "properties": {
+          "warehouse_code": {
+            "type": "string",
+            "description": "Acting warehouse (alternative to ?warehouse_code= / X-Warehouse-Code; must match the resolved acting warehouse if supplied).",
+            "nullable": true
+          },
+          "external_ref": {
+            "type": "string",
+            "description": "Non-unique external business reference.",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "description": "Free-text notes.",
+            "nullable": true
+          },
+          "extra_data": {
+            "type": "object",
+            "description": "Free-form JSON metadata.",
+            "nullable": true
+          },
+          "rel_type": {
+            "type": "string",
+            "description": "Opaque caller reference type.",
+            "nullable": true
+          },
+          "rel_id": {
+            "type": "string",
+            "description": "Opaque caller reference id.",
+            "nullable": true
+          },
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/WmsOutboundShipmentLineInput"
+            }
+          }
+        }
+      },
+      "CreateWarehouseTransferRequest": {
+        "type": "object",
+        "description": "Create a PUSH warehouse-to-warehouse transfer request (v1 is PUSH-only; `direction` is rejected). Header + lines are persisted atomically.",
+        "required": [
+          "destination_warehouse_code",
+          "lines"
+        ],
+        "properties": {
+          "warehouse_code": {
+            "type": "string",
+            "description": "Acting (source) warehouse (alternative to ?warehouse_code= / X-Warehouse-Code; must match the resolved acting warehouse if supplied).",
+            "nullable": true
+          },
+          "destination_warehouse_code": {
+            "type": "string",
+            "description": "Destination warehouse code in the same tenant (must differ from the source)."
+          },
+          "external_ref": {
+            "type": "string",
+            "description": "Non-unique external business reference.",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "description": "Free-text notes.",
+            "nullable": true
+          },
+          "extra_data": {
+            "type": "object",
+            "description": "Free-form JSON metadata.",
+            "nullable": true
+          },
+          "rel_type": {
+            "type": "string",
+            "description": "Opaque caller reference type.",
+            "nullable": true
+          },
+          "rel_id": {
+            "type": "string",
+            "description": "Opaque caller reference id.",
+            "nullable": true
+          },
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/WmsWarehouseTransferLineInput"
+            }
+          }
+        }
+      },
+      "CreateInternalTransferRequest": {
+        "type": "object",
+        "description": "Create an internal location-transfer draft. Header + lines are persisted atomically.",
+        "required": [
+          "lines"
+        ],
+        "properties": {
+          "warehouse_code": {
+            "type": "string",
+            "description": "Acting warehouse (alternative to ?warehouse_code= / X-Warehouse-Code; must match the resolved acting warehouse if supplied).",
+            "nullable": true
+          },
+          "external_ref": {
+            "type": "string",
+            "description": "Non-unique external business reference.",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "description": "Free-text notes.",
+            "nullable": true
+          },
+          "extra_data": {
+            "type": "object",
+            "description": "Free-form JSON metadata.",
+            "nullable": true
+          },
+          "rel_type": {
+            "type": "string",
+            "description": "Opaque caller reference type.",
+            "nullable": true
+          },
+          "rel_id": {
+            "type": "string",
+            "description": "Opaque caller reference id.",
+            "nullable": true
+          },
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/WmsInternalTransferLineInput"
+            }
+          }
+        }
+      },
+      "UpdateInboundReceiptRequest": {
+        "type": "object",
+        "description": "JSON Merge Patch (RFC 7386) update of an editable inbound receipt (DRAFT/PLANNED/RECEIVING). Omitted fields are unchanged; a present `lines` array replaces the full line list. Fields outside the editable whitelist are rejected (400).",
+        "properties": {
+          "external_ref": {
+            "type": "string",
+            "description": "Clear with null.",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "description": "Clear with null.",
+            "nullable": true
+          },
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/WmsInboundReceiptLineInput"
+            }
+          }
+        }
+      },
+      "UpdateOutboundShipmentRequest": {
+        "type": "object",
+        "description": "JSON Merge Patch (RFC 7386) update of an editable outbound shipment (DRAFT/PLANNED). Omitted fields are unchanged; a present `lines` array replaces the full line list. Fields outside the editable whitelist are rejected (400).",
+        "properties": {
+          "external_ref": {
+            "type": "string",
+            "description": "Clear with null.",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "description": "Clear with null.",
+            "nullable": true
+          },
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/WmsOutboundShipmentLineInput"
+            }
+          }
+        }
+      },
+      "UpdateWarehouseTransferRequest": {
+        "type": "object",
+        "description": "JSON Merge Patch (RFC 7386) update of a DRAFT warehouse-transfer request, source-owned. Omitted fields are unchanged; a present `lines` array replaces the full line list. `direction`, source/destination warehouses, and `status` are not settable via PATCH.",
+        "properties": {
+          "external_ref": {
+            "type": "string",
+            "description": "Clear with null.",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "description": "Clear with null.",
+            "nullable": true
+          },
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/WmsWarehouseTransferLineInput"
+            }
+          }
+        }
+      },
+      "UpdateInternalTransferRequest": {
+        "type": "object",
+        "description": "JSON Merge Patch (RFC 7386) update of a DRAFT internal location transfer. Omitted fields are unchanged; a present `lines` array replaces the full line list.",
+        "properties": {
+          "external_ref": {
+            "type": "string",
+            "description": "Clear with null.",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "description": "Clear with null.",
+            "nullable": true
+          },
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "$ref": "#/components/schemas/WmsInternalTransferLineInput"
+            }
+          }
+        }
+      },
+      "WmsCancelActionRequest": {
+        "type": "object",
+        "description": "`cancel` action body. `submit` takes no body.",
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 10,
+            "description": "Cancellation reason (>= 10 characters)."
+          }
+        }
+      },
+      "WmsInboundValidateOkResponse": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable request reference for agent follow-up."
+          },
+          "valid": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "line_count": {
+                "type": "integer"
+              },
+              "total_qty_expected": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      },
+      "WmsInboundPreviewOkResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "line_count": {
+                "type": "integer"
+              },
+              "total_qty_expected": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      },
+      "WmsInternalValidateOkResponse": {
+        "type": "object",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable request reference for agent follow-up."
+          },
+          "valid": {
+            "type": "boolean",
+            "const": true
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "line_count": {
+                "type": "integer"
+              },
+              "total_qty": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      },
+      "WmsInternalPreviewOkResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "line_count": {
+                "type": "integer"
+              },
+              "total_qty": {
+                "type": "number"
+              }
+            }
+          }
+        }
+      },
+      "WmsOutboundValidateOkResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "valid": {
+                "type": "boolean",
+                "const": true
+              }
+            }
+          }
+        }
+      },
+      "WmsOutboundPreviewOkResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "lines": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "product_variant_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "nullable": true
+                    },
+                    "qty_ordered": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "WmsWarehouseTransferCheck": {
+        "type": "object",
+        "properties": {
+          "check": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "detail": {
+            "type": "string"
+          }
+        }
+      },
+      "WmsWarehouseTransferValidateOkResponse": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "validate"
+          },
+          "valid": {
+            "type": "boolean",
+            "const": true
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WmsWarehouseTransferCheck"
+            }
+          }
+        }
+      },
+      "WmsWarehouseTransferPreviewOkResponse": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "preview"
+          },
+          "valid": {
+            "type": "boolean",
+            "const": true
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WmsWarehouseTransferCheck"
+            }
+          },
+          "preview": {
+            "type": "object",
+            "properties": {
+              "direction": {
+                "type": "string",
+                "const": "PUSH"
+              },
+              "source_warehouse_code": {
+                "type": "string"
+              },
+              "destination_warehouse_code": {
+                "type": "string"
+              },
+              "status_after_create": {
+                "type": "string",
+                "const": "DRAFT"
+              },
+              "line_count": {
+                "type": "integer"
+              },
+              "lines": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "index": {
+                      "type": "integer"
+                    },
+                    "product_variant_id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "nullable": true
+                    },
+                    "sku": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "qty_requested": {
+                      "type": "number"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "PublicWmsLocationSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "parent_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PublicWmsLocationNestedReference": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        }
+      },
+      "PublicWmsLocationDetail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "parent_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "capacity_units": {
+            "type": "number",
+            "nullable": true
+          },
+          "extra_data": {
+            "type": "object",
+            "nullable": true
+          },
+          "parent": {
+            "$ref": "#/components/schemas/PublicWmsLocationNestedReference"
+          },
+          "children": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicWmsLocationNestedReference"
+            }
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
       }
     },
     "PublicWmsWarehouseReference": {
@@ -2930,6 +4051,54 @@
             }
           }
         }
+      },
+      "post": {
+        "summary": "Create Board",
+        "tags": [
+          "Boards"
+        ],
+        "description": "Create a new board, optionally together with its lists, in a single request. When `lists` is provided, each list is created under the board and returned in the response.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBoardRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Board created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicBoardDetailResponse"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "list_count": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "403": {
+            "$ref": "#/components/schemas/Error"
+          }
+        }
       }
     },
     "/mission/boards/{id}": {
@@ -2983,6 +4152,189 @@
           },
           "404": {
             "description": "Board not found"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update Board",
+        "tags": [
+          "Boards"
+        ],
+        "description": "Update a board together with its lists in a single request. Lists without an `id` are created; lists with an `id` are updated.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBoardRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Board updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicBoardDetailResponse"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "list_count": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "403": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "404": {
+            "description": "Board not found"
+          }
+        }
+      }
+    },
+    "/mission/boards/{id}/lists": {
+      "post": {
+        "summary": "Add List to Board",
+        "tags": [
+          "Boards"
+        ],
+        "description": "Create a single list under an existing public board.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateBoardListRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "List created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicBoardListResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "403": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "404": {
+            "description": "Board not found"
+          }
+        }
+      }
+    },
+    "/mission/boards/{id}/lists/{listId}": {
+      "patch": {
+        "summary": "Update List in Board",
+        "tags": [
+          "Boards"
+        ],
+        "description": "Apply a partial update to a list under an existing public board. At least one of `name`, `limit`, or `is_archived` must be provided.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "listId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBoardListRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "List updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicBoardListResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "403": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "404": {
+            "description": "Board or list not found"
           }
         }
       }
@@ -3261,6 +4613,12 @@
                     "type": "string",
                     "maxLength": 10000,
                     "nullable": true
+                  },
+                  "due_date": {
+                    "type": "string",
+                    "format": "date-time",
+                    "nullable": true,
+                    "description": "Set to null to clear the due date. Must be today or in the future."
                   },
                   "follower_ids": {
                     "type": "array",
@@ -6655,6 +8013,126 @@
             "description": "Warehouse not found"
           }
         }
+      },
+      "post": {
+        "summary": "Create Inbound Receipt",
+        "description": "Create a inbound receipt draft for the acting warehouse. Tenant context is proxy-injected (x-api-tenant-code); warehouse scope is client-supplied via ?warehouse_code= or X-Warehouse-Code. Authorization gate: `scope.inbound`. Create is atomic (header + lines in one transaction).",
+        "tags": [
+          "WMS"
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "required": false,
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Optional idempotency key (create only). First application returns 201; a replay of the same key with an identical canonical body returns 200 with the existing document; the same key with a different body returns 409 (E0601).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInboundReceiptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Replay: same Idempotency-Key with an identical canonical body — returns the original document, no duplicate row/event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsInboundReceiptDetailResponse"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created inbound receipt. Returns the created document.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsInboundReceiptDetailResponse"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing warehouse context, invalid JSON body, or validation error"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse, document, or variant not found"
+          },
+          "409": {
+            "description": "Idempotency-key conflict (E0601) — same key, different canonical body."
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
       }
     },
     "/wms/inbound-receipts/{code}": {
@@ -6736,6 +8214,108 @@
           },
           "404": {
             "description": "Warehouse or receipt not found"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update Inbound Receipt",
+        "description": "JSON Merge Patch (RFC 7386) update of an editable inbound receipt. Requires an `If-Match` header carrying the current `updated_at` (concurrency token). Only editable header fields and an optional full `lines` replacement are accepted; `status` and other internal fields are rejected (400). Authorization gate: `scope.inbound`.",
+        "tags": [
+          "WMS"
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "required": false,
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "description": "Document code.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Document's current `updated_at` (ISO 8601, microsecond precision) from the public detail. Optimistic concurrency guard — a stale token returns 409 (E0602).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateInboundReceiptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated inbound receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsInboundReceiptDetailResponse"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing warehouse context, invalid JSON body, or validation error"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse, document, or variant not found"
+          },
+          "409": {
+            "description": "Stale-version conflict (E0602) or the document is not in an editable status."
+          },
+          "500": {
+            "description": "Internal server error"
           }
         }
       }
@@ -6876,6 +8456,126 @@
             "description": "Warehouse not found"
           }
         }
+      },
+      "post": {
+        "summary": "Create Internal Transfer",
+        "description": "Create a internal transfer draft for the acting warehouse. Tenant context is proxy-injected (x-api-tenant-code); warehouse scope is client-supplied via ?warehouse_code= or X-Warehouse-Code. Authorization gate: `scope.transfer`. Create is atomic (header + lines in one transaction).",
+        "tags": [
+          "WMS"
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "required": false,
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Optional idempotency key (create only). First application returns 201; a replay of the same key with an identical canonical body returns 200 with the existing document; the same key with a different body returns 409 (E0601).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInternalTransferRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Replay: same Idempotency-Key with an identical canonical body — returns the original document, no duplicate row/event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsInternalTransferDetailResponse"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created internal transfer. Returns the created document.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsInternalTransferDetailResponse"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing warehouse context, invalid JSON body, or validation error"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse, document, or variant not found"
+          },
+          "409": {
+            "description": "Idempotency-key conflict (E0601) — same key, different canonical body."
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
       }
     },
     "/wms/internal-transfers/{code}": {
@@ -6957,6 +8657,108 @@
           },
           "404": {
             "description": "Warehouse or transfer not found"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update Internal Transfer",
+        "description": "JSON Merge Patch (RFC 7386) update of an editable internal transfer. Requires an `If-Match` header carrying the current `updated_at` (concurrency token). Only editable header fields and an optional full `lines` replacement are accepted; `status` and other internal fields are rejected (400). Authorization gate: `scope.transfer`.",
+        "tags": [
+          "WMS"
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "required": false,
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "description": "Document code.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Document's current `updated_at` (ISO 8601, microsecond precision) from the public detail. Optimistic concurrency guard — a stale token returns 409 (E0602).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateInternalTransferRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated internal transfer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsInternalTransferDetailResponse"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing warehouse context, invalid JSON body, or validation error"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse, document, or variant not found"
+          },
+          "409": {
+            "description": "Stale-version conflict (E0602) or the document is not in an editable status."
+          },
+          "500": {
+            "description": "Internal server error"
           }
         }
       }
@@ -7101,6 +8903,126 @@
             "description": "Warehouse not found"
           }
         }
+      },
+      "post": {
+        "summary": "Create Outbound Shipment",
+        "description": "Create a outbound shipment draft for the acting warehouse. Tenant context is proxy-injected (x-api-tenant-code); warehouse scope is client-supplied via ?warehouse_code= or X-Warehouse-Code. Authorization gate: `scope.outbound`. Create is atomic (header + lines in one transaction).",
+        "tags": [
+          "WMS"
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "required": false,
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Optional idempotency key (create only). First application returns 201; a replay of the same key with an identical canonical body returns 200 with the existing document; the same key with a different body returns 409 (E0601).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOutboundShipmentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Replay: same Idempotency-Key with an identical canonical body — returns the original document, no duplicate row/event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsOutboundShipmentDetailResponse"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created outbound shipment. Returns the created document.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsOutboundShipmentDetailResponse"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing warehouse context, invalid JSON body, or validation error"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse, document, or variant not found"
+          },
+          "409": {
+            "description": "Idempotency-key conflict (E0601) — same key, different canonical body."
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
       }
     },
     "/wms/outbound-shipments/{code}": {
@@ -7182,6 +9104,108 @@
           },
           "404": {
             "description": "Warehouse or shipment not found"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update Outbound Shipment",
+        "description": "JSON Merge Patch (RFC 7386) update of an editable outbound shipment. Requires an `If-Match` header carrying the current `updated_at` (concurrency token). Only editable header fields and an optional full `lines` replacement are accepted; `status` and other internal fields are rejected (400). Authorization gate: `scope.outbound`.",
+        "tags": [
+          "WMS"
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "required": false,
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "description": "Document code.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Document's current `updated_at` (ISO 8601, microsecond precision) from the public detail. Optimistic concurrency guard — a stale token returns 409 (E0602).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateOutboundShipmentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated outbound shipment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsOutboundShipmentDetailResponse"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing warehouse context, invalid JSON body, or validation error"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse, document, or variant not found"
+          },
+          "409": {
+            "description": "Stale-version conflict (E0602) or the document is not in an editable status."
+          },
+          "500": {
+            "description": "Internal server error"
           }
         }
       }
@@ -7362,6 +9386,1621 @@
         }
       }
     },
+    "/wms/warehouse-transfers": {
+      "get": {
+        "summary": "List Warehouse Transfers",
+        "tags": [
+          "WMS"
+        ],
+        "description": "Returns paginated warehouse-to-warehouse transfer requests visible from a specific warehouse. Requires warehouse_code via query parameter or X-Warehouse-Code header.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to scope the request to. Required.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Search query for transfer code",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filters[status][$eq]",
+            "in": "query",
+            "description": "Filter by exact transfer status",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "DRAFT",
+                "PENDING_APPROVAL",
+                "APPROVED",
+                "IN_TRANSIT",
+                "COMPLETED",
+                "REJECTED",
+                "CANCELLED"
+              ]
+            }
+          },
+          {
+            "name": "filters[status][$in]",
+            "in": "query",
+            "description": "Filter by multiple statuses (comma-separated)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "minimum": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 50
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "description": "Sort by column:asc or column:desc. Allowed: created_at, code. Default: created_at:desc",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicWmsWarehouseTransferResponse"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/MetaPagination"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing X-Tenant-Code, missing warehouse_code, or invalid query parameters"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse not found"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create Warehouse Transfer",
+        "description": "Create a warehouse transfer draft for the acting warehouse. Tenant context is proxy-injected (x-api-tenant-code); warehouse scope is client-supplied via ?warehouse_code= or X-Warehouse-Code. Authorization gate: `scope.warehouse_transfer`. Create is atomic (header + lines in one transaction).",
+        "tags": [
+          "WMS"
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "required": false,
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Optional idempotency key (create only). First application returns 201; a replay of the same key with an identical canonical body returns 200 with the existing document; the same key with a different body returns 409 (E0601).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWarehouseTransferRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Replay: same Idempotency-Key with an identical canonical body — returns the original document, no duplicate row/event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsWarehouseTransferDetailResponse"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created warehouse transfer. Returns the created document.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsWarehouseTransferDetailResponse"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing warehouse context, invalid JSON body, or validation error"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse, document, or variant not found"
+          },
+          "409": {
+            "description": "Idempotency-key conflict (E0601) — same key, different canonical body."
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/wms/warehouse-transfers/{code}": {
+      "get": {
+        "summary": "Get Warehouse Transfer Detail",
+        "tags": [
+          "WMS"
+        ],
+        "description": "Returns a single warehouse-to-warehouse transfer with lines and unified lifecycle timeline. Requires warehouse_code via query parameter or X-Warehouse-Code header.",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "description": "Warehouse transfer code",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsWarehouseTransferDetailResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing X-Tenant-Code, missing warehouse_code, or invalid query parameters"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse or transfer not found"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update Warehouse Transfer",
+        "description": "JSON Merge Patch (RFC 7386) update of an editable warehouse transfer. Requires an `If-Match` header carrying the current `updated_at` (concurrency token). Only editable header fields and an optional full `lines` replacement are accepted; `status` and other internal fields are rejected (400). Authorization gate: `scope.warehouse_transfer`.",
+        "tags": [
+          "WMS"
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "required": false,
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "description": "Document code.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Document's current `updated_at` (ISO 8601, microsecond precision) from the public detail. Optimistic concurrency guard — a stale token returns 409 (E0602).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWarehouseTransferRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated warehouse transfer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsWarehouseTransferDetailResponse"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing warehouse context, invalid JSON body, or validation error"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse, document, or variant not found"
+          },
+          "409": {
+            "description": "Stale-version conflict (E0602) or the document is not in an editable status."
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/wms/inbound-receipts/validate": {
+      "post": {
+        "summary": "Validate Inbound Receipt",
+        "description": "Side-effect-free validate for a create request: runs the same authorization and validation steps as a real create but performs NO writes and emits NO events. Authorization gate: `scope.inbound`.",
+        "tags": [
+          "WMS"
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "required": false,
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInboundReceiptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Valid validate request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WmsInboundValidateOkResponse"
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing warehouse context, invalid JSON body, or validation error"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse, document, or variant not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/wms/inbound-receipts/preview": {
+      "post": {
+        "summary": "Preview Inbound Receipt",
+        "description": "Side-effect-free preview for a create request: runs the same authorization and validation steps as a real create but performs NO writes and emits NO events. Authorization gate: `scope.inbound`.",
+        "tags": [
+          "WMS"
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "required": false,
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInboundReceiptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Valid preview request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WmsInboundPreviewOkResponse"
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing warehouse context, invalid JSON body, or validation error"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse, document, or variant not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/wms/inbound-receipts/{code}/actions/{action}": {
+      "post": {
+        "summary": "Inbound Receipt Lifecycle Action",
+        "description": "Apply a non-posting lifecycle action to a inbound receipt: `submit` (no body) or `cancel` (body `{\"reason\": string, min 10 chars}`). Other actions — including inventory-posting/execution verbs — return 404. Requires an `If-Match` concurrency token. Authorization gate: `scope.inbound`.",
+        "tags": [
+          "WMS"
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "required": false,
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "description": "Document code.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "action",
+            "in": "path",
+            "required": true,
+            "description": "Lifecycle action: `submit` or `cancel`. GUI-only posting verbs (receive/verify/reserve/pick/pack/export/move/approve/reject/ship/receive) return 404.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Document's current `updated_at` (ISO 8601, microsecond precision) from the public detail. Optimistic concurrency guard — a stale token returns 409 (E0602).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/WmsCancelActionRequest"
+                  },
+                  {
+                    "type": "object",
+                    "description": "submit takes no body."
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Action applied. Returns the resulting document.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsInboundReceiptDetailResponse"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing warehouse context, invalid JSON body, or validation error"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse, document, or variant not found"
+          },
+          "409": {
+            "description": "Stale-version conflict (E0602) or invalid transition for the current status."
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/wms/outbound-shipments/validate": {
+      "post": {
+        "summary": "Validate Outbound Shipment",
+        "description": "Side-effect-free validate for a create request: runs the same authorization and validation steps as a real create but performs NO writes and emits NO events. Authorization gate: `scope.outbound`.",
+        "tags": [
+          "WMS"
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "required": false,
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOutboundShipmentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Valid validate request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WmsOutboundValidateOkResponse"
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing warehouse context, invalid JSON body, or validation error"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse, document, or variant not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/wms/outbound-shipments/preview": {
+      "post": {
+        "summary": "Preview Outbound Shipment",
+        "description": "Side-effect-free preview for a create request: runs the same authorization and validation steps as a real create but performs NO writes and emits NO events. Authorization gate: `scope.outbound`.",
+        "tags": [
+          "WMS"
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "required": false,
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOutboundShipmentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Valid preview request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WmsOutboundPreviewOkResponse"
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing warehouse context, invalid JSON body, or validation error"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse, document, or variant not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/wms/outbound-shipments/{code}/actions/{action}": {
+      "post": {
+        "summary": "Outbound Shipment Lifecycle Action",
+        "description": "Apply a non-posting lifecycle action to a outbound shipment: `submit` (no body) or `cancel` (body `{\"reason\": string, min 10 chars}`). Other actions — including inventory-posting/execution verbs — return 404. Requires an `If-Match` concurrency token. Authorization gate: `scope.outbound`.",
+        "tags": [
+          "WMS"
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "required": false,
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "description": "Document code.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "action",
+            "in": "path",
+            "required": true,
+            "description": "Lifecycle action: `submit` or `cancel`. GUI-only posting verbs (receive/verify/reserve/pick/pack/export/move/approve/reject/ship/receive) return 404.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Document's current `updated_at` (ISO 8601, microsecond precision) from the public detail. Optimistic concurrency guard — a stale token returns 409 (E0602).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/WmsCancelActionRequest"
+                  },
+                  {
+                    "type": "object",
+                    "description": "submit takes no body."
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Action applied. Returns the resulting document.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsOutboundShipmentDetailResponse"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing warehouse context, invalid JSON body, or validation error"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse, document, or variant not found"
+          },
+          "409": {
+            "description": "Stale-version conflict (E0602) or invalid transition for the current status."
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/wms/warehouse-transfers/validate": {
+      "post": {
+        "summary": "Validate Warehouse Transfer",
+        "description": "Side-effect-free validate for a create request: runs the same authorization and validation steps as a real create but performs NO writes and emits NO events. Authorization gate: `scope.warehouse_transfer`.",
+        "tags": [
+          "WMS"
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "required": false,
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWarehouseTransferRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Valid validate request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WmsWarehouseTransferValidateOkResponse"
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing warehouse context, invalid JSON body, or validation error"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse, document, or variant not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/wms/warehouse-transfers/preview": {
+      "post": {
+        "summary": "Preview Warehouse Transfer",
+        "description": "Side-effect-free preview for a create request: runs the same authorization and validation steps as a real create but performs NO writes and emits NO events. Authorization gate: `scope.warehouse_transfer`.",
+        "tags": [
+          "WMS"
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "required": false,
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWarehouseTransferRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Valid preview request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WmsWarehouseTransferPreviewOkResponse"
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing warehouse context, invalid JSON body, or validation error"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse, document, or variant not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/wms/warehouse-transfers/{code}/actions/{action}": {
+      "post": {
+        "summary": "Warehouse Transfer Lifecycle Action",
+        "description": "Apply a non-posting lifecycle action to a warehouse transfer: `submit` (no body) or `cancel` (body `{\"reason\": string, min 10 chars}`). Other actions — including inventory-posting/execution verbs — return 404. Requires an `If-Match` concurrency token. Authorization gate: `scope.warehouse_transfer`.",
+        "tags": [
+          "WMS"
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "required": false,
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "description": "Document code.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "action",
+            "in": "path",
+            "required": true,
+            "description": "Lifecycle action: `submit` or `cancel`. GUI-only posting verbs (receive/verify/reserve/pick/pack/export/move/approve/reject/ship/receive) return 404.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Document's current `updated_at` (ISO 8601, microsecond precision) from the public detail. Optimistic concurrency guard — a stale token returns 409 (E0602).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/WmsCancelActionRequest"
+                  },
+                  {
+                    "type": "object",
+                    "description": "submit takes no body."
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Action applied. Returns the resulting document.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsWarehouseTransferDetailResponse"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing warehouse context, invalid JSON body, or validation error"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse, document, or variant not found"
+          },
+          "409": {
+            "description": "Stale-version conflict (E0602) or invalid transition for the current status."
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/wms/internal-transfers/validate": {
+      "post": {
+        "summary": "Validate Internal Transfer",
+        "description": "Side-effect-free validate for a create request: runs the same authorization and validation steps as a real create but performs NO writes and emits NO events. Authorization gate: `scope.transfer`.",
+        "tags": [
+          "WMS"
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "required": false,
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInternalTransferRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Valid validate request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WmsInternalValidateOkResponse"
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing warehouse context, invalid JSON body, or validation error"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse, document, or variant not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/wms/internal-transfers/preview": {
+      "post": {
+        "summary": "Preview Internal Transfer",
+        "description": "Side-effect-free preview for a create request: runs the same authorization and validation steps as a real create but performs NO writes and emits NO events. Authorization gate: `scope.transfer`.",
+        "tags": [
+          "WMS"
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "required": false,
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInternalTransferRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Valid preview request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WmsInternalPreviewOkResponse"
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing warehouse context, invalid JSON body, or validation error"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse, document, or variant not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/wms/locations": {
+      "get": {
+        "summary": "List Locations",
+        "description": "Returns paginated warehouse locations scoped to the acting warehouse. Tenant context is proxy-injected; only locations inside the acting warehouse are returned — cross-warehouse/cross-tenant access resolves as not-found/denied. Search by code/name (q), active/inactive filter, pagination, sorting by created_at/updated_at/code/name.",
+        "tags": [
+          "WMS"
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "required": false,
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Search query for location code or name",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filters[is_active][$eq]",
+            "in": "query",
+            "required": false,
+            "description": "Filter by active state",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Sort by column:asc or column:desc. Default: created_at:desc",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicWmsLocationSummary"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/MetaPagination"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing warehouse context, invalid JSON body, or validation error"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse, document, or variant not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/wms/locations/{code}": {
+      "get": {
+        "summary": "Get Location Detail",
+        "description": "Returns a single warehouse location resolved by code inside the acting warehouse, including public parent/child references suitable for document line payloads. Wrong-tenant or wrong-warehouse access resolves as not-found with no existence leak.",
+        "tags": [
+          "WMS"
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "required": false,
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "description": "Document code.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsLocationDetail"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing warehouse context, invalid JSON body, or validation error"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse, document, or variant not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/mission/tasks/code/{code}": {
       "get": {
         "summary": "Get Task Detail (by Code)",
@@ -7474,6 +11113,12 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 500
+                  },
+                  "due_date": {
+                    "type": "string",
+                    "format": "date-time",
+                    "nullable": true,
+                    "description": "Set to null to clear the due date. Must be today or in the future."
                   },
                   "description": {
                     "type": "string",
