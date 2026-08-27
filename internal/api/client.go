@@ -228,6 +228,26 @@ func (c *Client) ListVariants(ctx context.Context, tenant *string, barcodePrefix
 	return c.Do(ctx, "GET", path, nil, tenant)
 }
 
+// CreateBoard creates a board for the given tenant. body is the JSON request body.
+func (c *Client) CreateBoard(ctx context.Context, body any, tenant *string) (*Response, error) {
+	return c.Do(ctx, "POST", "/mission/boards", body, tenant)
+}
+
+// UpdateBoard updates a board by id.
+func (c *Client) UpdateBoard(ctx context.Context, boardID string, body any, tenant *string) (*Response, error) {
+	return c.Do(ctx, "PATCH", "/mission/boards/"+boardID, body, tenant)
+}
+
+// CreateBoardList creates a list under a board.
+func (c *Client) CreateBoardList(ctx context.Context, boardID string, body any, tenant *string) (*Response, error) {
+	return c.Do(ctx, "POST", "/mission/boards/"+boardID+"/lists", body, tenant)
+}
+
+// UpdateBoardList updates a list by id.
+func (c *Client) UpdateBoardList(ctx context.Context, boardID, listID string, body any, tenant *string) (*Response, error) {
+	return c.Do(ctx, "PATCH", "/mission/boards/"+boardID+"/lists/"+listID, body, tenant)
+}
+
 // buildParams constructs a url.Values from the given string map (skipping empty values)
 // and appends page/limit when non-zero.
 func buildParams(extras map[string]string, page, limit int) url.Values {

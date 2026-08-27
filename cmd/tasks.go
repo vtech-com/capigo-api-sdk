@@ -138,10 +138,14 @@ OUTPUT
           {
             "id": "7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10",
             "code": "TASK-104", "title": "Fix login bug", "description": "...",
-            "status": "To-Do", "priority": "high", "assignee": {...},
+            "status": "To-Do", "priority": "High", "assignee": {...},
             "owner": {...}, "board_id": "...", "board_list_id": "...",
             "due_date": "...", "parent": null, "has_subtasks": false,
-            "attachments": [...], "created_at": "...", "updated_at": "..."
+            "attachments": [...],
+            "followers": [ { "id": "...", "display_name": "Minh",
+                             "member_code": "NV001" } ],
+            "meta_data": { "url": "https://acme.capigo.app/mission/tasks/TASK-104" },
+            "created_at": "...", "updated_at": "..."
           }
         ],
         "meta": {
@@ -251,10 +255,14 @@ OUTPUT
         "data": {
           "id": "7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10",
           "code": "TASK-104", "title": "Fix login bug", "description": "...",
-          "status": "To-Do", "priority": "high", "assignee": {...},
+          "status": "To-Do", "priority": "High", "assignee": {...},
           "owner": {...}, "board_id": "...", "board_list_id": "...",
           "due_date": "...", "parent": null, "has_subtasks": false,
-          "attachments": [...], "created_at": "...", "updated_at": "..."
+          "attachments": [...],
+          "followers": [ { "id": "...", "display_name": "Minh",
+                           "member_code": "NV001" } ],
+          "meta_data": { "url": "https://acme.capigo.app/mission/tasks/TASK-104" },
+          "created_at": "...", "updated_at": "..."
         },
         "meta": { "tenant": "acme", "tenant_source": "flag" }
       }
@@ -594,6 +602,7 @@ var (
 	taskUpdateBoard       string
 	taskUpdateList        string
 	taskUpdateFollowerIDs []string
+	taskUpdateDueDate     string
 )
 
 var tasksUpdateCmd = &cobra.Command{
@@ -611,7 +620,7 @@ USAGE
                            [--title <text>]
                            [--description <text>] [--status <text>]
                            [--assignee <uuid>] [--board <uuid> --list <uuid>]
-                           [--follower-id <uuid>]...
+                           [--due-date <ts>] [--follower-id <uuid>]...
 
 FLAGS
   <id>
@@ -657,13 +666,20 @@ FLAGS
       Add a follower. Repeatable. Additive and idempotent — this endpoint
       cannot remove a follower.
 
+  --due-date <ts>
+      New due date, RFC3339. An empty string clears it (sends null). Must be
+      today or in the future.
+
+        capigo tasks update <uuid> --due-date "2026-08-31T00:00:00Z"
+
   At least one field flag is required; sending none exits 5.
 
 OUTPUT
   The task as it now stands is at .data, the same shape as tasks get:
 
       {
-        "data": { "id": "...", "code": "TASK-104", "title": "...", ... },
+        "data": { "id": "...", "code": "TASK-104", "title": "...",
+                  "followers": [...], "meta_data": {...}, ... },
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "server_time": "2026-07-09T04:12:33Z" }
       }
@@ -728,6 +744,9 @@ OUTPUT
 		}
 		if len(taskUpdateFollowerIDs) > 0 {
 			body["follower_ids"] = taskUpdateFollowerIDs
+		}
+		if cmd.Flags().Changed("due-date") {
+			body["due_date"] = nullableID(taskUpdateDueDate)
 		}
 
 		if len(body) == 0 {
@@ -826,12 +845,13 @@ OUTPUT
         "data": [
           { "id": "9ab2c744-16fe-4d09-8a52-3ef0b7c61d84",
             "code": "ACMEC-69", "title": "Write the migration",
-            "description": "...", "status": "To-Do", "priority": "high",
+            "description": "...", "status": "To-Do", "priority": "High",
             "assignee": {...}, "owner": {...},
             "board_id": "...", "board_list_id": "...", "due_date": null,
             "parent": { "id": "7c1f2e88-...", "code": "ACMEC-68",
                         "title": "Fix login bug" },
             "has_subtasks": false, "attachments": [],
+            "followers": [...], "meta_data": {...},
             "created_at": "...", "updated_at": "..." }
         ],
         "meta": { "tenant": "acme", "tenant_source": "flag",
@@ -971,7 +991,8 @@ OUTPUT
   tasks get:
 
       {
-        "data": { "id": "...", "code": "TASK-104", "title": "...", ... },
+        "data": { "id": "...", "code": "TASK-104", "title": "...",
+                  "followers": [...], "meta_data": {...}, ... },
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "server_time": "2026-07-09T04:12:33Z" }
       }
@@ -1183,9 +1204,10 @@ OUTPUT
       {
         "data": {
           "parent_task": { "id": "...", "code": "TASK-104", "title": "...",
-                           "has_subtasks": true, ... },
+                           "has_subtasks": true, "followers": [...],
+                           "meta_data": {...}, ... },
           "subtasks": [ { "id": "...", "code": "TASK-105", "title": "Design",
-                          ... } ]
+                          "followers": [...], "meta_data": {...}, ... } ]
         },
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "server_time": "2026-07-09T04:12:33Z" }
@@ -1314,6 +1336,7 @@ func init() {
 	tasksUpdateCmd.Flags().StringVar(&taskUpdateBoard, "board", "", `board UUID; sent together with --list (pass --board "" --list "" to remove from board)`)
 	tasksUpdateCmd.Flags().StringVar(&taskUpdateList, "list", "", "board list UUID; sent together with --board")
 	tasksUpdateCmd.Flags().StringArrayVar(&taskUpdateFollowerIDs, "follower-id", nil, "follower user UUID (repeatable: --follower-id <uuid>); additive — removes are not supported")
+	tasksUpdateCmd.Flags().StringVar(&taskUpdateDueDate, "due-date", "", "due date (RFC3339; empty string clears it)")
 
 	// tasks create flags
 	tasksCreateCmd.Flags().StringVar(&taskCreateTenant, "tenant", "", "tenant code (required)")

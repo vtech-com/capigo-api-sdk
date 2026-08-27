@@ -91,7 +91,7 @@ OUTPUT
             "sku": "AT-001-S", "name": "Áo thun / S",
             "product_id": "7c1f2e88-3a4b-4c5d-9e6f-1a2b3c4d5e6f",
             "manufacturer_code": null, "legacy_code": null,
-            "extra_data": null }
+            "status": "active", "extra_data": null, "media": [] }
         ],
         "meta": {
           "tenant": "acme",
@@ -197,7 +197,9 @@ OUTPUT
           "compare_at_price": null, "currency": "VND", "weight": 180,
           "dimensions": null, "option1": "S", "option2": null, "option3": null,
           "manufacturer_code": null, "legacy_code": null,
+          "status": "active",
           "extra_data": { "seeded_from": "pcms" },
+          "media": [],
           "variant_type": "manual",
           "product": { "id": "7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10",
                        "name": "Áo thun basic", "slug": "ao-thun-basic",

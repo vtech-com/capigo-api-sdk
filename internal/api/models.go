@@ -112,6 +112,57 @@ type CreateTaskWithSubtasksRequest struct {
 	Subtasks   []SubtaskItem              `json:"subtasks"`
 }
 
+// CreateBoardRequest is the body for POST /mission/boards.
+// tenant_code is required and is sent as a body field (not a header).
+type CreateBoardRequest struct {
+	TenantCode  string                `json:"tenant_code"`
+	Name        string                `json:"name"`
+	Description *string               `json:"description,omitempty"`
+	IsPublic    *bool                 `json:"is_public,omitempty"`
+	Lists       []CreateBoardListItem `json:"lists,omitempty"`
+}
+
+// CreateBoardListItem is one list to create under a new board. Only Name is
+// required; Limit is an optional WIP limit.
+type CreateBoardListItem struct {
+	Name  string `json:"name"`
+	Limit *int   `json:"limit,omitempty"`
+}
+
+// UpdateBoardRequest is the body for PATCH /mission/boards/{id}.
+// tenant_code is required; every other field is optional and sent only when set.
+type UpdateBoardRequest struct {
+	TenantCode  string                `json:"tenant_code"`
+	Name        *string               `json:"name,omitempty"`
+	Description *string               `json:"description,omitempty"`
+	IsPublic    *bool                 `json:"is_public,omitempty"`
+	Lists       []UpdateBoardListItem `json:"lists,omitempty"`
+}
+
+// UpdateBoardListItem is one list operation inside an update-board request.
+// ID set → update that list; ID nil → create a new list.
+type UpdateBoardListItem struct {
+	ID         *string `json:"id,omitempty"`
+	Name       *string `json:"name,omitempty"`
+	Limit      *int    `json:"limit,omitempty"`
+	IsArchived *bool   `json:"is_archived,omitempty"`
+}
+
+// CreateBoardListRequest is the body for POST /mission/boards/{id}/lists.
+type CreateBoardListRequest struct {
+	TenantCode string `json:"tenant_code"`
+	Name       string `json:"name"`
+	Limit      *int   `json:"limit,omitempty"`
+}
+
+// UpdateBoardListRequest is the body for PATCH /mission/boards/{id}/lists/{listId}.
+type UpdateBoardListRequest struct {
+	TenantCode string  `json:"tenant_code"`
+	Name       *string `json:"name,omitempty"`
+	Limit      *int    `json:"limit,omitempty"`
+	IsArchived *bool   `json:"is_archived,omitempty"`
+}
+
 // ProductVariantDimensions holds physical dimensions of a variant.
 type ProductVariantDimensions struct {
 	L *float64 `json:"l"`
@@ -213,6 +264,7 @@ type UpsertVariantItem struct {
 	Option2          *string        `json:"option2,omitempty"`
 	ManufacturerCode *string        `json:"manufacturer_code,omitempty"`
 	LegacyCode       *string        `json:"legacy_code,omitempty"`
+	Status           *string        `json:"status,omitempty"`
 	ExtraData        map[string]any `json:"extra_data,omitempty"`
 }
 
