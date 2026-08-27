@@ -51,10 +51,37 @@ ones for a work-management agent are task update/delete and product get.
 | Priority | Missing action | Notes / status |
 |---|---|---|
 | High | `DELETE /mission/tasks/{id}` (task delete/cancel) | No way to delete/cancel a task via API. |
-| Medium | `POST/PATCH/DELETE /mission/boards` (board create/update/delete) | Boards are **read-only** via the public API. No programmatic board creation. |
-| Medium | Board lists management (the `lists`/columns inside a board) | `tasks create` accepts `board_list_id` but there's no endpoint to list/create board lists via the public API. |
 | Medium | Members: invite, role change, remove | `list` and `get` (UUID) are exposed. Member management (invite/RBAC/positions) exists in product docs but not in public `/api/v1`. |
 | Low (likely intentional) | `DELETE` on brands/categories/product-types/units/products | No resource exposes delete. Probably deliberate for reference data. |
+
+> Board and board-list create/update landed on prod, and are now wrapped — see the
+> "Deliberately unwrapped" section below for what remains out.
+
+## Deliberately unwrapped: the WMS module (23 operations, 2026-08-27)
+
+Prod now publishes a whole warehouse-management surface that the CLI does not wrap. It is
+held in `unimplementedOps` in `cmd/openapi_path_coverage_test.go` with a written reason, not
+silently dropped:
+
+- **Reads (12):** `locations` and `warehouse-transfers` list/get (new), plus the four
+document families the guard already held out — `warehouses`, `inbound-receipts`,
+`outbound-shipments`, `internal-transfers` (list + get each).
+- **Writes (11):** for `inbound-receipts`, `outbound-shipments`, `internal-transfers` and
+`warehouse-transfers` — create, update, plus the `preview`, `validate` and
+`actions/{action}` routes that make up their stateful workflow.
+
+Two reasons it stays unwrapped:
+
+1. **The surface is not settled.** The module was read-only when first assessed; the write
+   path arrived wholesale. Wrapping a moving surface teaches the agent a shape that will
+   change under it.
+2. **The write path is a stateful workflow, not a set of single calls.** `preview` and
+   `validate` feed a create, and documents then move through `actions/{action}`. A CLI that
+   freezes those states as commands is hard to withdraw later.
+
+This is a deliberate deferral, not an oversight. When the module stabilises, it gets a
+**dedicated design pass** — command shapes, output columns, and bundled-skill docs — not a
+fold-in to a spec sync.
 
 ## Addressing resources by human key (code), not UUID — API requirement
 

@@ -28,6 +28,19 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 - **The bundled `capigo-api` skill documents product `notes` and variant `status`**, matching
   the CLI help above.
+- **Synced `api/openapi.json` with prod.** 23 operations the document never declared — the
+  WMS write path plus `locations` and `warehouse-transfers` reads — and 29 new component
+  schemas. Nothing removed; no existing operation changed shape.
+
+### Deliberately not wrapped
+
+- **The WMS module (23 operations).** Prod now publishes the full write path for inbound
+  receipts, outbound shipments, internal transfers and warehouse transfers, on top of the
+  read endpoints the guard already held out. The surface is unsettled and the write path is
+  a stateful workflow (`preview`/`validate` feed a create; documents then move through
+  `actions/{action}`), so it stays in `unimplementedOps` with a reason rather than being
+  wrapped in a hurry. Recorded in `docs/api-coverage-gaps.md`; it gets a dedicated design
+  pass once the module stabilises.
 
 ## [0.24.0] — 2026-08-18
 

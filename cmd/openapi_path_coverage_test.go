@@ -107,18 +107,48 @@ var implementedOps = map[string]string{
 // left without a command on purpose.
 var unimplementedOps = map[string]string{
 
-	// WMS: a new read-only module, addressed by code rather than by id. Held out
-	// deliberately — the API surface is not settled yet, and a CLI that wraps an
-	// unsettled surface teaches its callers a shape that will move under them.
-	// Revisit when the module stabilises.
-	"GET /wms/warehouses":                "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
-	"GET /wms/warehouses/{code}":         "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
-	"GET /wms/inbound-receipts":          "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
-	"GET /wms/inbound-receipts/{code}":   "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
-	"GET /wms/outbound-shipments":        "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
-	"GET /wms/outbound-shipments/{code}": "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
-	"GET /wms/internal-transfers":        "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
-	"GET /wms/internal-transfers/{code}": "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+	// WMS: a module addressed by code rather than by id, and no longer read-only —
+	// prod now publishes the full write path (create, update, preview, validate, and
+	// state-machine actions) for every document type. Held out deliberately — the API
+	// surface is not settled yet, and a CLI that wraps an unsettled surface teaches
+	// its callers a shape that will move under them. Revisit when the module stabilises.
+	"GET /wms/warehouses":                 "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+	"GET /wms/warehouses/{code}":          "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+	"GET /wms/inbound-receipts":           "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+	"GET /wms/inbound-receipts/{code}":    "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+	"GET /wms/outbound-shipments":         "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+	"GET /wms/outbound-shipments/{code}":  "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+	"GET /wms/internal-transfers":         "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+	"GET /wms/internal-transfers/{code}":  "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+	"GET /wms/locations":                  "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+	"GET /wms/locations/{code}":           "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+	"GET /wms/warehouse-transfers":        "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+	"GET /wms/warehouse-transfers/{code}": "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
+
+	// WMS writes. Beyond the stability argument above, these are not single calls but
+	// a stateful workflow — preview and validate feed a create, and the documents then
+	// move through /actions/{action}. Wrapping a workflow whose states are still
+	// moving is how a CLI ends up with commands it cannot later remove. Left for a
+	// dedicated design pass once the module settles, not folded into a spec sync.
+	"POST /wms/inbound-receipts":                            "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
+	"POST /wms/inbound-receipts/preview":                    "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
+	"POST /wms/inbound-receipts/validate":                   "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
+	"PATCH /wms/inbound-receipts/{code}":                    "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
+	"POST /wms/inbound-receipts/{code}/actions/{action}":    "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
+	"POST /wms/outbound-shipments":                          "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
+	"POST /wms/outbound-shipments/preview":                  "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
+	"POST /wms/outbound-shipments/validate":                 "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
+	"PATCH /wms/outbound-shipments/{code}":                  "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
+	"POST /wms/outbound-shipments/{code}/actions/{action}":  "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
+	"POST /wms/internal-transfers":                          "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
+	"POST /wms/internal-transfers/preview":                  "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
+	"POST /wms/internal-transfers/validate":                 "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
+	"PATCH /wms/internal-transfers/{code}":                  "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
+	"POST /wms/warehouse-transfers":                         "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
+	"POST /wms/warehouse-transfers/preview":                 "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
+	"POST /wms/warehouse-transfers/validate":                "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
+	"PATCH /wms/warehouse-transfers/{code}":                 "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
+	"POST /wms/warehouse-transfers/{code}/actions/{action}": "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
 }
 
 // openAPIPathOnlySpec is the minimal subset of OpenAPI 3.0 needed to enumerate
