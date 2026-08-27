@@ -90,7 +90,11 @@ OUTPUT
   results span every tenant this key can reach, and a board does not name its
   own tenant either. Pass --tenant when you need to know where a board lives.
 
-  The lists on a board are not included here; boards get returns them.`,
+  The lists on a board are not included here; boards get returns them.
+
+  Only public boards are listed. A board whose is_public is false is absent
+  from every page, so a board you cannot find here may exist and be private
+  rather than not exist. See boards create --is-public.`,
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
@@ -176,7 +180,9 @@ OUTPUT
 
   With --tenant omitted, meta.tenant and meta.tenant_source are absent.
 
-  Exit 4 when no such board is reachable.`,
+  Exit 4 when no such board is reachable. "Board not found" also covers a
+  board that exists but has is_public false: the API serves public boards
+  only, and does not distinguish the two cases. See boards create --is-public.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -245,6 +251,15 @@ FLAGS
   --is-public
       Make the board public. Omit it and the server defaults to public (true);
       pass --is-public=false to make it private.
+
+      Passing =false is one-way through this CLI. Checked against the API on
+      2026-08-27: with is_public false, boards get, boards update, and both
+      boards lists writes all answer 404 "Board not found" with exit 4. The
+      visibility check runs before the update is applied, so --is-public
+      cannot switch it back on, and no endpoint deletes a board. The board
+      does keep existing, and the web app still shows it to its members — the
+      board becomes unreachable for this CLI, not for people. Leave the flag
+      off unless the user asked for a board no agent should touch again.
 
   --from-json <path|->
       A JSON object for the full request body, where - reads stdin. Use it to
@@ -360,6 +375,10 @@ FLAGS
 
   --is-public
       Set is_public (pass =false to make it private).
+
+      Passing =false is one-way: this same command answers 404 afterwards,
+      because the visibility check runs before the update. See boards create
+      --is-public for what stays reachable and what does not.
 
   --from-json <path|->
       A JSON object for the update body, where - reads stdin. Use it to manage
@@ -488,6 +507,10 @@ FLAGS
       hold at once. Omit it for no cap. This is not pagination, and not the
       --limit of boards list.
 
+      Write-only: no board or list read returns limit, so the value sent
+      cannot be read back or confirmed later. Report it as requested, never
+      as verified.
+
   --from-json <path|->
       A JSON object for the full request body, where - reads stdin. --tenant
       overrides any tenant_code in the file.
@@ -500,6 +523,9 @@ OUTPUT
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "server_time": "2026-08-21T09:00:00Z" }
       }
+
+  That is the whole record the API returns: limit is not echoed back, so the
+  response confirms the list, not the cap.
 
   Read meta.tenant: a write into the wrong tenant looks exactly like a success.`,
 	Args: cobra.ExactArgs(1),
@@ -591,8 +617,17 @@ FLAGS
       New work-in-progress cap. This is not pagination, and not the --limit of
       boards list. Use --from-json with "limit": null to clear it.
 
+      Write-only: no read returns limit, so a change to it cannot be confirmed
+      afterwards, and a call that changed nothing looks like one that did.
+
   --is-archived
       Archive (true) or unarchive (false) the list.
+
+      Archiving hides the list from every read: boards get then omits it from
+      .lists and drops meta.list_count, and no read exposes archived lists.
+      This command still reaches it, so keep the list id — unarchiving needs
+      an id nothing else will give you back. Tasks in the list are neither
+      moved nor deleted; they keep pointing at a list no read reports.
 
   --from-json <path|->
       A JSON object for the update body, where - reads stdin. --tenant overrides
@@ -608,6 +643,10 @@ OUTPUT
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "server_time": "2026-08-21T09:00:00Z" }
       }
+
+  The API returns neither limit nor is_archived, so a --wip-limit or
+  --is-archived call answers with a record identical to the one before it.
+  Exit 0 says the request was accepted; the response cannot say what changed.
 
   Read meta.tenant: a write into the wrong tenant looks exactly like a success.`,
 	Args: cobra.ExactArgs(2),

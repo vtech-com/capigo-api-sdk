@@ -57,18 +57,36 @@ ones for a work-management agent are task update/delete and product get.
 > Board and board-list create/update landed on prod, and are now wrapped — see the
 > "Deliberately unwrapped" section below for what remains out.
 
-## Deliberately unwrapped: the WMS module (23 operations, 2026-08-27)
+## API-level gaps — answers the API withholds (boards, verified 2026-08-27)
+
+These are not missing endpoints. The endpoints exist and work; what they return leaves the
+caller unable to check its own write. Measured against prod with a throwaway board, not
+inferred from the spec. The CLI cannot fix any of them — it passes `data` through unchanged,
+which is the point — so each one is an ask on the API. Until they land, the bundled skill and
+the `boards` help pages carry the caveat instead.
+
+| Priority | Gap | Why it matters |
+|---|---|---|
+| High | No read returns a board list's `limit` | `--wip-limit` is write-only. The value can be sent and never read back, so a WIP limit cannot be confirmed, and a call that changed nothing is indistinguishable from one that did. **Ask:** include `limit` in the board-list response and in `lists[]` on `GET /mission/boards/{id}`. |
+| High | Archiving a list makes it unreachable | `GET /mission/boards/{id}` drops archived lists from `.lists` and from `meta.list_count`, and no endpoint lists them. Only a caller that kept the list id can unarchive. **Ask:** an `include_archived` query param, and `is_archived` in the list response. |
+| High | A private board 404s as "Board not found" | `is_public: false` makes the board unreadable and unwritable through `/api/v1`, and the visibility check precedes the update, so the flag cannot be turned back on. With no board delete endpoint, `--is-public=false` is a one-way door for any API caller — and the board cannot be cleaned up either: the web board list is filtered by board membership with no tenant-owner bypass (`findBoardsByUser`), so a board an API key made private is reachable only by that key's own user in the web app, or by a DBA. **Ask:** either let a board owner still read and update their own private board, or distinguish the 404 from a genuinely absent board. |
+
+## Deliberately unwrapped: the WMS module (31 operations, 2026-08-27)
 
 Prod now publishes a whole warehouse-management surface that the CLI does not wrap. It is
 held in `unimplementedOps` in `cmd/openapi_path_coverage_test.go` with a written reason, not
 silently dropped:
 
-- **Reads (12):** `locations` and `warehouse-transfers` list/get (new), plus the four
-document families the guard already held out — `warehouses`, `inbound-receipts`,
+This sync added 23 of them to the document — 4 reads and all 19 writes; the other 8 reads
+were already held out.
+
+- **Reads (12):** `locations` and `warehouse-transfers` list/get (new in this sync), plus the
+four document families the guard already held out — `warehouses`, `inbound-receipts`,
 `outbound-shipments`, `internal-transfers` (list + get each).
-- **Writes (11):** for `inbound-receipts`, `outbound-shipments`, `internal-transfers` and
-`warehouse-transfers` — create, update, plus the `preview`, `validate` and
-`actions/{action}` routes that make up their stateful workflow.
+- **Writes (19):** create, `preview`, `validate` and update for `inbound-receipts`,
+`outbound-shipments`, `internal-transfers` and `warehouse-transfers`, plus the
+`actions/{action}` route on all of them except `internal-transfers`, which the spec does not
+declare one for.
 
 Two reasons it stays unwrapped:
 
@@ -76,8 +94,10 @@ Two reasons it stays unwrapped:
    path arrived wholesale. Wrapping a moving surface teaches the agent a shape that will
    change under it.
 2. **The write path is a stateful workflow, not a set of single calls.** `preview` and
-   `validate` feed a create, and documents then move through `actions/{action}`. A CLI that
-   freezes those states as commands is hard to withdraw later.
+   `validate` feed a create, and documents then move through `actions/{action}` — a route the
+   spec declares for three of the four document families but not for `internal-transfers`,
+   which is itself a sign the surface is still moving. A CLI that freezes those states as
+   commands is hard to withdraw later.
 
 This is a deliberate deferral, not an oversight. When the module stabilises, it gets a
 **dedicated design pass** — command shapes, output columns, and bundled-skill docs — not a
