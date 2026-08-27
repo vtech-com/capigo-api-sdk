@@ -457,7 +457,7 @@ USAGE
 var (
 	boardListsCreateTenant   string
 	boardListsCreateName     string
-	boardListsCreateLimit    int
+	boardListsCreateWIPLimit int
 	boardListsCreateFromJSON string
 )
 
@@ -471,7 +471,7 @@ PURPOSE
 
 USAGE
   capigo boards lists create <board-id> --tenant <code> --name <text>
-                             [--limit <n>] [--from-json <path|->]
+                             [--wip-limit <n>] [--from-json <path|->]
 
 FLAGS
   <board-id>
@@ -483,8 +483,10 @@ FLAGS
   --name <text>
       List name, at most 200 characters. Required unless --from-json is used.
 
-  --limit <n>
-      WIP limit for the list. Omit it for no limit.
+  --wip-limit <n>
+      Work-in-progress cap for the list — how many tasks the list is meant to
+      hold at once. Omit it for no cap. This is not pagination, and not the
+      --limit of boards list.
 
   --from-json <path|->
       A JSON object for the full request body, where - reads stdin. --tenant
@@ -531,8 +533,8 @@ OUTPUT
 				failValidation("--name is required (or use --from-json)")
 			}
 			req := api.CreateBoardListRequest{TenantCode: *tenant, Name: boardListsCreateName}
-			if cmd.Flags().Changed("limit") {
-				req.Limit = &boardListsCreateLimit
+			if cmd.Flags().Changed("wip-limit") {
+				req.Limit = &boardListsCreateWIPLimit
 			}
 			body = req
 		}
@@ -554,7 +556,7 @@ OUTPUT
 var (
 	boardListsUpdateTenant     string
 	boardListsUpdateName       string
-	boardListsUpdateLimit      int
+	boardListsUpdateWIPLimit   int
 	boardListsUpdateIsArchived bool
 	boardListsUpdateFromJSON   string
 )
@@ -569,7 +571,7 @@ PURPOSE
 
 USAGE
   capigo boards lists update <board-id> <list-id> --tenant <code>
-                              [--name <text>] [--limit <n>]
+                              [--name <text>] [--wip-limit <n>]
                               [--is-archived[=false]] [--from-json <path|->]
 
 FLAGS
@@ -585,8 +587,9 @@ FLAGS
   --name <text>
       New list name.
 
-  --limit <n>
-      New WIP limit. Use --from-json with "limit": null to clear it.
+  --wip-limit <n>
+      New work-in-progress cap. This is not pagination, and not the --limit of
+      boards list. Use --from-json with "limit": null to clear it.
 
   --is-archived
       Archive (true) or unarchive (false) the list.
@@ -595,7 +598,7 @@ FLAGS
       A JSON object for the update body, where - reads stdin. --tenant overrides
       any tenant_code in the file.
 
-  At least one of --name, --limit, --is-archived, --from-json is required.
+  At least one of --name, --wip-limit, --is-archived, --from-json is required.
 
 OUTPUT
   The list as it now stands is at .data:
@@ -638,14 +641,14 @@ OUTPUT
 			if cmd.Flags().Changed("name") {
 				req.Name = &boardListsUpdateName
 			}
-			if cmd.Flags().Changed("limit") {
-				req.Limit = &boardListsUpdateLimit
+			if cmd.Flags().Changed("wip-limit") {
+				req.Limit = &boardListsUpdateWIPLimit
 			}
 			if cmd.Flags().Changed("is-archived") {
 				req.IsArchived = &boardListsUpdateIsArchived
 			}
 			if req.Name == nil && req.Limit == nil && req.IsArchived == nil {
-				failValidation("at least one of --name, --limit, --is-archived is required (or use --from-json)")
+				failValidation("at least one of --name, --wip-limit, --is-archived is required (or use --from-json)")
 			}
 			body = req
 		}
@@ -686,12 +689,12 @@ func init() {
 
 	boardListsCreateCmd.Flags().StringVar(&boardListsCreateTenant, "tenant", "", "tenant code (required)")
 	boardListsCreateCmd.Flags().StringVar(&boardListsCreateName, "name", "", "list name (required unless --from-json is used)")
-	boardListsCreateCmd.Flags().IntVar(&boardListsCreateLimit, "limit", 0, "WIP limit")
+	boardListsCreateCmd.Flags().IntVar(&boardListsCreateWIPLimit, "wip-limit", 0, "work-in-progress cap for the list (not pagination)")
 	boardListsCreateCmd.Flags().StringVar(&boardListsCreateFromJSON, "from-json", "", "path to a JSON object with the full request body (use - for stdin)")
 
 	boardListsUpdateCmd.Flags().StringVar(&boardListsUpdateTenant, "tenant", "", "tenant code (required)")
 	boardListsUpdateCmd.Flags().StringVar(&boardListsUpdateName, "name", "", "new list name")
-	boardListsUpdateCmd.Flags().IntVar(&boardListsUpdateLimit, "limit", 0, "new WIP limit")
+	boardListsUpdateCmd.Flags().IntVar(&boardListsUpdateWIPLimit, "wip-limit", 0, "new work-in-progress cap (not pagination)")
 	boardListsUpdateCmd.Flags().BoolVar(&boardListsUpdateIsArchived, "is-archived", false, "archive (true) or unarchive (false)")
 	boardListsUpdateCmd.Flags().StringVar(&boardListsUpdateFromJSON, "from-json", "", "path to a JSON object with the update body (use - for stdin)")
 
