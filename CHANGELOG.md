@@ -10,6 +10,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.25.0] — 2026-08-27
+
 ### Added
 
 - **Command help now names the response fields the API returns.** `members list`/`get`
