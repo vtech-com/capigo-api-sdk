@@ -28,6 +28,11 @@ jobs:
       - name: Install GoReleaser
         uses: goreleaser/goreleaser-action@v7
         with:
+          # Pinned to a minor line: patch releases are picked up automatically,
+          # a minor bump is not. GoReleaser's cask template is what produces
+          # Casks/capigo.rb in the tap, so an unreviewed minor bump silently
+          # changes the published cask.
+          version: "~> v2.18"
           install-only: true
 
       - name: Run GoReleaser
