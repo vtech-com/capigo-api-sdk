@@ -10,6 +10,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **The release workflow pins GoReleaser to the `2.18` line** (`version: "~> v2.18"`) instead of
+  tracking whatever the latest `v2` is. GoReleaser's cask template is what generates
+  `Casks/capigo.rb` in `vtech-com/homebrew-tap`, so an unreviewed minor bump changes the
+  published cask without anyone approving it. Patch releases still flow in automatically.
+
 ## [0.25.0] — 2026-08-27
 
 ### Added
