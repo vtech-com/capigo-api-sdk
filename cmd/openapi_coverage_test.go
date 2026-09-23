@@ -53,7 +53,8 @@ var intentionallyUnexposed = map[string]map[string]string{
 	//   "/some/path": {"param_name": "reason why it is not exposed"},
 }
 
-// commandPathMapping maps each list command variable to its OpenAPI path.
+// commandPathMapping maps each list command — plus the task detail read, whose
+// query parameters the CLI also implements — to its OpenAPI path.
 // The path must match exactly what appears as a key in openapi.json "paths".
 var commandPathMapping = []struct {
 	name string
@@ -63,6 +64,12 @@ var commandPathMapping = []struct {
 	{name: "boardsListCmd", cmd: boardsListCmd, path: "/mission/boards"},
 	{name: "membersListCmd", cmd: membersListCmd, path: "/members"},
 	{name: "tasksListCmd", cmd: tasksListCmd, path: "/mission/tasks"},
+	// Both addresses of `tasks get` share one command, so both paths are
+	// checked against its flags: a query parameter the CLI stops exposing on
+	// either address fails here rather than silently leaving the spec copy
+	// advertising a flag that no longer exists.
+	{name: "tasksGetCmd", cmd: tasksGetCmd, path: "/mission/tasks/{id}"},
+	{name: "tasksGetCodeCmd", cmd: tasksGetCmd, path: "/mission/tasks/code/{code}"},
 	{name: "productsListCmd", cmd: productsListCmd, path: "/pcms/products"},
 	{name: "brandsListCmd", cmd: brandsListCmd, path: "/pcms/brands"},
 	{name: "categoriesListCmd", cmd: categoriesListCmd, path: "/pcms/categories"},
@@ -125,6 +132,8 @@ func TestOpenAPICoverage(t *testing.T) {
 				flagLookup = func(n string) bool { return membersListCmd.Flags().Lookup(n) != nil }
 			case "tasksListCmd":
 				flagLookup = func(n string) bool { return tasksListCmd.Flags().Lookup(n) != nil }
+			case "tasksGetCmd", "tasksGetCodeCmd":
+				flagLookup = func(n string) bool { return tasksGetCmd.Flags().Lookup(n) != nil }
 			case "productsListCmd":
 				flagLookup = func(n string) bool { return productsListCmd.Flags().Lookup(n) != nil }
 			case "brandsListCmd":

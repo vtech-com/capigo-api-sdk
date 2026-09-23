@@ -10,6 +10,33 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **`tasks list --include-archived` and `tasks get --include-archived` find a task that was archived.**
+  Archived tasks are left out of every task read by default — on the boards, in `tasks list`, and on both
+  detail addresses — so a task that exists can be missing from a list, and `tasks get` exits 4 for it. Both
+  flags send `include_archived=true` on that one request: `tasks list` adds it to the query string, and
+  `tasks get` appends it to whichever address you used, by id or by code. A code someone quoted still finds
+  the task after it was archived, which is the case these flags exist for. The flag is a read and only a
+  read: `tasks update` on an archived task still exits 4, and bringing one back is still `tasks unarchive`.
+
+- **`tasks unarchive` restores an archived task.** `capigo tasks unarchive (<id> | --code <code>)` posts
+  to `POST /mission/tasks/{id}/actions/unarchive` with no body. The same three actors as archive may call
+  it — the task's owner, its assignee, or a tenant owner of the task's tenant — and unlike archive a
+  subtask's own assignee is enough, because restore does not ask the parent. The answer is the task itself
+  (a restored task is readable again), an archived list holding it comes back with it, and restoring a task
+  that is already live writes nothing and records no event.
+
+- **`tasks archive` retires a task — and its whole family.** `capigo tasks archive (<id> | --code <code>)`
+  posts to `POST /mission/tasks/{id}/actions/archive` with no body: the task is named by its address and
+  the API records no reason. The task's owner, its assignee, or a tenant owner of the task's tenant may
+  call it — a plain member, and a member of the task's board, are refused (403, exit 3). Archiving is a
+  family operation in the database: naming a parent archives its subtasks with it, and naming a subtask
+  archives its parent and siblings, while only the task you name records the `task:archived` event. There
+  is no undo in this command — restore with `tasks unarchive` — and an archived task is outside every
+  default read, so a second call exits 4 (not found); do not retry a 4. Read one back deliberately with
+  `tasks get --include-archived`, or list them with `tasks list --include-archived`.
+
 ### Fixed
 
 - **`capigo help exit-codes` now covers exit-8 state conflicts, and a refused claim says what to do

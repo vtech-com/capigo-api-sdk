@@ -49,6 +49,7 @@ var (
 	taskListParentTaskID  string
 	taskListPage          int
 	taskListLimit         int
+	taskListArchive       bool
 )
 
 var tasksListCmd = &cobra.Command{
@@ -69,6 +70,7 @@ USAGE
                      [--board-list-id <uuid>] [--due-after <date>]
                      [--due-before <date>] [--created-after <ts>]
                      [--created-before <ts>] [--parent-task-id <uuid>|null]
+                     [--include-archived]
                      [--page <n>] [--limit <n>]
 
 FLAGS
@@ -119,6 +121,14 @@ FLAGS
       other value exits 5.
 
         capigo tasks list --tenant acme --parent-task-id null
+
+  --include-archived
+      Also list archived tasks. They are left out by default — here, on the
+      boards, and on every other task read — so a list that omits a task you
+      know exists is usually this. Archiving a parent archives its subtasks
+      with it: a family disappears together and returns together.
+
+        capigo tasks list --tenant acme --include-archived
 
   --page <n>
       Page to fetch. Pages start at 1. The default, 0, sends no page
@@ -198,6 +208,7 @@ OUTPUT
 			parentTaskID:  taskListParentTaskID,
 			page:          taskListPage,
 			limit:         taskListLimit,
+			archive:       taskListArchive,
 		})
 
 		resp, err := client.Do(ctx, "GET", path, nil, tenant)
@@ -215,8 +226,9 @@ OUTPUT
 }
 
 var (
-	taskGetTenant string
-	taskGetCode   string
+	taskGetTenant  string
+	taskGetCode    string
+	taskGetArchive bool
 )
 
 var tasksGetCmd = &cobra.Command{
@@ -230,7 +242,7 @@ PURPOSE
   activity entries are written asynchronously and can lag.
 
 USAGE
-  capigo tasks get (<id> | --code <code>) [--tenant <code>]
+  capigo tasks get (<id> | --code <code>) [--tenant <code>] [--include-archived]
 
 FLAGS
   <id>
@@ -250,6 +262,14 @@ FLAGS
       the task regardless of tenant. Required with --code.
 
         capigo tasks get 7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10 --tenant acme
+
+  --include-archived
+      Read a task that has been archived. Without it an archived task answers
+      404, exactly as a task that never existed does — that is the API's
+      default on every task read. The code you were given still finds it: this
+      is the flag that says you mean the retired row.
+
+        capigo tasks get --code ACMEC-68 --tenant acme --include-archived
 
 OUTPUT
   The task is at .data:
@@ -301,7 +321,7 @@ OUTPUT
 		tenant := resolveTenant(taskGetTenant, profile)
 		requireOneTaskAddress(id, taskGetCode, tenant)
 
-		resp, err := client.Do(ctx, "GET", taskPath(id, taskGetCode), nil, tenant)
+		resp, err := client.Do(ctx, "GET", includeArchivedPath(taskPath(id, taskGetCode), taskGetArchive), nil, tenant)
 		if err != nil {
 			return handleErr(err)
 		}
@@ -1088,6 +1108,189 @@ OUTPUT
 	},
 }
 
+// tasks archive flags
+var (
+	taskArchiveTenant string
+	taskArchiveCode   string
+)
+
+var tasksArchiveCmd = &cobra.Command{
+	Use:   "archive [<id>]",
+	Short: "Retire a task (and its whole family)",
+	Long: `Archive a task: it leaves every task read, and only the GUI can bring it back.
+
+PURPOSE
+  Retire a task that is finished, duplicated or wrong. This is the command behind
+  the task screen's archive control. The task's owner, its assignee, or a tenant
+  owner of the task's tenant may call it — a plain member, and a member of the
+  task's board, are refused with 403. A subtask is stricter still: archiving one
+  asks the parent's owner or assignee, so a subtask's own assignee alone cannot
+  retire it.
+
+  Archiving is a family operation. Naming a parent archives its subtasks with it,
+  and naming a subtask archives its parent and siblings. Only the task you name
+  records a task:archived event; the rows the cascade carries go quietly. Nothing
+  else about them changes: title, owner, assignee, status, followers and board
+  placement stay as they were.
+
+  There is no undo here. Unarchive is a GUI action, and an archived task is
+  outside every read, so a second call exits 4 (not found) like any other read of
+  that task — do not treat the 4 as a transient failure and retry.
+
+USAGE
+  capigo tasks archive (<id> | --code <code>) [--tenant <code>]
+
+FLAGS
+  <id>
+      Task UUID. Positional. Give this or --code, never both.
+
+  --code <code>
+      Address the task by its code — the key a person quotes, like ACMEC-68.
+      A code is unique within a tenant, not across them, so --code needs a
+      tenant: pass --tenant, or set a default.
+
+  --tenant <code>
+      Tenant to scope the lookup to. Optional with an id; required with
+      --code.
+
+OUTPUT
+  The archived task's id, because the task itself is outside every read from now
+  on:
+
+      { "data": { "id": "…" },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-09-23T04:12:33Z" } }`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		var id string
+		if len(args) == 1 {
+			id = args[0]
+		}
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(taskArchiveTenant, profile)
+		requireOneTaskAddress(id, taskArchiveCode, tenant)
+
+		// taskPath already escapes the address and picks the code route. No body:
+		// the API archives the task the address names.
+		resp, err := client.Do(ctx, "POST", taskPath(id, taskArchiveCode)+"/actions/archive", nil, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope api.RawEnvelope
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		meta := itemMeta(tenant, taskArchiveTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
+	},
+}
+
+// tasks unarchive flags
+var (
+	taskUnarchiveTenant string
+	taskUnarchiveCode   string
+)
+
+var tasksUnarchiveCmd = &cobra.Command{
+	Use:   "unarchive [<id>]",
+	Short: "Restore an archived task",
+	Long: `Restore an archived task: it comes back into every task read.
+
+PURPOSE
+  Bring back a task that was archived — by you, by a colleague, or through the API.
+  This is the command behind the task screen's restore control, and the same three
+  actors may call it as may archive: the task's owner, its assignee, or a tenant
+  owner of the task's tenant. Anyone else is refused with 403.
+
+  Restoring is easier than archiving in one way: a subtask's own assignee may
+  restore it, because restore does not ask the parent — archiving does. Naming any
+  member of an archived family restores the whole family, and an archived list
+  holding the task comes back with it.
+
+  A task that is already live is not an error: nothing is written, no event is
+  recorded, and the answer is the task as it stands.
+
+USAGE
+  capigo tasks unarchive (<id> | --code <code>) [--tenant <code>]
+
+FLAGS
+  <id>
+      Task UUID. Positional. Give this or --code, never both.
+
+  --code <code>
+      Address the task by its code — the key a person quotes, like ACMEC-68.
+      A code is unique within a tenant, not across them, so --code needs a
+      tenant: pass --tenant, or set a default.
+
+  --tenant <code>
+      Tenant to scope the lookup to. Optional with an id; required with
+      --code.
+
+OUTPUT
+  The task as it now stands, in the same shape as tasks get — a restored task is
+  readable again:
+
+      { "data": { "id": "…", "code": "ACME-42", "title": "…",
+                  "status": "To-Do",
+                  "assignee": { "id": "…", "display_name": "Minh" },
+                  "owner": { "id": "…", "display_name": "Lan" }, ... },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-09-23T04:12:33Z" } }`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		var id string
+		if len(args) == 1 {
+			id = args[0]
+		}
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(taskUnarchiveTenant, profile)
+		requireOneTaskAddress(id, taskUnarchiveCode, tenant)
+
+		// taskPath already escapes the address and picks the code route. No body:
+		// the API restores the task the address names.
+		resp, err := client.Do(ctx, "POST", taskPath(id, taskUnarchiveCode)+"/actions/unarchive", nil, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope api.RawEnvelope
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		meta := itemMeta(tenant, taskUnarchiveTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
+	},
+}
+
 // tasks create flags
 var (
 	taskCreateTenant         string
@@ -1652,10 +1855,12 @@ func init() {
 	tasksListCmd.Flags().StringVar(&taskListParentTaskID, "parent-task-id", "", "filter by parent task ID (use 'null' for top-level only)")
 	tasksListCmd.Flags().IntVar(&taskListPage, "page", 0, "page number")
 	tasksListCmd.Flags().IntVar(&taskListLimit, "limit", 0, "items per page")
+	tasksListCmd.Flags().BoolVar(&taskListArchive, "include-archived", false, "also list archived tasks")
 
 	// tasks get flags
 	tasksGetCmd.Flags().StringVar(&taskGetTenant, "tenant", "", "scope to this tenant code")
 	tasksGetCmd.Flags().StringVar(&taskGetCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
+	tasksGetCmd.Flags().BoolVar(&taskGetArchive, "include-archived", false, "read an archived task (404 answers without it)")
 
 	// tasks comments flags
 	tasksCommentsCmd.Flags().StringVar(&taskCommentsTenant, "tenant", "", "scope to this tenant code")
@@ -1699,6 +1904,14 @@ func init() {
 	tasksClaimCmd.Flags().StringVar(&taskClaimTenant, "tenant", "", "scope to this tenant code")
 	tasksClaimCmd.Flags().StringVar(&taskClaimCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
 
+	// tasks archive flags
+	tasksArchiveCmd.Flags().StringVar(&taskArchiveTenant, "tenant", "", "scope to this tenant code")
+	tasksArchiveCmd.Flags().StringVar(&taskArchiveCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
+
+	// tasks unarchive flags
+	tasksUnarchiveCmd.Flags().StringVar(&taskUnarchiveTenant, "tenant", "", "scope to this tenant code")
+	tasksUnarchiveCmd.Flags().StringVar(&taskUnarchiveCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
+
 	// tasks create flags
 	tasksCreateCmd.Flags().StringVar(&taskCreateTenant, "tenant", "", "tenant code (required)")
 	tasksCreateCmd.Flags().StringVar(&taskCreateTitle, "title", "", "task title (required)")
@@ -1731,7 +1944,7 @@ func init() {
 	// tasksAttachmentsCmd is defined in task_attachments.go, whose init() runs
 	// first — it is registered here so it lands after the verbs, not above them.
 	tasksSubtasksCmd.AddCommand(tasksSubtasksListCmd, tasksSubtasksCreateCmd)
-	taskCmd.AddCommand(tasksListCmd, tasksGetCmd, tasksCreateCmd, tasksUpdateCmd, tasksAssignAgentCmd, tasksTransferOwnershipCmd, tasksClaimCmd, tasksCommentsCmd, tasksSubtasksCmd, tasksAttachmentsCmd)
+	taskCmd.AddCommand(tasksListCmd, tasksGetCmd, tasksCreateCmd, tasksUpdateCmd, tasksAssignAgentCmd, tasksTransferOwnershipCmd, tasksClaimCmd, tasksArchiveCmd, tasksUnarchiveCmd, tasksCommentsCmd, tasksSubtasksCmd, tasksAttachmentsCmd)
 	rootCmd.AddCommand(taskCmd)
 }
 
@@ -1786,6 +1999,10 @@ type taskListFilters struct {
 	parentTaskID  string
 	page          int
 	limit         int
+	// archive maps to the API's include_archived=true. Omitted when false, so
+	// the server's own default — archived tasks left out — is what an unflagged
+	// call gets.
+	archive bool
 }
 
 // tasksListPath builds the request path + query string for `tasks list`.
@@ -1827,6 +2044,9 @@ func tasksListPath(f taskListFilters) string {
 	}
 	if f.parentTaskID != "" {
 		params.Set("parent_task_id", f.parentTaskID)
+	}
+	if f.archive {
+		params.Set("include_archived", "true")
 	}
 	if f.page > 0 {
 		params.Set("page", strconv.Itoa(f.page))

@@ -22,6 +22,18 @@ func taskPath(id, code string) string {
 	return "/mission/tasks/" + url.PathEscape(id)
 }
 
+// includeArchivedPath adds `include_archived=true` to a task read path.
+//
+// Only reads take it, and only as a deliberate act: an archived task is
+// invisible to every default answer, so the caller who holds a code and no task
+// says so here rather than reading the 404 as "never existed".
+func includeArchivedPath(path string, includeArchived bool) string {
+	if !includeArchived {
+		return path
+	}
+	return path + "?include_archived=true"
+}
+
 // requireOneTaskAddress exits 5 unless exactly one address was given, and
 // unless a code came with a tenant.
 //

@@ -4360,7 +4360,7 @@
         "tags": [
           "Tasks"
         ],
-        "description": "Search and filter tasks.",
+        "description": "Search and filter tasks. Archived tasks are excluded unless `include_archived=true`.",
         "parameters": [
           {
             "name": "X-Tenant-Code",
@@ -4421,6 +4421,16 @@
                 "summary": "Return only subtasks of the given parent"
               }
             }
+          },
+          {
+            "name": "include_archived",
+            "in": "query",
+            "required": false,
+            "description": "Include archived tasks in the answer. Omitted or `false` leaves them out — the default on every task read. `true` widens this one request, and archived rows come back alongside live ones. Any other value returns HTTP 400 with `INVALID_INCLUDE_ARCHIVED`.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
           }
         ],
         "responses": {
@@ -4446,7 +4456,7 @@
             }
           },
           "400": {
-            "description": "Invalid query parameter (e.g. malformed parent_task_id)",
+            "description": "Invalid query parameter (e.g. malformed `parent_task_id` or `include_archived`)",
             "content": {
               "application/json": {
                 "schema": {
@@ -4459,6 +4469,15 @@
                       "error": {
                         "code": "INVALID_PARENT_TASK_ID",
                         "message": "invalid parent_task_id filter"
+                      }
+                    }
+                  },
+                  "invalidIncludeArchived": {
+                    "summary": "Malformed include_archived value",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_INCLUDE_ARCHIVED",
+                        "message": "include_archived must be true or false"
                       }
                     }
                   }
@@ -4568,6 +4587,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "include_archived",
+            "in": "query",
+            "required": false,
+            "description": "Read an archived task. Omitted or `false` keeps today's answer — 404 for an archived task. `true` resolves the archived row as well, through the same tenant gate. Any other value returns HTTP 400 with `INVALID_INCLUDE_ARCHIVED`.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
           }
         ],
         "responses": {
@@ -4586,11 +4615,32 @@
               }
             }
           },
+          "400": {
+            "description": "Malformed `include_archived` value",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "invalidIncludeArchived": {
+                    "summary": "Malformed include_archived value",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_INCLUDE_ARCHIVED",
+                        "message": "include_archived must be true or false"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Task not found"
           }
         },
-        "description": "Retrieve a single task by UUID."
+        "description": "Retrieve a single task by UUID. An archived task answers 404 unless the request carries `include_archived=true`."
       },
       "patch": {
         "summary": "Update Task",
@@ -4810,6 +4860,148 @@
           },
           "409": {
             "description": "TASK_NOT_TRANSFERABLE: another ownership change won the race, or the database refused the transfer — re-read the task and retry"
+          }
+        }
+      }
+    },
+    "/mission/tasks/{id}/actions/archive": {
+      "post": {
+        "summary": "Archive Task",
+        "description": "Retire a task: set `archived_at` and take the task out of every task read. The caller must be the task's **owner**, its **assignee**, or a **tenant owner of the task's tenant** — board membership does not qualify, and a subtask is stricter: archiving it asks the *parent's* owner or assignee, so a subtask's own assignee is refused. The body carries no fields: the task is named by its address and the archive records no reason. The answer names the task by id rather than returning the task, because every task read answers `404` once the archive has run — a repeat answers `404` too, which is also why no `Idempotency-Key` is accepted: a replay is a read-side fact, not a duplicate write.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Task UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The task was archived; `data.id` names it",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A body was sent (archive takes no fields), or the body is not valid JSON"
+          },
+          "403": {
+            "description": "The caller is not the task's owner, its assignee, or a tenant owner of its tenant — for a subtask, not the parent's owner or assignee"
+          },
+          "404": {
+            "description": "Task not found — including a task that is already archived, and another tenant's task"
+          }
+        }
+      }
+    },
+    "/mission/tasks/{id}/actions/unarchive": {
+      "post": {
+        "summary": "Unarchive Task",
+        "description": "Restore an archived task: clear `archived_at` and bring it back into every task read. The caller must be the task's **owner**, its **assignee**, or a **tenant owner of the task's tenant** — board membership does not qualify. Unlike archiving, restoring a subtask does *not* ask the parent: a subtask's own assignee may restore it. The body carries no fields: the task is named by its address and the restore records no reason. Restoring a task that is already live is a successful no-op — the answer is that task and nothing is written. The answer is the task in the `GET /mission/tasks/{id}` shape, and one `task:unarchived` event is recorded unless the task was already live. The database's own triggers ride along: an archived list holding the task is unarchived with it, and a subtask deleted on its own has `is_deleted` cleared.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Task UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The task, restored",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A body was sent (unarchive takes no fields), or the body is not valid JSON"
+          },
+          "403": {
+            "description": "The caller is not the task's owner, its assignee, or a tenant owner of its tenant"
+          },
+          "404": {
+            "description": "Task not found — including another tenant's task, a deactivated caller, and a task that stopped being archived before the write"
+          },
+          "409": {
+            "description": "TASK_NOT_RESTORABLE: another call restored the task first, or the database refused the change — re-read the task"
           }
         }
       }
@@ -11316,6 +11508,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "include_archived",
+            "in": "query",
+            "required": false,
+            "description": "Read an archived task by its code. Omitted or `false` keeps today's answer — 404 for an archived task. `true` resolves the archived row as well, through the same tenant gate. Any other value returns HTTP 400 with `INVALID_INCLUDE_ARCHIVED`.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
           }
         ],
         "responses": {
@@ -11334,11 +11536,32 @@
               }
             }
           },
+          "400": {
+            "description": "Malformed `include_archived` value",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "invalidIncludeArchived": {
+                    "summary": "Malformed include_archived value",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_INCLUDE_ARCHIVED",
+                        "message": "include_archived must be true or false"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Task not found"
           }
         },
-        "description": "Retrieve a single task by code."
+        "description": "Retrieve a single task by code. An archived task answers 404 unless the request carries `include_archived=true`."
       },
       "patch": {
         "summary": "Update Task (by Code)",
@@ -11976,6 +12199,146 @@
           },
           "409": {
             "description": "TASK_NOT_TRANSFERABLE: another ownership change won the race, or the database refused the transfer — re-read the task and retry"
+          }
+        }
+      }
+    },
+    "/mission/tasks/code/{code}/actions/archive": {
+      "post": {
+        "summary": "Archive Task (by Code)",
+        "description": "Same contract as `POST /mission/tasks/{id}/actions/archive`, with the task addressed by its natural code instead of its UUID. The code is resolved inside the tenant first, so an unknown or foreign code answers `404` before anything else runs.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task code (e.g. ACME-42), resolved within the tenant"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The task was archived; `data.id` names it",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A body was sent (archive takes no fields), the body is not valid JSON, or X-Tenant-Code is missing (a code lookup needs the tenant)"
+          },
+          "403": {
+            "description": "The caller is not the task's owner, its assignee, or a tenant owner of its tenant — for a subtask, not the parent's owner or assignee"
+          },
+          "404": {
+            "description": "Task not found — including a task that is already archived, and another tenant's task"
+          }
+        }
+      }
+    },
+    "/mission/tasks/code/{code}/actions/unarchive": {
+      "post": {
+        "summary": "Unarchive Task (by Code)",
+        "description": "Same contract as `POST /mission/tasks/{id}/actions/unarchive`, with the task addressed by its natural code instead of its UUID. The code is resolved inside the tenant first, and archived rows are resolvable here — unlike a read, which answers `404` for them.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task code (e.g. ACME-42), resolved within the tenant"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The task, restored",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A body was sent (unarchive takes no fields), the body is not valid JSON, or X-Tenant-Code is missing (a code lookup needs the tenant)"
+          },
+          "403": {
+            "description": "The caller is not the task's owner, its assignee, or a tenant owner of its tenant"
+          },
+          "404": {
+            "description": "Task not found — including another tenant's task, a deactivated caller, and a task that stopped being archived before the write"
+          },
+          "409": {
+            "description": "TASK_NOT_RESTORABLE: another call restored the task first, or the database refused the change — re-read the task"
           }
         }
       }

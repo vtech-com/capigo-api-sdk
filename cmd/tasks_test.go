@@ -100,7 +100,7 @@ func TestTaskPathEscapesItsAddress(t *testing.T) {
 // TestTaskActionPath covers the action routes: they hang off whatever address
 // taskPath produced, so an id and a code both reach the same action.
 func TestTaskActionPath(t *testing.T) {
-	for _, action := range []string{"assign-agent", "transfer-ownership", "claim"} {
+	for _, action := range []string{"assign-agent", "transfer-ownership", "claim", "archive", "unarchive"} {
 		for _, tc := range []struct{ id, code, base string }{
 			{id: "task-1", base: "/mission/tasks/task-1"},
 			{code: "ACME-1", base: "/mission/tasks/code/ACME-1"},
@@ -139,6 +139,7 @@ func TestTasksListPath(t *testing.T) {
 		parentTaskID:  "p1",
 		page:          2,
 		limit:         30,
+		archive:       true,
 	})
 	base, query, found := strings.Cut(got, "?")
 	if !found || base != "/mission/tasks" {
@@ -161,6 +162,7 @@ func TestTasksListPath(t *testing.T) {
 		"filters[created_at][$gte]":   "2026-06-01T00:00:00Z",
 		"filters[created_at][$lte]":   "2026-06-30T00:00:00Z",
 		"parent_task_id":              "p1",
+		"include_archived":            "true",
 		"page":                        "2",
 		"limit":                       "30",
 	}
@@ -174,5 +176,38 @@ func TestTasksListPath(t *testing.T) {
 	if got := tasksListPath(taskListFilters{status: "Doing"}); strings.Contains(got, "priority") ||
 		strings.Contains(got, "assignee_id") || strings.Contains(got, "page=") {
 		t.Errorf("zero/empty flags should be omitted, got %q", got)
+	}
+
+	// --include-archived is opt-in: unflagged, the call must not ask for
+	// archived rows at all, because "false" and "absent" are the same answer to
+	// the server and a stray parameter would hide that.
+	if got := tasksListPath(taskListFilters{status: "Doing", archive: false}); strings.Contains(got, "include_archived") {
+		t.Errorf("archive=false must send no include_archived, got %q", got)
+	}
+	if got := tasksListPath(taskListFilters{archive: true}); got != "/mission/tasks?include_archived=true" {
+		t.Errorf("archive=true path = %q", got)
+	}
+}
+
+// TestIncludeArchivedPath covers the read flag: it appends the parameter only
+// when asked, and appends nothing at all otherwise — the bare path is what every
+// unflagged read has always sent.
+func TestIncludeArchivedPath(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		id, code string
+		archived bool
+		want     string
+	}{
+		{name: "id, unflagged", id: "task-1", want: "/mission/tasks/task-1"},
+		{name: "id, flagged", id: "task-1", archived: true, want: "/mission/tasks/task-1?include_archived=true"},
+		{name: "code, unflagged", code: "ACME-1", want: "/mission/tasks/code/ACME-1"},
+		{name: "code, flagged", code: "ACME-1", archived: true, want: "/mission/tasks/code/ACME-1?include_archived=true"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := includeArchivedPath(taskPath(tc.id, tc.code), tc.archived); got != tc.want {
+				t.Errorf("includeArchivedPath = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }

@@ -184,8 +184,10 @@ capigo tenants list      List tenants you can access
 
 capigo tasks list                    List tasks (--query/-q, --status, --priority, --assignee-id,
                                       --owner-id, --board-id, --board-list-id, --due-after/--due-before,
-                                      --created-after/--created-before, --parent-task-id, --page, --limit)
-capigo tasks get <id|--code>           Get task by ID or code (--code requires --tenant)
+                                      --created-after/--created-before, --parent-task-id, --include-archived,
+                                      --page, --limit)
+capigo tasks get <id|--code>           Get task by ID or code (--code requires --tenant; --include-archived
+                                       reads an archived task, which 404s without it)
 capigo tasks comments <id|--code>      List a task's comment + activity timeline (--type comment|activity,
                                        --sort asc|desc, --page, --limit; --code requires --tenant)
 capigo tasks attachments download <task-id|--code> <attachment-id>          Download a task-level attachment
@@ -198,6 +200,10 @@ capigo tasks transfer-ownership <id|--code> Hand a task to another member (--own
                                      member of the tenant; only the current owner may call it)
 capigo tasks claim <id|--code>        Take an unassigned task yourself (--code requires --tenant;
                                       any active member may claim; a task already assigned is a 409)
+capigo tasks archive <id|--code>      Retire a task (--code requires --tenant; owner, assignee or
+                                      tenant owner only; subtasks go with it; restore with tasks unarchive)
+capigo tasks unarchive <id|--code>    Restore an archived task (--code requires --tenant; owner,
+                                      assignee or tenant owner; a subtask's assignee may restore it)
 capigo tasks create                   Create a new task (--title + --tenant required; --follower-id repeatable;
                                      --idempotency-key makes a retry replay instead of duplicating;
                                      --subtasks-json to create subtasks atomically)

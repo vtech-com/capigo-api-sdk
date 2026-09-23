@@ -81,6 +81,46 @@ Read this only when creating or changing tasks, assignees, followers, or subtask
 - Self-claiming is one of the few writes a plain member can make: it needs membership, not the
   permission to assign.
 
+## Archiving a task
+
+- `tasks archive (<id> | --code)` retires a task. The call sends no body, and the task leaves every default
+  read — restore it with `tasks unarchive`, or read it back deliberately with `--include-archived`.
+- Permission is narrow: the task's owner, its assignee, or a tenant owner of the task's tenant. A plain
+  member is refused (403, exit 3), and so is a member of the task's board. A subtask is stricter — it asks
+  the parent's owner or assignee, so a subtask's own assignee alone cannot retire it.
+- Archiving is a family operation: naming a parent archives its subtasks with it, and naming a subtask
+  archives its parent and siblings. Only the task you named records the `task:archived` event.
+- Do not retry after exit 4 ("not found"): the task was archived by your own previous call, and an archived
+  task answers 4 on every read that does not ask for it. Add `--include-archived` before concluding
+  anything, and see "Finding an archived task" below.
+
+## Restoring a task
+
+- `tasks unarchive (<id> | --code)` brings an archived task back. The call sends no body, and the answer is
+  the task as it now stands — a restored task is readable again.
+- The same three actors as archive may call it: the task's owner, its assignee, or a tenant owner of the
+  task's tenant. Anyone else exits 3 (403).
+- Restoring does not ask the parent, so a subtask's own assignee may restore their subtask — archiving that
+  same subtask would have been refused. Naming any member of an archived family restores the whole family,
+  and an archived list holding the task comes back with it.
+- A task that is already live is a no-op: nothing is written, no event is recorded, and the answer is the
+  task.
+
+## Finding an archived task
+
+- Archived tasks are left out of every read by default. A task you know exists can therefore be missing
+  from `tasks list`, and `tasks get` exits 4 for it — that is usually this, not a permission problem.
+- Ask for them explicitly: `tasks list --include-archived` lists archived tasks alongside live ones, and
+  `tasks get --include-archived` reads one. Both send the API's `include_archived=true` on that one call.
+- The code a person quotes still finds the task:
+  `tasks get --code ACMEC-68 --tenant acme --include-archived`.
+- Without the flag, exit 4 is the same answer a task that never existed gets, so never report "the task
+  does not exist" off an unflagged 404 — add the flag first.
+- Archiving a parent archives its subtasks with it, so a family goes missing from the list together and
+  comes back together. A missing task and a missing subtask are one event, not two.
+- The flag widens reads only. `tasks update` on an archived task still exits 4, and a second `tasks archive`
+  still exits 4 — restore first with `tasks unarchive`, then change it.
+
 ## Ownership
 
 - `tasks transfer-ownership (<id> | --code) --owner-id <uuid>` gives a task a different owner. Two
