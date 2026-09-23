@@ -10,6 +10,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`capigo help exit-codes` now covers exit-8 state conflicts, and a refused claim says what to do
+  next.** Exit 8 was explained as a duplicate-unique-value conflict only, but a task that already has
+  an assignee exits 8 as well — the server refused the change because of the state it found. The topic
+  now names both cases, and `TASK_ALREADY_ASSIGNED` carries a `Next` step ("re-read the task; retrying
+  the same claim will not help") plus the capability brake in the error catalog, pinned by the catalog
+  test.
+
+## [0.25.0] — 2026-08-27
+
 ### Added
 
 - **`tasks claim` takes an unassigned task as yourself.**
@@ -61,19 +72,42 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   `data` through unchanged — but a field the help page never named is a field an agent could
   not know existed. `make verify-api` now reports every checked page agrees with the server.
 
+- **Board and board-list write commands.** `boards create`, `boards update`,
+  `boards lists create`, and `boards lists update` wrap the four write operations the API now
+  exposes for boards and their lists. `tasks update` also gains `--due-date` (RFC3339; an empty
+  string clears it). Every mission write injects `tenant_code` into the body from `--tenant`.
+
 ### Changed
 
 - **The bundled `capigo-api` skill documents product `notes` and variant `status`**, matching
   the CLI help above.
 
-### Fixed
+- **The `boards` help pages and the bundled skill name three things the API's own answers do
+  not.** Verified against prod on 2026-08-27 with a throwaway board, not read off the spec:
+  no read returns a list's `limit`, so `--wip-limit` is write-only and a change to it cannot
+  be confirmed; archiving a list drops it from `.lists` and from `meta.list_count` with no way
+  to list archived lists, so unarchiving needs a list id nothing gives back; and `is_public:
+  false` makes a board answer 404 "Board not found" to reads, updates and list writes alike —
+  the visibility check runs before the update, so the flag cannot be switched back, and no
+  endpoint deletes a board. Each is a write that succeeds while its response says nothing
+  about what happened, which is precisely the shape an agent misreads. The CLI does not block
+  or second-guess any of them — it still sends the request and reports what the server says;
+  it only stops the caller from learning the consequence by accident. Recorded as asks on the
+  API in `docs/api-coverage-gaps.md`.
+- **Synced `api/openapi.json` with prod.** 23 operations the document never declared — the
+  WMS write path plus `locations` and `warehouse-transfers` reads — and 29 new component
+  schemas. Nothing removed; no existing operation changed shape.
 
-- **`capigo help exit-codes` now covers exit-8 state conflicts, and a refused claim says what to do
-  next.** Exit 8 was explained as a duplicate-unique-value conflict only, but a task that already has
-  an assignee exits 8 as well — the server refused the change because of the state it found. The topic
-  now names both cases, and `TASK_ALREADY_ASSIGNED` carries a `Next` step ("re-read the task; retrying
-  the same claim will not help") plus the capability brake in the error catalog, pinned by the catalog
-  test.
+### Deliberately not wrapped
+
+- **The WMS module (23 operations).** Prod now publishes the full write path for inbound
+  receipts, outbound shipments, internal transfers and warehouse transfers, on top of the
+  read endpoints the guard already held out. The surface is unsettled and the write path is
+  a stateful workflow (`preview`/`validate` feed a create; documents then move through
+  `actions/{action}`), so it stays in `unimplementedOps` with a reason rather than being
+  wrapped in a hurry. Recorded in `docs/api-coverage-gaps.md`; it gets a dedicated design
+  pass once the module stabilises.
+
 ## [0.24.0] — 2026-08-18
 
 ### Fixed

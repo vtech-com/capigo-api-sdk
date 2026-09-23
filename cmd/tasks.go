@@ -607,6 +607,7 @@ var (
 	taskUpdateList              string
 	taskUpdateFollowerIDs       []string
 	taskUpdateRemoveFollowerIDs []string
+	taskUpdateDueDate           string
 )
 
 var tasksUpdateCmd = &cobra.Command{
@@ -624,7 +625,8 @@ USAGE
                            [--title <text>]
                            [--description <text>] [--status <text>]
                            [--assignee <uuid>] [--board <uuid> --list <uuid>]
-                           [--follower-id <uuid>]... [--remove-follower-id <uuid>]...
+                           [--due-date <ts>] [--follower-id <uuid>]...
+                           [--remove-follower-id <uuid>]...
 
 FLAGS
   <id>
@@ -676,6 +678,12 @@ FLAGS
       --follower-id and --remove-follower-id: the API rejects that with 400.
 
         capigo tasks update <uuid> --remove-follower-id <uuid>
+
+  --due-date <ts>
+      New due date, RFC3339. An empty string clears it (sends null). Must be
+      today or in the future.
+
+        capigo tasks update <uuid> --due-date "2026-08-31T00:00:00Z"
 
   At least one field flag is required; sending none exits 5.
 
@@ -753,6 +761,9 @@ OUTPUT
 		}
 		if len(taskUpdateRemoveFollowerIDs) > 0 {
 			body["follower_remove_ids"] = taskUpdateRemoveFollowerIDs
+		}
+		if cmd.Flags().Changed("due-date") {
+			body["due_date"] = nullableID(taskUpdateDueDate)
 		}
 
 		if len(body) == 0 {
@@ -1672,6 +1683,7 @@ func init() {
 	tasksUpdateCmd.Flags().StringVar(&taskUpdateList, "list", "", "board list UUID; sent together with --board")
 	tasksUpdateCmd.Flags().StringArrayVar(&taskUpdateFollowerIDs, "follower-id", nil, "follower user UUID to add (repeatable: --follower-id <uuid>); additive and idempotent")
 	tasksUpdateCmd.Flags().StringArrayVar(&taskUpdateRemoveFollowerIDs, "remove-follower-id", nil, "follower user UUID to remove (repeatable: --remove-follower-id <uuid>); a user who does not follow the task is a no-op")
+	tasksUpdateCmd.Flags().StringVar(&taskUpdateDueDate, "due-date", "", "due date (RFC3339; empty string clears it)")
 
 	// tasks assign-agent flags
 	tasksAssignAgentCmd.Flags().StringVar(&taskAssignAgentTenant, "tenant", "", "scope to this tenant code")
