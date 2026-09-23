@@ -7,7 +7,9 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
 	"github.com/vtech-com/capigo-api-sdk/internal/config"
@@ -140,6 +142,7 @@ OUTPUT
             "code": "TASK-104", "title": "Fix login bug", "description": "...",
             "status": "To-Do", "priority": "High", "assignee": {...},
             "owner": {...}, "board_id": "...", "board_list_id": "...",
+            "responsible_type": "human", "assigned_agent_key": null,
             "due_date": "...", "parent": null, "has_subtasks": false,
             "attachments": [...],
             "followers": [ { "id": "...", "display_name": "Minh",
@@ -257,6 +260,7 @@ OUTPUT
           "code": "TASK-104", "title": "Fix login bug", "description": "...",
           "status": "To-Do", "priority": "High", "assignee": {...},
           "owner": {...}, "board_id": "...", "board_list_id": "...",
+          "responsible_type": "human", "assigned_agent_key": null,
           "due_date": "...", "parent": null, "has_subtasks": false,
           "attachments": [...],
           "followers": [ { "id": "...", "display_name": "Minh",
@@ -593,15 +597,16 @@ OUTPUT
 
 // tasks update flags
 var (
-	taskUpdateTenant      string
-	taskUpdateCode        string
-	taskUpdateTitle       string
-	taskUpdateDescription string
-	taskUpdateStatus      string
-	taskUpdateAssignee    string
-	taskUpdateBoard       string
-	taskUpdateList        string
-	taskUpdateFollowerIDs []string
+	taskUpdateTenant            string
+	taskUpdateCode              string
+	taskUpdateTitle             string
+	taskUpdateDescription       string
+	taskUpdateStatus            string
+	taskUpdateAssignee          string
+	taskUpdateBoard             string
+	taskUpdateList              string
+	taskUpdateFollowerIDs       []string
+	taskUpdateRemoveFollowerIDs []string
 )
 
 var tasksUpdateCmd = &cobra.Command{
@@ -611,15 +616,15 @@ var tasksUpdateCmd = &cobra.Command{
 
 PURPOSE
   Move a task forward: reassign it, change its status, place it on a board,
-  or add followers. Read tasks get first if you need the current values
-  before changing them.
+  or change who follows it. Read tasks get first if you need the current
+  values before changing them.
 
 USAGE
   capigo tasks update (<id> | --code <code>) [--tenant <code>]
                            [--title <text>]
                            [--description <text>] [--status <text>]
                            [--assignee <uuid>] [--board <uuid> --list <uuid>]
-                           [--follower-id <uuid>]...
+                           [--follower-id <uuid>]... [--remove-follower-id <uuid>]...
 
 FLAGS
   <id>
@@ -662,8 +667,15 @@ FLAGS
         capigo tasks update <uuid> --board "" --list ""
 
   --follower-id <uuid>
-      Add a follower. Repeatable. Additive and idempotent — this endpoint
-      cannot remove a follower.
+      Add a follower. Repeatable. Additive and idempotent — adding someone who
+      already follows the task changes nothing.
+
+  --remove-follower-id <uuid>
+      Remove a follower. Repeatable. Removing someone who does not follow the
+      task is a no-op, not an error. The same user cannot appear in
+      --follower-id and --remove-follower-id: the API rejects that with 400.
+
+        capigo tasks update <uuid> --remove-follower-id <uuid>
 
   At least one field flag is required; sending none exits 5.
 
@@ -672,6 +684,7 @@ OUTPUT
 
       {
         "data": { "id": "...", "code": "TASK-104", "title": "...",
+                  "responsible_type": "human", "assigned_agent_key": null,
                   "followers": [...], "meta_data": {...}, ... },
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "server_time": "2026-07-09T04:12:33Z" }
@@ -738,6 +751,9 @@ OUTPUT
 		if len(taskUpdateFollowerIDs) > 0 {
 			body["follower_ids"] = taskUpdateFollowerIDs
 		}
+		if len(taskUpdateRemoveFollowerIDs) > 0 {
+			body["follower_remove_ids"] = taskUpdateRemoveFollowerIDs
+		}
 
 		if len(body) == 0 {
 			failValidation("at least one field must be provided for update")
@@ -759,19 +775,322 @@ OUTPUT
 	},
 }
 
+// tasks assign-agent flags
+var (
+	taskAssignAgentTenant   string
+	taskAssignAgentCode     string
+	taskAssignAgentAgentKey string
+)
+
+var tasksAssignAgentCmd = &cobra.Command{
+	Use:   "assign-agent [<id>]",
+	Short: "Move a task an agent owns to a different agent",
+	Long: `Move an agent-owned task to another agent.
+
+PURPOSE
+  Hand work from one agent to another before the agent run has started. This
+  moves the agent assignment only. A task assigned to a person has no agent run
+  to move, so it is refused with INVALID_AGENT — for a person use
+  tasks update --assignee.
+
+USAGE
+  capigo tasks assign-agent (<id> | --code <code>) --agent-key <key>
+                                 [--tenant <code>]
+
+FLAGS
+  <id>
+      Task UUID. Positional. Give this or --code, never both.
+
+  --code <code>
+      Address the task by its code — the key a person quotes, like ACMEC-68.
+      A code is unique within a tenant, not across them, so --code needs a
+      tenant: pass --tenant, or set a default.
+
+  --tenant <code>
+      Tenant to scope the lookup to. Optional with an id; required with
+      --code.
+
+  --agent-key <key>
+      Key of the agent to move the task to. Required. The agent must be
+      published and belong to the task's tenant (a system agent is also
+      accepted), and the task's agent run must still be pending — an agent
+      that already started cannot be swapped.
+
+        capigo tasks assign-agent ACMEC-68 --tenant acme --agent-key task-pilot
+
+  Naming the agent the task already has is a no-op that still answers 200, so
+  a retry is safe. No Idempotency-Key is needed or accepted: there is nothing
+  to duplicate.
+
+OUTPUT
+  The task as it now stands, in the same shape as tasks get. The assignment is
+  in the payload — read it back rather than trusting the 200:
+
+      { "data": { "id": "...", "code": "TASK-104", "title": "...",
+                  "responsible_type": "agent",
+                  "assigned_agent_key": "task-pilot", ... },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-09-22T04:12:33Z" } }
+
+  responsible_type reads "agent" and assigned_agent_key names the agent that
+  now owns the task; a person-owned task reads "human" with a null key.`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		var id string
+		if len(args) == 1 {
+			id = args[0]
+		}
+
+		if strings.TrimSpace(taskAssignAgentAgentKey) == "" {
+			failValidation("--agent-key is required")
+		}
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(taskAssignAgentTenant, profile)
+		requireOneTaskAddress(id, taskAssignAgentCode, tenant)
+
+		// taskPath already escapes the address and picks the code route.
+		resp, err := client.Do(ctx, "POST", taskPath(id, taskAssignAgentCode)+"/actions/assign-agent", map[string]any{
+			"agent_key": strings.TrimSpace(taskAssignAgentAgentKey),
+		}, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope api.RawEnvelope
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		meta := itemMeta(tenant, taskAssignAgentTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
+	},
+}
+
+// tasks transfer-ownership flags
+var (
+	taskTransferOwnershipTenant  string
+	taskTransferOwnershipCode    string
+	taskTransferOwnershipOwnerID string
+)
+
+var tasksTransferOwnershipCmd = &cobra.Command{
+	Use:   "transfer-ownership [<id>]",
+	Short: "Hand a task to another member",
+	Long: `Hand a task to another active member of its tenant.
+
+PURPOSE
+  Give a task a different owner — the person accountable for it. Two people can
+  do this: the task's current owner, and a tenant owner of the task's tenant
+  (ADR-061). Everyone else is refused, including a tenant owner of another
+  tenant. To change who works on a task instead, use tasks update --assignee.
+
+USAGE
+  capigo tasks transfer-ownership (<id> | --code <code>) --owner-id <uuid>
+                                 [--tenant <code>]
+
+FLAGS
+  <id>
+      Task UUID. Positional. Give this or --code, never both.
+
+  --code <code>
+      Address the task by its code — the key a person quotes, like ACMEC-68.
+      A code is unique within a tenant, not across them, so --code needs a
+      tenant: pass --tenant, or set a default.
+
+  --tenant <code>
+      Tenant to scope the lookup to. Optional with an id; required with
+      --code.
+
+  --owner-id <uuid>
+      User id of the new owner. Required. That user must be an active member
+      of the task's tenant, otherwise the API answers 400 INVALID_OWNER.
+      Resolve a member with members list or members get; never invent an id.
+
+        capigo tasks transfer-ownership ACMEC-68 --tenant acme \
+            --owner-id 7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10
+
+  Naming the current owner is a no-op that still answers 200, so a retry is
+  safe. The change touches the owner alone: assignee, followers and board
+  placement stay as they were.
+
+OUTPUT
+  The task as it now stands, in the same shape as tasks get. Read the new
+  owner back from the payload rather than trusting the 200:
+
+      { "data": { "id": "...", "code": "TASK-104", "title": "...",
+                  "owner": { "id": "...", "display_name": "Minh",
+                             "member_code": "NV001" }, ... },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-09-22T04:12:33Z" } }`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		var id string
+		if len(args) == 1 {
+			id = args[0]
+		}
+
+		newOwnerID := strings.TrimSpace(taskTransferOwnershipOwnerID)
+		if newOwnerID == "" {
+			failValidation("--owner-id is required")
+		}
+		if _, err := uuid.Parse(newOwnerID); err != nil {
+			failValidation("--owner-id must be a user UUID, not a member code or a name")
+		}
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(taskTransferOwnershipTenant, profile)
+		requireOneTaskAddress(id, taskTransferOwnershipCode, tenant)
+
+		// taskPath already escapes the address and picks the code route.
+		resp, err := client.Do(ctx, "POST", taskPath(id, taskTransferOwnershipCode)+"/actions/transfer-ownership", map[string]any{
+			"owner_id": newOwnerID,
+		}, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope api.RawEnvelope
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		meta := itemMeta(tenant, taskTransferOwnershipTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
+	},
+}
+
+// tasks claim flags
+var (
+	taskClaimTenant string
+	taskClaimCode   string
+)
+
+var tasksClaimCmd = &cobra.Command{
+	Use:   "claim [<id>]",
+	Short: "Take an unassigned task yourself",
+	Long: `Claim an unassigned task as yourself.
+
+PURPOSE
+  Take a task nobody has picked up yet. The assignee is always you: the call
+  sends no body and takes no flag that names a user, so it cannot assign a task
+  to somebody else. Any active member of the task's tenant may claim — no owner
+  or manager role is needed. This is the command behind the task screen's
+  "Assign to me" control. It is not the same as tasks update --assignee: that
+  call reassigns a task, while this one only takes a task that is still free.
+
+  The task must be unassigned. One that already has an assignee is refused with
+  409 TASK_ALREADY_ASSIGNED, and that is the same answer whether another member
+  took it first or you already hold it — so a retry after a dropped connection
+  is not a silent no-op. Re-read the task to see who holds it.
+
+USAGE
+  capigo tasks claim (<id> | --code <code>) [--tenant <code>]
+
+FLAGS
+  <id>
+      Task UUID. Positional. Give this or --code, never both.
+
+  --code <code>
+      Address the task by its code — the key a person quotes, like ACMEC-68.
+      A code is unique within a tenant, not across them, so --code needs a
+      tenant: pass --tenant, or set a default.
+
+  --tenant <code>
+      Tenant to scope the lookup to. Optional with an id; required with
+      --code.
+
+OUTPUT
+  The task as it now stands, in the same shape as tasks get. Read your own id
+  back from assignee rather than trusting the 200:
+
+      { "data": { "id": "...", "code": "TASK-104", "title": "...",
+                  "assignee": { "id": "<your user id>", "display_name": "Minh",
+                                "member_code": "NV001" },
+                  "owner": { "id": "...", "display_name": "Lan" }, ... },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-09-22T04:12:33Z" } }
+
+  Ownership does not move: owner stays who it was, and so do the status,
+  followers and board placement.`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		var id string
+		if len(args) == 1 {
+			id = args[0]
+		}
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(taskClaimTenant, profile)
+		requireOneTaskAddress(id, taskClaimCode, tenant)
+
+		// taskPath already escapes the address and picks the code route. No body:
+		// the API assigns the task to whoever the key authenticated as.
+		resp, err := client.Do(ctx, "POST", taskPath(id, taskClaimCode)+"/actions/claim", nil, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope api.RawEnvelope
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		meta := itemMeta(tenant, taskClaimTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
+	},
+}
+
 // tasks create flags
 var (
-	taskCreateTenant       string
-	taskCreateTitle        string
-	taskCreateDescription  string
-	taskCreatePriority     string
-	taskCreateStatus       string
-	taskCreateDueDate      string
-	taskCreateAssignee     string
-	taskCreateBoard        string
-	taskCreateList         string
-	taskCreateFollowerIDs  []string
-	taskCreateSubtasksJSON string
+	taskCreateTenant         string
+	taskCreateTitle          string
+	taskCreateDescription    string
+	taskCreatePriority       string
+	taskCreateStatus         string
+	taskCreateDueDate        string
+	taskCreateAssignee       string
+	taskCreateBoard          string
+	taskCreateList           string
+	taskCreateFollowerIDs    []string
+	taskCreateIdempotencyKey string
+	taskCreateSubtasksJSON   string
 )
 
 // --------------------------------------------------------------------------
@@ -841,6 +1160,7 @@ OUTPUT
             "parent": { "id": "7c1f2e88-...", "code": "ACMEC-68",
                         "title": "Fix login bug" },
             "has_subtasks": false, "attachments": [],
+            "responsible_type": "human", "assigned_agent_key": null,
             "followers": [...], "meta_data": {...},
             "created_at": "...", "updated_at": "..." }
         ],
@@ -925,7 +1245,8 @@ USAGE
                        [--priority <text>] [--status <text>]
                        [--due-date <ts>] [--assignee <uuid>]
                        [--board <uuid> --list <uuid>]
-                       [--follower-id <uuid>]... [--subtasks-json <path|->]
+                       [--follower-id <uuid>]... [--idempotency-key <key>]
+                       [--subtasks-json <path|->]
 
 FLAGS
   --tenant <code>
@@ -959,6 +1280,18 @@ FLAGS
   --follower-id <uuid>
       Follower user id. Repeatable.
 
+  --idempotency-key <key>
+      Make this create safe to retry. Use the same key and the same body when
+      a call fails mid-flight: the API replays the task it already created
+      instead of creating a second one. The key is scoped to the tenant, so
+      two tenants may use the same key. A key reused with a different body is
+      rejected with 409 E0601 — pick a new key for a genuinely new task.
+      Refused together with --subtasks-json, whose endpoint has no idempotency
+      contract.
+
+        capigo tasks create --tenant acme --title "Fix login bug" \
+            --idempotency-key "fix-login-$(date +%s)"
+
   --subtasks-json <path|->
       A JSON array of subtask items, at most 25, creating the parent and its
       children atomically: if any item is invalid, nothing is created. - reads
@@ -982,6 +1315,7 @@ OUTPUT
 
       {
         "data": { "id": "...", "code": "TASK-104", "title": "...",
+                  "responsible_type": "human", "assigned_agent_key": null,
                   "followers": [...], "meta_data": {...}, ... },
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "server_time": "2026-07-09T04:12:33Z" }
@@ -1020,6 +1354,9 @@ OUTPUT
 		// parent task is built from the same create flags; the JSON payload is
 		// the subtasks array. All-or-nothing: nothing is created if any part fails.
 		if taskCreateSubtasksJSON != "" {
+			if taskCreateIdempotencyKey != "" {
+				failValidation("--idempotency-key is not supported with --subtasks-json: POST /mission/tasks/with-subtasks has no idempotency contract")
+			}
 			raw, err := readJSONInput(taskCreateSubtasksJSON)
 			if err != nil {
 				return handleErr(fmt.Errorf("read --subtasks-json: %w", err))
@@ -1104,7 +1441,13 @@ OUTPUT
 		}
 
 		// POST /mission/tasks: tenant_code is in the body; also send X-Tenant-Code header for consistency.
-		resp, err := client.Do(ctx, "POST", "/mission/tasks", body, tenant)
+		// An Idempotency-Key makes a retry after a timeout replay the task the
+		// first attempt created instead of creating a second one.
+		var createHeaders map[string]string
+		if taskCreateIdempotencyKey != "" {
+			createHeaders = map[string]string{"Idempotency-Key": taskCreateIdempotencyKey}
+		}
+		resp, err := client.DoWithHeaders(ctx, "POST", "/mission/tasks", body, tenant, createHeaders)
 		if err != nil {
 			return handleErr(err)
 		}
@@ -1194,9 +1537,11 @@ OUTPUT
       {
         "data": {
           "parent_task": { "id": "...", "code": "TASK-104", "title": "...",
+                           "responsible_type": "human", "assigned_agent_key": null,
                            "has_subtasks": true, "followers": [...],
                            "meta_data": {...}, ... },
           "subtasks": [ { "id": "...", "code": "TASK-105", "title": "Design",
+                          "responsible_type": "human", "assigned_agent_key": null,
                           "followers": [...], "meta_data": {...}, ... } ]
         },
         "meta": { "tenant": "acme", "tenant_source": "flag",
@@ -1325,7 +1670,22 @@ func init() {
 	tasksUpdateCmd.Flags().StringVar(&taskUpdateAssignee, "assignee", "", "assignee user UUID (set to empty string to unassign)")
 	tasksUpdateCmd.Flags().StringVar(&taskUpdateBoard, "board", "", `board UUID; sent together with --list (pass --board "" --list "" to remove from board)`)
 	tasksUpdateCmd.Flags().StringVar(&taskUpdateList, "list", "", "board list UUID; sent together with --board")
-	tasksUpdateCmd.Flags().StringArrayVar(&taskUpdateFollowerIDs, "follower-id", nil, "follower user UUID (repeatable: --follower-id <uuid>); additive — removes are not supported")
+	tasksUpdateCmd.Flags().StringArrayVar(&taskUpdateFollowerIDs, "follower-id", nil, "follower user UUID to add (repeatable: --follower-id <uuid>); additive and idempotent")
+	tasksUpdateCmd.Flags().StringArrayVar(&taskUpdateRemoveFollowerIDs, "remove-follower-id", nil, "follower user UUID to remove (repeatable: --remove-follower-id <uuid>); a user who does not follow the task is a no-op")
+
+	// tasks assign-agent flags
+	tasksAssignAgentCmd.Flags().StringVar(&taskAssignAgentTenant, "tenant", "", "scope to this tenant code")
+	tasksAssignAgentCmd.Flags().StringVar(&taskAssignAgentCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
+	tasksAssignAgentCmd.Flags().StringVar(&taskAssignAgentAgentKey, "agent-key", "", "key of the agent to move the task to (required)")
+
+	// tasks transfer-ownership flags
+	tasksTransferOwnershipCmd.Flags().StringVar(&taskTransferOwnershipTenant, "tenant", "", "scope to this tenant code")
+	tasksTransferOwnershipCmd.Flags().StringVar(&taskTransferOwnershipCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
+	tasksTransferOwnershipCmd.Flags().StringVar(&taskTransferOwnershipOwnerID, "owner-id", "", "user UUID of the new owner (required; must be an active member of the task's tenant)")
+
+	// tasks claim flags
+	tasksClaimCmd.Flags().StringVar(&taskClaimTenant, "tenant", "", "scope to this tenant code")
+	tasksClaimCmd.Flags().StringVar(&taskClaimCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
 
 	// tasks create flags
 	tasksCreateCmd.Flags().StringVar(&taskCreateTenant, "tenant", "", "tenant code (required)")
@@ -1338,6 +1698,7 @@ func init() {
 	tasksCreateCmd.Flags().StringVar(&taskCreateBoard, "board", "", "board ID")
 	tasksCreateCmd.Flags().StringVar(&taskCreateList, "list", "", "board list ID")
 	tasksCreateCmd.Flags().StringArrayVar(&taskCreateFollowerIDs, "follower-id", nil, "follower user ID (repeatable: --follower-id <uuid> --follower-id <uuid>)")
+	tasksCreateCmd.Flags().StringVar(&taskCreateIdempotencyKey, "idempotency-key", "", "make the create safe to retry: the same key replays the task it created; a different body under the same key exits 1 with E0601 (not supported with --subtasks-json)")
 	tasksCreateCmd.Flags().StringVar(&taskCreateSubtasksJSON, "subtasks-json", "", "path to a JSON array of subtask items (use - for stdin); creates the task and its subtasks atomically via POST /mission/tasks/with-subtasks")
 
 	// tasks subtasks flags
@@ -1358,7 +1719,7 @@ func init() {
 	// tasksAttachmentsCmd is defined in task_attachments.go, whose init() runs
 	// first — it is registered here so it lands after the verbs, not above them.
 	tasksSubtasksCmd.AddCommand(tasksSubtasksListCmd, tasksSubtasksCreateCmd)
-	taskCmd.AddCommand(tasksListCmd, tasksGetCmd, tasksCreateCmd, tasksUpdateCmd, tasksCommentsCmd, tasksSubtasksCmd, tasksAttachmentsCmd)
+	taskCmd.AddCommand(tasksListCmd, tasksGetCmd, tasksCreateCmd, tasksUpdateCmd, tasksAssignAgentCmd, tasksTransferOwnershipCmd, tasksClaimCmd, tasksCommentsCmd, tasksSubtasksCmd, tasksAttachmentsCmd)
 	rootCmd.AddCommand(taskCmd)
 }
 

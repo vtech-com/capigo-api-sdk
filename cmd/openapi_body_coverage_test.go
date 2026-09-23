@@ -65,6 +65,10 @@ var bodyFieldAliasMap = map[string]string{
 	// follower_ids is a plural field; the CLI exposes it as a singular repeatable
 	// flag --follower-id so callers write: --follower-id <uuid> --follower-id <uuid>
 	"follower_ids": "follower-id",
+	// follower_remove_ids is the removal half of the same pair; the flag reads
+	// --remove-follower-id (verb first) so add and remove stay distinguishable
+	// at a glance: --follower-id <uuid> --remove-follower-id <uuid>.
+	"follower_remove_ids": "remove-follower-id",
 	// tenant_code is required by the API body but the CLI exposes it as --tenant
 	// (consistent with all other tenant-scoped commands).
 	"tenant_code": "tenant",
@@ -145,6 +149,21 @@ func buildWriteCommandMapping() []writeCommandEntry {
 			path:      "/mission/tasks/{id}",
 			method:    "patch",
 			hasFlag:   func(n string) bool { return tasksUpdateCmd.Flags().Lookup(n) != nil },
+		},
+		// tasks assign-agent: body is one field, agent_key→--agent-key (the naive
+		// snake_case→kebab-case transform), so no alias entry is needed.
+		{
+			humanName: "tasks assign-agent",
+			path:      "/mission/tasks/{id}/actions/assign-agent",
+			method:    "post",
+			hasFlag:   func(n string) bool { return tasksAssignAgentCmd.Flags().Lookup(n) != nil },
+		},
+		// tasks transfer-ownership: same shape, owner_id→--owner-id.
+		{
+			humanName: "tasks transfer-ownership",
+			path:      "/mission/tasks/{id}/actions/transfer-ownership",
+			method:    "post",
+			hasFlag:   func(n string) bool { return tasksTransferOwnershipCmd.Flags().Lookup(n) != nil },
 		},
 		// PCMS resource commands: all register --from-json, so per-field assertion is
 		// skipped. Listed here so NEW spec fields still surface as a test failure when

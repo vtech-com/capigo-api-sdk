@@ -72,6 +72,16 @@ func RedactedAuthorization(apiKey string) string {
 // Do executes an HTTP request against path. body is JSON-encoded when non-nil.
 // tenant is the X-Tenant-Code value; when nil the header is omitted entirely.
 func (c *Client) Do(ctx context.Context, method, path string, body any, tenant *string) (*Response, error) {
+	return c.DoWithHeaders(ctx, method, path, body, tenant, nil)
+}
+
+// DoWithHeaders is Do plus the per-request headers an endpoint's contract asks
+// for beyond tenancy — today `Idempotency-Key` on the create endpoints.
+//
+// The caller's headers are applied first and the client's own (Authorization,
+// User-Agent, X-Request-Id, Content-Type, X-Tenant-Code) second, so a caller
+// cannot accidentally overwrite the credential or the tenant it is talking as.
+func (c *Client) DoWithHeaders(ctx context.Context, method, path string, body any, tenant *string, headers map[string]string) (*Response, error) {
 	var bodyReader io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -86,6 +96,10 @@ func (c *Client) Do(ctx context.Context, method, path string, body any, tenant *
 		return nil, fmt.Errorf("build request: %w", err)
 	}
 
+	for name, value := range headers {
+		req.Header.Set(name, value)
+	}
+
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	req.Header.Set("User-Agent", version.UserAgent())
 	req.Header.Set("X-Request-Id", uuid.New().String())
@@ -98,6 +112,9 @@ func (c *Client) Do(ctx context.Context, method, path string, body any, tenant *
 
 	if c.verboseW != nil {
 		_, _ = fmt.Fprintf(c.verboseW, "> %s %s\n", method, c.baseURL+path)
+		for name, value := range headers {
+			_, _ = fmt.Fprintf(c.verboseW, "> %s: %s\n", name, value)
+		}
 		_, _ = fmt.Fprintf(c.verboseW, "> Authorization: %s\n", RedactedAuthorization(c.apiKey))
 		if tenant != nil {
 			_, _ = fmt.Fprintf(c.verboseW, "> X-Tenant-Code: %s\n", *tenant)

@@ -527,6 +527,21 @@
               }
             }
           },
+          "responsible_type": {
+            "type": "string",
+            "enum": [
+              "human",
+              "agent"
+            ],
+            "description": "Who is responsible: `human` (a person in `assignee`) or `agent` (the key in `assigned_agent_key`). The two are exclusive — a task has one or the other.",
+            "example": "agent"
+          },
+          "assigned_agent_key": {
+            "type": "string",
+            "nullable": true,
+            "description": "Agent key when `responsible_type` is `agent`; null for a person-owned task. Move it with POST /mission/tasks/{id}/actions/assign-agent.",
+            "example": "task-pilot"
+          },
           "board_id": {
             "type": "string",
             "format": "uuid",
@@ -3106,7 +3121,18 @@
         "tags": [
           "Tasks"
         ],
-        "description": "Create a new task.",
+        "description": "Create a new task. An optional `Idempotency-Key` header makes a retry safe: the first application returns 201, a replay of the same key with an identical canonical body returns 200 with the existing task, and the same key with a different body returns 409 (E0601).",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Optional idempotency key, scoped to the tenant. First application returns 201; a replay of the same key with an identical canonical body returns 200 with the existing task; the same key with a different body — or with a task archived since — returns 409 (E0601).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -3118,6 +3144,21 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "Replay: the same Idempotency-Key was applied with an identical canonical body — returns that task and writes nothing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "201": {
             "description": "Task created successfully",
             "content": {
@@ -3138,6 +3179,16 @@
           },
           "403": {
             "$ref": "#/components/schemas/Error"
+          },
+          "409": {
+            "description": "Idempotency-Key was already used with a different request body (E0601)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -3268,7 +3319,15 @@
                       "type": "string",
                       "format": "uuid"
                     },
-                    "description": "Additive: listed users are added as followers (idempotent)."
+                    "description": "Users to add as followers. Additive and idempotent: a listed user who already follows the task is left alone."
+                  },
+                  "follower_remove_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "description": "Users to remove from the followers. Removing a user who does not follow the task is a no-op. Must not repeat an id from follower_ids (400)."
                   }
                 }
               }
@@ -3304,6 +3363,240 @@
           },
           "403": {
             "description": "Insufficient permission to perform the update"
+          },
+          "404": {
+            "description": "Task not found"
+          }
+        }
+      }
+    },
+    "/mission/tasks/{id}/actions/transfer-ownership": {
+      "post": {
+        "summary": "Transfer Task Ownership",
+        "description": "Hand a task to another active member of its tenant. Two actors may call this: the task's **current owner**, or a **tenant owner of the task's own tenant** (ADR-061) — the change runs through `public.mission_transfer_task_ownership`, whose trigger accepts exactly those two, so a tenant owner of some other tenant gets the same 403. `owner_id` must be an active member of the task's tenant, and the task must be live: an archived task answers 404 like every other task endpoint. The write changes `owner_id` alone — assignee, followers, board placement and status stay as they are — and writes the `task:ownership:transferred` event in the same transaction, carrying `actor_authority` (`owner` or `tenant_owner`) and naming the former owner as a recipient. Naming the current owner is a successful no-op, so no `Idempotency-Key` is needed or accepted.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Task UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "owner_id"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "owner_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "User id of the new owner — an active member of the task's tenant."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The task after the transfer",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing owner_id, or INVALID_OWNER: the id does not name an active member of the task's tenant"
+          },
+          "403": {
+            "description": "The caller is not the task's current owner"
+          },
+          "404": {
+            "description": "Task not found"
+          },
+          "409": {
+            "description": "TASK_NOT_TRANSFERABLE: another ownership change won the race, or the database refused the transfer — re-read the task and retry"
+          }
+        }
+      }
+    },
+    "/mission/tasks/{id}/actions/claim": {
+      "post": {
+        "summary": "Claim Task (assign it to the caller)",
+        "description": "Assign an unassigned task to the caller. Any **active member of the task's tenant** may claim it — no owner or manager role is needed — and the assignee is always the authenticated caller, taken from the key: the body carries no fields, so a request can never assign the task to somebody else. Only an unassigned, live task can be claimed. An archived task answers `404` like every other task endpoint. A task that already has an assignee answers `409 TASK_ALREADY_ASSIGNED`, which is the same answer whether another member claimed it first or the caller already holds it — that is why no `Idempotency-Key` is accepted, and why the answer tells the caller to re-read the task. The write sets `assignee_id` alone, so ownership, followers, status and board placement stay as they were, and one `task:assigned` event is recorded. Addressed by task UUID.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Task UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The task with the caller as its assignee",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A body was sent (claim takes no fields), or the body is not valid JSON"
+          },
+          "403": {
+            "description": "The caller's membership of the task's tenant changed between the gate and the write. A caller who is simply not a member is answered 404 by the tenant gate before the service runs"
+          },
+          "404": {
+            "description": "Task not found"
+          },
+          "409": {
+            "description": "TASK_ALREADY_ASSIGNED: the task is not unassigned — another member claimed it, or the caller already did; re-read the task to see its assignee"
+          }
+        }
+      }
+    },
+    "/mission/tasks/{id}/actions/assign-agent": {
+      "post": {
+        "summary": "Assign Task To Agent",
+        "description": "Move an agent-responsible task to another agent. The task decides what is legal: it must already be assigned to an agent (`responsible_type = 'agent'` or an `assigned_agent_key`), and its agent task must still be `pending`. A task assigned to a person has no agent task to reassign, so it returns 400 — the two are exclusive; use `PATCH /mission/tasks/{id}` with `assignee_id` for a person. `agent_key` must name a published agent of this tenant or a system-scoped one. The reassignment updates `mission.tasks` and `ai.agent_tasks` in one transaction and emits `task:agent:reassigned`. No `Idempotency-Key`: naming the agent the task already has is a successful no-op, so a retry cannot duplicate anything.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Task UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "agent_key"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "agent_key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Key of the agent to move the task to, e.g. task-pilot."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The task after the reassignment",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing agent_key, or INVALID_AGENT: the task is not agent-responsible, its agent task is not pending, or the key names no published agent in this tenant"
+          },
+          "403": {
+            "description": "Insufficient permission to reassign the task"
           },
           "404": {
             "description": "Task not found"
@@ -7486,7 +7779,15 @@
                       "type": "string",
                       "format": "uuid"
                     },
-                    "description": "Additive: listed users are added as followers (idempotent)."
+                    "description": "Users to add as followers. Additive and idempotent: a listed user who already follows the task is left alone."
+                  },
+                  "follower_remove_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "description": "Users to remove from the followers. Removing a user who does not follow the task is a no-op. Must not repeat an id from follower_ids (400)."
                   }
                 }
               }
@@ -7945,6 +8246,237 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/mission/tasks/code/{code}/actions/transfer-ownership": {
+      "post": {
+        "summary": "Transfer Task Ownership (by Code)",
+        "description": "Same contract as `POST /mission/tasks/{id}/actions/transfer-ownership`, with the task addressed by its natural code. The task's current owner or a tenant owner of the task's own tenant may call it, `owner_id` must be an active member of the task's tenant, and the task must be live.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task code (e.g. ACME-42)"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "owner_id"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "owner_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "User id of the new owner — an active member of the task's tenant."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The task after the transfer",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing owner_id, or INVALID_OWNER: the id does not name an active member of the task's tenant"
+          },
+          "403": {
+            "description": "The caller is not the task's current owner"
+          },
+          "404": {
+            "description": "Task not found"
+          },
+          "409": {
+            "description": "TASK_NOT_TRANSFERABLE: another ownership change won the race, or the database refused the transfer — re-read the task and retry"
+          }
+        }
+      }
+    },
+    "/mission/tasks/code/{code}/actions/claim": {
+      "post": {
+        "summary": "Claim Task (by Code)",
+        "description": "Assign an unassigned task to the caller. Any **active member of the task's tenant** may claim it — no owner or manager role is needed — and the assignee is always the authenticated caller, taken from the key: the body carries no fields, so a request can never assign the task to somebody else. Only an unassigned, live task can be claimed. An archived task answers `404` like every other task endpoint. A task that already has an assignee answers `409 TASK_ALREADY_ASSIGNED`, which is the same answer whether another member claimed it first or the caller already holds it — that is why no `Idempotency-Key` is accepted, and why the answer tells the caller to re-read the task. The write sets `assignee_id` alone, so ownership, followers, status and board placement stay as they were, and one `task:assigned` event is recorded. A `code/{code}` sibling of this operation: the task is resolved by its natural code instead of its UUID, and every other rule is identical.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task code (e.g. ACME-42), resolved within the tenant"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The task with the caller as its assignee",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A body was sent (claim takes no fields), the body is not valid JSON, or X-Tenant-Code is missing (a code lookup needs the tenant)"
+          },
+          "403": {
+            "description": "The caller's membership of the task's tenant changed between the gate and the write. A caller who is simply not a member is answered 404 by the tenant gate before the service runs"
+          },
+          "404": {
+            "description": "Task not found"
+          },
+          "409": {
+            "description": "TASK_ALREADY_ASSIGNED: the task is not unassigned — another member claimed it, or the caller already did; re-read the task to see its assignee"
+          }
+        }
+      }
+    },
+    "/mission/tasks/code/{code}/actions/assign-agent": {
+      "post": {
+        "summary": "Assign Task To Agent (by Code)",
+        "description": "Same contract as `POST /mission/tasks/{id}/actions/assign-agent`, with the task addressed by its natural code. The task must already be agent-responsible and its agent task must still be `pending`; a task assigned to a person is rejected with 400.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task code (e.g. ACME-42)"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "agent_key"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "agent_key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Key of the agent to move the task to, e.g. task-pilot."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The task after the reassignment",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing agent_key, or INVALID_AGENT: the task is not agent-responsible, its agent task is not pending, or the key names no published agent in this tenant"
+          },
+          "403": {
+            "description": "Insufficient permission to reassign the task"
+          },
+          "404": {
+            "description": "Task not found"
           }
         }
       }

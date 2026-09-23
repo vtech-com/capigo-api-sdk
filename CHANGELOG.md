@@ -12,9 +12,51 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **`tasks claim` takes an unassigned task as yourself.**
+  `capigo tasks claim (<id> | --code <code>)` posts to `POST /mission/tasks/{id}/actions/claim`, the
+  endpoint the task screen's "Assign to me" control uses, and sends no body: the assignee is the user
+  the key authenticates as, so the call cannot be used to hand a task to somebody else. Any active
+  member of the task's tenant may claim — no owner or manager role is needed — which is why this is
+  not `tasks update --assignee`: that call reassigns a task, this one only takes a free one. A task
+  that already has an assignee exits 8 with `TASK_ALREADY_ASSIGNED`, and that is the same answer
+  whether another member claimed it first or you already hold it, so a retry after a dropped
+  connection is not a silent no-op — re-read the task with `tasks get` to see who has it. Claiming
+  changes the assignee alone: owner, status, followers and board placement stay as they were.
+- **`tasks transfer-ownership` hands a task to another member.**
+  `capigo tasks transfer-ownership (<id> | --code <code>) --owner-id <uuid>` posts to
+  `POST /mission/tasks/{id}/actions/transfer-ownership`, the endpoint the task screen's
+  `transferTaskOwnership` action uses. Two actors may call it: the task's **current owner**, and a
+  **tenant owner of the task's tenant** (ADR-061) — so an orphaned task can be handed on without a
+  database intervention. Everyone else, including a tenant owner of another tenant, gets a 403.
+  `--owner-id` must name an active member of the task's tenant (resolve it with `members list`,
+  never by hand; a local check rejects anything that is not a UUID before the round trip). The change
+  touches the owner alone: assignee, followers and board placement stay as they were. Naming the
+  current owner is a no-op that still answers 200, and the new owner and the former owner each
+  receive an inbox message.
+- **`tasks assign-agent` moves an agent-owned task to another agent.**
+  `capigo tasks assign-agent (<id> | --code <code>) --agent-key <key>` posts to
+  `POST /mission/tasks/{id}/actions/assign-agent`, the endpoint the task screen's agent picker
+  uses. It moves the agent assignment only: a task assigned to a person has no agent run to move, so
+  the API refuses it with `INVALID_AGENT` (exit 5) — that is a `tasks update --assignee` edit. The
+  agent run must still be `pending`, and the target agent must be published in the task's tenant (a
+  system agent is accepted too). Naming the agent the task already has is a no-op that still answers
+  200, so a retry needs no `Idempotency-Key`.
+- **`tasks update` can remove a follower.** `--remove-follower-id <uuid>` (repeatable) sends the
+  `follower_remove_ids` field on `PATCH /mission/tasks/{id}` (and `/code/{code}`), so a task's
+  watcher list can be corrected without the web UI — the endpoint's previous add-only limitation is
+  gone. `--follower-id` keeps adding. Removing someone who does not follow the task is a no-op;
+  naming the same user in both flags is rejected by the API with 400.
+- **`tasks create --idempotency-key <key>` makes a create safe to retry.** The key travels as the
+  `Idempotency-Key` header on `POST /mission/tasks`. A retry with the same key replays the task the
+  first attempt created (the API answers 200 instead of 201, with that task) instead of creating a
+  second one; the same key with a different body is 409 E0601. The key is scoped to the tenant.
+  Combining it with `--subtasks-json` fails locally (exit 5): `POST /mission/tasks/with-subtasks`
+  has no idempotency contract, and a silently dropped key would be a promise the CLI did not keep.
+
 - **Command help now names the response fields the API returns.** `members list`/`get`
-  document `title`, `department` and `birthday`; `tasks` commands document `followers` and
-  `meta_data`; `products` commands document `notes` and `media`; `variants` commands document
+  document `title`, `department` and `birthday`; `tasks` commands document `followers`,
+  `meta_data`, `responsible_type` and `assigned_agent_key`; `products` commands document `notes`
+  and `media`; `variants` commands document
   `status` and `media`. These fields were already present in the JSON output — the CLI passes
   `data` through unchanged — but a field the help page never named is a field an agent could
   not know existed. `make verify-api` now reports every checked page agrees with the server.
@@ -24,6 +66,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - **The bundled `capigo-api` skill documents product `notes` and variant `status`**, matching
   the CLI help above.
 
+### Fixed
+
+- **`capigo help exit-codes` now covers exit-8 state conflicts, and a refused claim says what to do
+  next.** Exit 8 was explained as a duplicate-unique-value conflict only, but a task that already has
+  an assignee exits 8 as well — the server refused the change because of the state it found. The topic
+  now names both cases, and `TASK_ALREADY_ASSIGNED` carries a `Next` step ("re-read the task; retrying
+  the same claim will not help") plus the capability brake in the error catalog, pinned by the catalog
+  test.
 ## [0.24.0] — 2026-08-18
 
 ### Fixed

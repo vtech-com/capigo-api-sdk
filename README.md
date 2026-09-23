@@ -190,9 +190,17 @@ capigo tasks comments <id|--code>      List a task's comment + activity timeline
                                        --sort asc|desc, --page, --limit; --code requires --tenant)
 capigo tasks attachments download <task-id|--code> <attachment-id>          Download a task-level attachment
 capigo tasks comments attachments download <task-id|--code> <attachment-id> Download a comment/activity attachment
-capigo tasks update <id>              Partial update a task (PATCH; --tenant optional; at least one field required)
+capigo tasks update <id>              Partial update a task (PATCH; --tenant optional; at least one field required;
+                                     --follower-id adds, --remove-follower-id removes)
+capigo tasks assign-agent <id|--code> Move an agent-owned task to another agent (--agent-key required;
+                                     --code requires --tenant)
+capigo tasks transfer-ownership <id|--code> Hand a task to another member (--owner-id required, an active
+                                     member of the tenant; only the current owner may call it)
+capigo tasks claim <id|--code>        Take an unassigned task yourself (--code requires --tenant;
+                                      any active member may claim; a task already assigned is a 409)
 capigo tasks create                   Create a new task (--title + --tenant required; --follower-id repeatable;
-                                       --subtasks-json to create subtasks atomically)
+                                     --idempotency-key makes a retry replay instead of duplicating;
+                                     --subtasks-json to create subtasks atomically)
 capigo tasks subtasks list <id|--code>     List a task's subtasks (--code requires --tenant)
 capigo tasks subtasks create <id|--code>   Add subtask(s) to an existing task (--title, or --from-json for a batch;
                                        --code requires --tenant)

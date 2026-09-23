@@ -97,6 +97,22 @@ func TestTaskPathEscapesItsAddress(t *testing.T) {
 	}
 }
 
+// TestTaskActionPath covers the action routes: they hang off whatever address
+// taskPath produced, so an id and a code both reach the same action.
+func TestTaskActionPath(t *testing.T) {
+	for _, action := range []string{"assign-agent", "transfer-ownership", "claim"} {
+		for _, tc := range []struct{ id, code, base string }{
+			{id: "task-1", base: "/mission/tasks/task-1"},
+			{code: "ACME-1", base: "/mission/tasks/code/ACME-1"},
+		} {
+			want := tc.base + "/actions/" + action
+			if got := taskPath(tc.id, tc.code) + "/actions/" + action; got != want {
+				t.Errorf("taskPath(%q, %q) + %s = %q, want %q", tc.id, tc.code, action, got, want)
+			}
+		}
+	}
+}
+
 // TestTasksListPath is a regression test for the tasks list filter gap: the
 // backend (query-parser.ts ALLOWED_FILTER_COLUMNS) accepts filters on status,
 // priority, assignee_id, owner_id, board_id, board_list_id, due_date, and
