@@ -5071,6 +5071,110 @@
         }
       }
     },
+    "/mission/tasks/{id}/actions/move": {
+      "post": {
+        "summary": "Move Task",
+        "description": "Place a top-level task in a board list: at the top of it, or behind a task already there. The caller must be the task's **owner**, its **assignee**, or a **tenant owner of the task's tenant** — board membership does not qualify, and the rule is the database's own update policy, so a caller who may read the task but not move it gets the same 404 a missing task gets. Exactly one placement per request: `after_task_id` (a task in the target list) or `position` = `\"top\"`. A subtask answers 400 — it has no board placement — and an archived task, or a target list that is archived, deleted or in another tenant, answers 404. An `after_task_id` that was archived between the read and the call places the task at the top instead of failing: the fallback the board's own drag relies on. An `after_task_id` naming the task being moved is 400 before anything is read: a card cannot be placed behind itself. The position is computed by one atomic, row-locking RPC, so no `Idempotency-Key` is needed or accepted — a retry lands the card in the same place.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Task UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "board_list_id"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "board_list_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Destination board list."
+                  },
+                  "after_task_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Place the task immediately after this task, which must be in the destination list."
+                  },
+                  "position": {
+                    "type": "string",
+                    "enum": [
+                      "top"
+                    ],
+                    "description": "Place the task first in the destination list."
+                  }
+                },
+                "oneOf": [
+                  {
+                    "required": [
+                      "after_task_id"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "position"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The task after the move",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error: both placements or neither, `position` other than `top`, a malformed list or task id, an unknown field, or SUBTASK_BOARD_FORBIDDEN for a subtask"
+          },
+          "404": {
+            "description": "Task not found, not movable by this caller, or the destination list is not readable for them"
+          }
+        }
+      }
+    },
     "/mission/tasks/{id}/actions/assign-agent": {
       "post": {
         "summary": "Assign Task To Agent",
@@ -12403,6 +12507,109 @@
           },
           "409": {
             "description": "TASK_ALREADY_ASSIGNED: the task is not unassigned — another member claimed it, or the caller already did; re-read the task to see its assignee"
+          }
+        }
+      }
+    },
+    "/mission/tasks/code/{code}/actions/move": {
+      "post": {
+        "summary": "Move Task (by Code)",
+        "description": "Place a top-level task in a board list: at the top of it, or behind a task already there. The caller must be the task's **owner**, its **assignee**, or a **tenant owner of the task's tenant** — board membership does not qualify, and the rule is the database's own update policy, so a caller who may read the task but not move it gets the same 404 a missing task gets. Exactly one placement per request: `after_task_id` (a task in the target list) or `position` = `\"top\"`. A subtask answers 400 — it has no board placement — and an archived task, or a target list that is archived, deleted or in another tenant, answers 404. An `after_task_id` that was archived between the read and the call places the task at the top instead of failing: the fallback the board's own drag relies on. An `after_task_id` naming the task being moved is 400 before anything is read: a card cannot be placed behind itself. The position is computed by one atomic, row-locking RPC, so no `Idempotency-Key` is needed or accepted — a retry lands the card in the same place.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task code (e.g. ACME-42)"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "board_list_id"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "board_list_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Destination board list."
+                  },
+                  "after_task_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Place the task immediately after this task, which must be in the destination list."
+                  },
+                  "position": {
+                    "type": "string",
+                    "enum": [
+                      "top"
+                    ],
+                    "description": "Place the task first in the destination list."
+                  }
+                },
+                "oneOf": [
+                  {
+                    "required": [
+                      "after_task_id"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "position"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The task after the move",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error: both placements or neither, `position` other than `top`, a malformed list or task id, an unknown field, or SUBTASK_BOARD_FORBIDDEN for a subtask"
+          },
+          "404": {
+            "description": "Task not found, not movable by this caller, or the destination list is not readable for them"
           }
         }
       }

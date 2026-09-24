@@ -100,7 +100,7 @@ func TestTaskPathEscapesItsAddress(t *testing.T) {
 // TestTaskActionPath covers the action routes: they hang off whatever address
 // taskPath produced, so an id and a code both reach the same action.
 func TestTaskActionPath(t *testing.T) {
-	for _, action := range []string{"assign-agent", "transfer-ownership", "claim", "archive", "unarchive"} {
+	for _, action := range []string{"assign-agent", "move", "transfer-ownership", "claim", "archive", "unarchive"} {
 		for _, tc := range []struct{ id, code, base string }{
 			{id: "task-1", base: "/mission/tasks/task-1"},
 			{code: "ACME-1", base: "/mission/tasks/code/ACME-1"},

@@ -910,6 +910,134 @@ OUTPUT
 	},
 }
 
+// tasks move flags
+var (
+	taskMoveTenant      string
+	taskMoveCode        string
+	taskMoveBoardListID string
+	taskMoveAfterTaskID string
+	taskMoveTop         bool
+)
+
+var tasksMoveCmd = &cobra.Command{
+	Use:   "move [<id>]",
+	Short: "Move a task into a board list, first or behind another card",
+	Long: `Move a task into a board list.
+
+PURPOSE
+  Place a card the way a drag does: into a column, either first in it or
+  directly behind a card already there. Use it to file work onto a board, or
+  to reorder a column from a script.
+
+USAGE
+  capigo tasks move (<id> | --code <code>) --board-list-id <uuid>
+                       (--top | --after-task-id <uuid>) [--tenant <code>]
+
+FLAGS
+  <id>
+      Task UUID. Positional. Give this or --code, never both.
+
+  --code <code>
+      Address the task by its code — the key a person quotes, like ACMEC-68.
+      A code is unique within a tenant, not across them, so --code needs a
+      tenant: pass --tenant, or set a default.
+
+  --tenant <code>
+      Tenant to scope the lookup to. Optional with an id; required with
+      --code.
+
+  --board-list-id <uuid>
+      Destination column. Required.
+
+  --top
+      Place the task first in the destination column. Give this or
+      --after-task-id, never both.
+
+        capigo tasks move TASK-104 --tenant acme --board-list-id <uuid> --top
+
+  --after-task-id <uuid>
+      Place the task directly behind this one, which must already be in the
+      destination column — an anchor from another column exits 4, and naming
+      the task itself is refused before the move starts (the API answers 400,
+      exit 5).
+
+        capigo tasks move TASK-104 --tenant acme --board-list-id <uuid> \
+          --after-task-id <uuid>
+
+  Only the task's owner, its assignee, or a tenant owner of its tenant may
+  move it. Anyone else exits 4, which is the same answer a task that does not
+  exist gets — so "not found" here does not always mean the task is gone. A
+  subtask exits 5 with SUBTASK_BOARD_FORBIDDEN: subtasks live in no column.
+
+  A retry is safe: the server recomputes the position from the card it finds,
+  so no Idempotency-Key is needed or accepted.
+
+OUTPUT
+  The task as it now stands, in the same shape as tasks get, with the
+  server-computed position:
+
+      { "data": { "id": "...", "code": "TASK-104", "board_id": "...",
+                  "board_list_id": "...", "position": 500, ... },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-09-23T04:12:33Z" } }`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		var id string
+		if len(args) == 1 {
+			id = args[0]
+		}
+
+		boardListID := strings.TrimSpace(taskMoveBoardListID)
+		afterTaskID := strings.TrimSpace(taskMoveAfterTaskID)
+
+		if boardListID == "" {
+			failValidation("--board-list-id is required")
+		}
+		switch {
+		case taskMoveTop && afterTaskID != "":
+			failValidation("give --top or --after-task-id, not both")
+		case !taskMoveTop && afterTaskID == "":
+			failValidation("a placement is required: --top, or --after-task-id <uuid>")
+		}
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(taskMoveTenant, profile)
+		requireOneTaskAddress(id, taskMoveCode, tenant)
+
+		body := map[string]any{"board_list_id": boardListID}
+		if taskMoveTop {
+			body["position"] = "top"
+		} else {
+			body["after_task_id"] = afterTaskID
+		}
+
+		resp, err := client.Do(ctx, "POST", taskPath(id, taskMoveCode)+"/actions/move", body, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope api.RawEnvelope
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		meta := itemMeta(tenant, taskMoveTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
+	},
+}
+
 // tasks transfer-ownership flags
 var (
 	taskTransferOwnershipTenant  string
@@ -1894,6 +2022,11 @@ func init() {
 	tasksAssignAgentCmd.Flags().StringVar(&taskAssignAgentTenant, "tenant", "", "scope to this tenant code")
 	tasksAssignAgentCmd.Flags().StringVar(&taskAssignAgentCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
 	tasksAssignAgentCmd.Flags().StringVar(&taskAssignAgentAgentKey, "agent-key", "", "key of the agent to move the task to (required)")
+	tasksMoveCmd.Flags().StringVar(&taskMoveTenant, "tenant", "", "scope to this tenant code")
+	tasksMoveCmd.Flags().StringVar(&taskMoveCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
+	tasksMoveCmd.Flags().StringVar(&taskMoveBoardListID, "board-list-id", "", "destination board list UUID (required)")
+	tasksMoveCmd.Flags().StringVar(&taskMoveAfterTaskID, "after-task-id", "", "place the task behind this task, which must be in the destination list")
+	tasksMoveCmd.Flags().BoolVar(&taskMoveTop, "top", false, "place the task first in the destination list")
 
 	// tasks transfer-ownership flags
 	tasksTransferOwnershipCmd.Flags().StringVar(&taskTransferOwnershipTenant, "tenant", "", "scope to this tenant code")
@@ -1944,7 +2077,7 @@ func init() {
 	// tasksAttachmentsCmd is defined in task_attachments.go, whose init() runs
 	// first — it is registered here so it lands after the verbs, not above them.
 	tasksSubtasksCmd.AddCommand(tasksSubtasksListCmd, tasksSubtasksCreateCmd)
-	taskCmd.AddCommand(tasksListCmd, tasksGetCmd, tasksCreateCmd, tasksUpdateCmd, tasksAssignAgentCmd, tasksTransferOwnershipCmd, tasksClaimCmd, tasksArchiveCmd, tasksUnarchiveCmd, tasksCommentsCmd, tasksSubtasksCmd, tasksAttachmentsCmd)
+	taskCmd.AddCommand(tasksListCmd, tasksGetCmd, tasksCreateCmd, tasksUpdateCmd, tasksAssignAgentCmd, tasksMoveCmd, tasksTransferOwnershipCmd, tasksClaimCmd, tasksArchiveCmd, tasksUnarchiveCmd, tasksCommentsCmd, tasksSubtasksCmd, tasksAttachmentsCmd)
 	rootCmd.AddCommand(taskCmd)
 }
 
