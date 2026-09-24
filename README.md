@@ -196,6 +196,8 @@ capigo tasks update <id>              Partial update a task (PATCH; --tenant opt
                                      --follower-id adds, --remove-follower-id removes; --due-date sets or clears it)
 capigo tasks assign-agent <id|--code> Move an agent-owned task to another agent (--agent-key required;
                                      --code requires --tenant)
+capigo tasks move <id|--code>       Move a task into a board list (--board-list-id required; --top or
+                                    --after-task-id <uuid>; --code requires --tenant)
 capigo tasks transfer-ownership <id|--code> Hand a task to another member (--owner-id required, an active
                                      member of the tenant; only the current owner may call it)
 capigo tasks claim <id|--code>        Take an unassigned task yourself (--code requires --tenant;
@@ -205,8 +207,10 @@ capigo tasks archive <id|--code>      Retire a task (--code requires --tenant; o
 capigo tasks unarchive <id|--code>    Restore an archived task (--code requires --tenant; owner,
                                       assignee or tenant owner; a subtask's assignee may restore it)
 capigo tasks create                   Create a new task (--title + --tenant required; --follower-id repeatable;
-                                     --idempotency-key makes a retry replay instead of duplicating;
-                                     --subtasks-json to create subtasks atomically)
+                                     --board + --list to file it on a board, with --top or
+                                     --after-task-id <uuid> to choose where; --idempotency-key makes a
+                                     retry replay instead of duplicating; --subtasks-json to create
+                                     subtasks atomically)
 capigo tasks subtasks list <id|--code>     List a task's subtasks (--code requires --tenant)
 capigo tasks subtasks create <id|--code>   Add subtask(s) to an existing task (--title, or --from-json for a batch;
                                        --code requires --tenant)

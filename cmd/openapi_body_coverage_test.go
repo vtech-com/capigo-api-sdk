@@ -26,6 +26,7 @@
 //	board_id     → board        (shorter flag name for usability)
 //	board_list_id → list        (short flag name; context makes it clear)
 //	assignee_id  → assignee     (trailing _id dropped for usability)
+//	position     → top          (one accepted value; exposed as the boolean --top)
 //
 // Verifying the guard catches real regressions:
 // To confirm this test would fail if --follower-id were removed from tasks create,
@@ -78,6 +79,10 @@ var bodyFieldAliasMap = map[string]string{
 	"board_list_id": "list",
 	// assignee_id → assignee: the _id suffix dropped for usability.
 	"assignee_id": "assignee",
+	// position accepts exactly one value ("top"), so the create command exposes
+	// it as the boolean --top rather than --position <value>: the same flag the
+	// move action uses for the same intent.
+	"position": "top",
 	// POST /mission/tasks/with-subtasks: the subtasks array is supplied as a JSON
 	// file via --subtasks-json on `tasks create`.
 	"subtasks": "subtasks-json",

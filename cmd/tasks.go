@@ -1431,6 +1431,8 @@ var (
 	taskCreateBoard          string
 	taskCreateList           string
 	taskCreateFollowerIDs    []string
+	taskCreateAfterTaskID    string
+	taskCreateTop            bool
 	taskCreateIdempotencyKey string
 	taskCreateSubtasksJSON   string
 )
@@ -1587,6 +1589,7 @@ USAGE
                        [--priority <text>] [--status <text>]
                        [--due-date <ts>] [--assignee <uuid>]
                        [--board <uuid> --list <uuid>]
+                       [--top | --after-task-id <uuid>]
                        [--follower-id <uuid>]... [--idempotency-key <key>]
                        [--subtasks-json <path|->]
 
@@ -1618,6 +1621,26 @@ FLAGS
 
   --list <uuid>
       Board list id. See --board.
+
+      Naming a list also changes who may create. The API writes such a create
+      through the board's own card-creation path: the caller must be a member
+      of that board or a tenant owner (anyone else exits 4), and the board's
+      owners are added as followers alongside --follower-id. A create with no
+      list keeps the plain path, which needs neither.
+
+  --top
+      Place the new card first in --list. Give this or --after-task-id, never
+      both, and only with --list. Omit both and the card is appended.
+
+        capigo tasks create --tenant acme --title "Fix login bug" \
+            --board <uuid> --list <uuid> --top
+
+  --after-task-id <uuid>
+      Place the new card directly behind this one, which must already be in
+      --list — an anchor in another column exits 4.
+
+        capigo tasks create --tenant acme --title "Fix login bug" \
+            --board <uuid> --list <uuid> --after-task-id <uuid>
 
   --follower-id <uuid>
       Follower user id. Repeatable.
@@ -1679,6 +1702,23 @@ OUTPUT
 			failValidation("--title is required")
 		}
 
+		afterTaskID := strings.TrimSpace(taskCreateAfterTaskID)
+		placementGiven := taskCreateTop || afterTaskID != ""
+		switch {
+		case taskCreateTop && afterTaskID != "":
+			failValidation("give --top or --after-task-id, not both")
+		case placementGiven && taskCreateSubtasksJSON != "":
+			failValidation("--top and --after-task-id are not supported with --subtasks-json: POST /mission/tasks/with-subtasks takes no placement")
+		case placementGiven && taskCreateList == "":
+			failValidation("a placement needs --list: the card is placed in that column")
+		}
+		// Refused here rather than in the --subtasks-json branch below, which runs
+		// after the client is built: a flag combination the endpoint cannot take
+		// must exit 5 whether or not credentials are configured.
+		if taskCreateIdempotencyKey != "" && taskCreateSubtasksJSON != "" {
+			failValidation("--idempotency-key is not supported with --subtasks-json: POST /mission/tasks/with-subtasks has no idempotency contract")
+		}
+
 		client, cfg, err := buildClient()
 		if err != nil {
 			return handleErr(err)
@@ -1696,9 +1736,6 @@ OUTPUT
 		// parent task is built from the same create flags; the JSON payload is
 		// the subtasks array. All-or-nothing: nothing is created if any part fails.
 		if taskCreateSubtasksJSON != "" {
-			if taskCreateIdempotencyKey != "" {
-				failValidation("--idempotency-key is not supported with --subtasks-json: POST /mission/tasks/with-subtasks has no idempotency contract")
-			}
 			raw, err := readJSONInput(taskCreateSubtasksJSON)
 			if err != nil {
 				return handleErr(fmt.Errorf("read --subtasks-json: %w", err))
@@ -1780,6 +1817,13 @@ OUTPUT
 		}
 		if len(taskCreateFollowerIDs) > 0 {
 			body.FollowerIDs = taskCreateFollowerIDs
+		}
+		if afterTaskID != "" {
+			body.AfterTaskID = &afterTaskID
+		}
+		if taskCreateTop {
+			top := "top"
+			body.Position = &top
 		}
 
 		// POST /mission/tasks: tenant_code is in the body; also send X-Tenant-Code header for consistency.
@@ -2055,6 +2099,8 @@ func init() {
 	tasksCreateCmd.Flags().StringVar(&taskCreateAssignee, "assignee", "", "assignee user ID")
 	tasksCreateCmd.Flags().StringVar(&taskCreateBoard, "board", "", "board ID")
 	tasksCreateCmd.Flags().StringVar(&taskCreateList, "list", "", "board list ID")
+	tasksCreateCmd.Flags().StringVar(&taskCreateAfterTaskID, "after-task-id", "", "place the new card directly behind this task in --list (needs --list; exclusive with --top)")
+	tasksCreateCmd.Flags().BoolVar(&taskCreateTop, "top", false, "place the new card first in --list (needs --list; exclusive with --after-task-id)")
 	tasksCreateCmd.Flags().StringArrayVar(&taskCreateFollowerIDs, "follower-id", nil, "follower user ID (repeatable: --follower-id <uuid> --follower-id <uuid>)")
 	tasksCreateCmd.Flags().StringVar(&taskCreateIdempotencyKey, "idempotency-key", "", "make the create safe to retry: the same key replays the task it created; a different body under the same key exits 1 with E0601 (not supported with --subtasks-json)")
 	tasksCreateCmd.Flags().StringVar(&taskCreateSubtasksJSON, "subtasks-json", "", "path to a JSON array of subtask items (use - for stdin); creates the task and its subtasks atomically via POST /mission/tasks/with-subtasks")

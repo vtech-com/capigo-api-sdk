@@ -13,7 +13,16 @@ Read this only when creating or changing tasks, assignees, followers, or subtask
 4. For "me" or no assignee, omit the assignee flag: Capigo applies its creator-assignment default.
    An explicitly unassigned task needs a help-confirmed CLI path; never send an empty assignee.
 5. If placing the task on a board, resolve its exact board and list through `boards.md`; otherwise
-   omit both fields.
+   omit both fields. Naming a list also asks for membership of that board (or a tenant owner): a
+   create onto a board that the caller is not on is refused with `BOARD_FORBIDDEN` (403), and that
+   refusal is final for that caller — do not retry it as a transient error. A wrong tenant is a
+   different code (`AUTH_TENANT_MISMATCH`), so the two refusals do not mean the same thing.
+6. `--top`, or `--after-task-id <uuid>` naming a card already in that column, decides where the new
+   card lands; omit both and it is appended. Both flags need `--list`, are mutually exclusive, and
+   are refused with `--subtasks-json` (exit 5).
+7. A create that names a list can answer `PLACEMENT_FAILED` (409) with the created task in `data.id`:
+   the card exists at the end of that list and only the position was refused. Do not create it again —
+   place it with `tasks move`.
 
 ## Comments
 
@@ -105,6 +114,27 @@ Read this only when creating or changing tasks, assignees, followers, or subtask
   and an archived list holding the task comes back with it.
 - A task that is already live is a no-op: nothing is written, no event is recorded, and the answer is the
   task.
+
+## Moving a task on a board
+
+- `tasks move (<id> | --code) --board-list-id <uuid> (--top | --after-task-id <uuid>)` places a card the
+  way a drag does: first in the column, or directly behind a card already there.
+- The destination column is required, and exactly one placement: `--top`, or `--after-task-id` naming a
+  card in that same column. Missing the list, missing both placements, or giving both exits 5 and nothing
+  moves. Naming the task itself as the anchor is refused too — the API answers 400 before it moves
+  anything, so a 5 there does not mean the move was attempted.
+- Only the task's owner, its assignee, or a tenant owner of its tenant may move it. Anyone else exits 4 —
+  the same answer a task that does not exist gets, so never report "the task does not exist" off an exit 4
+  without checking the caller's relationship to the task.
+- Moving is how work is filed onto a board from the CLI: a task with no board placement gains one, and a
+  task already on a board changes column. Send the move and read the returned `board_id`, `board_list_id`
+  and `position` back rather than assuming the card landed where you pictured it.
+- An `--after-task-id` from another column exits 4 and leaves the task where it was. If the anchor was
+  archived between your read and the call, the task lands first in the destination column instead — the
+  board's own graceful fallback — so a move that succeeds may still not be exactly where you asked.
+- A subtask cannot be moved: exit 5 with `SUBTASK_BOARD_FORBIDDEN`, because subtasks live in no column.
+- Retry freely. The server computes the position from the card it finds, so a second identical call leaves
+  the card where the first one put it and no idempotency key is needed.
 
 ## Finding an archived task
 

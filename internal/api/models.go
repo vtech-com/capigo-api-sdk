@@ -56,12 +56,18 @@ type AttachmentDownload struct {
 // CreateTaskRequest is the body for POST /mission/tasks.
 // tenant_code is required and is sent as a body field (not a header).
 type CreateTaskRequest struct {
-	TenantCode  string   `json:"tenant_code"`
-	Title       string   `json:"title"`
-	Description *string  `json:"description,omitempty"`
-	AssigneeID  *string  `json:"assignee_id,omitempty"`
-	BoardID     *string  `json:"board_id,omitempty"`
-	BoardListID *string  `json:"board_list_id,omitempty"`
+	TenantCode  string  `json:"tenant_code"`
+	Title       string  `json:"title"`
+	Description *string `json:"description,omitempty"`
+	AssigneeID  *string `json:"assignee_id,omitempty"`
+	BoardID     *string `json:"board_id,omitempty"`
+	BoardListID *string `json:"board_list_id,omitempty"`
+	// AfterTaskID places the new card directly behind that task in BoardListID.
+	// At most one of AfterTaskID and Position may be set, and neither without
+	// BoardListID. A JSON null is rejected by the API: use Position for "first".
+	AfterTaskID *string `json:"after_task_id,omitempty"`
+	// Position places the new card first in BoardListID. Only "top" is accepted.
+	Position    *string  `json:"position,omitempty"`
 	FollowerIDs []string `json:"follower_ids,omitempty"`
 	Priority    *string  `json:"priority,omitempty"`
 	Status      *string  `json:"status,omitempty"`

@@ -12,6 +12,26 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **`tasks create` can put the new card where you want it.** `capigo tasks create ... --board <uuid>
+  --list <uuid> (--top | --after-task-id <uuid>)` creates the task through the board's own
+  card-creation path and places it first in the column (`--top`) or directly behind a card already
+  there (`--after-task-id`). Omit both and the card is appended, as before. `--top` and
+  `--after-task-id` need `--list` and are mutually exclusive; either one without a list, both
+  together, or either with `--subtasks-json` exits 5 before any request is sent. A create that names a
+  list now also asks for membership of that board (or a tenant owner) — anyone else exits 4 with
+  `FORBIDDEN` — and adds the board's owners as followers alongside `--follower-id`. A create with no
+  list keeps the plain path and needs neither.
+
+- **`tasks move` places a card the way a drag does.** `capigo tasks move (<id> | --code <code>)
+  --board-list-id <uuid> (--top | --after-task-id <uuid>)` posts to
+  `POST /mission/tasks/{id}/actions/move`. The destination list is required and exactly one placement:
+  `--top` for first in the column, or `--after-task-id` to land directly behind a card already there. The
+  task's owner, its assignee, or a tenant owner of its tenant may move it; anyone else exits 4, which is
+  the same answer a task that does not exist gets. A subtask exits 5 with `SUBTASK_BOARD_FORBIDDEN` —
+  subtasks live in no column — and an archived task, or an archived destination list, exits 4. Moving a
+  task that had no board placement files it onto the board. A retry is safe, because the server recomputes
+  the position from the card it finds, so no `--idempotency-key` is sent.
+
 - **`tasks list --include-archived` and `tasks get --include-archived` find a task that was archived.**
   Archived tasks are left out of every task read by default — on the boards, in `tasks list`, and on both
   detail addresses — so a task that exists can be missing from a list, and `tasks get` exits 4 for it. Both

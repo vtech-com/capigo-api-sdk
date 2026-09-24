@@ -1298,6 +1298,18 @@
             "format": "uuid",
             "nullable": true
           },
+          "after_task_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Place the new card directly behind this task in `board_list_id`. Send at most one of `after_task_id` and `position`, and never without `board_list_id`. `null` is refused — send `position: \"top\"` to place the card first. Omit both to append."
+          },
+          "position": {
+            "type": "string",
+            "enum": [
+              "top"
+            ],
+            "description": "Place the new card first in `board_list_id`. Requires `board_list_id`, and is mutually exclusive with `after_task_id`."
+          },
           "follower_ids": {
             "type": "array",
             "items": {
@@ -4492,7 +4504,7 @@
         "tags": [
           "Tasks"
         ],
-        "description": "Create a new task. An optional `Idempotency-Key` header makes a retry safe: the first application returns 201, a replay of the same key with an identical canonical body returns 200 with the existing task, and the same key with a different body returns 409 (E0601).",
+        "description": "Create a new task. A body that names `board_list_id` creates the card through the board's own card-creation path: it requires membership of that board (or a tenant owner), seeds the board owners as followers, and accepts an optional placement (`after_task_id`, or `position: \"top\"`) — omit both to append. A body with no list keeps the plain create. An optional `Idempotency-Key` header makes a retry safe: the first application returns 201, a replay of the same key with an identical canonical body returns 200 with the existing task, and the same key with a different body returns 409 (E0601).",
         "parameters": [
           {
             "name": "Idempotency-Key",
@@ -4549,14 +4561,74 @@
             "$ref": "#/components/schemas/Error"
           },
           "403": {
-            "$ref": "#/components/schemas/Error"
-          },
-          "409": {
-            "description": "Idempotency-Key was already used with a different request body (E0601)",
+            "description": "Access to this tenant is denied, or the caller is neither a member of the board named by `board_list_id` nor a tenant owner (the latter answers `BOARD_FORBIDDEN`)",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "tenantDenied": {
+                    "summary": "The key or the X-Tenant-Code names another tenant",
+                    "value": {
+                      "error": {
+                        "code": "AUTH_TENANT_MISMATCH",
+                        "message": "Access to this tenant is denied"
+                      }
+                    }
+                  },
+                  "boardDenied": {
+                    "summary": "A tenant member who is not on that board",
+                    "value": {
+                      "error": {
+                        "code": "BOARD_FORBIDDEN",
+                        "message": "You must be a member of the board, or a tenant owner, to create a task in its list"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The `board_list_id` no longer resolves to a live list in this tenant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The Idempotency-Key was already used with a different request body (E0601), or the task was created and the requested position could not be applied (PLACEMENT_FAILED — the answer names the created task in `data.id`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "idempotencyConflict": {
+                    "summary": "Same key, different body",
+                    "value": {
+                      "error": {
+                        "code": "E0601",
+                        "message": "Idempotency-Key was already used with a different request body"
+                      }
+                    }
+                  },
+                  "placementFailed": {
+                    "summary": "The card exists at the end of the list; the placement did not happen",
+                    "value": {
+                      "error": {
+                        "code": "PLACEMENT_FAILED",
+                        "message": "The task was created at the end of the list, but the requested position could not be applied. Place it with POST /v1/mission/tasks/{id}/actions/move"
+                      },
+                      "data": {
+                        "id": "the created task id"
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -4644,7 +4716,7 @@
       },
       "patch": {
         "summary": "Update Task",
-        "description": "Partial update of a task. Any subset of fields may be provided; at least one is required. Each changed field emits its corresponding domain event. `PATCH` is partial-update (cf. there is no full-replace `PUT` for tasks).",
+        "description": "Partial update of a task. Any subset of fields may be provided; at least one is required. Each changed field emits its corresponding domain event. `PATCH` is partial-update (cf. there is no full-replace `PUT` for tasks). Assigning a task that is a subtask follows the subtask rule, not the task rule: the caller must be the parent task's owner or assignee, a tenant owner, or an active member of the parent task's board — the same check the GUI applies. A subtask's own assignee cannot reassign it through this endpoint.",
         "tags": [
           "Tasks"
         ],
@@ -4721,6 +4793,7 @@
                     "nullable": true,
                     "description": "Set to null to clear the due date. Must be today or in the future."
                   },
+
                   "follower_ids": {
                     "type": "array",
                     "items": {
@@ -4867,7 +4940,7 @@
     "/mission/tasks/{id}/actions/archive": {
       "post": {
         "summary": "Archive Task",
-        "description": "Retire a task: set `archived_at` and take the task out of every task read. The caller must be the task's **owner**, its **assignee**, or a **tenant owner of the task's tenant** — board membership does not qualify, and a subtask is stricter: archiving it asks the *parent's* owner or assignee, so a subtask's own assignee is refused. The body carries no fields: the task is named by its address and the archive records no reason. The answer names the task by id rather than returning the task, because every task read answers `404` once the archive has run — a repeat answers `404` too, which is also why no `Idempotency-Key` is accepted: a replay is a read-side fact, not a duplicate write.",
+        "description": "Retire a task: set `archived_at` and take the task out of every task read. The caller must be the task's **owner**, its **assignee**, or a **tenant owner of the task's tenant** — board membership does not qualify, and a subtask is stricter: archiving it asks the *parent's* owner or assignee, so a subtask's own assignee is refused. Archiving a subtask retires that subtask alone — its parent and siblings are untouched — while archiving a **parent** retires its active subtasks with it and marks them as taken by that archive, which is what its own restore later releases (`docs/adr/adr-078-parent-archive-sweeps-and-records.md`). The body carries no fields: the task is named by its address and the archive records no reason. The answer names the task by id rather than returning the task, because every task read answers `404` once the archive has run — a repeat answers `404` too, which is also why no `Idempotency-Key` is accepted: a replay is a read-side fact, not a duplicate write.",
         "tags": [
           "Tasks"
         ],
@@ -4941,7 +5014,7 @@
     "/mission/tasks/{id}/actions/unarchive": {
       "post": {
         "summary": "Unarchive Task",
-        "description": "Restore an archived task: clear `archived_at` and bring it back into every task read. The caller must be the task's **owner**, its **assignee**, or a **tenant owner of the task's tenant** — board membership does not qualify. Unlike archiving, restoring a subtask does *not* ask the parent: a subtask's own assignee may restore it. The body carries no fields: the task is named by its address and the restore records no reason. Restoring a task that is already live is a successful no-op — the answer is that task and nothing is written. The answer is the task in the `GET /mission/tasks/{id}` shape, and one `task:unarchived` event is recorded unless the task was already live. The database's own triggers ride along: an archived list holding the task is unarchived with it, and a subtask deleted on its own has `is_deleted` cleared.",
+        "description": "Restore an archived task: clear `archived_at` and bring it back into every task read. The caller must be the task's **owner**, its **assignee**, or a **tenant owner of the task's tenant** — board membership does not qualify. A subtask answers to its parent's coordinators here too, so a subtask's own assignee is refused. A subtask whose parent is still archived cannot be restored at all (`400 PARENT_TASK_ARCHIVED`): restoring that parent is what releases the subtasks its archive took, and it leaves a subtask that was archived on its own archived (`docs/adr/adr-078-parent-archive-sweeps-and-records.md`). The body carries no fields: the task is named by its address and the restore records no reason. Restoring a task that is already live is a successful no-op — the answer is that task and nothing is written. The answer is the task in the `GET /mission/tasks/{id}` shape, and one `task:unarchived` event is recorded unless the task was already live. The database's own triggers ride along: an archived list holding the task is unarchived with it, and a subtask deleted on its own has `is_deleted` cleared.",
         "tags": [
           "Tasks"
         ],
@@ -5067,110 +5140,6 @@
           },
           "409": {
             "description": "TASK_ALREADY_ASSIGNED: the task is not unassigned — another member claimed it, or the caller already did; re-read the task to see its assignee"
-          }
-        }
-      }
-    },
-    "/mission/tasks/{id}/actions/move": {
-      "post": {
-        "summary": "Move Task",
-        "description": "Place a top-level task in a board list: at the top of it, or behind a task already there. The caller must be the task's **owner**, its **assignee**, or a **tenant owner of the task's tenant** — board membership does not qualify, and the rule is the database's own update policy, so a caller who may read the task but not move it gets the same 404 a missing task gets. Exactly one placement per request: `after_task_id` (a task in the target list) or `position` = `\"top\"`. A subtask answers 400 — it has no board placement — and an archived task, or a target list that is archived, deleted or in another tenant, answers 404. An `after_task_id` that was archived between the read and the call places the task at the top instead of failing: the fallback the board's own drag relies on. An `after_task_id` naming the task being moved is 400 before anything is read: a card cannot be placed behind itself. The position is computed by one atomic, row-locking RPC, so no `Idempotency-Key` is needed or accepted — a retry lands the card in the same place.",
-        "tags": [
-          "Tasks"
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "description": "Task UUID"
-          },
-          {
-            "name": "X-Tenant-Code",
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "board_list_id"
-                ],
-                "additionalProperties": false,
-                "properties": {
-                  "board_list_id": {
-                    "type": "string",
-                    "format": "uuid",
-                    "description": "Destination board list."
-                  },
-                  "after_task_id": {
-                    "type": "string",
-                    "format": "uuid",
-                    "description": "Place the task immediately after this task, which must be in the destination list."
-                  },
-                  "position": {
-                    "type": "string",
-                    "enum": [
-                      "top"
-                    ],
-                    "description": "Place the task first in the destination list."
-                  }
-                },
-                "oneOf": [
-                  {
-                    "required": [
-                      "after_task_id"
-                    ]
-                  },
-                  {
-                    "required": [
-                      "position"
-                    ]
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The task after the move",
-            "headers": {
-              "X-Server-Time": {
-                "schema": {
-                  "type": "string",
-                  "format": "date-time"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/PublicTaskResponse"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error: both placements or neither, `position` other than `top`, a malformed list or task id, an unknown field, or SUBTASK_BOARD_FORBIDDEN for a subtask"
-          },
-          "404": {
-            "description": "Task not found, not movable by this caller, or the destination list is not readable for them"
           }
         }
       }
@@ -5626,7 +5595,7 @@
             }
           },
           "400": {
-            "description": "Validation error (all-or-nothing) — nothing was created. Possible codes: SUBTASK_VALIDATION_ERROR, PARENT_TASK_NOT_FOUND, SUBTASK_INVALID, PARENT_TASK_ARCHIVED, INVALID_ASSIGNEE.",
+            "description": "Validation error (all-or-nothing) — nothing was created. Possible codes: SUBTASK_VALIDATION_ERROR, SUBTASK_INVALID, INVALID_ASSIGNEE. PARENT_TASK_NOT_FOUND and PARENT_TASK_ARCHIVED exist in the service layer but are not reachable here: the parent lookup answers 404 first.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5637,6 +5606,16 @@
           },
           "403": {
             "description": "Permission denied — not parent task owner or tenant owner, or not a tenant member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Parent task not found — unknown, archived, or in another tenant. The Public API treats an archived task as absent, so the parent lookup answers before the PARENT_TASK_ARCHIVED branch can run.",
             "content": {
               "application/json": {
                 "schema": {
@@ -12055,7 +12034,7 @@
             }
           },
           "400": {
-            "description": "Validation error (all-or-nothing) — nothing was created. Possible codes: SUBTASK_VALIDATION_ERROR, PARENT_TASK_NOT_FOUND, SUBTASK_INVALID, PARENT_TASK_ARCHIVED, INVALID_ASSIGNEE.",
+            "description": "Validation error (all-or-nothing) — nothing was created. Possible codes: SUBTASK_VALIDATION_ERROR, SUBTASK_INVALID, INVALID_ASSIGNEE. PARENT_TASK_NOT_FOUND and PARENT_TASK_ARCHIVED exist in the service layer but are not reachable here: the parent lookup answers 404 first.",
             "content": {
               "application/json": {
                 "schema": {
@@ -12066,6 +12045,16 @@
           },
           "403": {
             "description": "Permission denied — not parent task owner or tenant owner, or not a tenant member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Parent task not found — unknown, archived, or in another tenant. The Public API treats an archived task as absent, so the parent lookup answers before the PARENT_TASK_ARCHIVED branch can run.",
             "content": {
               "application/json": {
                 "schema": {
@@ -12511,109 +12500,6 @@
         }
       }
     },
-    "/mission/tasks/code/{code}/actions/move": {
-      "post": {
-        "summary": "Move Task (by Code)",
-        "description": "Place a top-level task in a board list: at the top of it, or behind a task already there. The caller must be the task's **owner**, its **assignee**, or a **tenant owner of the task's tenant** — board membership does not qualify, and the rule is the database's own update policy, so a caller who may read the task but not move it gets the same 404 a missing task gets. Exactly one placement per request: `after_task_id` (a task in the target list) or `position` = `\"top\"`. A subtask answers 400 — it has no board placement — and an archived task, or a target list that is archived, deleted or in another tenant, answers 404. An `after_task_id` that was archived between the read and the call places the task at the top instead of failing: the fallback the board's own drag relies on. An `after_task_id` naming the task being moved is 400 before anything is read: a card cannot be placed behind itself. The position is computed by one atomic, row-locking RPC, so no `Idempotency-Key` is needed or accepted — a retry lands the card in the same place.",
-        "tags": [
-          "Tasks"
-        ],
-        "parameters": [
-          {
-            "name": "code",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Task code (e.g. ACME-42)"
-          },
-          {
-            "name": "X-Tenant-Code",
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "board_list_id"
-                ],
-                "additionalProperties": false,
-                "properties": {
-                  "board_list_id": {
-                    "type": "string",
-                    "format": "uuid",
-                    "description": "Destination board list."
-                  },
-                  "after_task_id": {
-                    "type": "string",
-                    "format": "uuid",
-                    "description": "Place the task immediately after this task, which must be in the destination list."
-                  },
-                  "position": {
-                    "type": "string",
-                    "enum": [
-                      "top"
-                    ],
-                    "description": "Place the task first in the destination list."
-                  }
-                },
-                "oneOf": [
-                  {
-                    "required": [
-                      "after_task_id"
-                    ]
-                  },
-                  {
-                    "required": [
-                      "position"
-                    ]
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The task after the move",
-            "headers": {
-              "X-Server-Time": {
-                "schema": {
-                  "type": "string",
-                  "format": "date-time"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/PublicTaskResponse"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error: both placements or neither, `position` other than `top`, a malformed list or task id, an unknown field, or SUBTASK_BOARD_FORBIDDEN for a subtask"
-          },
-          "404": {
-            "description": "Task not found, not movable by this caller, or the destination list is not readable for them"
-          }
-        }
-      }
-    },
     "/mission/tasks/code/{code}/actions/assign-agent": {
       "post": {
         "summary": "Assign Task To Agent (by Code)",
@@ -12933,6 +12819,213 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/mission/tasks/{id}/actions/move": {
+      "post": {
+        "summary": "Move Task",
+        "description": "Place a top-level task in a board list: at the top of it, or behind a task already there. The caller must be the task's **owner**, its **assignee**, or a **tenant owner of the task's tenant** — board membership does not qualify, and the rule is the database's own update policy, so a caller who may read the task but not move it gets the same 404 a missing task gets. Exactly one placement per request: `after_task_id` (a task in the target list) or `position` = `\"top\"`. A subtask answers 400 — it has no board placement — and an archived task, or a target list that is archived, deleted or in another tenant, answers 404. An `after_task_id` that was archived between the read and the call places the task at the top instead of failing: the fallback the board's own drag relies on. An `after_task_id` naming the task being moved is 400 before anything is read: a card cannot be placed behind itself. The position is computed by one atomic, row-locking RPC, so no `Idempotency-Key` is needed or accepted — a retry lands the card in the same place.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Task UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "board_list_id"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "board_list_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Destination board list."
+                  },
+                  "after_task_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Place the task immediately after this task, which must be in the destination list."
+                  },
+                  "position": {
+                    "type": "string",
+                    "enum": [
+                      "top"
+                    ],
+                    "description": "Place the task first in the destination list."
+                  }
+                },
+                "oneOf": [
+                  {
+                    "required": [
+                      "after_task_id"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "position"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The task after the move",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error: both placements or neither, `position` other than `top`, a malformed list or task id, an unknown field, or SUBTASK_BOARD_FORBIDDEN for a subtask"
+          },
+          "404": {
+            "description": "Task not found, not movable by this caller, or the destination list is not readable for them"
+          }
+        }
+      }
+    },
+    "/mission/tasks/code/{code}/actions/move": {
+      "post": {
+        "summary": "Move Task (by Code)",
+        "description": "Place a top-level task in a board list: at the top of it, or behind a task already there. The caller must be the task's **owner**, its **assignee**, or a **tenant owner of the task's tenant** — board membership does not qualify, and the rule is the database's own update policy, so a caller who may read the task but not move it gets the same 404 a missing task gets. Exactly one placement per request: `after_task_id` (a task in the target list) or `position` = `\"top\"`. A subtask answers 400 — it has no board placement — and an archived task, or a target list that is archived, deleted or in another tenant, answers 404. An `after_task_id` that was archived between the read and the call places the task at the top instead of failing: the fallback the board's own drag relies on. An `after_task_id` naming the task being moved is 400 before anything is read: a card cannot be placed behind itself. The position is computed by one atomic, row-locking RPC, so no `Idempotency-Key` is needed or accepted — a retry lands the card in the same place.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task code (e.g. ACME-42)"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "board_list_id"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "board_list_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Destination board list."
+                  },
+                  "after_task_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Place the task immediately after this task, which must be in the destination list."
+                  },
+                  "position": {
+                    "type": "string",
+                    "enum": [
+                      "top"
+                    ],
+                    "description": "Place the task first in the destination list."
+                  }
+                },
+                "oneOf": [
+                  {
+                    "required": [
+                      "after_task_id"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "position"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The task after the move",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error: both placements or neither, `position` other than `top`, a malformed list or task id, an unknown field, or SUBTASK_BOARD_FORBIDDEN for a subtask"
+          },
+          "404": {
+            "description": "Task not found, not movable by this caller, or the destination list is not readable for them"
           }
         }
       }
