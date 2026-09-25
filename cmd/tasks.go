@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -482,21 +484,61 @@ var (
 	taskCommentsCreateAttachmentsJSON string
 )
 
+// tasks comments create flags (the upload ones; the rest live above the command)
+var (
+	taskCommentsCreateFiles          []string
+	taskCommentsCreateContentType    string
+	taskCommentsCreateIdempotencyKey string
+)
+
+// maxCommentFiles mirrors the API's MAX_ATTACHMENTS_PER_MESSAGE: one comment
+// carries at most this many files. Counting is local because the alternative is
+// uploading every byte of an eleventh file to be told so afterwards.
+const maxCommentFiles = 10
+
+// readUploadParts reads each --file path and declares the media type for it: the
+// override when the caller gave one, otherwise the detection
+// `tasks attachments upload` also uses.
+func readUploadParts(paths []string, contentTypeOverride string) ([]api.UploadPart, error) {
+	parts := make([]api.UploadPart, 0, len(paths))
+	for _, path := range paths {
+		data, err := api.ReadUploadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		contentType := contentTypeOverride
+		if contentType == "" {
+			contentType = api.DetectContentType(path, data)
+		}
+		parts = append(parts, api.UploadPart{
+			FieldName:   "file",
+			FileName:    filepath.Base(path),
+			ContentType: contentType,
+			Data:        data,
+		})
+	}
+	return parts, nil
+}
+
 var tasksCommentsCreateCmd = &cobra.Command{
 	Use:   "create [<id>]",
 	Short: "Post a comment to a task",
 	Long: `Add a comment to a task's discussion timeline.
 
 PURPOSE
-  Post a comment, with text, attachments, or both. To read what is already
-  there, use tasks comments. Attachments are referenced by id, not uploaded
-  by this command: this endpoint takes pre-uploaded attachment references, and
-  the public API has no upload endpoint, so --attachments-json only works with
-  attachment ids that were uploaded through another channel (the web app).
+  Post a comment, with text, files, or both. To read what is already there,
+  use tasks comments.
+
+  Files travel with the comment: --file sends the bytes in the same request,
+  the server stores them and records the attachment, and nothing else is
+  needed to make them visible. (--attachments-json remains for callers that
+  already hold uploaded attachment ids from another channel.)
 
 USAGE
   capigo tasks comments create (<id> | --code <code>) [--tenant <code>]
                                 [--content <text>]
+                                [--file <path> ...]
+                                [--idempotency-key <key>]
                                 [--attachments-json <path|->]
 
 FLAGS
@@ -515,10 +557,41 @@ FLAGS
       --code.
 
   --content <text>
-      Comment text. May be empty (or omitted) if --attachments-json is given;
-      at least one of the two is required.
+      Comment text. May be empty (or omitted) when --file or
+      --attachments-json is given; at least one of the three is required.
 
         capigo tasks comments create <uuid> --content "Reproduced on staging."
+
+  --file <path>
+      A file to attach. Repeat the flag for more than one (at most 10).
+      The media type is detected from the path, then from the file's first
+      bytes; the server checks it against a fixed list of accepted types
+      (images, PDF, Office documents, text/markdown/csv, zip) and answers
+      400 INVALID_FILE_TYPE naming the type it saw.
+
+        capigo tasks comments create <uuid> --content "Here it is" --file ./invoice.pdf
+
+      --file and --attachments-json cannot be combined: a comment carries
+      either files or pre-uploaded ids. Sending both exits 5.
+
+  --content-type <media type>
+      Declare this type for every --file instead of detecting one. The
+      detection reads the extension first and the bytes second, so a file
+      whose format neither names correctly — a format this machine has no
+      mapping for, or one whose bytes look like another type — would be
+      refused or stored under the wrong type. Naming it here settles it. A
+      value with no characters is refused here rather than sent: the server
+      would reject the declaration after the upload had been spent.
+
+        capigo tasks comments create <uuid> --file ./plan.md --content-type text/markdown
+
+  --idempotency-key <key>
+      Optional; needs --file. Makes a retry safe: sending the same key with
+      the same comment again does not post a second one. The API takes a key
+      on a comment that carries its files, so passing this without --file
+      exits 5 rather than sending a key the server would ignore. A key with
+      no characters is refused here for the same reason the API ignores it:
+      it would make the retry unsafe while looking safe.
 
   --attachments-json <path|->
       Path to a JSON file (or - for stdin) holding an object keyed by
@@ -536,8 +609,8 @@ FLAGS
       | echo '{"3fa85f64-...": {"file_name":"a.png","mime_type":"image/png","size_bytes":100}}' \
         | capigo tasks comments create <uuid> --attachments-json -
 
-  At least one of --content and --attachments-json is required; sending
-  neither exits 5.
+  At least one of --content, --file and --attachments-json is required;
+  sending none of the three exits 5.
 
 OUTPUT
   The created comment is at .data, the same shape as one row of tasks
@@ -554,7 +627,12 @@ OUTPUT
 
   meta.tenant is the tenant the write landed in, when --tenant was given or
   resolved from CAPIGO_TENANT/config; it is absent when the id alone found
-  the task with no tenant resolved.`,
+  the task with no tenant resolved.
+
+  meta.replayed is true when a comment with files was not posted again: an
+  earlier call with this --idempotency-key had already posted it, so the
+  answer is the comment that attempt wrote. It is absent on the first post,
+  which is the normal case.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -566,8 +644,34 @@ OUTPUT
 
 		hasContent := cmd.Flags().Changed("content") && taskCommentsCreateContent != ""
 		hasAttachments := taskCommentsCreateAttachmentsJSON != ""
-		if !hasContent && !hasAttachments {
-			failValidation("at least one of --content or --attachments-json is required")
+		hasFiles := len(taskCommentsCreateFiles) > 0
+
+		if !hasContent && !hasAttachments && !hasFiles {
+			failValidation("at least one of --content, --file or --attachments-json is required")
+		}
+		if hasFiles && hasAttachments {
+			failValidation("--file and --attachments-json cannot be combined: a comment carries either files or pre-uploaded attachment ids, not both")
+		}
+		if len(taskCommentsCreateFiles) > maxCommentFiles {
+			failValidation(
+				"a comment carries at most %d files; %d were given",
+				maxCommentFiles,
+				len(taskCommentsCreateFiles),
+			)
+		}
+
+		idempotencyKey := requireUsableKey(
+			cmd.Flags().Changed("idempotency-key"),
+			taskCommentsCreateIdempotencyKey,
+			"idempotency-key",
+		)
+		contentTypeOverride := requireUsableMediaType(
+			cmd.Flags().Changed("content-type"),
+			taskCommentsCreateContentType,
+			"content-type",
+		)
+		if idempotencyKey != "" && !hasFiles {
+			failValidation("--idempotency-key needs --file: the API takes a key on a comment that carries its files, and a body of pre-uploaded ids has no key")
 		}
 
 		client, cfg, err := buildClient()
@@ -582,6 +686,45 @@ OUTPUT
 
 		tenant := resolveTenant(taskCommentsCreateTenant, profile)
 		requireOneTaskAddress(id, taskCommentsCreateCode, tenant)
+
+		path := taskPath(id, taskCommentsCreateCode) + "/comments"
+
+		// A comment with files: the files go up with the comment, in one
+		// request, and the API stores them itself.
+		if hasFiles {
+			files, err := readUploadParts(
+				taskCommentsCreateFiles,
+				contentTypeOverride,
+			)
+			if err != nil {
+				return handleErr(err)
+			}
+
+			resp, err := client.PostTaskCommentWithAttachments(
+				ctx,
+				path,
+				taskCommentsCreateContent,
+				files,
+				tenant,
+				idempotencyKey,
+			)
+			if err != nil {
+				return handleErr(err)
+			}
+
+			meta := itemMeta(tenant, taskCommentsCreateTenant, nil)
+			meta.ServerTime = resp.ServerTime
+			if resp.StatusCode == http.StatusOK {
+				// 200 is the server telling us it stored nothing: an earlier
+				// call with this key had already posted the comment. That is a
+				// fact only this command holds, so it goes on stdout.
+				if meta.Extra == nil {
+					meta.Extra = map[string]any{}
+				}
+				meta.Extra["replayed"] = true
+			}
+			return output.Write(os.Stdout, json.RawMessage(resp.Body), meta)
+		}
 
 		body := map[string]any{}
 		if cmd.Flags().Changed("content") {
@@ -599,7 +742,6 @@ OUTPUT
 			body["attachments"] = attachments
 		}
 
-		path := taskPath(id, taskCommentsCreateCode) + "/comments"
 		resp, err := client.Do(ctx, "POST", path, body, tenant)
 		if err != nil {
 			return handleErr(err)
@@ -2045,7 +2187,10 @@ func init() {
 	// tasks comments create flags
 	tasksCommentsCreateCmd.Flags().StringVar(&taskCommentsCreateTenant, "tenant", "", "scope to this tenant code")
 	tasksCommentsCreateCmd.Flags().StringVar(&taskCommentsCreateCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
-	tasksCommentsCreateCmd.Flags().StringVar(&taskCommentsCreateContent, "content", "", "comment text (required unless --attachments-json is used)")
+	tasksCommentsCreateCmd.Flags().StringVar(&taskCommentsCreateContent, "content", "", "comment text (required unless --file or --attachments-json is used)")
+	tasksCommentsCreateCmd.Flags().StringArrayVar(&taskCommentsCreateFiles, "file", nil, "path to a file to attach; repeat for more than one (at most 10)")
+	tasksCommentsCreateCmd.Flags().StringVar(&taskCommentsCreateContentType, "content-type", "", "declare this media type for every --file instead of detecting it")
+	tasksCommentsCreateCmd.Flags().StringVar(&taskCommentsCreateIdempotencyKey, "idempotency-key", "", "make a retry safe: reuse this key to re-send the same comment without posting it twice")
 	tasksCommentsCreateCmd.Flags().StringVar(&taskCommentsCreateAttachmentsJSON, "attachments-json", "", "path to a JSON object of pre-uploaded attachment references keyed by UUID (use - for stdin)")
 	tasksCommentsCmd.AddCommand(tasksCommentsCreateCmd)
 

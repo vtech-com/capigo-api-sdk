@@ -31,12 +31,27 @@ type CommentAuthor struct {
 	Type string `json:"type"` // "user" | "agent"
 }
 
-// CommentAttachment is flat attachment metadata on a task comment.
-type CommentAttachment struct {
+// AttachmentMetadata is flat attachment metadata as the API returns it. One
+// shape covers three places: a task's own attachments, a comment's attachments,
+// and the body of a successful upload — the CLI reads the same four fields in
+// each, so it keeps one struct rather than three copies that drift.
+type AttachmentMetadata struct {
 	ID        string `json:"id"`
 	FileName  string `json:"file_name"`
 	MimeType  string `json:"mime_type"`
 	SizeBytes int64  `json:"size_bytes"`
+}
+
+// CommentAttachment is the comment-facing name for that shape, kept so existing
+// callers of this package compile unchanged.
+type CommentAttachment = AttachmentMetadata
+
+// TaskAttachmentEnvelope is the body of a successful write that answers with an
+// attachment: `POST /mission/tasks/{id}/attachments` (the file that was stored)
+// and `DELETE /mission/tasks/{id}/attachments/{attachmentId}` (the file that was
+// removed). One type, because the API answers the same shape either way.
+type TaskAttachmentEnvelope struct {
+	Data AttachmentMetadata `json:"data"`
 }
 
 // AttachmentDownload is the response of both attachment download endpoints:

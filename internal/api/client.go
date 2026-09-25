@@ -95,7 +95,21 @@ func (c *Client) DoWithHeaders(ctx context.Context, method, path string, body an
 	if err != nil {
 		return nil, fmt.Errorf("build request: %w", err)
 	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 
+	return c.send(req, headers, tenant)
+}
+
+// send applies the client's own headers, performs the request, and maps a
+// 4xx/5xx to an APIError.
+//
+// Every method that talks to the API funnels through here, so the credential,
+// the tenant header, verbose tracing, and the error envelope behave identically
+// whether the body was JSON or a file. The caller's headers are applied first
+// and the client's second: a per-request header can never shadow the key.
+func (c *Client) send(req *http.Request, headers map[string]string, tenant *string) (*Response, error) {
 	for name, value := range headers {
 		req.Header.Set(name, value)
 	}
@@ -103,15 +117,12 @@ func (c *Client) DoWithHeaders(ctx context.Context, method, path string, body an
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 	req.Header.Set("User-Agent", version.UserAgent())
 	req.Header.Set("X-Request-Id", uuid.New().String())
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
 	if tenant != nil {
 		req.Header.Set("X-Tenant-Code", *tenant)
 	}
 
 	if c.verboseW != nil {
-		_, _ = fmt.Fprintf(c.verboseW, "> %s %s\n", method, c.baseURL+path)
+		_, _ = fmt.Fprintf(c.verboseW, "> %s %s\n", req.Method, req.URL.String())
 		for name, value := range headers {
 			_, _ = fmt.Fprintf(c.verboseW, "> %s: %s\n", name, value)
 		}
@@ -185,6 +196,20 @@ func parseAPIError(body []byte, status int, requestID string) *APIError {
 		HTTPStatus: status,
 		RawBody:    body,
 	}
+}
+
+// RemoveTaskAttachment retires a file from a task: the server drops the
+// metadata from the task and deletes the stored object in this one request.
+//
+// path comes from taskAttachmentRemovePath — the task addressed by id or by
+// code, plus the attachment id.
+//
+// No Idempotency-Key is sent, and none is accepted: a repeat is a read-side
+// fact, not a duplicate write. Removing an attachment the task no longer holds
+// answers 404 (the same answer a repeated DELETE gets), so a retry is told the
+// file is already gone rather than deleting anything twice.
+func (c *Client) RemoveTaskAttachment(ctx context.Context, path string, tenant *string) (*Response, error) {
+	return c.Do(ctx, "DELETE", path, nil, tenant)
 }
 
 // ListBrands fetches a page of brands for the given tenant.

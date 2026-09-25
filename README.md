@@ -190,6 +190,9 @@ capigo tasks get <id|--code>           Get task by ID or code (--code requires -
                                        reads an archived task, which 404s without it)
 capigo tasks comments <id|--code>      List a task's comment + activity timeline (--type comment|activity,
                                        --sort asc|desc, --page, --limit; --code requires --tenant)
+capigo tasks attachments upload <task-id|--code> <path>              Upload a file to a task in one call
+                                                                     (--content-type, --idempotency-key)
+capigo tasks attachments remove <task-id|--code> <attachment-id>    Remove a file from a task (final; no key)
 capigo tasks attachments download <task-id|--code> <attachment-id>          Download a task-level attachment
 capigo tasks comments attachments download <task-id|--code> <attachment-id> Download a comment/activity attachment
 capigo tasks update <id>              Partial update a task (PATCH; --tenant optional; at least one field required;
@@ -400,10 +403,46 @@ echo '[{"title":"Subtask A"},{"title":"Subtask B"}]' \
 echo '[{"title":"Design"},{"title":"Build","priority":"High"}]' \
   | capigo tasks subtasks create <parent-uuid> --tenant acme --from-json -
 
+# Upload a file onto a task (the server stores it and records it in one call)
+capigo tasks attachments upload <task-uuid> ./invoice.pdf --tenant acme
+# Retry safely: the same key with the same file returns the attachment already
+# stored instead of a second copy
+capigo tasks attachments upload --code ACMEC-68 ./invoice.pdf --idempotency-key upload-42
+
 # Download an attachment (task-level or from a comment/activity entry)
 capigo tasks attachments download <task-uuid> <attachment-uuid> --dest ./downloads/
 capigo tasks comments attachments download <task-uuid> <attachment-uuid>
+
+# Remove a file from a task (final: the stored object is deleted too)
+capigo tasks attachments remove <task-uuid> <attachment-uuid>
+
+# Comment with files: the comment and its files travel in one request
+capigo tasks comments create <task-uuid> --content "Here is the invoice" --file ./invoice.pdf
+# Retry safely: the same key with the same comment does not post it twice
+capigo tasks comments create <task-uuid> --content "Here is the invoice" \
+  --file ./invoice.pdf --idempotency-key comment-42
 ```
+
+An upload is one request: the CLI sends the bytes, the server stores them and records the
+attachment, and stdout names the attachment id that `tasks attachments download` takes next.
+There is no presigned-URL round trip to drive. `data.replayed` is `false` when the call stored
+the file and `true` when the server returned an attachment an earlier call with the same
+`--idempotency-key` had already stored — a successful retry, not a second copy. The media type
+is detected from the path, then from the file's first bytes; pass `--content-type` when the
+detection is wrong (a `.md` file on a system with no MIME database, say). The API accepts a
+fixed set of types and a 50 MB ceiling, the same ones the web UI enforces. An `--idempotency-key`
+that is empty or all whitespace exits 5: the API trims the header and reads the blank as no key
+at all, so the retry the flag promises would not happen.
+
+A comment carries its own files the same way — `--file`, repeatable, at most 10 (an eleventh exits
+5 before anything goes up) — and `--content-type` declares one media type for all of them when the
+detection would guess wrong.
+
+
+A removal is final and takes no `--idempotency-key`: removing an attachment the task no longer
+holds exits 4 (`Attachment not found`), so a retry tells you the file is already gone rather
+than deleting twice. stdout names the file that was removed, which is the last chance to check
+it was the right one — every task read stops listing it from there.
 
 Attachment downloads fetch a signed, short-lived URL (5-minute lifetime) and write the bytes to
 disk in the same call — there's no separate "get the URL" step, and the CLI never prints the

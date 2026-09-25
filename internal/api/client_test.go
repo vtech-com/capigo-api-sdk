@@ -109,6 +109,56 @@ func TestDo_NoTenantHeader_WhenTenantNil(t *testing.T) {
 	}
 }
 
+// A removal is a DELETE to the attachment's own address, with the tenant on the
+// header and no body: the API reads nothing else off the request, and no
+// Idempotency-Key is sent — a delete already answers 404 for a second attempt.
+func TestRemoveTaskAttachment_UsesDelete(t *testing.T) {
+	var method, path, tenant string
+	var hasBody bool
+
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		method = r.Method
+		path = r.URL.Path
+		tenant = r.Header.Get("X-Tenant-Code")
+		hasBody = r.ContentLength > 0
+		if _, present := r.Header["Idempotency-Key"]; present {
+			t.Error("Idempotency-Key was sent on a delete")
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"data":{"id":"att-1","file_name":"invoice.pdf","mime_type":"application/pdf","size_bytes":5}}`))
+	}))
+	defer srv.Close()
+
+	client := newTestClient(t, srv)
+	acme := "acme"
+
+	resp, err := client.RemoveTaskAttachment(
+		context.Background(),
+		"/mission/tasks/task-1/attachments/att-1",
+		&acme,
+	)
+	if err != nil {
+		t.Fatalf("RemoveTaskAttachment: %v", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Errorf("StatusCode = %d, want 200", resp.StatusCode)
+	}
+	if method != http.MethodDelete {
+		t.Errorf("method = %s, want DELETE", method)
+	}
+	if path != "/mission/tasks/task-1/attachments/att-1" {
+		t.Errorf("path = %s", path)
+	}
+	if tenant != "acme" {
+		t.Errorf("X-Tenant-Code = %q, want acme", tenant)
+	}
+	if hasBody {
+		t.Error("a body was sent; a delete names everything it needs in its address")
+	}
+}
+
 func TestDo_ContentTypeSet_WhenBodyPresent(t *testing.T) {
 	var capturedReq *http.Request
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

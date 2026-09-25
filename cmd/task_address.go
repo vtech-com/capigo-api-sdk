@@ -89,3 +89,12 @@ func requireAttachmentID(attachmentID string) {
 		failValidation("an attachment id is required")
 	}
 }
+
+// requireUploadPath exits 5 when the file to upload was never named. An empty
+// path would otherwise be read as a file that does not exist, which reports the
+// wrong repair — the argument is missing, not the file.
+func requireUploadPath(path string) {
+	if path == "" {
+		failValidation("a file path is required: the file to upload, as a path on this machine")
+	}
+}

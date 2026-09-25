@@ -1,7 +1,7 @@
 # Task domain relationships
 
-Read this only when creating or changing tasks, assignees, followers, or subtasks. Read
-`boards.md` as well when board placement is involved.
+Read this only when creating or changing tasks, assignees, followers, subtasks, or a task's
+attachments. Read `boards.md` as well when board placement is involved.
 
 ## Create flow
 
@@ -24,13 +24,53 @@ Read this only when creating or changing tasks, assignees, followers, or subtask
    the card exists at the end of that list and only the position was refused. Do not create it again —
    place it with `tasks move`.
 
+## Attachments
+
+- `tasks attachments upload <task-id|--code> <path>` attaches a file in one call: the CLI sends
+  the bytes, the server stores them and records the attachment. There is no presigned URL to
+  fetch and no second call — it is the way to put a file on a task from here.
+- Read `.data.replayed` before believing an upload stored anything. `false` means this call
+  stored the file; `true` means the server returned an attachment an earlier call with the same
+  `--idempotency-key` had already stored. Retrying an upload without a key can store the file
+  twice, so pass `--idempotency-key` when a retry is possible — an agent's second attempt is
+  exactly that case.
+- The media type is detected from the path, then from the file's first bytes. When the detection
+  is wrong the server refuses with `INVALID_FILE_TYPE` and names the type it saw: pass
+  `--content-type` with the right one. The accepted types and the 50 MB ceiling are the API's
+  and the web UI's own.
+- `.data.id` is what `tasks attachments download` takes next.
+- `tasks attachments remove <task-id|--code> <attachment-id>` retires a file: it leaves the task's
+  list and the stored object is deleted, in the same call. There is no undo anywhere in this CLI,
+  so resolve the exact attachment id first — never remove by file name or by position in a list.
+- `.data.removed` is `true` on a successful removal, and `.data` names the file that was removed:
+  the only chance to check it was the right one, since every task read stops listing it from there.
+- A removal takes no `--idempotency-key`. Removing an attachment the task no longer holds exits 4
+  (`Attachment not found`), which is also the answer a repeated remove gets — read that as "already
+  gone", not as a transient failure to retry. Exit 4 is likewise what an unreachable task answers,
+  so it never reveals whether someone else's task exists.
+- Attachments on *comments* travel with the comment: `tasks comments create --file <path>` (repeatable,
+  at most 10 — an eleventh exits 5 before anything is uploaded) sends the files in the same request
+  and the server stores and records them. It is the way to put a file on a comment from here — no
+  upload step first. `--content-type <media type>` declares one for every `--file` instead of letting
+  the detection decide, which is what a file whose format this machine cannot name needs (a `.md` on a
+  host with no MIME database, or bytes that look like another type).
+- `--idempotency-key` needs `--file`. With it, re-sending the same key with the same comment does
+  not post a second one: the answer is the comment the first attempt wrote, and `meta.replayed` is
+  `true`. Passing the key without `--file` exits 5, because the API takes a key only on a comment
+  that carries its files — a body of pre-uploaded ids has no key, and silently ignoring it would
+  make a retry look safe when it is not. A key holding only whitespace exits 5 as well: the API
+  trims the header and reads the blank as no key at all, so a retry under it would post a second
+  comment while the flag said it would not.
+- `--file` and `--attachments-json` cannot be combined (exit 5): a comment carries either files or
+  pre-uploaded ids. `--attachments-json` is for a caller that already holds attachment ids from
+  somewhere else.
+
 ## Comments
 
 - `tasks comments create` posts a comment; `tasks comments` (no `create`) only reads the timeline.
   Confirm which one a request needs before acting.
-- Attachments are referenced by pre-uploaded id, not uploaded by this CLI. Only pass
-  `--attachments-json` when the caller already has attachment ids from another channel (the web
-  app); otherwise post `--content` alone.
+- Comment files are sent with `--file` (see Attachments above); `--attachments-json` is only for an
+  existing attachment id from another channel (the web app). Otherwise post `--content` alone.
 - Addressing works the same as everywhere else in this domain: an id, or `--code` plus `--tenant`.
 
 ## Subtasks

@@ -61,6 +61,8 @@ var implementedOps = map[string]string{
 	"POST /mission/tasks/{id}/subtasks":                                    "tasks subtasks create (batch)",
 	"POST /mission/tasks/with-subtasks":                                    "tasks create --subtasks-json (atomic parent + subtasks)",
 	"GET /mission/tasks/{id}/attachments/{attachmentId}/download":          "tasks attachments download",
+	"POST /mission/tasks/{id}/attachments":                                 "tasks attachments upload",
+	"DELETE /mission/tasks/{id}/attachments/{attachmentId}":                "tasks attachments remove",
 	"GET /mission/tasks/{id}/comments/attachments/{attachmentId}/download": "tasks comments attachments download",
 
 	// The same five capabilities, addressed by a task's code instead of its id.
@@ -78,6 +80,8 @@ var implementedOps = map[string]string{
 	"GET /mission/tasks/code/{code}/subtasks":                                     "tasks subtasks list --code",
 	"POST /mission/tasks/code/{code}/subtasks":                                    "tasks subtasks create --code",
 	"GET /mission/tasks/code/{code}/attachments/{attachmentId}/download":          "tasks attachments download --code",
+	"POST /mission/tasks/code/{code}/attachments":                                 "tasks attachments upload --code",
+	"DELETE /mission/tasks/code/{code}/attachments/{attachmentId}":                "tasks attachments remove --code",
 	"GET /mission/tasks/code/{code}/comments/attachments/{attachmentId}/download": "tasks comments attachments download --code",
 
 	"GET /pcms/products":               "products list",

@@ -12,6 +12,55 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **`tasks comments create --file` sends the comment and its files in one request.** `capigo tasks
+  comments create (<id> | --code <code>) --content <text> --file <path> [--file <path> ...]` posts
+  `multipart/form-data` to `POST /mission/tasks/{id}/comments` (or the `code/{code}` sibling): the
+  server stores each file, records the attachment, and writes the comment with it, so there is no
+  upload step first. Up to 10 files per comment — eleven exits 5 without uploading anything; the
+  media type is detected from the path, then from the file's first bytes, and the server checks it
+  against its own allow-list (images, PDF, Office documents, text/markdown/csv, zip), answering 400
+  `INVALID_FILE_TYPE` naming the type it saw; `--content-type` declares one for every `--file`
+  instead, which is the fix when the detection guesses wrong or this machine has no mapping for the
+  format. `--file` and `--attachments-json` cannot be combined (exit 5) — a comment carries either
+  files or pre-uploaded ids.
+- **`tasks comments create --idempotency-key` makes a comment retry-safe.** With it, re-sending the
+  same key with the same comment does not post a second one: the answer is the comment the first
+  attempt wrote, with `meta.replayed: true` on stdout so an agent reading only stdout can tell a
+  replay from a fresh post (the server answers 200 instead of 201). The key needs `--file`, because
+  the API takes one only on a comment that carries its files; passing it without `--file` exits 5
+  rather than sending a key the server would ignore, and a key with no characters exits 5 too —
+  the API trims it and reads it as no key at all, which would make the retry unsafe while looking
+  safe. Reusing the key for a different comment exits 8 with `E0601`.
+
+- **`tasks attachments remove` retires a file from a task.** `capigo tasks attachments remove
+  (<id> | --code <code>) <attachment-id>` sends `DELETE /mission/tasks/{id}/attachments/{attachmentId}`
+  (or the `code/{code}` sibling). The attachment leaves the task's list and the stored object is deleted
+  in the same call, and stdout names the file that was removed — the last chance to check it was the
+  right one, because every task read stops listing it from there, with `"removed": true` so an agent
+  reading only stdout does not have to infer that the delete happened. It takes no `--idempotency-key`
+  and needs none: the API accepts no key on a delete, and removing an attachment the task no longer
+  holds exits 4 with `Attachment not found`, so a retry tells you the file is already gone instead of
+  deleting anything twice. A second exit 4 — the task out of reach, or another tenant's — is the same
+  answer the API gives for a task that does not exist, so it never leaks whether the task is real.
+  Note the web UI also strips markdown references to a removed file from the task description; this
+  endpoint and this command do not touch the description.
+
+- **`tasks attachments upload` puts a file on a task in one call.** `capigo tasks attachments
+  upload (<id> | --code <code>) <path>` posts the bytes as `multipart/form-data` to
+  `POST /mission/tasks/{id}/attachments` (or the `code/{code}` sibling), and the server stores the
+  file and records the attachment — there is no presigned URL to fetch and no second call to make
+  the file visible. `.data` carries the stored attachment plus `source_path`, and `.data.id` is
+  what `tasks attachments download` takes next. The media type is detected from the path, then from
+  the file's first bytes; `--content-type` overrides it, which is the fix when detection guesses
+  wrong (the server answers 400 `INVALID_FILE_TYPE` naming the type it saw). The API's own limits
+  apply: a fixed set of accepted types and 50 MB. `--idempotency-key` makes a retry safe — the
+  second attempt answers with the attachment the first one stored, and `.data.replayed` says so
+  (`false` for the call that stored the file, `true` for a replay), while reusing the key for a
+  different file exits 8 with `E0601`; a key with no characters exits 5, since the API trims it and
+  reads it as no key at all. An empty file, an unreadable path, or one over the limit is
+  refused locally (exit 5) without spending the upload first. Attachments on *comments* remain
+  reference-only: `tasks comments create --attachments-json` takes ids the caller already has.
+
 - **`tasks create` can put the new card where you want it.** `capigo tasks create ... --board <uuid>
   --list <uuid> (--top | --after-task-id <uuid>)` creates the task through the board's own
   card-creation path and places it first in the column (`--top`) or directly behind a card already

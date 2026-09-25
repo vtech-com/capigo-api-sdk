@@ -1449,6 +1449,32 @@
           }
         }
       },
+    "PublicTaskAttachment": {
+      "type": "object",
+      "description": "Flat metadata for one task attachment. No download URL — fetch one via GET /mission/tasks/{id}/attachments/{attachmentId}/download. This is the same shape a task read returns in its `attachments` array, and the body of a successful upload.",
+      "required": [
+        "id",
+        "file_name",
+        "mime_type",
+        "size_bytes"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Attachment id. Keep it: it is what the download and remove endpoints address."
+        },
+        "file_name": {
+          "type": "string"
+        },
+        "mime_type": {
+          "type": "string"
+        },
+        "size_bytes": {
+          "type": "integer"
+        }
+      }
+    },
       "PublicWmsWarehouseReference": {
         "type": "object",
         "required": [
@@ -5283,6 +5309,269 @@
         }
       }
     },
+    "/mission/tasks/{id}/attachments": {
+      "post": {
+        "summary": "Upload Task Attachment",
+        "description": "Attach a file to a task in one request. The file is the `file` part of a `multipart/form-data` body; the server stores the bytes and records the metadata, so there is no presigned-URL round trip to orchestrate. Limits are the web UI's own: the MIME type must be one of the allowed types (`image/png`, `image/jpeg`, `image/webp`, `image/gif`, `application/pdf`, Word/Excel/PowerPoint, `text/plain`, `text/markdown`, `text/csv`, `application/zip`, `application/x-zip-compressed`) and the file must be larger than 0 bytes and no larger than 50 MB (52428800 bytes). The caller must be an active member of the task's tenant and the task's owner, its assignee, a tenant owner, or a member of its board. An optional `Idempotency-Key` header makes a retry safe: the first application returns 201, a replay of the same key with the same file returns 200 with the attachment already stored, and the same key with a different file (name, type or size) returns 409 (E0601).",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Task UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Optional idempotency key, scoped to the tenant and the task. First application returns 201; a replay of the same key with the same file returns 200 with the attachment already stored; the same key with a different file returns 409 (E0601).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "The file. Its part header supplies the file name and the Content-Type the allow-list is checked against; send no separate fields."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Replay: the same Idempotency-Key was applied with the same file — the attachment stored by the earlier attempt, and nothing written.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskAttachment"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The file is stored and recorded on the task.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskAttachment"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was refused before anything was stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "notMultipart": {
+                    "summary": "Body is not multipart/form-data",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_CONTENT_TYPE",
+                        "message": "Request body must be multipart/form-data carrying the file in a part named `file`"
+                      }
+                    }
+                  },
+                  "noFilePart": {
+                    "summary": "No part named `file`",
+                    "value": {
+                      "error": {
+                        "code": "MISSING_FILE_PART",
+                        "message": "The request must carry the file in a part named `file`"
+                      }
+                    }
+                  },
+                  "badType": {
+                    "summary": "MIME type not on the allow-list",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_FILE_TYPE",
+                        "message": "File type \"application/x-msdownload\" is not allowed"
+                      }
+                    }
+                  },
+                  "badSize": {
+                    "summary": "Empty file, or larger than 50 MB",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_FILE_SIZE",
+                        "message": "File size must be greater than 0 and at most 52428800 bytes"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not the task's owner, its assignee, a tenant owner, or a member of its board",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Task not found (also the answer for another tenant's task — no existence leak)"
+          },
+          "409": {
+            "description": "The Idempotency-Key was already used to attach a different file to this task (E0601)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "idempotencyConflict": {
+                    "summary": "Same key, different file",
+                    "value": {
+                      "error": {
+                        "code": "E0601",
+                        "message": "Idempotency-Key was already used to attach a different file to this task"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The storage write or the metadata write failed — nothing is left behind"
+          }
+        }
+      }
+    },
+    "/mission/tasks/{id}/attachments/{attachmentId}": {
+      "delete": {
+        "summary": "Remove Task Attachment",
+        "description": "Retire a file from a task: the metadata leaves the task's attachment list and the stored object is deleted with it, in one request. The caller must be an active member of the task's tenant and the task's owner, its assignee, a tenant owner, or a member of its board. The answer names the attachment that was removed — the file name, type and size — which is a fact the caller cannot read back afterwards. No `Idempotency-Key` is accepted: a repeat is a read-side fact, not a duplicate write, so a second `DELETE` of the same attachment answers `404` (the same reasoning the archive action follows). A task description that embedded the file as markdown is not edited: the web UI strips that text itself (`apps/web/src/actions/task/task-attachment-actions.ts`), and this endpoint does not touch the description.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Task UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "attachmentId",
+            "in": "path",
+            "required": true,
+            "description": "Attachment id, from a task read's `attachments[].id` or from the upload response.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The attachment was removed, and this is what it was.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskAttachment"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not the task's owner, its assignee, a tenant owner, or a member of its board",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Task not found (also the answer for another tenant's task — no existence leak), or the task holds no attachment with that id (which is also what a repeated DELETE answers), or the attachment id is not a UUID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "alreadyRemoved": {
+                    "summary": "The attachment is not on this task any more",
+                    "value": {
+                      "error": {
+                        "code": "NOT_FOUND",
+                        "message": "Attachment not found"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The metadata write failed — the attachment is still on the task. A storage delete that fails after the metadata is gone is logged, not raised: the request still answers 200"
+          }
+        }
+      }
+    },
     "/mission/tasks/{id}/comments": {
       "get": {
         "summary": "List Task Comments",
@@ -5398,7 +5687,7 @@
       },
       "post": {
         "summary": "Create Task Comment",
-        "description": "Add a text-and-attachment comment to a task by its UUID. At least content (non-empty string) or one attachment entry must be provided.",
+        "description": "Add a comment to a task. Two bodies are accepted on the same endpoint. A `multipart/form-data` body carries the comment and its files together: a `content` text field and one `file` part per attachment (at most 10 files, each larger than 0 bytes and at most 50 MB, each of a type the web UI accepts — images, PDF, Word/Excel/PowerPoint, text/plain, text/markdown, text/csv, zip). The server stores each file and records the attachment, so a caller never orchestrates a presigned URL. An `application/json` body is unchanged: it takes `content` and/or `attachments`, an object of pre-uploaded attachment references keyed by attachment id. Either way, at least text or one file/attachment is required. The caller must be an active member of the task's tenant. On the multipart body an optional `Idempotency-Key` header makes a retry safe: the first application returns 201, a replay of the same key with the same comment returns 200 with the comment already written, and the same key with a different comment returns 409 (E0601).",
         "tags": [
           "Tasks"
         ],
@@ -5414,6 +5703,15 @@
             "description": "Task UUID"
           },
           {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Optional idempotency key, scoped to the tenant, the task's thread and the caller. Read on a `multipart/form-data` body: the first application returns 201, a replay of the same key with the same comment returns 200 with the comment already written, and the same key with a different comment returns 409 (E0601). A JSON body does not carry a key.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "X-Tenant-Code",
             "in": "header",
             "schema": {
@@ -5424,6 +5722,22 @@
         "requestBody": {
           "required": true,
           "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "content": {
+                    "type": "string",
+                    "description": "Comment text. May be omitted when at least one `file` part is sent."
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "A file to attach. Repeat the part for more than one file (at most 10). Each part's header supplies the file name and the Content-Type the allow-list is checked against."
+                  }
+                }
+              }
+            },
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/PostTaskCommentRequest"
@@ -5432,6 +5746,16 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "Replay: the same Idempotency-Key was applied with the same comment — the comment the earlier attempt wrote, and nothing stored a second time. Multipart bodies only.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicTaskCommentResponse"
+                }
+              }
+            }
+          },
           "201": {
             "description": "Comment created",
             "headers": {
@@ -5451,13 +5775,61 @@
             }
           },
           "400": {
-            "description": "Invalid request body (missing content and attachments, or non-JSON)"
+            "description": "Invalid request body: neither text nor a file, an unreadable multipart body, more than 10 files (`TOO_MANY_FILES`), a file type outside the allow-list (`INVALID_FILE_TYPE`), or an empty or oversized file (`INVALID_FILE_SIZE`). For a JSON body: missing content and attachments, or non-JSON.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "nothingToSay": {
+                    "summary": "A multipart body with no `content` and no file",
+                    "value": {
+                      "error": {
+                        "code": "VALIDATION_ERROR",
+                        "message": "A comment must carry text (a `content` field), a file, or both"
+                      }
+                    }
+                  },
+                  "tooManyFiles": {
+                    "summary": "More files than a comment carries",
+                    "value": {
+                      "error": {
+                        "code": "TOO_MANY_FILES",
+                        "message": "A comment carries at most 10 files"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "403": {
             "description": "Caller lacks task visibility"
           },
           "404": {
             "description": "Task not found"
+          },
+          "409": {
+            "description": "The Idempotency-Key was already used to post a different comment to this task (E0601). Multipart bodies only.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "idempotencyConflict": {
+                    "summary": "Same key, different comment",
+                    "value": {
+                      "error": {
+                        "code": "E0601",
+                        "message": "Idempotency-Key was already used to post a different comment to this task"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -11895,7 +12267,7 @@
       },
       "post": {
         "summary": "Create Task Comment (by Code)",
-        "description": "Add a text-and-attachment comment to a task by its taskCode. Same contract as POST /mission/tasks/{id}/comments, keyed by taskCode instead of UUID.",
+        "description": "Add a comment to a task addressed by its taskCode. The same two bodies as POST /mission/tasks/{id}/comments: a `multipart/form-data` body of `content` plus one `file` part per attachment — stored and recorded by the server, no presigned URL — or the unchanged JSON body of `content` and/or pre-uploaded `attachments`. On the multipart body an optional `Idempotency-Key` makes a retry safe: 201 the first time, 200 when the same key replays the same comment, 409 (E0601) when the key meets a different one. Requires `X-Tenant-Code`.",
         "tags": [
           "Tasks"
         ],
@@ -11910,8 +12282,19 @@
             "description": "Task code (e.g., ACME-42)"
           },
           {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Optional idempotency key, scoped to the tenant, the task's thread and the caller. Read on a `multipart/form-data` body: the first application returns 201, a replay of the same key with the same comment returns 200 with the comment already written, and the same key with a different comment returns 409 (E0601). A JSON body does not carry a key.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "X-Tenant-Code",
             "in": "header",
+            "required": true,
+            "description": "Required: a task code is unique within a tenant, not across them.",
             "schema": {
               "type": "string"
             }
@@ -11920,6 +12303,22 @@
         "requestBody": {
           "required": true,
           "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "content": {
+                    "type": "string",
+                    "description": "Comment text. May be omitted when at least one `file` part is sent."
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "A file to attach. Repeat the part for more than one file (at most 10)."
+                  }
+                }
+              }
+            },
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/PostTaskCommentRequest"
@@ -11928,6 +12327,16 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "Replay: the same Idempotency-Key was applied with the same comment — the comment the earlier attempt wrote, and nothing stored a second time. Multipart bodies only.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicTaskCommentResponse"
+                }
+              }
+            }
+          },
           "201": {
             "description": "Comment created",
             "headers": {
@@ -11947,13 +12356,16 @@
             }
           },
           "400": {
-            "description": "Invalid request body (missing content and attachments, or non-JSON)"
+            "description": "Invalid request body: missing `X-Tenant-Code`, neither text nor a file, more than 10 files (`TOO_MANY_FILES`), a file type outside the allow-list (`INVALID_FILE_TYPE`), or an empty or oversized file (`INVALID_FILE_SIZE`)"
           },
           "403": {
             "description": "Caller lacks task visibility"
           },
           "404": {
             "description": "Task not found"
+          },
+          "409": {
+            "description": "The Idempotency-Key was already used to post a different comment to this task (E0601). Multipart bodies only."
           }
         }
       }
@@ -12633,6 +13045,193 @@
           },
           "500": {
             "description": "Signed URL generation failed"
+          }
+        }
+      }
+    },
+    "/mission/tasks/code/{code}/attachments": {
+      "post": {
+        "summary": "Upload Task Attachment (by Code)",
+        "description": "The `code/{code}` sibling of `POST /mission/tasks/{id}/attachments`: the task is addressed by its natural code instead of its UUID, and every other rule is identical — a `multipart/form-data` body whose `file` part carries the bytes, the web UI's MIME allow-list and 50 MB size limit, the same permission set, and the same optional `Idempotency-Key`. Requires `X-Tenant-Code`.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "description": "Task code (e.g. ACME-42)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Optional idempotency key, scoped to the tenant and the task. First application returns 201; a replay of the same key with the same file returns 200 with the attachment already stored; the same key with a different file returns 409 (E0601).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Required: a task code is unique within a tenant, not across them.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "The file. Its part header supplies the file name and the Content-Type the allow-list is checked against."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Replay: the same Idempotency-Key was applied with the same file — the attachment stored by the earlier attempt, and nothing written.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskAttachment"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The file is stored and recorded on the task.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskAttachment"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing `X-Tenant-Code`, or a request refused before anything was stored (`INVALID_CONTENT_TYPE`, `MISSING_FILE_PART`, `INVALID_FILE_TYPE`, `INVALID_FILE_SIZE`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not the task's owner, its assignee, a tenant owner, or a member of its board"
+          },
+          "404": {
+            "description": "Task not found — the answer for a malformed code, an unknown code, and another tenant's task alike (no existence leak)"
+          },
+          "409": {
+            "description": "The Idempotency-Key was already used to attach a different file to this task (E0601)"
+          },
+          "500": {
+            "description": "The storage write or the metadata write failed — nothing is left behind"
+          }
+        }
+      }
+    },
+    "/mission/tasks/code/{code}/attachments/{attachmentId}": {
+      "delete": {
+        "summary": "Remove Task Attachment (by Code)",
+        "description": "The `code/{code}` sibling of `DELETE /mission/tasks/{id}/attachments/{attachmentId}`: the task is addressed by its natural code instead of its UUID, and every other rule is identical — the permission set, the answer naming the removed file, and the `404` a repeat answers. Requires `X-Tenant-Code`.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "description": "Task code (e.g. ACME-42)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "attachmentId",
+            "in": "path",
+            "required": true,
+            "description": "Attachment id, from a task read's `attachments[].id` or from the upload response.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Required: a task code is unique within a tenant, not across them.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The attachment was removed, and this is what it was.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskAttachment"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing `X-Tenant-Code`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not the task's owner, its assignee, a tenant owner, or a member of its board"
+          },
+          "404": {
+            "description": "Task not found — the answer for a malformed code, an unknown code, and another tenant's task alike (no existence leak) — or the task holds no attachment with that id, which is also what a repeated DELETE answers"
+          },
+          "500": {
+            "description": "The metadata write failed — the attachment is still on the task"
           }
         }
       }

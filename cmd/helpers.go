@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/spf13/viper"
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
@@ -13,6 +14,49 @@ import (
 )
 
 const defaultBaseURL = "https://platform.capigo.app/api/v1"
+
+// requireUsableKey returns the Idempotency-Key to send, refusing one that was
+// given but carries no characters.
+//
+// The API trims the header and reads a blank value as no key at all, so a blank
+// key would post the duplicate (or store the file twice) that the flag exists to
+// prevent — silently, with nothing in the answer to show it. A key nobody asked
+// for is empty, which is what the API expects on a request without one.
+func requireUsableKey(flagGiven bool, value, flagName string) string {
+	if !flagGiven {
+		return ""
+	}
+
+	key := strings.TrimSpace(value)
+	if key == "" {
+		failValidation(
+			"--%s needs characters: a blank key reads as no key at all, and the retry it promises would not happen",
+			flagName,
+		)
+	}
+	return key
+}
+
+// requireUsableMediaType returns the media type to declare for an upload,
+// refusing one that was given but carries no characters.
+//
+// Left blank-when-given it would be sent as-is, and the server — which trims the
+// part header too — would refuse the file as undeclared, after the whole upload
+// was spent. An empty answer means "nobody asked", which is a detection.
+func requireUsableMediaType(flagGiven bool, value, flagName string) string {
+	if !flagGiven {
+		return ""
+	}
+
+	mediaType := strings.TrimSpace(value)
+	if mediaType == "" {
+		failValidation(
+			"--%s needs a media type: an empty declaration leaves the file with none",
+			flagName,
+		)
+	}
+	return mediaType
+}
 
 // buildClient loads config and constructs an api.Client using the active profile.
 // Env var CAPIGO_API_KEY overrides the profile key; CAPIGO_API_URL and --api-url

@@ -2,11 +2,113 @@ package cmd
 
 import (
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
 )
+
+// The flags the command's own help promises have to exist, or the help lies.
+func TestTasksCommentsCreateFileFlags(t *testing.T) {
+	for _, name := range []string{"file", "content-type", "idempotency-key", "content", "attachments-json"} {
+		if tasksCommentsCreateCmd.Flags().Lookup(name) == nil {
+			t.Errorf("tasks comments create has no --%s flag", name)
+		}
+	}
+}
+
+// The detection is a guess, so the override has to reach every part it was given
+// for — otherwise the flag that exists to correct a wrong guess cannot.
+func TestReadUploadParts_UsesTheDeclaredType(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "plan.unknownext")
+	if err := os.WriteFile(path, []byte("hello"), 0o600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	parts, err := readUploadParts([]string{path}, "text/markdown")
+	if err != nil {
+		t.Fatalf("readUploadParts: %v", err)
+	}
+	if len(parts) != 1 {
+		t.Fatalf("parts = %d, want 1", len(parts))
+	}
+	if parts[0].ContentType != "text/markdown" {
+		t.Errorf("ContentType = %q, want the declared text/markdown", parts[0].ContentType)
+	}
+}
+
+// readUploadParts reads each --file path and declares the media type it detects:
+// the server checks that type against its allow-list, so a blank one would be
+// refused as "no Content-Type" with nothing to fix.
+func TestReadUploadParts(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "notes.txt")
+	if err := os.WriteFile(path, []byte("hello"), 0o600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	parts, err := readUploadParts([]string{path}, "")
+	if err != nil {
+		t.Fatalf("readUploadParts: %v", err)
+	}
+	if len(parts) != 1 {
+		t.Fatalf("parts = %d, want 1", len(parts))
+	}
+
+	got := parts[0]
+	if got.FieldName != "file" {
+		t.Errorf("FieldName = %q, want file — the API looks for that part name", got.FieldName)
+	}
+	if got.FileName != "notes.txt" {
+		t.Errorf("FileName = %q, want the base name", got.FileName)
+	}
+	if got.ContentType != "text/plain" {
+		t.Errorf("ContentType = %q, want text/plain", got.ContentType)
+	}
+	if string(got.Data) != "hello" {
+		t.Errorf("Data = %q, want hello", string(got.Data))
+	}
+}
+
+// A path that is not there is refused locally, before a request is built — the
+// same rule tasks attachments upload follows.
+func TestReadUploadParts_RefusesAMissingFile(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "nope.txt")
+
+	if _, err := readUploadParts([]string{missing}, ""); err == nil {
+		t.Error("readUploadParts accepted a path that does not exist")
+	}
+}
+
+// A blank key is not a key: the API trims the header and reads the blank as
+// absent, so passing one through unchanged would post the duplicate the flag
+// exists to prevent. The exit itself goes through failValidation, which os.Exit
+// makes untestable in-process; what is tested here is that a key nobody asked
+// for stays empty and a real key keeps its characters.
+func TestRequireUsableKey(t *testing.T) {
+	if got := requireUsableKey(false, "  ignored  ", "idempotency-key"); got != "" {
+		t.Errorf("a key that was not given = %q, want empty", got)
+	}
+	if got := requireUsableKey(true, "  comment-42  ", "idempotency-key"); got != "comment-42" {
+		t.Errorf("a given key = %q, want it trimmed to comment-42", got)
+	}
+}
+
+// A declared media type with no characters is the same class of mistake: sent
+// as-is, the server trims it to nothing and refuses the file after the upload.
+// The exit goes through failValidation; what is tested is that "not declared"
+// stays empty (which is a detection) and a real type keeps its characters.
+func TestRequireUsableMediaType(t *testing.T) {
+	if got := requireUsableMediaType(false, "  ignored  ", "content-type"); got != "" {
+		t.Errorf("a type that was not declared = %q, want empty so detection runs", got)
+	}
+	if got := requireUsableMediaType(true, " text/plain ", "content-type"); got != "text/plain" {
+		t.Errorf("a declared type = %q, want it trimmed to text/plain", got)
+	}
+}
 
 func TestValidateCommentParams(t *testing.T) {
 	// Valid combinations (including empty = use server default) return nil.
