@@ -4876,6 +4876,79 @@
           }
         }
       }
+,
+      "delete": {
+        "summary": "Delete Task",
+        "description": "Retire a task: soft-delete it, exactly as the archive action does. A **top-level task** is retired together with its active subtasks, which the database's family cascade retires in the same write; a subtask named here is retired alone, and its dedicated address is `DELETE /mission/tasks/{id}/subtasks/{subtaskId}`. The caller must be the task's **owner**, its **assignee**, or a **tenant owner of the task's tenant**; board membership does not qualify. The body carries no fields: the task is named by its address and the delete records no reason. The answer names the task by id rather than returning the task, because every task read answers `404` once the delete has run — a repeat answers `404` too, which is also why no `Idempotency-Key` is accepted: a replay is a read-side fact, not a duplicate write.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Task UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The task was retired; `data.id` names it",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A body was sent (delete takes no fields), or the body is not valid JSON"
+          },
+          "403": {
+            "description": "The caller is not the task's owner, its assignee, or a tenant owner of its tenant"
+          },
+          "404": {
+            "description": "Task not found — including a task that is already deleted, and another tenant's task"
+          }
+        }
+      }
     },
     "/mission/tasks/{id}/actions/transfer-ownership": {
       "post": {
@@ -6141,6 +6214,182 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/mission/tasks/{id}/subtasks/{subtaskId}": {
+      "delete": {
+        "summary": "Delete a Subtask",
+        "description": "Retire one subtask, leaving its parent task and its sibling subtasks exactly as they are. The caller must be the **parent task's** owner, its assignee, or a **tenant owner of its tenant**; a subtask's own assignee is refused — deleting is a lifecycle operation, not a board edit — and board membership does not qualify either. The subtask must belong to the parent named in the address — a subtask under a different parent answers `404`. The body carries no fields: the subtask is named by its address and the delete records no reason. The answer names the subtask by id (`200 { \"data\": { \"id\": … } }`) rather than returning a row every read now answers `404` for. A repeat answers `404`, which is also why no `Idempotency-Key` is accepted: a replay is a read-side fact, not a duplicate write. Retiring a top-level task with its subtasks is `DELETE /mission/tasks/{id}`.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Parent task UUID"
+          },
+          {
+            "name": "subtaskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Subtask UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The subtask was retired; `data.id` names it",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A body was sent (delete takes no fields), or the body is not valid JSON"
+          },
+          "403": {
+            "description": "The caller is not the parent task's owner, its assignee, or a tenant owner of its tenant — a subtask's own assignee is refused"
+          },
+          "404": {
+            "description": "Parent task or subtask not found — unknown, archived, another tenant's, or a subtask that belongs to a different parent"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Reorder a Subtask",
+        "description": "Reorder one subtask among its siblings. The body carries a single field, `after_subtask_id`: the sibling to sit directly behind, or `null` to sit first among them — `serviceMoveSubtaskToAfter`'s own meaning for a null anchor, so there is one spelling per intent. The caller must be the **parent task's** owner, its assignee, or a **tenant owner of its tenant**; a subtask's own assignee is refused, because reordering is structural rather than a board edit, and board membership does not qualify either. The subtask must belong to the parent named in the address — a subtask under a different parent answers `404`. The answer is the subtask in the same shape `GET /mission/tasks/{id}` returns, with its server-computed `position`: the placement is computed by one atomic, row-locking RPC, so a retry lands the subtask in the same place and no `Idempotency-Key` is needed or accepted. A subtask lives in no board list — moving a top-level card between lists is `POST /mission/tasks/{id}/actions/move`.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Parent task UUID"
+          },
+          {
+            "name": "subtaskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Subtask UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "after_subtask_id"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "after_subtask_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true,
+                    "description": "Place the subtask immediately after this sibling; null places it first."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The subtask after the move, with its server-computed `position`",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error: a missing or unknown field, `after_subtask_id` that is not a UUID, or `after_subtask_id` naming the subtask itself"
+          },
+          "403": {
+            "description": "Permission denied — not the parent task's owner or assignee, nor a tenant owner of its tenant"
+          },
+          "404": {
+            "description": "Parent task or subtask not found — unknown, archived, another tenant's, a subtask that belongs to a different parent, or an `after_subtask_id` that is a live sibling under another parent. An `after_subtask_id` that is archived, deleted, or in another tenant is not found either, but does not fail: it places the subtask first among its siblings, the same fall-back the card move makes."
           }
         }
       }
@@ -12152,6 +12401,78 @@
           }
         }
       }
+,
+      "delete": {
+        "summary": "Delete Task (by Code)",
+        "description": "Same contract as `DELETE /mission/tasks/{id}`, with the task addressed by its natural code instead of its UUID. The code is resolved inside the tenant first, so an unknown or foreign code answers `404` before anything else runs.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task code (e.g. ACME-42), resolved within the tenant"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The task was retired; `data.id` names it",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A body was sent (delete takes no fields), the body is not valid JSON, or X-Tenant-Code is missing (a code lookup needs the tenant)"
+          },
+          "403": {
+            "description": "The caller is not the task's owner, its assignee, or a tenant owner of its tenant"
+          },
+          "404": {
+            "description": "Task not found — including a task that is already deleted, and another tenant's task"
+          }
+        }
+      }
     },
     "/mission/tasks/code/{code}/comments": {
       "get": {
@@ -12619,6 +12940,180 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/mission/tasks/code/{code}/subtasks/{subtaskId}": {
+      "delete": {
+        "summary": "Delete a Subtask (by Code)",
+        "description": "Same contract as `DELETE /mission/tasks/{id}/subtasks/{subtaskId}`, with the parent task addressed by its natural code instead of its UUID.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Parent task code (e.g. ACME-42)"
+          },
+          {
+            "name": "subtaskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Subtask UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The subtask was retired; `data.id` names it",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A body was sent (delete takes no fields), the body is not valid JSON, or X-Tenant-Code is missing (a code lookup needs the tenant)"
+          },
+          "403": {
+            "description": "The caller is not the parent task's owner, its assignee, or a tenant owner of its tenant — a subtask's own assignee is refused"
+          },
+          "404": {
+            "description": "Parent task or subtask not found — unknown, archived, another tenant's, or a subtask that belongs to a different parent"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Reorder a Subtask (by Code)",
+        "description": "Same contract as `PATCH /mission/tasks/{id}/subtasks/{subtaskId}`, with the parent task addressed by its natural code instead of its UUID.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Parent task code (e.g. ACME-42)"
+          },
+          {
+            "name": "subtaskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Subtask UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "after_subtask_id"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "after_subtask_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true,
+                    "description": "Place the subtask immediately after this sibling; null places it first."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The subtask after the move, with its server-computed `position`",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error: a missing or unknown field, `after_subtask_id` that is not a UUID, or `after_subtask_id` naming the subtask itself, or X-Tenant-Code is missing (a code lookup needs the tenant)"
+          },
+          "403": {
+            "description": "Permission denied — not the parent task's owner or assignee, nor a tenant owner of its tenant"
+          },
+          "404": {
+            "description": "Parent task or subtask not found — unknown, archived, another tenant's, a subtask that belongs to a different parent, or an `after_subtask_id` that is a live sibling under another parent. An `after_subtask_id` that is archived, deleted, or in another tenant is not found either, but does not fail: it places the subtask first among its siblings, the same fall-back the card move makes."
           }
         }
       }

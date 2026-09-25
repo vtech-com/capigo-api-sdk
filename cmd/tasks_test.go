@@ -215,6 +215,34 @@ func TestTaskActionPath(t *testing.T) {
 	}
 }
 
+// TestSubtaskPath covers the address both one-subtask commands build. It is the
+// regression test for what those commands used to compose inline: a wrong
+// suffix or an unescaped id reaches the server as a different route, and every
+// OpenAPI guard stays green, because implementedOps is a hand-written map.
+func TestSubtaskPath(t *testing.T) {
+	for _, tc := range []struct{ id, code, subtask, want string }{
+		{
+			id:      "parent-1",
+			subtask: "sub-2",
+			want:    "/mission/tasks/parent-1/subtasks/sub-2",
+		},
+		{
+			code:    "ACME-1",
+			subtask: "sub-2",
+			want:    "/mission/tasks/code/ACME-1/subtasks/sub-2",
+		},
+		{
+			id:      "parent-1",
+			subtask: "sub/2",
+			want:    "/mission/tasks/parent-1/subtasks/sub%2F2",
+		},
+	} {
+		if got := subtaskPath(tc.id, tc.code, tc.subtask); got != tc.want {
+			t.Errorf("subtaskPath(%q, %q, %q) = %q, want %q", tc.id, tc.code, tc.subtask, got, tc.want)
+		}
+	}
+}
+
 // TestTasksListPath is a regression test for the tasks list filter gap: the
 // backend (query-parser.ts ALLOWED_FILTER_COLUMNS) accepts filters on status,
 // priority, assignee_id, owner_id, board_id, board_list_id, due_date, and

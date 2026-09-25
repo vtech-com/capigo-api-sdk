@@ -12,6 +12,42 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **`tasks delete` soft-deletes a task — and a parent takes its subtasks with it.** `capigo tasks
+  delete (<id> | --code <code>) [--tenant <code>]` sends `DELETE /mission/tasks/{id}` (or the
+  `code/{code}` sibling). Deleting a **top-level task** retires its active subtasks with it, so a
+  family always shares one state. The caller must be the task's owner, its assignee, or a tenant owner
+  of its tenant, and a subtask's own assignee exits 4 when a subtask is named here. stdout names the
+  deleted task's id, because the task itself is outside every read from then on. A repeat exits 4 —
+  the task is no longer live — which is also why there is no `--idempotency-key`: the API reads a
+  replay as a fact about the task, not as a duplicate write to dedupe. Nothing is erased; the GUI's
+  archived view can restore it.
+
+- **`tasks subtasks delete` retires one subtask and leaves its parent alone.** `capigo tasks subtasks
+  delete (<parent-id> | --code <code>) <subtask-id>` sends
+  `DELETE /mission/tasks/{id}/subtasks/{subtaskId}` (or the `code/{code}` sibling). Unlike
+  `tasks delete`, the parent task and the sibling subtasks keep their state. The caller must be the
+  **parent task's** owner, its assignee, or a tenant owner of its tenant — a subtask's own assignee
+  exits 4, because deleting is a lifecycle operation rather than a board edit. The subtask must belong
+  to the parent named in the address; quoting any other parent exits 4. stdout names the deleted
+  subtask's id, and a repeat exits 4 — so no `--idempotency-key` here either: a replay is a read-side
+  fact, not a duplicate write to dedupe.
+
+- **`tasks subtasks move` reorders a subtask among its siblings.** `capigo tasks subtasks move
+  (<parent-id> | --code <code>) <subtask-id> (--top | --after-subtask-id <uuid>)` sends
+  `PATCH /mission/tasks/{id}/subtasks/{subtaskId}` (or the `code/{code}` sibling) with the one field
+  that resource carries: `{"after_subtask_id": "<uuid>"}`, or `{"after_subtask_id": null}` for `--top`
+  — the CLI's own spelling of a null anchor, so a caller never types a JSON null. A subtask lives in
+  no board column, so it only moves among its siblings; moving a top-level card between columns stays
+  `tasks move`. The caller must be the **parent task's** owner, its assignee, or a tenant owner of its
+  tenant — a subtask's own assignee exits 4, because reordering is structural rather than a board
+  edit. The subtask must belong to the parent named in the address; quoting another parent's subtask
+  exits 4. stdout is the subtask as it now stands, with its server-computed `position`. That position
+  is recomputed under a lock, so a retry is safe and no `--idempotency-key` is accepted.
+
+- **The spec copy is re-synced.** `api/openapi.json` gains `DELETE /mission/tasks/{id}` and its
+  `code/{code}` sibling, and the two subtask paths, each carrying `patch` (reorder) and `delete`
+  (retire) — 75 paths.
+
 - **`tasks comments create --file` sends the comment and its files in one request.** `capigo tasks
   comments create (<id> | --code <code>) --content <text> --file <path> [--file <path> ...]` posts
   `multipart/form-data` to `POST /mission/tasks/{id}/comments` (or the `code/{code}` sibling): the

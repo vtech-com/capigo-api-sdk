@@ -209,6 +209,9 @@ capigo tasks archive <id|--code>      Retire a task (--code requires --tenant; o
                                       tenant owner only; subtasks go with it; restore with tasks unarchive)
 capigo tasks unarchive <id|--code>    Restore an archived task (--code requires --tenant; owner,
                                       assignee or tenant owner; a subtask's assignee may restore it)
+capigo tasks delete <id|--code>       Delete a task (--code requires --tenant; owner, assignee or tenant
+                                      owner only; a subtask is deleted alone, a parent takes its
+                                      subtasks with it; soft delete, so the GUI's archive can restore it)
 capigo tasks create                   Create a new task (--title + --tenant required; --follower-id repeatable;
                                      --board + --list to file it on a board, with --top or
                                      --after-task-id <uuid> to choose where; --idempotency-key makes a
@@ -217,6 +220,12 @@ capigo tasks create                   Create a new task (--title + --tenant requ
 capigo tasks subtasks list <id|--code>     List a task's subtasks (--code requires --tenant)
 capigo tasks subtasks create <id|--code>   Add subtask(s) to an existing task (--title, or --from-json for a batch;
                                        --code requires --tenant)
+capigo tasks subtasks move <id|--code> <subtask-id>  Reorder a subtask among its siblings (--top, or
+                                       --after-subtask-id <uuid>; --code requires --tenant; the parent's
+                                       owner, assignee or tenant owner only)
+capigo tasks subtasks delete <id|--code> <subtask-id>  Delete one subtask (soft delete; its parent and
+                                       siblings stay; --code requires --tenant; the parent's owner,
+                                       assignee or tenant owner only)
 
 capigo boards list       List boards (supports --query/-q, --page, --limit)
 capigo boards get <id>   Get board by ID (includes its `lists` array)

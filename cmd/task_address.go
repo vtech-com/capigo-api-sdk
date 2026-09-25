@@ -22,6 +22,17 @@ func taskPath(id, code string) string {
 	return "/mission/tasks/" + url.PathEscape(id)
 }
 
+// subtaskPath builds the address of one subtask under a parent task. Every verb
+// that acts on a single subtask (delete, reorder) hangs off the same shape, so
+// the composition lives here once instead of inline in each command.
+//
+// Both the parent and the subtask are values someone typed, so both are escaped:
+// a subtask id containing a slash addresses a subtask rather than a different
+// route.
+func subtaskPath(parentID, parentCode, subtaskID string) string {
+	return taskPath(parentID, parentCode) + "/subtasks/" + url.PathEscape(subtaskID)
+}
+
 // includeArchivedPath adds `include_archived=true` to a task read path.
 //
 // Only reads take it, and only as a deliberate act: an archived task is

@@ -1561,6 +1561,103 @@ OUTPUT
 	},
 }
 
+// tasks delete flags
+var (
+	taskDeleteTenant string
+	taskDeleteCode   string
+)
+
+var tasksDeleteCmd = &cobra.Command{
+	Use:   "delete [<id>]",
+	Short: "Delete a task (soft delete; a parent takes its subtasks)",
+	Long: `Delete a task: it leaves every task read and lands in the archive.
+
+PURPOSE
+  Remove a task you no longer need — a duplicate, a mistake, work filed in the
+  wrong place. This is a soft delete: nothing is erased, and the task can be
+  restored from the GUI's archived view. It is the write the tasks archive
+  command performs, offered under the verb callers reach for.
+
+  Deleting a SUBTASK retires that subtask alone: its parent and its siblings keep
+  their state. Deleting a TOP-LEVEL task retires its active subtasks with it, so
+  a parent and its children always share one state.
+
+  The task's owner, its assignee, or a tenant owner of the task's tenant may call
+  it; a plain member, and a member of the task's board, are refused with 403
+  (exit 4). A subtask is stricter: deleting one asks the parent's owner or
+  assignee, so a subtask's own assignee alone cannot retire it.
+
+  There is no undo here. An archived task is outside every read, so a second call
+  exits 4 (not found) like any other read of that task — do not treat the 4 as a
+  transient failure and retry.
+
+USAGE
+  capigo tasks delete (<id> | --code <code>) [--tenant <code>]
+
+FLAGS
+  <id>
+      Task UUID. Positional. Give this or --code, never both.
+
+  --code <code>
+      Address the task by its code — the key a person quotes, like ACMEC-68.
+      A code is unique within a tenant, not across them, so --code needs a
+      tenant: pass --tenant, or set a default.
+
+  --tenant <code>
+      Tenant to scope the lookup to. Optional with an id; required with
+      --code.
+
+OUTPUT
+  The deleted task's id, because the task itself is outside every read from now
+  on:
+
+      { "data": { "id": "…" },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-09-25T04:12:33Z" } }
+
+  No Idempotency-Key is accepted: the API reads a repeat as a fact about the
+  task — it is already gone, answered with 404 — not as a duplicate write to
+  dedupe.`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		var id string
+		if len(args) == 1 {
+			id = args[0]
+		}
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(taskDeleteTenant, profile)
+		requireOneTaskAddress(id, taskDeleteCode, tenant)
+
+		// taskPath already escapes the address and picks the code route. No body:
+		// the API deletes the task the address names.
+		resp, err := client.Do(ctx, "DELETE", taskPath(id, taskDeleteCode), nil, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope api.RawEnvelope
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		meta := itemMeta(tenant, taskDeleteTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
+	},
+}
+
 // tasks create flags
 var (
 	taskCreateTenant         string
@@ -1585,11 +1682,12 @@ var (
 
 var tasksSubtasksCmd = &cobra.Command{
 	Use:   "subtasks",
-	Short: "List or create a task's subtasks",
+	Short: "List, create, reorder or delete a task's subtasks",
 	Long: `The children of one task.
 
-A subtask is a task: the same object, with a parent. Reading them and creating
-them are separate calls to the API, so they are separate commands here.
+A subtask is a task: the same object, with a parent. Reading them, creating
+them, reordering them and deleting them are separate calls to the API, so they
+are separate commands here.
 
 USAGE
   capigo tasks subtasks <command> (<parent-id> | --code <code>) [<args>]`,
@@ -2152,6 +2250,253 @@ OUTPUT
 	},
 }
 
+// tasks subtasks move flags
+var (
+	taskSubtasksMoveTenant         string
+	taskSubtasksMoveCode           string
+	taskSubtasksMoveTop            bool
+	taskSubtasksMoveAfterSubtaskID string
+)
+
+var tasksSubtasksMoveCmd = &cobra.Command{
+	Use:   "move (<parent-id> | --code <code>) <subtask-id>",
+	Short: "Reorder a subtask among its siblings",
+	Long: `Reorder a subtask: first among its siblings, or directly behind one of them.
+
+PURPOSE
+  Change where a subtask sits in its parent's list. A subtask lives in no board
+  column, so it does not move between lists — it only moves among its siblings.
+  Moving a top-level card between columns is tasks move.
+
+  The caller must be the PARENT task's owner, its assignee, or a tenant owner of
+  its tenant. A subtask's own assignee is refused with 403 (exit 4): reordering
+  is a structural change, not a board edit.
+
+  The subtask must belong to the parent named in the address. Quote the wrong
+  parent and the API answers 404 (exit 4), not a misleading success.
+
+  The position is computed by the server, under a lock, from the card it finds —
+  so a retry lands the subtask in the same place and no Idempotency-Key is
+  needed or accepted.
+
+USAGE
+  capigo tasks subtasks move (<parent-id> | --code <code>) <subtask-id>
+                                 (--top | --after-subtask-id <uuid>)
+                                 [--tenant <code>]
+
+FLAGS
+  <parent-id>
+      Parent task UUID. Positional, omitted when --code supplies the address.
+
+  --code <code>
+      Address the parent task by its code — the key a person quotes, like
+      ACMEC-68. A code is unique within a tenant, not across them, so --code
+      needs a tenant: pass --tenant, or set a default.
+
+  <subtask-id>
+      The subtask to move, always the last positional.
+
+  --top
+      Place the subtask first among its siblings. Give this or
+      --after-subtask-id, never both.
+
+        capigo tasks subtasks move 7c1f2e88-... 9ab2c744-... --tenant acme --top
+
+  --after-subtask-id <uuid>
+      Place the subtask directly behind this sibling, which must belong to the
+      same parent — an anchor under another parent exits 4, and naming the
+      subtask itself exits 5 (the API answers 400).
+
+        capigo tasks subtasks move --code ACMEC-68 9ab2c744-... --tenant acme \
+            --after-subtask-id <uuid>
+
+  --tenant <code>
+      Tenant to scope the lookup to. Optional with an id; required with
+      --code.
+
+OUTPUT
+  The subtask as it now stands, in the same shape as tasks get, with its
+  server-computed position:
+
+      { "data": { "id": "…", "code": "ACMEC-69", "title": "…",
+                  "parent": { "id": "…", "code": "ACMEC-68", "title": "…" },
+                  "position": 500, ... },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-09-25T04:12:33Z" } }`,
+	Args: cobra.MaximumNArgs(2),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		// A code address supplies the parent, so only the subtask is positional;
+		// an id address takes parent then subtask.
+		var parentID, subtaskID string
+		if taskSubtasksMoveCode != "" {
+			if len(args) != 1 {
+				failValidation("a subtask id is required: capigo tasks subtasks move --code <parent-code> <subtask-id>")
+			}
+			subtaskID = args[0]
+		} else {
+			if len(args) != 2 {
+				failValidation("a parent id and a subtask id are required: capigo tasks subtasks move <parent-id> <subtask-id>")
+			}
+			parentID = args[0]
+			subtaskID = args[1]
+		}
+
+		afterSubtaskID := strings.TrimSpace(taskSubtasksMoveAfterSubtaskID)
+		switch {
+		case taskSubtasksMoveTop && afterSubtaskID != "":
+			failValidation("give --top or --after-subtask-id, not both")
+		case !taskSubtasksMoveTop && afterSubtaskID == "":
+			failValidation("a placement is required: --top, or --after-subtask-id <uuid>")
+		}
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(taskSubtasksMoveTenant, profile)
+		requireOneTaskAddress(parentID, taskSubtasksMoveCode, tenant)
+
+		// The API takes one field: the sibling to sit behind, or null for the
+		// front. --top is this CLI's spelling of that null, so a caller never has
+		// to type a JSON null.
+		var anchor any
+		if !taskSubtasksMoveTop {
+			anchor = afterSubtaskID
+		}
+		body := map[string]any{"after_subtask_id": anchor}
+
+		path := subtaskPath(parentID, taskSubtasksMoveCode, subtaskID)
+		resp, err := client.Do(ctx, "PATCH", path, body, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope api.RawEnvelope
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		meta := itemMeta(tenant, taskSubtasksMoveTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
+	},
+}
+
+// tasks subtasks delete flags
+var (
+	taskSubtasksDeleteTenant string
+	taskSubtasksDeleteCode   string
+)
+
+var tasksSubtasksDeleteCmd = &cobra.Command{
+	Use:   "delete (<parent-id> | --code <code>) <subtask-id>",
+	Short: "Delete a subtask (soft delete; its parent stays)",
+	Long: `Delete one subtask, leaving its parent task and its sibling subtasks alone.
+
+PURPOSE
+  Remove a subtask you no longer need. This is a soft delete: nothing is erased,
+  and the subtask can be restored from the GUI's archived view. Deleting the
+  whole task — a parent with its subtasks — is tasks delete.
+
+  The caller must be the PARENT task's owner, its assignee, or a tenant owner of
+  its tenant. A subtask's own assignee is refused with 403 (exit 4): deleting is
+  a lifecycle operation, not a board edit.
+
+  The subtask must belong to the parent named in the address. Quote the wrong
+  parent and the API answers 404 (exit 4) rather than deleting anything.
+
+  An archived subtask is outside every read, so a second call exits 4 as well —
+  do not treat that as a transient failure and retry.
+
+USAGE
+  capigo tasks subtasks delete (<parent-id> | --code <code>) <subtask-id>
+                                   [--tenant <code>]
+
+FLAGS
+  <parent-id>
+      Parent task UUID. Positional, omitted when --code supplies the address.
+
+  --code <code>
+      Address the parent task by its code — the key a person quotes, like
+      ACMEC-68. A code is unique within a tenant, not across them, so --code
+      needs a tenant: pass --tenant, or set a default.
+
+  <subtask-id>
+      The subtask to delete, always the last positional.
+
+  --tenant <code>
+      Tenant to scope the lookup to. Optional with an id; required with
+      --code.
+
+OUTPUT
+  The deleted subtask's id, because the subtask itself is outside every read
+  from now on:
+
+      { "data": { "id": "…" },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-09-25T04:12:33Z" } }
+
+  No Idempotency-Key is accepted: the API reads a repeat as a fact about the
+  subtask — it is already gone, answered with 404 — not as a duplicate write to
+  dedupe.`,
+	Args: cobra.MaximumNArgs(2),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		// A code address supplies the parent, so only the subtask is positional;
+		// an id address takes parent then subtask.
+		var parentID, subtaskID string
+		if taskSubtasksDeleteCode != "" {
+			if len(args) != 1 {
+				failValidation("a subtask id is required: capigo tasks subtasks delete --code <parent-code> <subtask-id>")
+			}
+			subtaskID = args[0]
+		} else {
+			if len(args) != 2 {
+				failValidation("a parent id and a subtask id are required: capigo tasks subtasks delete <parent-id> <subtask-id>")
+			}
+			parentID = args[0]
+			subtaskID = args[1]
+		}
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(taskSubtasksDeleteTenant, profile)
+		requireOneTaskAddress(parentID, taskSubtasksDeleteCode, tenant)
+
+		path := subtaskPath(parentID, taskSubtasksDeleteCode, subtaskID)
+		resp, err := client.Do(ctx, "DELETE", path, nil, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope api.RawEnvelope
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		meta := itemMeta(tenant, taskSubtasksDeleteTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
+	},
+}
+
 func init() {
 	// tasks list flags
 	tasksListCmd.Flags().StringVar(&taskListTenant, "tenant", "", "scope to this tenant code")
@@ -2264,11 +2609,25 @@ func init() {
 	tasksSubtasksCreateCmd.Flags().StringVar(&taskSubtasksPriority, "priority", "", "priority (Low, Normal, High, Urgent)")
 	tasksSubtasksCreateCmd.Flags().StringVar(&taskSubtasksStatus, "status", "", "status (Pending, To-Do, Doing, Done, Closed, Cancelled)")
 
+	// tasks subtasks move flags
+	tasksSubtasksMoveCmd.Flags().StringVar(&taskSubtasksMoveTenant, "tenant", "", "scope to this tenant code")
+	tasksSubtasksMoveCmd.Flags().StringVar(&taskSubtasksMoveCode, "code", "", "address the parent task by its code (e.g. ACMEC-68) instead of by id")
+	tasksSubtasksMoveCmd.Flags().BoolVar(&taskSubtasksMoveTop, "top", false, "place the subtask first among its siblings (exclusive with --after-subtask-id)")
+	tasksSubtasksMoveCmd.Flags().StringVar(&taskSubtasksMoveAfterSubtaskID, "after-subtask-id", "", "place the subtask directly behind this sibling (exclusive with --top)")
+
+	// tasks delete flags
+	tasksDeleteCmd.Flags().StringVar(&taskDeleteTenant, "tenant", "", "scope to this tenant code")
+	tasksDeleteCmd.Flags().StringVar(&taskDeleteCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
+
+	// tasks subtasks delete flags
+	tasksSubtasksDeleteCmd.Flags().StringVar(&taskSubtasksDeleteTenant, "tenant", "", "scope to this tenant code")
+	tasksSubtasksDeleteCmd.Flags().StringVar(&taskSubtasksDeleteCode, "code", "", "address the parent task by its code (e.g. ACMEC-68) instead of by id")
+
 	// Registration order is display order (cobra.EnableCommandSorting is off).
 	// tasksAttachmentsCmd is defined in task_attachments.go, whose init() runs
 	// first — it is registered here so it lands after the verbs, not above them.
-	tasksSubtasksCmd.AddCommand(tasksSubtasksListCmd, tasksSubtasksCreateCmd)
-	taskCmd.AddCommand(tasksListCmd, tasksGetCmd, tasksCreateCmd, tasksUpdateCmd, tasksAssignAgentCmd, tasksMoveCmd, tasksTransferOwnershipCmd, tasksClaimCmd, tasksArchiveCmd, tasksUnarchiveCmd, tasksCommentsCmd, tasksSubtasksCmd, tasksAttachmentsCmd)
+	tasksSubtasksCmd.AddCommand(tasksSubtasksListCmd, tasksSubtasksCreateCmd, tasksSubtasksMoveCmd, tasksSubtasksDeleteCmd)
+	taskCmd.AddCommand(tasksListCmd, tasksGetCmd, tasksCreateCmd, tasksUpdateCmd, tasksAssignAgentCmd, tasksMoveCmd, tasksTransferOwnershipCmd, tasksClaimCmd, tasksArchiveCmd, tasksUnarchiveCmd, tasksDeleteCmd, tasksCommentsCmd, tasksSubtasksCmd, tasksAttachmentsCmd)
 	rootCmd.AddCommand(taskCmd)
 }
 

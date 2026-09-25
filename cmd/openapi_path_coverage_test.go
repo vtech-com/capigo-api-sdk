@@ -55,18 +55,21 @@ var implementedOps = map[string]string{
 	"POST /mission/tasks/{id}/actions/claim":                               "tasks claim",
 	"POST /mission/tasks/{id}/actions/archive":                             "tasks archive",
 	"POST /mission/tasks/{id}/actions/unarchive":                           "tasks unarchive",
+	"DELETE /mission/tasks/{id}":                                           "tasks delete",
 	"GET /mission/tasks/{id}/comments":                                     "tasks comments",
 	"POST /mission/tasks/{id}/comments":                                    "tasks comments create",
 	"GET /mission/tasks/{id}/subtasks":                                     "tasks subtasks list",
 	"POST /mission/tasks/{id}/subtasks":                                    "tasks subtasks create (batch)",
+	"PATCH /mission/tasks/{id}/subtasks/{subtaskId}":                       "tasks subtasks move",
+	"DELETE /mission/tasks/{id}/subtasks/{subtaskId}":                      "tasks subtasks delete",
 	"POST /mission/tasks/with-subtasks":                                    "tasks create --subtasks-json (atomic parent + subtasks)",
 	"GET /mission/tasks/{id}/attachments/{attachmentId}/download":          "tasks attachments download",
 	"POST /mission/tasks/{id}/attachments":                                 "tasks attachments upload",
 	"DELETE /mission/tasks/{id}/attachments/{attachmentId}":                "tasks attachments remove",
 	"GET /mission/tasks/{id}/comments/attachments/{attachmentId}/download": "tasks comments attachments download",
 
-	// The same five capabilities, addressed by a task's code instead of its id.
-	// One flag on each existing command, not five more commands.
+	// The same capabilities, addressed by a task's code instead of its id.
+	// One flag on each existing command, not a second command per address.
 	"GET /mission/tasks/code/{code}":                                              "tasks get --code",
 	"PATCH /mission/tasks/code/{code}":                                            "tasks update --code",
 	"POST /mission/tasks/code/{code}/actions/assign-agent":                        "tasks assign-agent --code",
@@ -75,10 +78,13 @@ var implementedOps = map[string]string{
 	"POST /mission/tasks/code/{code}/actions/claim":                               "tasks claim --code",
 	"POST /mission/tasks/code/{code}/actions/archive":                             "tasks archive --code",
 	"POST /mission/tasks/code/{code}/actions/unarchive":                           "tasks unarchive --code",
+	"DELETE /mission/tasks/code/{code}":                                           "tasks delete --code",
 	"GET /mission/tasks/code/{code}/comments":                                     "tasks comments --code",
 	"POST /mission/tasks/code/{code}/comments":                                    "tasks comments create --code",
 	"GET /mission/tasks/code/{code}/subtasks":                                     "tasks subtasks list --code",
 	"POST /mission/tasks/code/{code}/subtasks":                                    "tasks subtasks create --code",
+	"PATCH /mission/tasks/code/{code}/subtasks/{subtaskId}":                       "tasks subtasks move --code",
+	"DELETE /mission/tasks/code/{code}/subtasks/{subtaskId}":                      "tasks subtasks delete --code",
 	"GET /mission/tasks/code/{code}/attachments/{attachmentId}/download":          "tasks attachments download --code",
 	"POST /mission/tasks/code/{code}/attachments":                                 "tasks attachments upload --code",
 	"DELETE /mission/tasks/code/{code}/attachments/{attachmentId}":                "tasks attachments remove --code",

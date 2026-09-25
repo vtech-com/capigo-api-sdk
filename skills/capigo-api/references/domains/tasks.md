@@ -80,6 +80,18 @@ attachments. Read `boards.md` as well when board placement is involved.
 - Only the parent owner, parent assignee, or tenant owner can change subtask structure. A permission
   failure is final for that operation; do not retry it as a transient error.
 - Parent status is independent of subtask progress. Do not infer or change it from child states.
+- `tasks subtasks move (<parent-id> | --code <code>) <subtask-id> (--top | --after-subtask-id <uuid>)`
+  reorders a subtask among its siblings. A subtask lives in no board column, so it never moves between
+  lists — moving a top-level card between columns is `tasks move`.
+- Address the parent the subtask actually belongs to. Quoting another parent's subtask exits 4, and that
+  is final: it is not the same subtask under a second address, and retrying will not find it.
+- The position is computed by the server under a lock, so a retry is safe. Never compute or send a
+  number yourself.
+- `tasks subtasks delete (<parent-id> | --code <code>) <subtask-id>` retires one subtask: the parent
+  task and the sibling subtasks keep their state. Name the parent the subtask actually belongs to —
+  any other parent exits 4, and that is final. The parent's owner, its assignee, or a tenant owner may
+  call it; a subtask's own assignee is refused. A repeat exits 4, so never follow it with a `tasks get`
+  to confirm.
 
 ## Followers
 
@@ -142,6 +154,10 @@ attachments. Read `boards.md` as well when board placement is involved.
 - Do not retry after exit 4 ("not found"): the task was archived by your own previous call, and an archived
   task answers 4 on every read that does not ask for it. Add `--include-archived` before concluding
   anything, and see "Finding an archived task" below.
+- `tasks delete (<id> | --code)` is the same write under the verb callers reach for: a soft delete that
+  leaves the task in the archive. Deleting a top-level task retires its active subtasks with it. The
+  answer names the id, and a repeat exits 4 — never follow a delete with a `tasks get` to confirm it,
+  because that read is designed to answer 4. Retiring one subtask alone is `tasks subtasks delete`.
 
 ## Restoring a task
 

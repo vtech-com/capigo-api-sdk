@@ -138,6 +138,15 @@ func buildWriteCommandMapping() []writeCommandEntry {
 			method:    "post",
 			hasFlag:   func(n string) bool { return tasksSubtasksCreateCmd.Flags().Lookup(n) != nil },
 		},
+		// tasks subtasks move: no --from-json, so every body field must have a flag.
+		// The body carries one field, after_subtask_id→--after-subtask-id; --top is
+		// this CLI's spelling of `after_subtask_id: null` and adds no body field.
+		{
+			humanName: "tasks subtasks move",
+			path:      "/mission/tasks/{id}/subtasks/{subtaskId}",
+			method:    "patch",
+			hasFlag:   func(n string) bool { return tasksSubtasksMoveCmd.Flags().Lookup(n) != nil },
+		},
 		// tasks create --subtasks-json drives with-subtasks: tenant_code→--tenant,
 		// subtasks→--subtasks-json (alias), and the nested task object is built from
 		// the individual create flags (task is intentionallyUnexposed).
