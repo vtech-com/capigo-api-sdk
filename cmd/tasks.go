@@ -223,8 +223,8 @@ FLAGS
   --include-archived
       Also list archived tasks. They are left out by default — here, on the
       boards, and on every other task read — so a list that omits a task you
-      know exists is usually this. Archiving a parent archives its subtasks
-      with it: a family disappears together and returns together.
+      know exists is usually this. Archiving a parent archives its subtasks with
+      it, and restoring that parent is what brings them back.
 
         capigo tasks list --tenant acme --include-archived
 
@@ -1663,7 +1663,7 @@ var (
 
 var tasksArchiveCmd = &cobra.Command{
 	Use:   "archive [<id>]",
-	Short: "Retire a task (and its whole family)",
+	Short: "Retire a task (a parent takes its subtasks with it)",
 	Long: `Archive a task: it leaves every task read, and only the GUI can bring it back.
 
 PURPOSE
@@ -1674,11 +1674,13 @@ PURPOSE
   asks the parent's owner or assignee, so a subtask's own assignee alone cannot
   retire it.
 
-  Archiving is a family operation. Naming a parent archives its subtasks with it,
-  and naming a subtask archives its parent and siblings. Only the task you name
-  records a task:archived event; the rows the cascade carries go quietly. Nothing
-  else about them changes: title, owner, assignee, status, followers and board
-  placement stay as they were.
+  Archiving a parent sweeps its family: its active subtasks are archived with it
+  and marked as taken by that archive, so restoring the parent later releases
+  exactly those. Naming a subtask is not a family operation: only that subtask is
+  archived, and its parent and siblings are left exactly as they are. Only the task
+  you name records a task:archived event; the rows a parent's sweep carries go
+  quietly. Nothing else about any of them changes: title, owner, assignee, status,
+  followers and board placement stay as they were.
 
   There is no undo here. Unarchive is a GUI action, and an archived task is
   outside every read, so a second call exits 4 (not found) like any other read of
@@ -1764,10 +1766,12 @@ PURPOSE
   actors may call it as may archive: the task's owner, its assignee, or a tenant
   owner of the task's tenant. Anyone else is refused with 403.
 
-  Restoring is easier than archiving in one way: a subtask's own assignee may
-  restore it, because restore does not ask the parent — archiving does. Naming any
-  member of an archived family restores the whole family, and an archived list
-  holding the task comes back with it.
+  Restoring asks the same three actors as archiving, and a subtask is the same
+  case there: it answers to its parent's owner or assignee, not to its own. A
+  subtask whose parent is still archived cannot be restored at all (400
+  PARENT_TASK_ARCHIVED) — restoring that parent is what releases the subtasks its
+  archive took, and a subtask that was archived on its own stays archived either
+  way. An archived list holding the task comes back with it.
 
   A task that is already live is not an error: nothing is written, no event is
   recorded, and the answer is the task as it stands.
@@ -1856,12 +1860,12 @@ PURPOSE
   command performs, offered under the verb callers reach for.
 
   Deleting a SUBTASK retires that subtask alone: its parent and its siblings keep
-  their state. Deleting a TOP-LEVEL task retires its active subtasks with it, so
-  a parent and its children always share one state.
+  their state. Deleting a TOP-LEVEL task retires its active subtasks with it, in
+  the same write.
 
   The task's owner, its assignee, or a tenant owner of the task's tenant may call
   it; a plain member, and a member of the task's board, are refused with 403
-  (exit 4). A subtask is stricter: deleting one asks the parent's owner or
+  (exit 3). A subtask is stricter: deleting one asks the parent's owner or
   assignee, so a subtask's own assignee alone cannot retire it.
 
   There is no undo here. An archived task is outside every read, so a second call
@@ -2141,7 +2145,7 @@ FLAGS
 
       Naming a list also changes who may create. The API writes such a create
       through the board's own card-creation path: the caller must be a member
-      of that board or a tenant owner (anyone else exits 4), and the board's
+      of that board or a tenant owner (anyone else exits 3), and the board's
       owners are added as followers alongside --follower-id. A create with no
       list keeps the plain path, which needs neither.
 
@@ -2212,7 +2216,7 @@ OUTPUT
 
   meta.tenant is the tenant the task was written to. Read it: a write that
   landed in the wrong tenant looks exactly like a write that succeeded.`,
-	RunE: func(_ *cobra.Command, _ []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
 		if taskCreateTitle == "" {
@@ -2345,10 +2349,17 @@ OUTPUT
 
 		// POST /mission/tasks: tenant_code is in the body; also send X-Tenant-Code header for consistency.
 		// An Idempotency-Key makes a retry after a timeout replay the task the
-		// first attempt created instead of creating a second one.
+		// first attempt created instead of creating a second one. A key of
+		// whitespace is refused rather than sent: the API trims the header and
+		// reads a blank value as no key at all, which is the duplicate this flag
+		// exists to prevent.
 		var createHeaders map[string]string
-		if taskCreateIdempotencyKey != "" {
-			createHeaders = map[string]string{"Idempotency-Key": taskCreateIdempotencyKey}
+		if key := requireUsableKey(
+			cmd.Flags().Changed("idempotency-key"),
+			taskCreateIdempotencyKey,
+			"idempotency-key",
+		); key != "" {
+			createHeaders = map[string]string{"Idempotency-Key": key}
 		}
 		resp, err := client.DoWithHeaders(ctx, "POST", "/mission/tasks", body, tenant, createHeaders)
 		if err != nil {
@@ -2546,7 +2557,7 @@ PURPOSE
   Moving a top-level card between columns is tasks move.
 
   The caller must be the PARENT task's owner, its assignee, or a tenant owner of
-  its tenant. A subtask's own assignee is refused with 403 (exit 4): reordering
+  its tenant. A subtask's own assignee is refused with 403 (exit 3): reordering
   is a structural change, not a board edit.
 
   The subtask must belong to the parent named in the address. Quote the wrong
@@ -2684,7 +2695,7 @@ PURPOSE
   whole task — a parent with its subtasks — is tasks delete.
 
   The caller must be the PARENT task's owner, its assignee, or a tenant owner of
-  its tenant. A subtask's own assignee is refused with 403 (exit 4): deleting is
+  its tenant. A subtask's own assignee is refused with 403 (exit 3): deleting is
   a lifecycle operation, not a board edit.
 
   The subtask must belong to the parent named in the address. Quote the wrong
