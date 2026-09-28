@@ -242,8 +242,16 @@ capigo boards list       List boards (supports --query/-q, --page, --limit)
 capigo boards get <id>   Get board by ID (includes its `lists` array)
 capigo boards create     Create a board (--name + --tenant required, or --from-json)
 capigo boards update <id>        Partial update a board (PATCH; --tenant required; at least one field required)
+capigo boards delete <id>        Delete a board (soft delete; its lists and their tasks stay live)
 capigo boards lists create <board-id>        Create a list in a board (--name + --tenant required)
-capigo boards lists update <board-id> <list-id>  Update a list in a board (PATCH; --tenant required)
+capigo boards lists update <board-id> <list-id>  Update a list (--name/--wip-limit/--is-archived) or
+                                       reorder it (--after-list-id or --before-list-id, one only)
+capigo boards lists delete <board-id> <list-id>  Delete a list (soft delete; the tasks in it stay live)
+capigo boards members list <board-id>        List a board's members (--tenant optional)
+capigo boards members add <board-id>         Add 1-50 members in one call (--user-id repeatable, --role;
+                                       a member the board already has is skipped, not refused)
+capigo boards members update <board-id> <user-id>  Change a member's board role (--role required)
+capigo boards members remove <board-id> <user-id>  Remove a member from a board (prints nothing)
 
 capigo members list      List workspace members (supports --query/-q, --page, --limit)
 capigo members get <id>  Get a member by ID
@@ -295,7 +303,7 @@ Run `capigo <group> <command> --help` for the complete, authoritative flag list 
 
 `--tenant <code>` appears as a local flag on commands that require or accept a tenant scope (e.g. `capigo products list --tenant acme`). It is not a global flag. The active config profile is always read from `~/.capigo/config.json` and cannot be overridden at runtime.
 
-Every PCMS command (`products`, `variants`, `brands`, `categories`, `product-types`, `units`) **requires** a tenant on every verb. `tasks list`/`get`, `boards list`/`get`, and `members list`/`get` accept an *optional* `--tenant` — omit it to read across every tenant you can access (`meta.tenant` is then absent — there is no single tenant to name). `tasks create` and `tasks subtasks create` always require a tenant; `tasks subtasks list` requires a tenant only when addressed by `--code`. Board writes — `boards create`, `boards update`, `boards lists create`, `boards lists update` — always require a tenant.
+Every PCMS command (`products`, `variants`, `brands`, `categories`, `product-types`, `units`) **requires** a tenant on every verb. `tasks list`/`get`, `boards list`/`get`, `boards members list`, and `members list`/`get` accept an *optional* `--tenant` — omit it to read across every tenant you can access (`meta.tenant` is then absent — there is no single tenant to name). `tasks create` and `tasks subtasks create` always require a tenant; `tasks subtasks list` requires a tenant only when addressed by `--code`. Board writes — `boards create`, `boards update`, `boards delete`, `boards lists create`, `boards lists update`, `boards lists delete`, and `boards members add`/`update`/`remove` — always require a tenant: they write into one workspace.
 
 ## Products
 

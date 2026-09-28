@@ -12,6 +12,80 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **`boards delete` retires a board — and it deletes no work.** `capigo boards delete <board-id>
+  --tenant <code>` sends `DELETE /mission/boards/{id}`. The board leaves every read, and a repeat is
+  exit 4. Its lists and the tasks in them stay live rows: the lists become unreachable — a list is
+  addressed inside its board — while the tasks stay readable through `tasks get` and `tasks list`. To
+  close the work instead, archive each list: `boards lists update --is-archived` archives the tasks in
+  that list. Nothing brings a deleted board back.
+  - The answer is the id it retired, at `.data.id`, not the row: every read answers 404 for the board
+    from here on. Exit 3 when the caller may not edit the board (board owner or tenant owner only), and
+    exit 4 when it is unknown, private, or already retired — a private board cannot be deleted through
+    the API at all, because the visibility check runs before the write.
+  - Confirm it by reading: `boards list` no longer shows it, and `boards get` answers 404. The write
+    also records a `board:deleted` event naming the caller.
+  - No `--idempotency-key` is accepted: there is no create here, and a repeat is refused by the read
+    that gates the call rather than by a stored key. `api/openapi.json` gained the operation.
+
+- **`boards lists delete` retires a list — and it is not the same as archiving it.** `capigo boards
+  lists delete <board-id> <list-id> --tenant <code>` sends `DELETE /mission/boards/{id}/lists/{listId}`.
+  The list leaves every read for good, while the tasks filed in it stay active and keep pointing at it:
+  the archive cascade fires on the `is_archived` edge only, so `boards lists update --is-archived` is the
+  write that moves the work, and this one leaves it exactly where it is. Nothing brings a deleted list
+  back — there is no un-delete in the CLI or the API.
+  - The answer is the id it retired, at `.data.id`, not the row: every read answers 404 for the list
+    from here on. A repeat is exit 4, and so is a list belonging to another board — the address names
+    both the board and the list.
+  - Confirm it by reading: `boards get` no longer lists it and `meta.list_count` has dropped.
+  - Needs board ownership or tenant ownership (exit 3 otherwise), and it reaches an archived list too —
+    a caller holding an id may retire what they hid. No `--idempotency-key` is accepted: there is no
+    create here, and a repeat is refused by the read that gates the call rather than by a stored key.
+  - `api/openapi.json` gained the operation; the path-coverage guard now covers it.
+
+- **`boards lists update` reorders a list — `--after-list-id` / `--before-list-id`.** `capigo boards
+  lists update <board-id> <list-id> --tenant <code> --after-list-id <uuid>` moves the list to sit
+  directly behind that list on the same board; `--before-list-id <uuid>` puts it directly in front.
+  The API computes the position, so a numeric one is never sent, and `.data.position` in the answer is
+  the position the server now holds — the same number `boards get` reports for that list.
+  - One anchor only, and never together with `--name`, `--wip-limit` or `--is-archived`: the API takes
+    an update or a reorder, not both, and the CLI exits 5 on the pair before sending anything.
+    `--from-json` beside **any** of those flags — an anchor, a field, any of the five — is also exit 5,
+    because the file is the whole body and the flag beside it would otherwise be dropped silently.
+  - A list already where it is asked to go is **exit 0**, not an error: the reorder is a normal write, and
+    one that keeps the order may still rewrite the position between the same neighbours. Nothing in the
+    answer says "moved" — read `.data.position` if you need to report where it landed.
+  - The anchor must be another list on the same board that `boards get` still shows. An anchor on
+    another board, an archived anchor (archived lists are absent from every read) or an unknown one
+    exits 4. A list named as its own anchor is refused with exit 5, and so is
+    `--after-list-id` with `--before-list-id`.
+  - `api/openapi.json` carries `after_list_id` / `before_list_id` on the update body and the widened
+    404.
+
+- **`boards members` manages a board's people, and `add` writes a batch in one call.** Four commands cover
+  the four endpoints: `capigo boards members list <board-id> --tenant <code>` reads who is on a board and
+  their board role; `capigo boards members add <board-id> --tenant <code> --user-id <uuid>
+  [--user-id <uuid> ...] [--role <owner|member>]` adds 1 to 50 members in one request; `capigo boards
+  members update <board-id> <user-id> --tenant <code> --role <owner|member>` changes one member's board
+  role; and `capigo boards members remove <board-id> <user-id> --tenant <code>` takes one member off.
+  - `add` answers per member, at `.data.results[]`, in the order the `--user-id` flags were given:
+    `added` means this call wrote the membership, `skipped` (reason `already_member`) means the board
+    already had it. Read `added_count`: a repeat of the same call reports 0 and changes nothing, which
+    is what makes the call safe to retry. There is no `--idempotency-key` to pass and none is needed —
+    a member is unique on `(board_id, user_id)`, so a retry cannot write a second row.
+  - `--role` applies to the whole request, because the API takes one role per batch: adding a member and
+    promoting another is two calls, and promoting someone already on the board is `boards members
+    update`.
+  - `--user-id` is the `user_id` that `boards members list` reports. It is **not** the workspace member
+    id that `members list` reports, and the server refuses (exit 4) an id that is not an active member
+    of the tenant.
+  - `boards members remove` prints nothing on success: the API answers 204 with no body, and this CLI
+    prints only what the server sent. Exit 0 is the whole confirmation.
+  - `boards members list` needs board membership (any role) or tenant ownership; the three writes need
+    board ownership or tenant ownership and exit 3 otherwise. The last active owner cannot be removed or
+    demoted — exit 8, a board always keeps one. All four require a tenant.
+  - `api/openapi.json` carries both paths — they were the only endpoints in the platform's spec missing
+    here — and the request/response schemas this CLI sends and reads.
+
 - **`tasks history` reads a task's status log.** `capigo tasks history (<id> | --code <code>) [--tenant <code>]
   [--page <n>] [--limit <n>]` sends `GET /mission/tasks/{id}/history` (or the `code/{code}` sibling). Each
   entry carries `from_status`, `to_status`, `changed_at` and `changed_by` — the same person ref a task's
@@ -181,6 +255,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   is no undo in this command — restore with `tasks unarchive` — and an archived task is outside every
   default read, so a second call exits 4 (not found); do not retry a 4. Read one back deliberately with
   `tasks get --include-archived`, or list them with `tasks list --include-archived`.
+
+### Changed
+
+- **`boards lists update` refuses a flag beside `--from-json` (exit 5), where it used to drop the flag and
+  send the file.** A dropped flag was silent: the caller believed the rename or the reorder had been
+  asked for, and the list did not move. Any of `--name`, `--wip-limit`, `--is-archived`, `--after-list-id`
+  or `--before-list-id` beside `--from-json` is now named and refused instead. `--from-json` alone is
+  unchanged, and `--tenant` is still folded into the file's body.
+- **`boards members list` no longer requires `--tenant`.** Omitting it searches the board across every
+  tenant the key can reach and leaves `meta.tenant` empty, exactly as `boards list` and `boards get`
+  behave. The board's own members are the same either way; `boards members add`/`update`/`remove` still
+  require the tenant, because they write into one workspace.
 
 ### Fixed
 

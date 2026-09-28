@@ -86,6 +86,10 @@ var bodyFieldAliasMap = map[string]string{
 	// POST /mission/tasks/with-subtasks: the subtasks array is supplied as a JSON
 	// file via --subtasks-json on `tasks create`.
 	"subtasks": "subtasks-json",
+	// POST /mission/boards/{id}/members: user_ids is a plural field, and the CLI
+	// exposes it as a singular repeatable flag — the shape every other
+	// repeatable id/name list here uses: --user-id <uuid> --user-id <uuid>.
+	"user_ids": "user-id",
 }
 
 // intentionallyUnexposedBodyFields lists body fields that the CLI deliberately
@@ -178,6 +182,43 @@ func buildWriteCommandMapping() []writeCommandEntry {
 			path:      "/mission/tasks/{id}/actions/transfer-ownership",
 			method:    "post",
 			hasFlag:   func(n string) bool { return tasksTransferOwnershipCmd.Flags().Lookup(n) != nil },
+		},
+		// boards members add: no --from-json, so every body field needs a flag —
+		// tenant_code→--tenant, user_ids→--user-id (repeatable), role→--role.
+		{
+			humanName: "boards members add",
+			path:      "/mission/boards/{id}/members",
+			method:    "post",
+			hasFlag:   func(n string) bool { return boardMembersAddCmd.Flags().Lookup(n) != nil },
+		},
+		// boards members update: the PATCH body is tenant_code + role, both
+		// flagged, and no --from-json escape hatch exists to hide a new field.
+		{
+			humanName: "boards members update",
+			path:      "/mission/boards/{id}/members/{userId}",
+			method:    "patch",
+			hasFlag:   func(n string) bool { return boardMembersUpdateCmd.Flags().Lookup(n) != nil },
+		},
+		// The DELETE commands carry a body too, and until now the guard had no
+		// DELETE case at all — so a body field could be added to one of them with
+		// nothing failing. Each registers --tenant for tenant_code.
+		{
+			humanName: "boards delete",
+			path:      "/mission/boards/{id}",
+			method:    "delete",
+			hasFlag:   func(n string) bool { return boardsDeleteCmd.Flags().Lookup(n) != nil },
+		},
+		{
+			humanName: "boards lists delete",
+			path:      "/mission/boards/{id}/lists/{listId}",
+			method:    "delete",
+			hasFlag:   func(n string) bool { return boardListsDeleteCmd.Flags().Lookup(n) != nil },
+		},
+		{
+			humanName: "boards members remove",
+			path:      "/mission/boards/{id}/members/{userId}",
+			method:    "delete",
+			hasFlag:   func(n string) bool { return boardMembersRemoveCmd.Flags().Lookup(n) != nil },
 		},
 		// PCMS resource commands: all register --from-json, so per-field assertion is
 		// skipped. Listed here so NEW spec fields still surface as a test failure when
@@ -288,9 +329,10 @@ type openAPIBodySpec struct {
 }
 
 type openAPIBodyPathItem struct {
-	Post  *openAPIBodyOperation `json:"post"`
-	Patch *openAPIBodyOperation `json:"patch"`
-	Put   *openAPIBodyOperation `json:"put"`
+	Post   *openAPIBodyOperation `json:"post"`
+	Patch  *openAPIBodyOperation `json:"patch"`
+	Put    *openAPIBodyOperation `json:"put"`
+	Delete *openAPIBodyOperation `json:"delete"`
 }
 
 type openAPIBodyOperation struct {
@@ -355,6 +397,8 @@ func TestOpenAPIBodyCoverage(t *testing.T) {
 				op = pathItem.Patch
 			case "put":
 				op = pathItem.Put
+			case "delete":
+				op = pathItem.Delete
 			}
 			if op == nil {
 				t.Fatalf("path %q has no %s operation in openapi.json", entry.path, strings.ToUpper(entry.method))

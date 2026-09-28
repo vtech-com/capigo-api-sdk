@@ -43,6 +43,14 @@ The CLI wraps every endpoint that currently exists, with one exception:
 
 Everything else under `/members`, `/mission/*`, `/pcms/*`, `/tenants` is wrapped.
 
+**Board membership (2026-09-28):** the four `/mission/boards/{id}/members*` operations were the
+only endpoints present in the platform's spec and absent from this repo's copy — the spec copy
+predated them. They are wrapped now (`boards members list`/`add`/`update`/`remove`) and both
+paths are in `api/openapi.json`, so nothing here is uncovered. `boards members add` sends the
+batch `user_ids` array; the copy was updated by hand for these two paths only, and the next
+`make update-spec` against a prod that carries them will reconcile the rest of the document's
+formatting.
+
 ## API-level gaps — endpoints that do NOT exist yet
 
 "Needed" depends on the Tấm skill scope (defined elsewhere). The clearly-justified

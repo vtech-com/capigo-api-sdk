@@ -177,11 +177,50 @@ type CreateBoardListRequest struct {
 }
 
 // UpdateBoardListRequest is the body for PATCH /mission/boards/{id}/lists/{listId}.
+// Two intents share the endpoint and are never sent together: a field update
+// (Name/Limit/IsArchived), or a reorder naming one anchor (AfterListID XOR
+// BeforeListID), which changes Position and nothing else.
 type UpdateBoardListRequest struct {
-	TenantCode string  `json:"tenant_code"`
-	Name       *string `json:"name,omitempty"`
-	Limit      *int    `json:"limit,omitempty"`
-	IsArchived *bool   `json:"is_archived,omitempty"`
+	TenantCode   string  `json:"tenant_code"`
+	Name         *string `json:"name,omitempty"`
+	Limit        *int    `json:"limit,omitempty"`
+	IsArchived   *bool   `json:"is_archived,omitempty"`
+	AfterListID  *string `json:"after_list_id,omitempty"`
+	BeforeListID *string `json:"before_list_id,omitempty"`
+}
+
+// DeleteBoardRequest is the body for DELETE /mission/boards/{id}.
+// The address names the board; the body carries the tenant only.
+type DeleteBoardRequest struct {
+	TenantCode string `json:"tenant_code"`
+}
+
+// DeleteBoardListRequest is the body for DELETE /mission/boards/{id}/lists/{listId}.
+// The address names the board and the list; the body carries the tenant only.
+type DeleteBoardListRequest struct {
+	TenantCode string `json:"tenant_code"`
+}
+
+// AddBoardMembersRequest is the body for POST /mission/boards/{id}/members.
+// UserIDs is the array the endpoint exists for: 1 to 50 members in one request.
+// Role applies to the whole request, because the API takes one role per batch.
+type AddBoardMembersRequest struct {
+	TenantCode string   `json:"tenant_code"`
+	UserIDs    []string `json:"user_ids"`
+	Role       *string  `json:"role,omitempty"`
+}
+
+// UpdateBoardMemberRequest is the body for PATCH /mission/boards/{id}/members/{userId}.
+// Role is required: the endpoint changes the board role and nothing else.
+type UpdateBoardMemberRequest struct {
+	TenantCode string `json:"tenant_code"`
+	Role       string `json:"role"`
+}
+
+// RemoveBoardMemberRequest is the body for DELETE /mission/boards/{id}/members/{userId}.
+// The member is named by the address; the body carries only the tenant.
+type RemoveBoardMemberRequest struct {
+	TenantCode string `json:"tenant_code"`
 }
 
 // ProductVariantDimensions holds physical dimensions of a variant.

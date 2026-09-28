@@ -290,6 +290,46 @@ func (c *Client) UpdateBoardList(ctx context.Context, boardID, listID string, bo
 	return c.Do(ctx, "PATCH", "/mission/boards/"+boardID+"/lists/"+listID, body, tenant)
 }
 
+// DeleteBoard retires a board. A soft delete: the board leaves every read,
+// while its lists and their tasks stay live rows. The API answers with the id
+// it retired, not the row.
+func (c *Client) DeleteBoard(ctx context.Context, boardID string, body any, tenant *string) (*Response, error) {
+	return c.Do(ctx, "DELETE", "/mission/boards/"+boardID, body, tenant)
+}
+
+// DeleteBoardList retires a list from a board. This is not archiving: the list
+// leaves every read, while the tasks filed in it stay live and keep pointing at
+// it. The API answers with the id it retired, not the row.
+func (c *Client) DeleteBoardList(ctx context.Context, boardID, listID string, body any, tenant *string) (*Response, error) {
+	return c.Do(ctx, "DELETE", "/mission/boards/"+boardID+"/lists/"+listID, body, tenant)
+}
+
+// ListBoardMembers fetches a page of a board's members.
+func (c *Client) ListBoardMembers(ctx context.Context, boardID string, tenant *string, page, limit int) (*Response, error) {
+	params := buildParams(nil, page, limit)
+	path := "/mission/boards/" + boardID + "/members"
+	if len(params) > 0 {
+		path += "?" + params.Encode()
+	}
+	return c.Do(ctx, "GET", path, nil, tenant)
+}
+
+// AddBoardMembers adds 1..50 workspace members to a board in one request.
+// The API answers per member: already-members come back skipped, not refused.
+func (c *Client) AddBoardMembers(ctx context.Context, boardID string, body any, tenant *string) (*Response, error) {
+	return c.Do(ctx, "POST", "/mission/boards/"+boardID+"/members", body, tenant)
+}
+
+// UpdateBoardMember changes one member's board role.
+func (c *Client) UpdateBoardMember(ctx context.Context, boardID, userID string, body any, tenant *string) (*Response, error) {
+	return c.Do(ctx, "PATCH", "/mission/boards/"+boardID+"/members/"+userID, body, tenant)
+}
+
+// RemoveBoardMember removes one member from a board. The API answers 204.
+func (c *Client) RemoveBoardMember(ctx context.Context, boardID, userID string, body any, tenant *string) (*Response, error) {
+	return c.Do(ctx, "DELETE", "/mission/boards/"+boardID+"/members/"+userID, body, tenant)
+}
+
 // buildParams constructs a url.Values from the given string map (skipping empty values)
 // and appends page/limit when non-zero.
 func buildParams(extras map[string]string, page, limit int) url.Values {
