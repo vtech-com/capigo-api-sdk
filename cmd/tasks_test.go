@@ -341,3 +341,185 @@ func TestIncludeArchivedPath(t *testing.T) {
 		})
 	}
 }
+
+// TestTasksListPathNewFilters covers the query parameters added with the
+// API-side filter work: scope, unassigned, the date triplet, archived, the
+// updated_at pair and sort. Each is omitted when unset — "absent" and "false"
+// are the same answer to the server, so a stray parameter would only hide that.
+func TestTasksListPathNewFilters(t *testing.T) {
+	if got := tasksListPath(taskListFilters{}); got != "/mission/tasks" {
+		t.Errorf("bare path = %q", got)
+	}
+
+	got := tasksListPath(taskListFilters{
+		scope:         "mine",
+		unassigned:    true,
+		dateField:     "due_date",
+		dateFrom:      "2026-09-01T00:00:00+07:00",
+		dateTo:        "2026-09-30T23:59:59+07:00",
+		updatedAfter:  "2026-09-01T00:00:00+07:00",
+		updatedBefore: "2026-09-30T23:59:59+07:00",
+		sort:          "updated_at:desc",
+	})
+	base, query, found := strings.Cut(got, "?")
+	if !found || base != "/mission/tasks" {
+		t.Fatalf("path = %q, want base + query", got)
+	}
+	q, err := url.ParseQuery(query)
+	if err != nil {
+		t.Fatalf("parse query %q: %v", query, err)
+	}
+	want := map[string]string{
+		"scope":                     "mine",
+		"unassigned":                "true",
+		"date_field":                "due_date",
+		"date_from":                 "2026-09-01T00:00:00+07:00",
+		"date_to":                   "2026-09-30T23:59:59+07:00",
+		"filters[updated_at][$gte]": "2026-09-01T00:00:00+07:00",
+		"filters[updated_at][$lte]": "2026-09-30T23:59:59+07:00",
+		"sort":                      "updated_at:desc",
+	}
+	for k, wantVal := range want {
+		if got := q.Get(k); got != wantVal {
+			t.Errorf("query %s = %q, want %q", k, got, wantVal)
+		}
+	}
+
+	// --archived is its own mode, and is not --include-archived.
+	if got := tasksListPath(taskListFilters{archived: true}); got != "/mission/tasks?archived=true" {
+		t.Errorf("archived=true path = %q", got)
+	}
+	// The two are separate parameters on the wire; the validator is what
+	// refuses the pair, because they name different lists.
+	if got := tasksListPath(taskListFilters{archived: true, archive: true}); !strings.Contains(got, "archived=true") ||
+		!strings.Contains(got, "include_archived=true") {
+		t.Errorf("archived and include_archived are different parameters, got %q", got)
+	}
+
+	// Unset values leave no trace.
+	if got := tasksListPath(taskListFilters{scope: "", unassigned: false, archived: false, dateField: "", sort: ""}); strings.Contains(got, "?") {
+		t.Errorf("unset flags should send no query string, got %q", got)
+	}
+}
+
+// TestValidateTaskListFlags covers the combinations the CLI refuses before the
+// request: the three modes are mutually exclusive, and the board task search
+// cannot express a filter or an ordering outside its own set. Each refusal is a
+// VALIDATION_ERROR (HTTP 400 → exit 5); a coherent combination returns nil.
+func TestValidateTaskListFlags(t *testing.T) {
+	valid := []struct {
+		name string
+		f    taskListFilters
+	}{
+		{"bare", taskListFilters{}},
+		{"scope all is the default written out", taskListFilters{scope: "all"}},
+		{"scope mine alone", taskListFilters{scope: "mine"}},
+		{"scope mine with a plain filter", taskListFilters{scope: "mine", status: "Doing", priority: "high", archive: true}},
+		{"unassigned alone", taskListFilters{unassigned: true}},
+		{"unassigned with board and status filters", taskListFilters{unassigned: true, boardID: "b1", status: "Doing"}},
+		{"date range with a board sort", taskListFilters{dateField: "due_date", dateTo: "2026-09-30T23:59:59+07:00", sort: "status:asc"}},
+		{"archived alone", taskListFilters{archived: true}},
+		{"updated_at filter outside board mode", taskListFilters{updatedAfter: "2026-09-01T00:00:00Z", sort: "updated_at:desc"}},
+	}
+	for _, c := range valid {
+		if e := validateTaskListFlags(c.f); e != nil {
+			t.Errorf("%s: got %v, want nil", c.name, e)
+		}
+	}
+
+	invalid := []struct {
+		name string
+		f    taskListFilters
+	}{
+		{"unknown scope", taskListFilters{scope: "team"}},
+		{"scope mine with unassigned", taskListFilters{scope: "mine", unassigned: true}},
+		{"scope mine with a date range", taskListFilters{scope: "mine", dateField: "due_date", dateTo: "2026-09-30T23:59:59+07:00"}},
+		{"archived with scope mine", taskListFilters{archived: true, scope: "mine"}},
+		{"archived with include archived", taskListFilters{archived: true, archive: true}},
+		{"archived with unassigned", taskListFilters{archived: true, unassigned: true}},
+		{"unassigned with priority", taskListFilters{unassigned: true, priority: "high"}},
+		{"unassigned with an assignee", taskListFilters{unassigned: true, assigneeID: "u1"}},
+		{"unassigned with a parent", taskListFilters{unassigned: true, parentTaskID: "p1"}},
+		{"unassigned with include archived", taskListFilters{unassigned: true, archive: true}},
+		{"unassigned with an unsupported sort", taskListFilters{unassigned: true, sort: "priority:desc"}},
+		{"date bound without a field", taskListFilters{dateFrom: "2026-09-01T00:00:00+07:00"}},
+		{"date field without a bound", taskListFilters{dateField: "due_date"}},
+		{"unknown date field", taskListFilters{dateField: "archived_at", dateTo: "2026-09-30T23:59:59+07:00"}},
+	}
+	for _, c := range invalid {
+		e := validateTaskListFlags(c.f)
+		if e == nil {
+			t.Errorf("%s: expected a refusal, got nil", c.name)
+			continue
+		}
+		if e.Code != "VALIDATION_ERROR" || e.HTTPStatus != 400 {
+			t.Errorf("%s: got %+v, want VALIDATION_ERROR/400", c.name, e)
+		}
+		if api.ExitCodeFor(e) != 5 {
+			t.Errorf("%s: exit code = %d, want 5", c.name, api.ExitCodeFor(e))
+		}
+	}
+}
+
+// TestHistoryPath covers the status-history request path: page/limit are sent
+// only when set, and there is deliberately no sort parameter — the API's read
+// takes no ordering, so one here would be ignored rather than honoured.
+func TestHistoryPath(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		base        string
+		page, limit int
+		want        string
+	}{
+		{name: "bare", base: "/mission/tasks/task-1", want: "/mission/tasks/task-1/history"},
+		{name: "by code", base: "/mission/tasks/code/ACME-1", want: "/mission/tasks/code/ACME-1/history"},
+		{name: "page", base: "/mission/tasks/task-1", page: 2, want: "/mission/tasks/task-1/history?page=2"},
+		{name: "limit", base: "/mission/tasks/task-1", limit: 50, want: "/mission/tasks/task-1/history?limit=50"},
+		{
+			name: "both",
+			base: "/mission/tasks/task-1", page: 3, limit: 10,
+			want: "/mission/tasks/task-1/history?limit=10&page=3",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := historyPath(tc.base, tc.page, tc.limit); got != tc.want {
+				t.Errorf("historyPath = %q, want %q", got, tc.want)
+			}
+		})
+	}
+
+	if got := historyPath("/mission/tasks/task-1", 0, 0); strings.Contains(got, "sort") {
+		t.Errorf("history takes no sort parameter, got %q", got)
+	}
+}
+
+// TestValidateTaskHistoryParams pins the two refusals that must happen before
+// the request: a limit the server rejects rather than clamps, and a page below
+// the first one. Both are VALIDATION_ERROR → exit 5.
+func TestValidateTaskHistoryParams(t *testing.T) {
+	for _, c := range []struct{ page, limit int }{{0, 0}, {1, 20}, {0, 50}, {2, 50}} {
+		if e := validateTaskHistoryParams(c.page, c.limit); e != nil {
+			t.Errorf("validateTaskHistoryParams(%d,%d) = %v, want nil", c.page, c.limit, e)
+		}
+	}
+
+	for _, c := range []struct {
+		name        string
+		page, limit int
+	}{
+		{"limit over the cap", 0, 51},
+		{"negative page", -1, 0},
+	} {
+		e := validateTaskHistoryParams(c.page, c.limit)
+		if e == nil {
+			t.Errorf("%s: expected a refusal, got nil", c.name)
+			continue
+		}
+		if e.Code != "VALIDATION_ERROR" || e.HTTPStatus != 400 {
+			t.Errorf("%s: got %+v, want VALIDATION_ERROR/400", c.name, e)
+		}
+		if api.ExitCodeFor(e) != 5 {
+			t.Errorf("%s: exit code = %d, want 5", c.name, api.ExitCodeFor(e))
+		}
+	}
+}

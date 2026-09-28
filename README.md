@@ -184,12 +184,23 @@ capigo tenants list      List tenants you can access
 
 capigo tasks list                    List tasks (--query/-q, --status, --priority, --assignee-id,
                                       --owner-id, --board-id, --board-list-id, --due-after/--due-before,
-                                      --created-after/--created-before, --parent-task-id, --include-archived,
+                                      --created-after/--created-before, --updated-after/--updated-before,
+                                      --parent-task-id, --sort <column:direction>, --include-archived,
                                       --page, --limit)
+                                      Three modes of its own, mutually exclusive: --scope mine (your own
+                                      tasks — the API's AND-only filters cannot ask for owner OR assignee),
+                                      --unassigned or --date-field/--date-from/--date-to (board tasks with
+                                      no assignee, or in a date window), and --archived (the archived
+                                      tasks you own or are assigned to, which is not --include-archived).
+                                      The first two read one tenant at a time, so pass --tenant when the
+                                      key can reach several.
 capigo tasks get <id|--code>           Get task by ID or code (--code requires --tenant; --include-archived
                                        reads an archived task, which 404s without it)
 capigo tasks comments <id|--code>      List a task's comment + activity timeline (--type comment|activity,
                                        --sort asc|desc, --page, --limit; --code requires --tenant)
+capigo tasks history <id|--code>       List a task's status log, newest first: from_status, to_status,
+                                       changed_at, changed_by (--page, --limit; --code requires --tenant;
+                                       no --sort — the API's read is newest-first only and refuses one)
 capigo tasks attachments upload <task-id|--code> <path>              Upload a file to a task in one call
                                                                      (--content-type, --idempotency-key)
 capigo tasks attachments remove <task-id|--code> <attachment-id>    Remove a file from a task (final; no key)

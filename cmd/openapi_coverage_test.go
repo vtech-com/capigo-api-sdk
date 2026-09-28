@@ -70,6 +70,10 @@ var commandPathMapping = []struct {
 	// advertising a flag that no longer exists.
 	{name: "tasksGetCmd", cmd: tasksGetCmd, path: "/mission/tasks/{id}"},
 	{name: "tasksGetCodeCmd", cmd: tasksGetCmd, path: "/mission/tasks/code/{code}"},
+	// The status-history read carries only page/limit, and both addresses are
+	// one command — so both paths are checked against its flags.
+	{name: "tasksHistoryCmd", cmd: tasksHistoryCmd, path: "/mission/tasks/{id}/history"},
+	{name: "tasksHistoryCodeCmd", cmd: tasksHistoryCmd, path: "/mission/tasks/code/{code}/history"},
 	{name: "productsListCmd", cmd: productsListCmd, path: "/pcms/products"},
 	{name: "brandsListCmd", cmd: brandsListCmd, path: "/pcms/brands"},
 	{name: "categoriesListCmd", cmd: categoriesListCmd, path: "/pcms/categories"},
@@ -134,6 +138,8 @@ func TestOpenAPICoverage(t *testing.T) {
 				flagLookup = func(n string) bool { return tasksListCmd.Flags().Lookup(n) != nil }
 			case "tasksGetCmd", "tasksGetCodeCmd":
 				flagLookup = func(n string) bool { return tasksGetCmd.Flags().Lookup(n) != nil }
+			case "tasksHistoryCmd", "tasksHistoryCodeCmd":
+				flagLookup = func(n string) bool { return tasksHistoryCmd.Flags().Lookup(n) != nil }
 			case "productsListCmd":
 				flagLookup = func(n string) bool { return productsListCmd.Flags().Lookup(n) != nil }
 			case "brandsListCmd":

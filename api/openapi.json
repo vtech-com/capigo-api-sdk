@@ -164,6 +164,78 @@
           }
         }
       },
+      "PublicTaskStatusHistoryEntry": {
+        "type": "object",
+        "description": "One recorded status change on a task — the row `mission.task_status_histories` holds, not the activity message the same change also posts.",
+        "required": [
+          "id",
+          "task_id",
+          "from_status",
+          "to_status",
+          "changed_by",
+          "changed_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "task_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "from_status": {
+            "type": "string",
+            "nullable": true,
+            "description": "The status left behind. `null` on the entry a task's creation wrote — there was no status to leave.",
+            "example": "To-Do"
+          },
+          "to_status": {
+            "type": "string",
+            "description": "The status entered.",
+            "example": "Doing"
+          },
+          "changed_by": {
+            "type": "object",
+            "nullable": true,
+            "description": "Who made the change, in the same person-ref shape a task's `owner` and `assignee` use. `null` when the row records no actor — a change made by a removed member or by a system path. The email address itself is never exposed; a member with no display name falls back to the address's local part, the same rule `owner` and `assignee` follow.",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "display_name": {
+                "type": "string"
+              },
+              "member_code": {
+                "type": "string",
+                "nullable": true
+              }
+            }
+          },
+          "changed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PublicTaskStatusHistoryListResponse": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicTaskStatusHistoryEntry"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/MetaPagination"
+          }
+        }
+      },
       "PostTaskCommentRequest": {
         "type": "object",
         "description": "Request body for creating a task comment. At least one of content or attachments must be provided.",
@@ -4398,7 +4470,7 @@
         "tags": [
           "Tasks"
         ],
-        "description": "Search and filter tasks. Archived tasks are excluded unless `include_archived=true`.",
+        "description": "Search and filter tasks. Archived tasks are excluded unless `include_archived=true`. The `filters[...]` grammar joins every rule with AND, so three questions it cannot ask are answered by their own parameter, each backed by the database function the corresponding screen already uses: `scope=mine` (the caller's own tasks — owner OR assignee OR follower), `unassigned`/`date_field`, and `archived=true`. Each of the three reads one tenant at a time and they are mutually exclusive with each other.",
         "parameters": [
           {
             "name": "X-Tenant-Code",
@@ -4410,7 +4482,7 @@
           {
             "name": "q",
             "in": "query",
-            "description": "Search by task title",
+            "description": "Search by task text, case-insensitive and escaped (a literal `%` or `_` stays literal). Matches `title`, `description` and `code` on the default, board and archived lists. On `scope=mine` it matches `title` and `code` only: the personal read queries `mission.v_tasks`, which has no description column, so a term there cannot reach one.",
             "schema": {
               "type": "string"
             }
@@ -4436,9 +4508,24 @@
             "in": "query",
             "style": "deepObject",
             "explode": true,
-            "description": "Filter by fields, e.g. filters[status][$eq]=Done",
+            "description": "Filter by fields, e.g. filters[status][$eq]=Done. Rules are joined with AND, and the columns are `status`, `priority`, `assignee_id`, `owner_id`, `board_id`, `board_list_id`, `due_date`, `created_at` and `updated_at`. `filters[assignee_id]` compares against a value, so \"no assignee\" is the `unassigned` parameter rather than a filter.",
             "schema": {
               "type": "object"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Order the page, as `column:direction` (the direction defaults to ascending). `created_at`, `updated_at`, `due_date` and `priority` are accepted; `created_at` is the default. When `unassigned` or a date range selects the board task search, only `created_at`, `updated_at`, `due_date` and `status` are accepted and anything else is HTTP 400 `INVALID_SORT_COLUMN`.",
+            "schema": {
+              "type": "string"
+            },
+            "examples": {
+              "mostRecentlyChanged": {
+                "value": "updated_at:desc",
+                "summary": "Most recently updated first"
+              }
             }
           },
           {
@@ -4469,6 +4556,74 @@
               "type": "boolean",
               "default": false
             }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "description": "Whose tasks to answer with. Omitted or `all` is the tenant-wide read this endpoint has always served. `mine` answers with the caller's own tasks — those they own, are assigned to, or follow — which is the one shape the AND-only `filters[...]` grammar cannot express. `scope=mine` reads a single tenant at a time, so it needs a resolvable tenant (a tenant-scoped key, or the `X-Tenant-Code` header); otherwise HTTP 400 `INVALID_TENANT_SCOPE`. It is mutually exclusive with the `unassigned`/date filters and with `archived=true`, and any other value returns HTTP 400 `INVALID_SCOPE`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "mine"
+              ],
+              "default": "all"
+            }
+          },
+          {
+            "name": "unassigned",
+            "in": "query",
+            "required": false,
+            "description": "Answer with tasks that have no assignee — the other question the AND-only grammar cannot ask, since `filters[assignee_id]` can only compare against a value. This filter is served by the board task search (`mission.search_board_tasks`), so the rows are board tasks the caller can view, and archived rows are never among them. Combining it with a filter other than `filters[board_id]` or `filters[status]`, with `parent_task_id`, with `include_archived=true`, or with a sort column outside `created_at`/`updated_at`/`due_date`/`status` returns HTTP 400 `INVALID_QUERY_PARAMS` (or `INVALID_SORT_COLUMN`) rather than answering without that part. Any value other than `true`/`false` returns HTTP 400 `INVALID_UNASSIGNED`.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "date_field",
+            "in": "query",
+            "required": false,
+            "description": "Which date column `date_from`/`date_to` bound. Required when either bound is set — a bound with no field would silently filter nothing — and refused on its own when neither bound is set. Served by the same board task search as `unassigned`, so the same row scope and the same 400s apply. Any other value returns HTTP 400 `INVALID_DATE_FIELD`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "created_at",
+                "due_date",
+                "updated_at"
+              ]
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive lower bound on `date_field`. ISO 8601 date-time **with a timezone offset** — percent-encode the `+`, as in `2026-09-01T00:00:00%2B07:00`. An offset-less value such as `2026-09-01` is refused (HTTP 400 `INVALID_DATE_RANGE`) rather than read as UTC midnight and silently shifting the window by the caller's offset. For overdue tasks, use `date_field=due_date` with `date_to` set to now and no `date_from`.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive upper bound on `date_field`. Same format and same refusals as `date_from`; a `date_from` after its `date_to` returns HTTP 400 `INVALID_DATE_RANGE` rather than an empty page that looks like a real answer.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "archived",
+            "in": "query",
+            "required": false,
+            "description": "Answer with the archived tasks the caller owns or is assigned to — the archived screen's own list, newest archive first. This is not `include_archived`: that widens the live list, this replaces it with the retired one, and a task matching neither test (board membership included) is not returned. Reads a single tenant at a time, so it needs a resolvable tenant (HTTP 400 `INVALID_TENANT_SCOPE` otherwise), and it is mutually exclusive with `scope=mine`, the `unassigned`/date filters, and `include_archived=true`. Any value other than `true`/`false` returns HTTP 400 `INVALID_ARCHIVED`.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
           }
         ],
         "responses": {
@@ -4494,7 +4649,7 @@
             }
           },
           "400": {
-            "description": "Invalid query parameter (e.g. malformed `parent_task_id` or `include_archived`)",
+            "description": "Invalid query parameter (e.g. malformed `parent_task_id`, `include_archived`, `scope`, `unassigned`, `archived` or date range, or a mode combined with something it cannot express)",
             "content": {
               "application/json": {
                 "schema": {
@@ -4516,6 +4671,33 @@
                       "error": {
                         "code": "INVALID_INCLUDE_ARCHIVED",
                         "message": "include_archived must be true or false"
+                      }
+                    }
+                  },
+                  "invalidScope": {
+                    "summary": "A scope that names no backend",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_SCOPE",
+                        "message": "Invalid scope: team"
+                      }
+                    }
+                  },
+                  "tenantScopeRequired": {
+                    "summary": "A single-tenant mode asked for while the key spans several",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_TENANT_SCOPE",
+                        "message": "scope=mine read one tenant at a time; send X-Tenant-Code to name it"
+                      }
+                    }
+                  },
+                  "invalidDateRange": {
+                    "summary": "A bound with no timezone offset",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_DATE_RANGE",
+                        "message": "date_to is not a valid ISO 8601 date-time with a timezone offset"
                       }
                     }
                   }
@@ -5959,6 +6141,100 @@
           },
           "500": {
             "description": "Signed URL generation failed"
+          }
+        }
+      }
+    },
+    "/mission/tasks/{id}/history": {
+      "get": {
+        "summary": "List Task Status History",
+        "description": "Every status change a task has been through, newest first, with the member who made each one. This is the status log, not the activity timeline: the same change also posts an activity message on `/mission/tasks/{id}/comments?type=activity`, which reads as \"what happened to this card\", while this answers \"which status did it hold, from when, changed by whom\" — the shape an integrator syncs against. The order is fixed newest first, so **`sort` is refused with HTTP 400 `INVALID_QUERY_PARAMS`** rather than accepted and ignored: the sibling comments endpoint takes a sort because its service honours one, and this read has none to expose. The caller must be an active member of the task's tenant; another tenant's task, and an archived one, answer `404` like every other task read.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Task UUID"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size. Values > 50 are rejected with 400 (not clamped).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task status history, newest first",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicTaskStatusHistoryListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "An invalid page or limit, or a `sort` — this read is always newest first and has no sort to expose",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "sortRefused": {
+                    "summary": "A sort on a read whose order is fixed",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_QUERY_PARAMS",
+                        "message": "this read is always newest first and takes no sort parameter"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Task not found"
           }
         }
       }
@@ -12687,6 +12963,100 @@
           },
           "409": {
             "description": "The Idempotency-Key was already used to post a different comment to this task (E0601). Multipart bodies only."
+          }
+        }
+      }
+    },
+    "/mission/tasks/code/{code}/history": {
+      "get": {
+        "summary": "List Task Status History by Code",
+        "description": "Every status change a task has been through, newest first, with the member who made each one — the same read as `/mission/tasks/{id}/history`, addressed by the task's natural code instead of its UUID. `X-Tenant-Code` is required, because a code is only unique within its tenant. The order is fixed newest first, so **`sort` is refused with HTTP 400 `INVALID_QUERY_PARAMS`**, exactly as on the UUID address.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task code, e.g. ACME-42"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size. Values > 50 are rejected with 400 (not clamped).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task status history, newest first",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicTaskStatusHistoryListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing X-Tenant-Code, an invalid page or limit, or a `sort` — this read is always newest first and has no sort to expose",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "sortRefused": {
+                    "summary": "A sort on a read whose order is fixed",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_QUERY_PARAMS",
+                        "message": "this read is always newest first and takes no sort parameter"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Task not found"
           }
         }
       }

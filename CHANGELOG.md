@@ -12,6 +12,46 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **`tasks history` reads a task's status log.** `capigo tasks history (<id> | --code <code>) [--tenant <code>]
+  [--page <n>] [--limit <n>]` sends `GET /mission/tasks/{id}/history` (or the `code/{code}` sibling). Each
+  entry carries `from_status`, `to_status`, `changed_at` and `changed_by` — the same person ref a task's
+  owner and assignee use, and `null` when the row records no actor, which is what a change by a departed
+  member or a system path leaves behind. `from_status` is `null` on the entry a task's creation wrote.
+  - This is the status log, not the activity timeline: `tasks comments` returns the entries that read as
+    "what happened to this card", and this returns "which status did it hold, from when, changed by whom".
+    Sync against this one.
+  - Entries come back newest first and there is **no `--sort`**: the API's read has no ordering to expose
+    and refuses a sort parameter with `400 INVALID_QUERY_PARAMS` rather than answering in another order.
+    `--code` requires `--tenant`; `--limit` above 50 exits 5 before the request.
+  - An unknown task exits 4, and so does an archived one — the same answer every task read gives. A task
+    that was created and never moved returns one entry, its creation, and exit 0.
+  - `api/openapi.json` carries the path and the row schema.
+
+- **`tasks list` gains three list modes and `updated_at`.** The endpoint's `filters[...]` grammar joins
+  every rule with AND, so `capigo tasks list` could not ask three questions a task list is asked: whose
+  tasks are mine (`--owner-id` and `--assignee-id` together mean "both roles", not "either"), which
+  tasks have nobody assigned, and what changed since I last looked. Each mode is a flag of its own,
+  backed by the same database function the matching screen uses.
+  - `--scope mine` lists your own tasks — owned, assigned or followed. Every other flag still applies
+    on top, including `--include-archived`. `-q` narrows to the title and the code here, where the
+    plain list also searches the description: the personal read answers from a view that carries none.
+  - `--unassigned`, and `--date-field <created_at|due_date|updated_at>` with `--date-from`/`--date-to`
+    (inclusive, ISO 8601 with a timezone offset), list board tasks your key can see; archived tasks are
+    never among them, because that is what the board task search answers. Overdue tasks are
+    `--date-field due_date --date-to <now>`. The pair is refused together with a filter the board
+    search cannot express (`--priority`, `--assignee-id`, `--owner-id`, `--board-list-id`,
+    `--due-*`/`--created-*`/`--updated-*`, `--parent-task-id`, `--include-archived`) and with a `--sort`
+    outside `created_at`, `updated_at`, `due_date` and `status` — exit 5, before any request.
+  - `--archived` lists the archived tasks you own or are assigned to, newest archive first. It
+    **replaces** `--include-archived` rather than extending it, so the two together exit 5, as do
+    `--scope mine` and the unassigned/date pair.
+  - `--updated-after`/`--updated-before` filter on when a task last changed, and `--sort
+    <column:direction>` orders the page — both of which the API's `updated_at` support now allows.
+  - The three modes each read one tenant at a time; a key that spans several exits 5 with the API's
+    `INVALID_TENANT_SCOPE` unless `--tenant` (or a default) names one. Without any of them the
+    tenant-wide list is unchanged.
+  - `api/openapi.json` carries the new query parameters and their refusals.
+
 - **`tasks delete` soft-deletes a task — and a parent takes its subtasks with it.** `capigo tasks
   delete (<id> | --code <code>) [--tenant <code>]` sends `DELETE /mission/tasks/{id}` (or the
   `code/{code}` sibling). Deleting a **top-level task** retires its active subtasks with it, so a

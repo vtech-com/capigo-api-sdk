@@ -48,7 +48,16 @@ var (
 	taskListDueBefore     string
 	taskListCreatedAfter  string
 	taskListCreatedBefore string
+	taskListUpdatedAfter  string
+	taskListUpdatedBefore string
 	taskListParentTaskID  string
+	taskListScope         string
+	taskListUnassigned    bool
+	taskListArchived      bool
+	taskListDateField     string
+	taskListDateFrom      string
+	taskListDateTo        string
+	taskListSort          string
 	taskListPage          int
 	taskListLimit         int
 	taskListArchive       bool
@@ -71,9 +80,17 @@ USAGE
                      [--owner-id <uuid>] [--board-id <uuid>]
                      [--board-list-id <uuid>] [--due-after <date>]
                      [--due-before <date>] [--created-after <ts>]
-                     [--created-before <ts>] [--parent-task-id <uuid>|null]
-                     [--include-archived]
+                     [--created-before <ts>] [--updated-after <ts>]
+                     [--updated-before <ts>] [--parent-task-id <uuid>|null]
+                     [--scope mine] [--unassigned]
+                     [--date-field <column>] [--date-from <ts>] [--date-to <ts>]
+                     [--archived] [--include-archived]
+                     [--sort <column:direction>]
                      [--page <n>] [--limit <n>]
+
+  --scope, --unassigned/--date-* and --archived each name a different list,
+  and they are mutually exclusive. Every other flag filters the list they
+  name, or the tenant-wide one when none of them is given.
 
 FLAGS
   --tenant <code>
@@ -83,9 +100,14 @@ FLAGS
         capigo tasks list --tenant acme
 
   -q, --query <term>
-      Search by task title.
+      Search by task text — title, description and code. With --scope mine the
+      description is not searched: that read answers from a view that carries
+      no description, so a term there matches the title and the code only.
 
         capigo tasks list --tenant acme -q "Fix login"
+
+      A literal % or _ in the term stays literal rather than becoming a
+      wildcard, and a term under two characters searches nothing.
 
   --status <text>
       Filter by status: Pending, To-Do, Doing, Done, Closed, or Cancelled.
@@ -123,6 +145,80 @@ FLAGS
       other value exits 5.
 
         capigo tasks list --tenant acme --parent-task-id null
+
+  --scope mine
+      List your own tasks — those you own, are assigned to, or follow. Omit
+      the flag for every task the tenant has. The API's filter syntax joins its
+      rules with AND, so this is the only way to ask the question: filtering on
+      --owner-id and --assignee-id together returns only tasks where you hold
+      both roles.
+
+        capigo tasks list --tenant acme --scope mine
+
+      It reads one tenant at a time. Pass --tenant (or set a default) when
+      your key can reach several; otherwise the server answers 400
+      INVALID_TENANT_SCOPE and exits 5.
+
+  --unassigned
+      Only tasks with nobody assigned to them. Answered by the board task
+      search, so the rows are board tasks your key can see, and archived tasks
+      are never among them.
+
+        capigo tasks list --tenant acme --unassigned
+
+  --date-field <column>, --date-from <ts>, --date-to <ts>
+      A window on one date column: created_at, due_date or updated_at. Both
+      bounds are inclusive and may be given together or separately.
+      --date-field is required whenever either bound is present, and a bound is
+      required whenever the field is: either alone is refused, because a
+      filter that matches everything looks exactly like one that was meant to
+      narrow the list.
+
+        capigo tasks list --tenant acme --date-field due_date \
+          --date-from 2026-09-01T00:00:00+07:00 \
+          --date-to   2026-09-30T23:59:59+07:00
+
+      Overdue tasks are this with no lower bound and a --date-to of now:
+
+        capigo tasks list --tenant acme --date-field due_date \
+          --date-to 2026-09-28T10:00:00+07:00
+
+      Bounds must carry a timezone offset. An offset-less date is refused
+      locally with exit 5 rather than read as UTC midnight and shifting the
+      window by seven hours.
+
+      These two flags select the same board task search as --unassigned, so the
+      same rows come back (board tasks the key can see, never archived), and
+      the same restrictions apply: --priority, --assignee-id, --owner-id,
+      --board-list-id, the --due-*/--created-*/--updated-* pairs,
+      --parent-task-id and --include-archived are all refused with exit 5, and
+      --sort is limited to created_at, updated_at, due_date and status.
+
+  --archived
+      List the archived tasks you own or are assigned to, newest archive
+      first. This is the Archive screen's list, not a wider version of the
+      live one: board membership does not add to it, and a retired task nobody
+      owned or held is not in it.
+
+        capigo tasks list --tenant acme --archived
+
+      It replaces --include-archived rather than extending it, so giving both
+      exits 5 — the same as combining it with --scope mine or with
+      --unassigned/--date-field. Like --scope mine it reads one tenant at a
+      time.
+
+  --sort <column:direction>
+      Order the page. The direction defaults to ascending when omitted.
+      created_at, updated_at and due_date are the columns the personal and
+      board searches order by; status is available on the board search only.
+
+        capigo tasks list --tenant acme --sort updated_at:desc
+
+      --updated-after <ts> / --updated-before <ts>
+          Filter on when a task last changed, rather than its creation or due
+          date — the way to find what moved since your last sync.
+
+            capigo tasks list --tenant acme --updated-after 2026-09-01T00:00:00+07:00
 
   --include-archived
       Also list archived tasks. They are left out by default — here, on the
@@ -183,6 +279,40 @@ OUTPUT
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
+		listFilters := taskListFilters{
+			query:         taskListQuery,
+			status:        taskListStatus,
+			priority:      taskListPriority,
+			assigneeID:    taskListAssigneeID,
+			ownerID:       taskListOwnerID,
+			boardID:       taskListBoardID,
+			boardListID:   taskListBoardListID,
+			dueAfter:      taskListDueAfter,
+			dueBefore:     taskListDueBefore,
+			createdAfter:  taskListCreatedAfter,
+			createdBefore: taskListCreatedBefore,
+			updatedAfter:  taskListUpdatedAfter,
+			updatedBefore: taskListUpdatedBefore,
+			parentTaskID:  taskListParentTaskID,
+			scope:         taskListScope,
+			unassigned:    taskListUnassigned,
+			dateField:     taskListDateField,
+			dateFrom:      taskListDateFrom,
+			dateTo:        taskListDateTo,
+			archived:      taskListArchived,
+			sort:          taskListSort,
+			page:          taskListPage,
+			limit:         taskListLimit,
+			archive:       taskListArchive,
+		}
+
+		// Validate flag combinations before anything else: a refusal here must
+		// be about the flags, not about a missing API key nobody can fix by
+		// changing their command.
+		if e := validateTaskListFlags(listFilters); e != nil {
+			return handleErr(e)
+		}
+
 		client, cfg, err := buildClient()
 		if err != nil {
 			return handleErr(err)
@@ -195,23 +325,7 @@ OUTPUT
 
 		tenant := resolveTenant(taskListTenant, profile)
 
-		path := tasksListPath(taskListFilters{
-			query:         taskListQuery,
-			status:        taskListStatus,
-			priority:      taskListPriority,
-			assigneeID:    taskListAssigneeID,
-			ownerID:       taskListOwnerID,
-			boardID:       taskListBoardID,
-			boardListID:   taskListBoardListID,
-			dueAfter:      taskListDueAfter,
-			dueBefore:     taskListDueBefore,
-			createdAfter:  taskListCreatedAfter,
-			createdBefore: taskListCreatedBefore,
-			parentTaskID:  taskListParentTaskID,
-			page:          taskListPage,
-			limit:         taskListLimit,
-			archive:       taskListArchive,
-		})
+		path := tasksListPath(listFilters)
 
 		resp, err := client.Do(ctx, "GET", path, nil, tenant)
 		if err != nil {
@@ -472,6 +586,169 @@ OUTPUT
 		// Comments are scoped to a single task, so there is no tenant in meta
 		// even when a tenant was resolved implicitly. The API's own meta passes
 		// through untouched.
+		return output.Write(os.Stdout, rawList(envelope.Data), mergeAPIMeta(envelope.Meta))
+	},
+}
+
+// tasks history flags
+var (
+	taskHistoryTenant string
+	taskHistoryCode   string
+	taskHistoryPage   int
+	taskHistoryLimit  int
+)
+
+// validateTaskHistoryParams refuses a page or limit the API answers with a 400,
+// before the request leaves: the server rejects a limit above 50 rather than
+// clamping it, and a page below 1.
+func validateTaskHistoryParams(page, limit int) *api.APIError {
+	if limit > 50 {
+		return taskListValidationError(
+			"--limit must be at most 50 for this command (got %d); the server rejects larger values rather than clamping", limit)
+	}
+	if page < 0 {
+		return taskListValidationError("--page must be 1 or more (got %d)", page)
+	}
+	return nil
+}
+
+// historyPath builds the request path + query string for `tasks history`.
+// Empty/zero flag values are omitted so the server applies its own defaults.
+// There is no sort parameter: the API's read takes no ordering, so one here
+// would be ignored.
+func historyPath(base string, page, limit int) string {
+	params := url.Values{}
+	if page > 0 {
+		params.Set("page", strconv.Itoa(page))
+	}
+	if limit > 0 {
+		params.Set("limit", strconv.Itoa(limit))
+	}
+
+	path := base + "/history"
+	if len(params) > 0 {
+		path += "?" + params.Encode()
+	}
+	return path
+}
+
+var tasksHistoryCmd = &cobra.Command{
+	Use:   "history [<id>]",
+	Short: "List a task's status history",
+	Long: `Read every status change a task has been through, with who made each one.
+
+PURPOSE
+  Answer "which status did this card hold, from when, changed by whom". This is
+  the STATUS LOG, not the activity timeline: the same change also posts an
+  activity entry that tasks comments returns, and that timeline reads as "what
+  happened to this card". Sync against this; read the timeline when you want the
+  narrative.
+
+  For a task's CURRENT status, read tasks get instead — the history is what led
+  there.
+
+USAGE
+  capigo tasks history (<id> | --code <code>) [--tenant <code>]
+                       [--page <n>] [--limit <n>]
+
+FLAGS
+  <id>
+      Task UUID. Positional. Give this or --code, never both.
+
+  --code <code>
+      Address the task by its code — the key a person quotes, like ACMEC-68.
+      A code is unique within a tenant, not across them, so --code needs a
+      tenant: pass --tenant, or set a default.
+
+        capigo tasks history --code ACMEC-68 --tenant acme
+
+  --tenant <code>
+      Tenant to scope the lookup to. Optional with an id; required with --code.
+
+  --page <n>
+      Page to fetch, 1-based. The default, 0, sends no page parameter and lets
+      the server choose.
+
+  --limit <n>
+      Entries per page, at most 50. Values above 50 exit 5; the server rejects
+      them rather than clamping.
+
+        capigo tasks history <uuid> --limit 50 --page 2
+
+OUTPUT
+  Newest first — the order the server applies. There is no --sort flag, and the
+  API refuses a sort parameter rather than answering in another order, so this
+  is the only order there is. The entries are at .data[]:
+
+      {
+        "data": [
+          { "id": "...",
+            "task_id": "...",
+            "from_status": "To-Do",
+            "to_status": "Doing",
+            "changed_by": { "id": "...", "display_name": "Minh",
+                            "member_code": "NV001" },
+            "changed_at": "2026-07-08T09:12:00Z" }
+        ],
+        "meta": { "page": 1, "limit": 20, "total": 3, "has_more": false }
+      }
+
+  from_status is null on the entry a task's creation wrote: there was no status
+  to leave, and the API does not invent one.
+
+  changed_by is null when the row records no actor — a change made by a removed
+  member, or by a system path. Otherwise it is the same person ref a task's
+  owner and assignee use, and it never carries an email address: a member with
+  no display name falls back to the local part of their address.
+
+  meta.tenant and meta.tenant_source are absent: a history read is scoped to one
+  task by id, not to a tenant, so there is no tenant to name even when --tenant
+  was resolved.
+
+  A task whose status never changed — created and left alone — returns an empty
+  list and exit 0. That is not the same as "no such task", which exits 4.`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		var id string
+		if len(args) == 1 {
+			id = args[0]
+		}
+
+		// Validate flag values client-side so we fail fast (exit 5) before any
+		// network call.
+		if e := validateTaskHistoryParams(taskHistoryPage, taskHistoryLimit); e != nil {
+			return handleErr(e)
+		}
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(taskHistoryTenant, profile)
+		requireOneTaskAddress(id, taskHistoryCode, tenant)
+
+		path := historyPath(taskPath(id, taskHistoryCode), taskHistoryPage, taskHistoryLimit)
+
+		resp, err := client.Do(ctx, "GET", path, nil, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope api.RawEnvelope
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		// Scoped to a single task, so there is no tenant in meta even when one
+		// was resolved implicitly. The API's own meta passes through untouched.
 		return output.Write(os.Stdout, rawList(envelope.Data), mergeAPIMeta(envelope.Meta))
 	},
 }
@@ -2511,7 +2788,16 @@ func init() {
 	tasksListCmd.Flags().StringVar(&taskListDueBefore, "due-before", "", "filter to tasks due on/before this ISO 8601 date")
 	tasksListCmd.Flags().StringVar(&taskListCreatedAfter, "created-after", "", "filter to tasks created on/after this ISO 8601 timestamp")
 	tasksListCmd.Flags().StringVar(&taskListCreatedBefore, "created-before", "", "filter to tasks created on/before this ISO 8601 timestamp")
+	tasksListCmd.Flags().StringVar(&taskListUpdatedAfter, "updated-after", "", "filter to tasks last updated on/after this ISO 8601 timestamp")
+	tasksListCmd.Flags().StringVar(&taskListUpdatedBefore, "updated-before", "", "filter to tasks last updated on/before this ISO 8601 timestamp")
 	tasksListCmd.Flags().StringVar(&taskListParentTaskID, "parent-task-id", "", "filter by parent task ID (use 'null' for top-level only)")
+	tasksListCmd.Flags().StringVar(&taskListScope, "scope", "", "whose tasks to list: 'mine' for your own (owner or assignee), or omit for the whole tenant")
+	tasksListCmd.Flags().BoolVar(&taskListUnassigned, "unassigned", false, "only tasks with no assignee (board tasks the key can see)")
+	tasksListCmd.Flags().StringVar(&taskListDateField, "date-field", "", "date column --date-from/--date-to bound: created_at, due_date or updated_at")
+	tasksListCmd.Flags().StringVar(&taskListDateFrom, "date-from", "", "inclusive lower bound on --date-field, ISO 8601 with a timezone offset")
+	tasksListCmd.Flags().StringVar(&taskListDateTo, "date-to", "", "inclusive upper bound on --date-field, ISO 8601 with a timezone offset")
+	tasksListCmd.Flags().BoolVar(&taskListArchived, "archived", false, "only the archived tasks you own or are assigned to")
+	tasksListCmd.Flags().StringVar(&taskListSort, "sort", "", "order by column:direction, e.g. updated_at:desc")
 	tasksListCmd.Flags().IntVar(&taskListPage, "page", 0, "page number")
 	tasksListCmd.Flags().IntVar(&taskListLimit, "limit", 0, "items per page")
 	tasksListCmd.Flags().BoolVar(&taskListArchive, "include-archived", false, "also list archived tasks")
@@ -2528,6 +2814,11 @@ func init() {
 	tasksCommentsCmd.Flags().StringVar(&taskCommentsSort, "sort", "", "order by created_at: asc | desc (default: desc — newest first)")
 	tasksCommentsCmd.Flags().IntVar(&taskCommentsPage, "page", 0, "page number (1-based)")
 	tasksCommentsCmd.Flags().IntVar(&taskCommentsLimit, "limit", 0, "items per page (max 50)")
+
+	tasksHistoryCmd.Flags().StringVar(&taskHistoryTenant, "tenant", "", "scope to this tenant code")
+	tasksHistoryCmd.Flags().StringVar(&taskHistoryCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
+	tasksHistoryCmd.Flags().IntVar(&taskHistoryPage, "page", 0, "page number (1-based)")
+	tasksHistoryCmd.Flags().IntVar(&taskHistoryLimit, "limit", 0, "entries per page (max 50)")
 
 	// tasks comments create flags
 	tasksCommentsCreateCmd.Flags().StringVar(&taskCommentsCreateTenant, "tenant", "", "scope to this tenant code")
@@ -2627,7 +2918,7 @@ func init() {
 	// tasksAttachmentsCmd is defined in task_attachments.go, whose init() runs
 	// first — it is registered here so it lands after the verbs, not above them.
 	tasksSubtasksCmd.AddCommand(tasksSubtasksListCmd, tasksSubtasksCreateCmd, tasksSubtasksMoveCmd, tasksSubtasksDeleteCmd)
-	taskCmd.AddCommand(tasksListCmd, tasksGetCmd, tasksCreateCmd, tasksUpdateCmd, tasksAssignAgentCmd, tasksMoveCmd, tasksTransferOwnershipCmd, tasksClaimCmd, tasksArchiveCmd, tasksUnarchiveCmd, tasksDeleteCmd, tasksCommentsCmd, tasksSubtasksCmd, tasksAttachmentsCmd)
+	taskCmd.AddCommand(tasksListCmd, tasksGetCmd, tasksCreateCmd, tasksUpdateCmd, tasksAssignAgentCmd, tasksMoveCmd, tasksTransferOwnershipCmd, tasksClaimCmd, tasksArchiveCmd, tasksUnarchiveCmd, tasksDeleteCmd, tasksCommentsCmd, tasksHistoryCmd, tasksSubtasksCmd, tasksAttachmentsCmd)
 	rootCmd.AddCommand(taskCmd)
 }
 
@@ -2679,9 +2970,24 @@ type taskListFilters struct {
 	dueBefore     string
 	createdAfter  string
 	createdBefore string
+	updatedAfter  string
+	updatedBefore string
 	parentTaskID  string
-	page          int
-	limit         int
+	// scope maps to the API's scope=mine. Empty means the tenant-wide read.
+	scope string
+	// unassigned and the date triplet select the API's board task search, so
+	// they are set together with the restrictions validateTaskListFlags
+	// enforces rather than independently of them.
+	unassigned bool
+	dateField  string
+	dateFrom   string
+	dateTo     string
+	// archived maps to the API's archived=true: the retired rows the caller
+	// owns or is assigned to, not a widening of the live list.
+	archived bool
+	sort     string
+	page     int
+	limit    int
 	// archive maps to the API's include_archived=true. Omitted when false, so
 	// the server's own default — archived tasks left out — is what an unflagged
 	// call gets.
@@ -2725,8 +3031,35 @@ func tasksListPath(f taskListFilters) string {
 	if f.createdBefore != "" {
 		params.Set("filters[created_at][$lte]", f.createdBefore)
 	}
+	if f.updatedAfter != "" {
+		params.Set("filters[updated_at][$gte]", f.updatedAfter)
+	}
+	if f.updatedBefore != "" {
+		params.Set("filters[updated_at][$lte]", f.updatedBefore)
+	}
 	if f.parentTaskID != "" {
 		params.Set("parent_task_id", f.parentTaskID)
+	}
+	if f.scope != "" {
+		params.Set("scope", f.scope)
+	}
+	if f.unassigned {
+		params.Set("unassigned", "true")
+	}
+	if f.archived {
+		params.Set("archived", "true")
+	}
+	if f.dateField != "" {
+		params.Set("date_field", f.dateField)
+	}
+	if f.dateFrom != "" {
+		params.Set("date_from", f.dateFrom)
+	}
+	if f.dateTo != "" {
+		params.Set("date_to", f.dateTo)
+	}
+	if f.sort != "" {
+		params.Set("sort", f.sort)
 	}
 	if f.archive {
 		params.Set("include_archived", "true")
@@ -2743,6 +3076,133 @@ func tasksListPath(f taskListFilters) string {
 		path += "?" + params.Encode()
 	}
 	return path
+}
+
+// boardTaskSearchSortColumns are the only orderings the API's board task search
+// accepts, in the `column:direction` spelling the CLI takes.
+var boardTaskSearchSortColumns = map[string]bool{
+	"created_at": true,
+	"updated_at": true,
+	"due_date":   true,
+	"status":     true,
+}
+
+// taskListValidationError builds the refusal every rule below returns: the
+// API's own VALIDATION_ERROR shape, so the answer reads the same whichever side
+// caught it (HTTP 400 → exit 5).
+func taskListValidationError(format string, args ...any) *api.APIError {
+	return &api.APIError{
+		Code:       "VALIDATION_ERROR",
+		Message:    fmt.Sprintf(format, args...),
+		HTTPStatus: 400,
+	}
+}
+
+// validateTaskListFlags refuses flag combinations the API answers with a 400,
+// before the request leaves the machine. Returns nil when the flags are
+// coherent, or the first refusal as a VALIDATION_ERROR.
+//
+// The endpoint picks a different database function per group of flags, and
+// three of these combinations are ones the server can only refuse — or worse,
+// answer with a different list than the flags read as asking for. Catching them
+// here costs no round trip and names the flag rather than the query parameter.
+func validateTaskListFlags(f taskListFilters) *api.APIError {
+	switch f.scope {
+	case "", "all", "mine":
+	default:
+		return taskListValidationError(
+			"--scope %q is not a scope the API serves; use mine, or omit it for every task the tenant has", f.scope)
+	}
+
+	boardMode := f.unassigned || f.dateField != "" || f.dateFrom != "" || f.dateTo != ""
+	if f.archived && (f.scope == "mine" || f.archive || boardMode) {
+		return taskListValidationError(
+			"--archived cannot be combined with %s: archived tasks are their own list, not a wider one", f.modesGiven())
+	}
+
+	if boardMode {
+		if f.scope == "mine" {
+			return taskListValidationError(
+				"--scope mine and --unassigned/--date-field read different lists and cannot be combined")
+		}
+		if blocked := f.boardModeBlockingFlag(); blocked != "" {
+			return taskListValidationError(
+				"--unassigned and --date-field/--date-from/--date-to are served by the board task search, which cannot apply %s; drop one side", blocked)
+		}
+		if f.sort != "" {
+			column := f.sort
+			if i := strings.Index(f.sort, ":"); i >= 0 {
+				column = f.sort[:i]
+			}
+			if !boardTaskSearchSortColumns[column] {
+				return taskListValidationError(
+					"--sort %s is not available with --unassigned or a date range; those may sort by created_at, updated_at, due_date or status", f.sort)
+			}
+		}
+	}
+
+	switch f.dateField {
+	case "":
+		if f.dateFrom != "" || f.dateTo != "" {
+			return taskListValidationError(
+				"--date-from and --date-to need --date-field (created_at, due_date or updated_at) to say which date they bound")
+		}
+	case "created_at", "due_date", "updated_at":
+		if f.dateFrom == "" && f.dateTo == "" {
+			return taskListValidationError(
+				"--date-field %s needs --date-from, --date-to, or both; on its own it filters nothing", f.dateField)
+		}
+	default:
+		return taskListValidationError(
+			"--date-field %q is not a date column the API filters on; use created_at, due_date or updated_at", f.dateField)
+	}
+
+	return nil
+}
+
+// boardModeBlockingFlag names the first flag whose filter the board task search
+// cannot express, or "" when none is set.
+func (f taskListFilters) boardModeBlockingFlag() string {
+	switch {
+	case f.priority != "":
+		return "--priority"
+	case f.assigneeID != "":
+		return "--assignee-id"
+	case f.ownerID != "":
+		return "--owner-id"
+	case f.boardListID != "":
+		return "--board-list-id"
+	case f.dueAfter != "" || f.dueBefore != "":
+		return "--due-after/--due-before"
+	case f.createdAfter != "" || f.createdBefore != "":
+		return "--created-after/--created-before"
+	case f.updatedAfter != "" || f.updatedBefore != "":
+		return "--updated-after/--updated-before"
+	case f.parentTaskID != "":
+		return "--parent-task-id"
+	case f.archive:
+		return "--include-archived"
+	}
+	return ""
+}
+
+// modesGiven lists the mutually exclusive modes the caller set, for a message
+// that names what actually clashed.
+func (f taskListFilters) modesGiven() string {
+	names := []string{}
+	if f.scope == "mine" {
+		names = append(names, "--scope mine")
+	}
+	if f.archive {
+		names = append(names, "--include-archived")
+	}
+	if f.unassigned || f.dateField != "" || f.dateFrom != "" || f.dateTo != "" {
+		names = append(names, "--unassigned/--date-field")
+	}
+	if len(names) == 0 {
+		return "these flags"
+	}
+	return strings.Join(names, ", ")
 }
 
 // commentsPath builds the request path + query string for `tasks comments`.

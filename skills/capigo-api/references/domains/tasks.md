@@ -223,6 +223,57 @@ attachments. Read `boards.md` as well when board placement is involved.
   response: read `.data.owner` to confirm the new owner. The new owner and the former owner each get
   an inbox message; the activity entry says when a tenant owner transferred a task they did not own.
 
+## Whose tasks, and which ones
+
+`tasks list` has three modes beyond the tenant-wide default, and they are mutually exclusive. Each is
+one question the plain `filters[...]` grammar cannot ask, because its rules are joined with AND.
+
+- `--scope mine` — your own tasks: owned, assigned to, or followed. `--assignee-id <me> --owner-id <me>`
+  is not the same request; it means "both roles at once". Every other flag still narrows on top,
+  `--include-archived` included. `-q` matches the title and the code here, where the plain list also
+  matches the description: the personal read answers from a view that carries no description, so a
+  phrase that lives only in one will not match it.
+- `--unassigned`, and `--date-field created_at|due_date|updated_at` with an inclusive
+  `--date-from`/`--date-to` — tasks with nobody assigned, and tasks in a date window. Overdue tasks are
+  `--date-field due_date --date-to <now>` with no lower bound.
+  - Both are answered by the board task search, so the rows are **board tasks your key can see**, and
+    archived tasks are never among them. A task with no board placement is not in the answer, however
+    well it matches — read this mode as "board work", not "every task".
+  - Bounds must be ISO 8601 **with a timezone offset**, and `--date-field` and a bound are required
+    together: either alone exits 5, because a filter that matches everything reads exactly like one
+    meant to narrow the list.
+  - The mode cannot carry a `--priority`, `--assignee-id`, `--owner-id`, `--board-list-id`,
+    `--due-*`/`--created-*`/`--updated-*`, `--parent-task-id` or `--include-archived` filter, and it
+    orders only by `created_at`, `updated_at`, `due_date` or `status`. A combination outside that set
+    exits 5 before the request rather than returning a page with the filter quietly dropped.
+- `--archived` — the archived tasks you own or are assigned to, newest archive first. This is the
+  Archive screen's list, not a wider live one: board membership does not add to it, and it is **not**
+  `--include-archived`. Giving both exits 5, because one of the two would otherwise win in silence.
+- All three read **one tenant at a time**. With a key that can reach several, pass `--tenant` (or set a
+  default); otherwise the API answers 400 `INVALID_TENANT_SCOPE` and the CLI exits 5.
+- `--updated-after`/`--updated-before` and `--sort <column:direction>` are available on the default and
+  personal modes: they ask what changed since your last read, and in what order to page it.
+
+## Reading a task's status log
+
+- `tasks history (<id> | --code <code>)` returns every status change a task has been through, newest
+  first, with `from_status`, `to_status`, `changed_at` and `changed_by`. This is the STATUS LOG; it is
+  not the activity timeline `tasks comments` returns. The same change writes an entry on both, but the
+  timeline reads as "what happened to this card" and this answers "which status did it hold, from when,
+  changed by whom". Sync against this one.
+- `from_status` is `null` on the entry a task's creation wrote — there was no status to leave — so a
+  task created and never moved returns exactly one entry, not zero.
+- `changed_by` is the same person ref a task's owner and assignee use. It is `null` when the row records
+  no actor: a change made by someone who has since left the tenant, or by a system path. The email
+  address is never included; a member with no display name falls back to the local part of their address,
+  the same rule `owner` and `assignee` follow.
+- Newest first is the only order, and there is no flag to change it: the API's read has no ordering to
+  expose, and it refuses a sort parameter rather than answering in another order. Page with
+  `--page`/`--limit` (max 50); a page past the end is an empty list with the real `meta.total`, not an
+  error.
+- An unknown task exits 4, and an archived one does too — the same answer every task read gives. Use
+  `tasks get --include-archived` when the task itself is what you need.
+
 ## Verify
 
 After a write, check `error`, `meta.tenant`, the returned assignee, and any returned board/list.
