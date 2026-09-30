@@ -9,7 +9,8 @@ attachments. Read `boards.md` as well when board placement is involved.
 2. Creating a task makes the caller its owner. A task has at most one assignee; followers receive
    updates but do not share responsibility.
 3. Resolve an explicit assignee to one exact, active member in the target tenant. Never guess a UUID
-   or select a partial name. Use an AI-agent assignee only when leaf help supports it.
+   or select a partial name. Use an AI-agent assignee only when leaf help supports it. For a task
+   going onto a board, follow **People on a board task** below.
 4. For "me" or no assignee, omit the assignee flag: Capigo applies its creator-assignment default.
    An explicitly unassigned task needs a help-confirmed CLI path; never send an empty assignee.
 5. If placing the task on a board, resolve its exact board and list through `boards.md`; otherwise
@@ -23,6 +24,33 @@ attachments. Read `boards.md` as well when board placement is involved.
 7. A create that names a list can answer `PLACEMENT_FAILED` (409) with the created task in `data.id`:
    the card exists at the end of that list and only the position was refused. Do not create it again —
    place it with `tasks move`.
+
+## People on a board task
+
+Applies whenever a task is on a board, or is being put on one — the `--board` of a create, or the
+`board_id` that `tasks get` returns — and the request names a person as assignee, new owner, or
+follower.
+
+1. **Look on the board first.** Read `boards members list <board-id>` in full (page until
+   `meta.total` is covered; it has no name filter) and match the name or email there. The board's
+   members are the people who work it, so when a name fits someone on the board and someone
+   elsewhere in the tenant, it means the board member. Search the whole tenant with `members list`
+   only when nobody on the board matches. Several board matches is still ambiguous: ask.
+2. **Check the board member is still in the tenant.** A board member's `user_id` is the id
+   `--assignee`, `--owner-id` and `--follower-id` take, but a board can still list someone who has
+   left the tenant. Run `members get <user_id> --tenant <task tenant>` before the write: a 404 means
+   they cannot take the task — tell the user rather than falling back to someone else.
+3. **An assignee who is not on the board needs the user's confirmation.** When the person resolves
+   only through the tenant list, stop before the write. Tell the user they are not a member of that
+   board, and ask whether to assign them anyway, pick someone on the board, or add them to the board
+   first (`boards members add`, which needs board or tenant ownership). A request that already says
+   so ("assign Lan even though Lan isn't on the board") is that confirmation.
+4. **Membership you cannot read is not membership you can assume.** `boards members list` needs
+   board membership or tenant ownership; exit 3 means this key cannot see the board's people. Say
+   so, and ask the user to confirm the assignee as in step 3 rather than treating them as a member
+   or as an outsider.
+5. A follower or new owner from outside the board needs no extra confirmation, but name them as
+   not on the board when reporting the result.
 
 ## Attachments
 

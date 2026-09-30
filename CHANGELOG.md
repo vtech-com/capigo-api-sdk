@@ -12,6 +12,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **The bundled skill picks people for a board task from the board first.** When a task is on a
+  board, `skills/capigo-api` now resolves an assignee, new owner, or follower from
+  `boards members list` before the tenant's `members list`, checks the board member is still in the
+  tenant, and asks the user to confirm before assigning someone who is
+  not on the board — or when the key cannot read the board's members.
+
 - **`boards delete` retires a board — and it deletes no work.** `capigo boards delete <board-id>
   --tenant <code>` sends `DELETE /mission/boards/{id}`. The board leaves every read, and a repeat is
   exit 4. Its lists and the tasks in them stay live rows: the lists become unreachable — a list is
@@ -75,9 +81,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   - `--role` applies to the whole request, because the API takes one role per batch: adding a member and
     promoting another is two calls, and promoting someone already on the board is `boards members
     update`.
-  - `--user-id` is the `user_id` that `boards members list` reports. It is **not** the workspace member
-    id that `members list` reports, and the server refuses (exit 4) an id that is not an active member
-    of the tenant.
+  - `--user-id` is the `user_id` that `boards members list` reports — the same id `members list` reports.
+    The server refuses (exit 4) an id that is not an active member of the tenant.
   - `boards members remove` prints nothing on success: the API answers 204 with no body, and this CLI
     prints only what the server sent. Exit 0 is the whole confirmation.
   - `boards members list` needs board membership (any role) or tenant ownership; the three writes need

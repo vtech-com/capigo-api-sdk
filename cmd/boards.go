@@ -1011,9 +1011,10 @@ OUTPUT
                   "page": 1, "limit": 20, "total": 1, "has_more": false }
       }
 
-  user_id is the id every other boards members command takes; it is not the
-  workspace member id that members list reports, and the two are not
-  interchangeable. role is the board-level role, owner or member. Read
+  user_id is the id every other boards members command takes. It is the same
+  id members list reports and tasks create --assignee takes, but a board can
+  still list someone who has left the tenant: members get answers 404 for
+  them, and they cannot be assigned work. role is the board-level role, owner or member. Read
   meta.total rather than counting .data[]: a page never holds more than
   --limit.
 
@@ -1076,8 +1077,8 @@ FLAGS
 
   --user-id <uuid>
       Auth user id of a workspace member to add. Repeatable, and at least one
-      is required; up to 50 per call. This is the user_id that boards members
-      list reports, not the workspace member id that members list reports.
+      is required; up to 50 per call. This is the id members list reports,
+      and the user_id boards members list reports.
 
         capigo boards members add 7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10 \
           --tenant acme --user-id 4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb \
