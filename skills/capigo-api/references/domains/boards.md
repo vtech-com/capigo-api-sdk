@@ -105,11 +105,10 @@ its lists. Leaf help remains authoritative for the available board and task comm
 
 ## Board membership
 
-- A board's members are a **subset** of the workspace's members: being in the workspace does not put
-  anyone on a board, and board membership does not change the workspace role. The two id spaces do not
-  interchange — `boards members` takes the `user_id` that `boards members list` reports, not the
-  member id `members list` reports. Resolve a person to a board-member `user_id` through
-  `boards members list`, never by assuming the workspace id will do.
+- Being in the workspace does not put anyone on a board, and board membership does not change the
+  workspace role. The `user_id` that `boards members list` reports is the same id `members list`
+  reports and task flags take. A board can still list someone who has **left the tenant**:
+  `members get <user_id> --tenant <code>` answers 404 for them, and no task can be assigned to them.
 - `boards members add` is a batch, and it **skips** what is already there rather than refusing: an
   entry comes back `skipped` with reason `already_member`, and `added_count` is what changed the board.
   Exit 0 with `added_count: 0` therefore means the board was already as asked — never report it as a
