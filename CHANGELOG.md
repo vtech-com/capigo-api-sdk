@@ -10,6 +10,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.26.0] — 2026-09-30
+
 ### Added
 
 - **The bundled skill picks people for a board task from the board first.** When a task is on a
