@@ -136,4 +136,14 @@ var errorCatalog = map[string]ErrorInfo{
 		Meaning: "The signed download URL (5-minute TTL) was rejected by storage when the CLI tried to fetch the bytes, immediately after requesting it.",
 		Next:    "Re-run the same `tasks attachments download` / `tasks comments attachments download` command — it mints a fresh URL on every call. Do not reuse a URL or metadata from a previous invocation.",
 	},
+
+	// ----- Mission task action codes. The server message already says which
+	// state refused the change ("The task is not unassigned — another member
+	// claimed it, or you already did"), so Meaning stays empty; Next carries
+	// the read-back step and the brake — the claim capability exists, the
+	// task's state is what refused it, and retrying cannot change that. -----
+	"TASK_ALREADY_ASSIGNED": {
+		Next:           "Re-read the task to see who holds it: capigo tasks get <id|--code>. Retrying the same claim will not help — the refusal is identical whether another member claimed it first or you already hold it.",
+		CapabilityNote: true,
+	},
 }

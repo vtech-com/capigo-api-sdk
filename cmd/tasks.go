@@ -4,10 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
 
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
 	"github.com/vtech-com/capigo-api-sdk/internal/config"
@@ -44,9 +48,19 @@ var (
 	taskListDueBefore     string
 	taskListCreatedAfter  string
 	taskListCreatedBefore string
+	taskListUpdatedAfter  string
+	taskListUpdatedBefore string
 	taskListParentTaskID  string
+	taskListScope         string
+	taskListUnassigned    bool
+	taskListArchived      bool
+	taskListDateField     string
+	taskListDateFrom      string
+	taskListDateTo        string
+	taskListSort          string
 	taskListPage          int
 	taskListLimit         int
+	taskListArchive       bool
 )
 
 var tasksListCmd = &cobra.Command{
@@ -66,8 +80,17 @@ USAGE
                      [--owner-id <uuid>] [--board-id <uuid>]
                      [--board-list-id <uuid>] [--due-after <date>]
                      [--due-before <date>] [--created-after <ts>]
-                     [--created-before <ts>] [--parent-task-id <uuid>|null]
+                     [--created-before <ts>] [--updated-after <ts>]
+                     [--updated-before <ts>] [--parent-task-id <uuid>|null]
+                     [--scope mine] [--unassigned]
+                     [--date-field <column>] [--date-from <ts>] [--date-to <ts>]
+                     [--archived] [--include-archived]
+                     [--sort <column:direction>]
                      [--page <n>] [--limit <n>]
+
+  --scope, --unassigned/--date-* and --archived each name a different list,
+  and they are mutually exclusive. Every other flag filters the list they
+  name, or the tenant-wide one when none of them is given.
 
 FLAGS
   --tenant <code>
@@ -77,9 +100,14 @@ FLAGS
         capigo tasks list --tenant acme
 
   -q, --query <term>
-      Search by task title.
+      Search by task text — title, description and code. With --scope mine the
+      description is not searched: that read answers from a view that carries
+      no description, so a term there matches the title and the code only.
 
         capigo tasks list --tenant acme -q "Fix login"
+
+      A literal % or _ in the term stays literal rather than becoming a
+      wildcard, and a term under two characters searches nothing.
 
   --status <text>
       Filter by status: Pending, To-Do, Doing, Done, Closed, or Cancelled.
@@ -118,6 +146,88 @@ FLAGS
 
         capigo tasks list --tenant acme --parent-task-id null
 
+  --scope mine
+      List your own tasks — those you own, are assigned to, or follow. Omit
+      the flag for every task the tenant has. The API's filter syntax joins its
+      rules with AND, so this is the only way to ask the question: filtering on
+      --owner-id and --assignee-id together returns only tasks where you hold
+      both roles.
+
+        capigo tasks list --tenant acme --scope mine
+
+      It reads one tenant at a time. Pass --tenant (or set a default) when
+      your key can reach several; otherwise the server answers 400
+      INVALID_TENANT_SCOPE and exits 5.
+
+  --unassigned
+      Only tasks with nobody assigned to them. Answered by the board task
+      search, so the rows are board tasks your key can see, and archived tasks
+      are never among them.
+
+        capigo tasks list --tenant acme --unassigned
+
+  --date-field <column>, --date-from <ts>, --date-to <ts>
+      A window on one date column: created_at, due_date or updated_at. Both
+      bounds are inclusive and may be given together or separately.
+      --date-field is required whenever either bound is present, and a bound is
+      required whenever the field is: either alone is refused, because a
+      filter that matches everything looks exactly like one that was meant to
+      narrow the list.
+
+        capigo tasks list --tenant acme --date-field due_date \
+          --date-from 2026-09-01T00:00:00+07:00 \
+          --date-to   2026-09-30T23:59:59+07:00
+
+      Overdue tasks are this with no lower bound and a --date-to of now:
+
+        capigo tasks list --tenant acme --date-field due_date \
+          --date-to 2026-09-28T10:00:00+07:00
+
+      Bounds must carry a timezone offset. An offset-less date is refused
+      locally with exit 5 rather than read as UTC midnight and shifting the
+      window by seven hours.
+
+      These two flags select the same board task search as --unassigned, so the
+      same rows come back (board tasks the key can see, never archived), and
+      the same restrictions apply: --priority, --assignee-id, --owner-id,
+      --board-list-id, the --due-*/--created-*/--updated-* pairs,
+      --parent-task-id and --include-archived are all refused with exit 5, and
+      --sort is limited to created_at, updated_at, due_date and status.
+
+  --archived
+      List the archived tasks you own or are assigned to, newest archive
+      first. This is the Archive screen's list, not a wider version of the
+      live one: board membership does not add to it, and a retired task nobody
+      owned or held is not in it.
+
+        capigo tasks list --tenant acme --archived
+
+      It replaces --include-archived rather than extending it, so giving both
+      exits 5 — the same as combining it with --scope mine or with
+      --unassigned/--date-field. Like --scope mine it reads one tenant at a
+      time.
+
+  --sort <column:direction>
+      Order the page. The direction defaults to ascending when omitted.
+      created_at, updated_at and due_date are the columns the personal and
+      board searches order by; status is available on the board search only.
+
+        capigo tasks list --tenant acme --sort updated_at:desc
+
+      --updated-after <ts> / --updated-before <ts>
+          Filter on when a task last changed, rather than its creation or due
+          date — the way to find what moved since your last sync.
+
+            capigo tasks list --tenant acme --updated-after 2026-09-01T00:00:00+07:00
+
+  --include-archived
+      Also list archived tasks. They are left out by default — here, on the
+      boards, and on every other task read — so a list that omits a task you
+      know exists is usually this. Archiving a parent archives its subtasks with
+      it, and restoring that parent is what brings them back.
+
+        capigo tasks list --tenant acme --include-archived
+
   --page <n>
       Page to fetch. Pages start at 1. The default, 0, sends no page
       parameter and lets the server choose.
@@ -140,6 +250,7 @@ OUTPUT
             "code": "TASK-104", "title": "Fix login bug", "description": "...",
             "status": "To-Do", "priority": "High", "assignee": {...},
             "owner": {...}, "board_id": "...", "board_list_id": "...",
+            "responsible_type": "human", "assigned_agent_key": null,
             "due_date": "...", "parent": null, "has_subtasks": false,
             "attachments": [...],
             "followers": [ { "id": "...", "display_name": "Minh",
@@ -168,6 +279,40 @@ OUTPUT
 	RunE: func(_ *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
+		listFilters := taskListFilters{
+			query:         taskListQuery,
+			status:        taskListStatus,
+			priority:      taskListPriority,
+			assigneeID:    taskListAssigneeID,
+			ownerID:       taskListOwnerID,
+			boardID:       taskListBoardID,
+			boardListID:   taskListBoardListID,
+			dueAfter:      taskListDueAfter,
+			dueBefore:     taskListDueBefore,
+			createdAfter:  taskListCreatedAfter,
+			createdBefore: taskListCreatedBefore,
+			updatedAfter:  taskListUpdatedAfter,
+			updatedBefore: taskListUpdatedBefore,
+			parentTaskID:  taskListParentTaskID,
+			scope:         taskListScope,
+			unassigned:    taskListUnassigned,
+			dateField:     taskListDateField,
+			dateFrom:      taskListDateFrom,
+			dateTo:        taskListDateTo,
+			archived:      taskListArchived,
+			sort:          taskListSort,
+			page:          taskListPage,
+			limit:         taskListLimit,
+			archive:       taskListArchive,
+		}
+
+		// Validate flag combinations before anything else: a refusal here must
+		// be about the flags, not about a missing API key nobody can fix by
+		// changing their command.
+		if e := validateTaskListFlags(listFilters); e != nil {
+			return handleErr(e)
+		}
+
 		client, cfg, err := buildClient()
 		if err != nil {
 			return handleErr(err)
@@ -180,22 +325,7 @@ OUTPUT
 
 		tenant := resolveTenant(taskListTenant, profile)
 
-		path := tasksListPath(taskListFilters{
-			query:         taskListQuery,
-			status:        taskListStatus,
-			priority:      taskListPriority,
-			assigneeID:    taskListAssigneeID,
-			ownerID:       taskListOwnerID,
-			boardID:       taskListBoardID,
-			boardListID:   taskListBoardListID,
-			dueAfter:      taskListDueAfter,
-			dueBefore:     taskListDueBefore,
-			createdAfter:  taskListCreatedAfter,
-			createdBefore: taskListCreatedBefore,
-			parentTaskID:  taskListParentTaskID,
-			page:          taskListPage,
-			limit:         taskListLimit,
-		})
+		path := tasksListPath(listFilters)
 
 		resp, err := client.Do(ctx, "GET", path, nil, tenant)
 		if err != nil {
@@ -212,8 +342,9 @@ OUTPUT
 }
 
 var (
-	taskGetTenant string
-	taskGetCode   string
+	taskGetTenant  string
+	taskGetCode    string
+	taskGetArchive bool
 )
 
 var tasksGetCmd = &cobra.Command{
@@ -227,7 +358,7 @@ PURPOSE
   activity entries are written asynchronously and can lag.
 
 USAGE
-  capigo tasks get (<id> | --code <code>) [--tenant <code>]
+  capigo tasks get (<id> | --code <code>) [--tenant <code>] [--include-archived]
 
 FLAGS
   <id>
@@ -248,6 +379,14 @@ FLAGS
 
         capigo tasks get 7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10 --tenant acme
 
+  --include-archived
+      Read a task that has been archived. Without it an archived task answers
+      404, exactly as a task that never existed does — that is the API's
+      default on every task read. The code you were given still finds it: this
+      is the flag that says you mean the retired row.
+
+        capigo tasks get --code ACMEC-68 --tenant acme --include-archived
+
 OUTPUT
   The task is at .data:
 
@@ -257,6 +396,7 @@ OUTPUT
           "code": "TASK-104", "title": "Fix login bug", "description": "...",
           "status": "To-Do", "priority": "High", "assignee": {...},
           "owner": {...}, "board_id": "...", "board_list_id": "...",
+          "responsible_type": "human", "assigned_agent_key": null,
           "due_date": "...", "parent": null, "has_subtasks": false,
           "attachments": [...],
           "followers": [ { "id": "...", "display_name": "Minh",
@@ -297,7 +437,7 @@ OUTPUT
 		tenant := resolveTenant(taskGetTenant, profile)
 		requireOneTaskAddress(id, taskGetCode, tenant)
 
-		resp, err := client.Do(ctx, "GET", taskPath(id, taskGetCode), nil, tenant)
+		resp, err := client.Do(ctx, "GET", includeArchivedPath(taskPath(id, taskGetCode), taskGetArchive), nil, tenant)
 		if err != nil {
 			return handleErr(err)
 		}
@@ -450,6 +590,169 @@ OUTPUT
 	},
 }
 
+// tasks history flags
+var (
+	taskHistoryTenant string
+	taskHistoryCode   string
+	taskHistoryPage   int
+	taskHistoryLimit  int
+)
+
+// validateTaskHistoryParams refuses a page or limit the API answers with a 400,
+// before the request leaves: the server rejects a limit above 50 rather than
+// clamping it, and a page below 1.
+func validateTaskHistoryParams(page, limit int) *api.APIError {
+	if limit > 50 {
+		return taskListValidationError(
+			"--limit must be at most 50 for this command (got %d); the server rejects larger values rather than clamping", limit)
+	}
+	if page < 0 {
+		return taskListValidationError("--page must be 1 or more (got %d)", page)
+	}
+	return nil
+}
+
+// historyPath builds the request path + query string for `tasks history`.
+// Empty/zero flag values are omitted so the server applies its own defaults.
+// There is no sort parameter: the API's read takes no ordering, so one here
+// would be ignored.
+func historyPath(base string, page, limit int) string {
+	params := url.Values{}
+	if page > 0 {
+		params.Set("page", strconv.Itoa(page))
+	}
+	if limit > 0 {
+		params.Set("limit", strconv.Itoa(limit))
+	}
+
+	path := base + "/history"
+	if len(params) > 0 {
+		path += "?" + params.Encode()
+	}
+	return path
+}
+
+var tasksHistoryCmd = &cobra.Command{
+	Use:   "history [<id>]",
+	Short: "List a task's status history",
+	Long: `Read every status change a task has been through, with who made each one.
+
+PURPOSE
+  Answer "which status did this card hold, from when, changed by whom". This is
+  the STATUS LOG, not the activity timeline: the same change also posts an
+  activity entry that tasks comments returns, and that timeline reads as "what
+  happened to this card". Sync against this; read the timeline when you want the
+  narrative.
+
+  For a task's CURRENT status, read tasks get instead — the history is what led
+  there.
+
+USAGE
+  capigo tasks history (<id> | --code <code>) [--tenant <code>]
+                       [--page <n>] [--limit <n>]
+
+FLAGS
+  <id>
+      Task UUID. Positional. Give this or --code, never both.
+
+  --code <code>
+      Address the task by its code — the key a person quotes, like ACMEC-68.
+      A code is unique within a tenant, not across them, so --code needs a
+      tenant: pass --tenant, or set a default.
+
+        capigo tasks history --code ACMEC-68 --tenant acme
+
+  --tenant <code>
+      Tenant to scope the lookup to. Optional with an id; required with --code.
+
+  --page <n>
+      Page to fetch, 1-based. The default, 0, sends no page parameter and lets
+      the server choose.
+
+  --limit <n>
+      Entries per page, at most 50. Values above 50 exit 5; the server rejects
+      them rather than clamping.
+
+        capigo tasks history <uuid> --limit 50 --page 2
+
+OUTPUT
+  Newest first — the order the server applies. There is no --sort flag, and the
+  API refuses a sort parameter rather than answering in another order, so this
+  is the only order there is. The entries are at .data[]:
+
+      {
+        "data": [
+          { "id": "...",
+            "task_id": "...",
+            "from_status": "To-Do",
+            "to_status": "Doing",
+            "changed_by": { "id": "...", "display_name": "Minh",
+                            "member_code": "NV001" },
+            "changed_at": "2026-07-08T09:12:00Z" }
+        ],
+        "meta": { "page": 1, "limit": 20, "total": 3, "has_more": false }
+      }
+
+  from_status is null on the entry a task's creation wrote: there was no status
+  to leave, and the API does not invent one.
+
+  changed_by is null when the row records no actor — a change made by a removed
+  member, or by a system path. Otherwise it is the same person ref a task's
+  owner and assignee use, and it never carries an email address: a member with
+  no display name falls back to the local part of their address.
+
+  meta.tenant and meta.tenant_source are absent: a history read is scoped to one
+  task by id, not to a tenant, so there is no tenant to name even when --tenant
+  was resolved.
+
+  A task whose status never changed — created and left alone — returns an empty
+  list and exit 0. That is not the same as "no such task", which exits 4.`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		var id string
+		if len(args) == 1 {
+			id = args[0]
+		}
+
+		// Validate flag values client-side so we fail fast (exit 5) before any
+		// network call.
+		if e := validateTaskHistoryParams(taskHistoryPage, taskHistoryLimit); e != nil {
+			return handleErr(e)
+		}
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(taskHistoryTenant, profile)
+		requireOneTaskAddress(id, taskHistoryCode, tenant)
+
+		path := historyPath(taskPath(id, taskHistoryCode), taskHistoryPage, taskHistoryLimit)
+
+		resp, err := client.Do(ctx, "GET", path, nil, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope api.RawEnvelope
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		// Scoped to a single task, so there is no tenant in meta even when one
+		// was resolved implicitly. The API's own meta passes through untouched.
+		return output.Write(os.Stdout, rawList(envelope.Data), mergeAPIMeta(envelope.Meta))
+	},
+}
+
 // tasks comments create flags
 var (
 	taskCommentsCreateTenant          string
@@ -458,21 +761,61 @@ var (
 	taskCommentsCreateAttachmentsJSON string
 )
 
+// tasks comments create flags (the upload ones; the rest live above the command)
+var (
+	taskCommentsCreateFiles          []string
+	taskCommentsCreateContentType    string
+	taskCommentsCreateIdempotencyKey string
+)
+
+// maxCommentFiles mirrors the API's MAX_ATTACHMENTS_PER_MESSAGE: one comment
+// carries at most this many files. Counting is local because the alternative is
+// uploading every byte of an eleventh file to be told so afterwards.
+const maxCommentFiles = 10
+
+// readUploadParts reads each --file path and declares the media type for it: the
+// override when the caller gave one, otherwise the detection
+// `tasks attachments upload` also uses.
+func readUploadParts(paths []string, contentTypeOverride string) ([]api.UploadPart, error) {
+	parts := make([]api.UploadPart, 0, len(paths))
+	for _, path := range paths {
+		data, err := api.ReadUploadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		contentType := contentTypeOverride
+		if contentType == "" {
+			contentType = api.DetectContentType(path, data)
+		}
+		parts = append(parts, api.UploadPart{
+			FieldName:   "file",
+			FileName:    filepath.Base(path),
+			ContentType: contentType,
+			Data:        data,
+		})
+	}
+	return parts, nil
+}
+
 var tasksCommentsCreateCmd = &cobra.Command{
 	Use:   "create [<id>]",
 	Short: "Post a comment to a task",
 	Long: `Add a comment to a task's discussion timeline.
 
 PURPOSE
-  Post a comment, with text, attachments, or both. To read what is already
-  there, use tasks comments. Attachments are referenced by id, not uploaded
-  by this command: this endpoint takes pre-uploaded attachment references, and
-  the public API has no upload endpoint, so --attachments-json only works with
-  attachment ids that were uploaded through another channel (the web app).
+  Post a comment, with text, files, or both. To read what is already there,
+  use tasks comments.
+
+  Files travel with the comment: --file sends the bytes in the same request,
+  the server stores them and records the attachment, and nothing else is
+  needed to make them visible. (--attachments-json remains for callers that
+  already hold uploaded attachment ids from another channel.)
 
 USAGE
   capigo tasks comments create (<id> | --code <code>) [--tenant <code>]
                                 [--content <text>]
+                                [--file <path> ...]
+                                [--idempotency-key <key>]
                                 [--attachments-json <path|->]
 
 FLAGS
@@ -491,10 +834,41 @@ FLAGS
       --code.
 
   --content <text>
-      Comment text. May be empty (or omitted) if --attachments-json is given;
-      at least one of the two is required.
+      Comment text. May be empty (or omitted) when --file or
+      --attachments-json is given; at least one of the three is required.
 
         capigo tasks comments create <uuid> --content "Reproduced on staging."
+
+  --file <path>
+      A file to attach. Repeat the flag for more than one (at most 10).
+      The media type is detected from the path, then from the file's first
+      bytes; the server checks it against a fixed list of accepted types
+      (images, PDF, Office documents, text/markdown/csv, zip) and answers
+      400 INVALID_FILE_TYPE naming the type it saw.
+
+        capigo tasks comments create <uuid> --content "Here it is" --file ./invoice.pdf
+
+      --file and --attachments-json cannot be combined: a comment carries
+      either files or pre-uploaded ids. Sending both exits 5.
+
+  --content-type <media type>
+      Declare this type for every --file instead of detecting one. The
+      detection reads the extension first and the bytes second, so a file
+      whose format neither names correctly — a format this machine has no
+      mapping for, or one whose bytes look like another type — would be
+      refused or stored under the wrong type. Naming it here settles it. A
+      value with no characters is refused here rather than sent: the server
+      would reject the declaration after the upload had been spent.
+
+        capigo tasks comments create <uuid> --file ./plan.md --content-type text/markdown
+
+  --idempotency-key <key>
+      Optional; needs --file. Makes a retry safe: sending the same key with
+      the same comment again does not post a second one. The API takes a key
+      on a comment that carries its files, so passing this without --file
+      exits 5 rather than sending a key the server would ignore. A key with
+      no characters is refused here for the same reason the API ignores it:
+      it would make the retry unsafe while looking safe.
 
   --attachments-json <path|->
       Path to a JSON file (or - for stdin) holding an object keyed by
@@ -512,8 +886,8 @@ FLAGS
       | echo '{"3fa85f64-...": {"file_name":"a.png","mime_type":"image/png","size_bytes":100}}' \
         | capigo tasks comments create <uuid> --attachments-json -
 
-  At least one of --content and --attachments-json is required; sending
-  neither exits 5.
+  At least one of --content, --file and --attachments-json is required;
+  sending none of the three exits 5.
 
 OUTPUT
   The created comment is at .data, the same shape as one row of tasks
@@ -530,7 +904,12 @@ OUTPUT
 
   meta.tenant is the tenant the write landed in, when --tenant was given or
   resolved from CAPIGO_TENANT/config; it is absent when the id alone found
-  the task with no tenant resolved.`,
+  the task with no tenant resolved.
+
+  meta.replayed is true when a comment with files was not posted again: an
+  earlier call with this --idempotency-key had already posted it, so the
+  answer is the comment that attempt wrote. It is absent on the first post,
+  which is the normal case.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := context.Background()
@@ -542,8 +921,34 @@ OUTPUT
 
 		hasContent := cmd.Flags().Changed("content") && taskCommentsCreateContent != ""
 		hasAttachments := taskCommentsCreateAttachmentsJSON != ""
-		if !hasContent && !hasAttachments {
-			failValidation("at least one of --content or --attachments-json is required")
+		hasFiles := len(taskCommentsCreateFiles) > 0
+
+		if !hasContent && !hasAttachments && !hasFiles {
+			failValidation("at least one of --content, --file or --attachments-json is required")
+		}
+		if hasFiles && hasAttachments {
+			failValidation("--file and --attachments-json cannot be combined: a comment carries either files or pre-uploaded attachment ids, not both")
+		}
+		if len(taskCommentsCreateFiles) > maxCommentFiles {
+			failValidation(
+				"a comment carries at most %d files; %d were given",
+				maxCommentFiles,
+				len(taskCommentsCreateFiles),
+			)
+		}
+
+		idempotencyKey := requireUsableKey(
+			cmd.Flags().Changed("idempotency-key"),
+			taskCommentsCreateIdempotencyKey,
+			"idempotency-key",
+		)
+		contentTypeOverride := requireUsableMediaType(
+			cmd.Flags().Changed("content-type"),
+			taskCommentsCreateContentType,
+			"content-type",
+		)
+		if idempotencyKey != "" && !hasFiles {
+			failValidation("--idempotency-key needs --file: the API takes a key on a comment that carries its files, and a body of pre-uploaded ids has no key")
 		}
 
 		client, cfg, err := buildClient()
@@ -558,6 +963,45 @@ OUTPUT
 
 		tenant := resolveTenant(taskCommentsCreateTenant, profile)
 		requireOneTaskAddress(id, taskCommentsCreateCode, tenant)
+
+		path := taskPath(id, taskCommentsCreateCode) + "/comments"
+
+		// A comment with files: the files go up with the comment, in one
+		// request, and the API stores them itself.
+		if hasFiles {
+			files, err := readUploadParts(
+				taskCommentsCreateFiles,
+				contentTypeOverride,
+			)
+			if err != nil {
+				return handleErr(err)
+			}
+
+			resp, err := client.PostTaskCommentWithAttachments(
+				ctx,
+				path,
+				taskCommentsCreateContent,
+				files,
+				tenant,
+				idempotencyKey,
+			)
+			if err != nil {
+				return handleErr(err)
+			}
+
+			meta := itemMeta(tenant, taskCommentsCreateTenant, nil)
+			meta.ServerTime = resp.ServerTime
+			if resp.StatusCode == http.StatusOK {
+				// 200 is the server telling us it stored nothing: an earlier
+				// call with this key had already posted the comment. That is a
+				// fact only this command holds, so it goes on stdout.
+				if meta.Extra == nil {
+					meta.Extra = map[string]any{}
+				}
+				meta.Extra["replayed"] = true
+			}
+			return output.Write(os.Stdout, json.RawMessage(resp.Body), meta)
+		}
 
 		body := map[string]any{}
 		if cmd.Flags().Changed("content") {
@@ -575,7 +1019,6 @@ OUTPUT
 			body["attachments"] = attachments
 		}
 
-		path := taskPath(id, taskCommentsCreateCode) + "/comments"
 		resp, err := client.Do(ctx, "POST", path, body, tenant)
 		if err != nil {
 			return handleErr(err)
@@ -593,16 +1036,17 @@ OUTPUT
 
 // tasks update flags
 var (
-	taskUpdateTenant      string
-	taskUpdateCode        string
-	taskUpdateTitle       string
-	taskUpdateDescription string
-	taskUpdateStatus      string
-	taskUpdateAssignee    string
-	taskUpdateBoard       string
-	taskUpdateList        string
-	taskUpdateFollowerIDs []string
-	taskUpdateDueDate     string
+	taskUpdateTenant            string
+	taskUpdateCode              string
+	taskUpdateTitle             string
+	taskUpdateDescription       string
+	taskUpdateStatus            string
+	taskUpdateAssignee          string
+	taskUpdateBoard             string
+	taskUpdateList              string
+	taskUpdateFollowerIDs       []string
+	taskUpdateRemoveFollowerIDs []string
+	taskUpdateDueDate           string
 )
 
 var tasksUpdateCmd = &cobra.Command{
@@ -612,8 +1056,8 @@ var tasksUpdateCmd = &cobra.Command{
 
 PURPOSE
   Move a task forward: reassign it, change its status, place it on a board,
-  or add followers. Read tasks get first if you need the current values
-  before changing them.
+  or change who follows it. Read tasks get first if you need the current
+  values before changing them.
 
 USAGE
   capigo tasks update (<id> | --code <code>) [--tenant <code>]
@@ -621,6 +1065,7 @@ USAGE
                            [--description <text>] [--status <text>]
                            [--assignee <uuid>] [--board <uuid> --list <uuid>]
                            [--due-date <ts>] [--follower-id <uuid>]...
+                           [--remove-follower-id <uuid>]...
 
 FLAGS
   <id>
@@ -663,8 +1108,15 @@ FLAGS
         capigo tasks update <uuid> --board "" --list ""
 
   --follower-id <uuid>
-      Add a follower. Repeatable. Additive and idempotent — this endpoint
-      cannot remove a follower.
+      Add a follower. Repeatable. Additive and idempotent — adding someone who
+      already follows the task changes nothing.
+
+  --remove-follower-id <uuid>
+      Remove a follower. Repeatable. Removing someone who does not follow the
+      task is a no-op, not an error. The same user cannot appear in
+      --follower-id and --remove-follower-id: the API rejects that with 400.
+
+        capigo tasks update <uuid> --remove-follower-id <uuid>
 
   --due-date <ts>
       New due date, RFC3339. An empty string clears it (sends null). Must be
@@ -679,6 +1131,7 @@ OUTPUT
 
       {
         "data": { "id": "...", "code": "TASK-104", "title": "...",
+                  "responsible_type": "human", "assigned_agent_key": null,
                   "followers": [...], "meta_data": {...}, ... },
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "server_time": "2026-07-09T04:12:33Z" }
@@ -745,6 +1198,9 @@ OUTPUT
 		if len(taskUpdateFollowerIDs) > 0 {
 			body["follower_ids"] = taskUpdateFollowerIDs
 		}
+		if len(taskUpdateRemoveFollowerIDs) > 0 {
+			body["follower_remove_ids"] = taskUpdateRemoveFollowerIDs
+		}
 		if cmd.Flags().Changed("due-date") {
 			body["due_date"] = nullableID(taskUpdateDueDate)
 		}
@@ -769,19 +1225,736 @@ OUTPUT
 	},
 }
 
+// tasks assign-agent flags
+var (
+	taskAssignAgentTenant   string
+	taskAssignAgentCode     string
+	taskAssignAgentAgentKey string
+)
+
+var tasksAssignAgentCmd = &cobra.Command{
+	Use:   "assign-agent [<id>]",
+	Short: "Move a task an agent owns to a different agent",
+	Long: `Move an agent-owned task to another agent.
+
+PURPOSE
+  Hand work from one agent to another before the agent run has started. This
+  moves the agent assignment only. A task assigned to a person has no agent run
+  to move, so it is refused with INVALID_AGENT — for a person use
+  tasks update --assignee.
+
+USAGE
+  capigo tasks assign-agent (<id> | --code <code>) --agent-key <key>
+                                 [--tenant <code>]
+
+FLAGS
+  <id>
+      Task UUID. Positional. Give this or --code, never both.
+
+  --code <code>
+      Address the task by its code — the key a person quotes, like ACMEC-68.
+      A code is unique within a tenant, not across them, so --code needs a
+      tenant: pass --tenant, or set a default.
+
+  --tenant <code>
+      Tenant to scope the lookup to. Optional with an id; required with
+      --code.
+
+  --agent-key <key>
+      Key of the agent to move the task to. Required. The agent must be
+      published and belong to the task's tenant (a system agent is also
+      accepted), and the task's agent run must still be pending — an agent
+      that already started cannot be swapped.
+
+        capigo tasks assign-agent ACMEC-68 --tenant acme --agent-key task-pilot
+
+  Naming the agent the task already has is a no-op that still answers 200, so
+  a retry is safe. No Idempotency-Key is needed or accepted: there is nothing
+  to duplicate.
+
+OUTPUT
+  The task as it now stands, in the same shape as tasks get. The assignment is
+  in the payload — read it back rather than trusting the 200:
+
+      { "data": { "id": "...", "code": "TASK-104", "title": "...",
+                  "responsible_type": "agent",
+                  "assigned_agent_key": "task-pilot", ... },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-09-22T04:12:33Z" } }
+
+  responsible_type reads "agent" and assigned_agent_key names the agent that
+  now owns the task; a person-owned task reads "human" with a null key.`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		var id string
+		if len(args) == 1 {
+			id = args[0]
+		}
+
+		if strings.TrimSpace(taskAssignAgentAgentKey) == "" {
+			failValidation("--agent-key is required")
+		}
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(taskAssignAgentTenant, profile)
+		requireOneTaskAddress(id, taskAssignAgentCode, tenant)
+
+		// taskPath already escapes the address and picks the code route.
+		resp, err := client.Do(ctx, "POST", taskPath(id, taskAssignAgentCode)+"/actions/assign-agent", map[string]any{
+			"agent_key": strings.TrimSpace(taskAssignAgentAgentKey),
+		}, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope api.RawEnvelope
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		meta := itemMeta(tenant, taskAssignAgentTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
+	},
+}
+
+// tasks move flags
+var (
+	taskMoveTenant      string
+	taskMoveCode        string
+	taskMoveBoardListID string
+	taskMoveAfterTaskID string
+	taskMoveTop         bool
+)
+
+var tasksMoveCmd = &cobra.Command{
+	Use:   "move [<id>]",
+	Short: "Move a task into a board list, first or behind another card",
+	Long: `Move a task into a board list.
+
+PURPOSE
+  Place a card the way a drag does: into a column, either first in it or
+  directly behind a card already there. Use it to file work onto a board, or
+  to reorder a column from a script.
+
+USAGE
+  capigo tasks move (<id> | --code <code>) --board-list-id <uuid>
+                       (--top | --after-task-id <uuid>) [--tenant <code>]
+
+FLAGS
+  <id>
+      Task UUID. Positional. Give this or --code, never both.
+
+  --code <code>
+      Address the task by its code — the key a person quotes, like ACMEC-68.
+      A code is unique within a tenant, not across them, so --code needs a
+      tenant: pass --tenant, or set a default.
+
+  --tenant <code>
+      Tenant to scope the lookup to. Optional with an id; required with
+      --code.
+
+  --board-list-id <uuid>
+      Destination column. Required.
+
+  --top
+      Place the task first in the destination column. Give this or
+      --after-task-id, never both.
+
+        capigo tasks move TASK-104 --tenant acme --board-list-id <uuid> --top
+
+  --after-task-id <uuid>
+      Place the task directly behind this one, which must already be in the
+      destination column — an anchor from another column exits 4, and naming
+      the task itself is refused before the move starts (the API answers 400,
+      exit 5).
+
+        capigo tasks move TASK-104 --tenant acme --board-list-id <uuid> \
+          --after-task-id <uuid>
+
+  Only the task's owner, its assignee, or a tenant owner of its tenant may
+  move it. Anyone else exits 4, which is the same answer a task that does not
+  exist gets — so "not found" here does not always mean the task is gone. A
+  subtask exits 5 with SUBTASK_BOARD_FORBIDDEN: subtasks live in no column.
+
+  A retry is safe: the server recomputes the position from the card it finds,
+  so no Idempotency-Key is needed or accepted.
+
+OUTPUT
+  The task as it now stands, in the same shape as tasks get, with the
+  server-computed position:
+
+      { "data": { "id": "...", "code": "TASK-104", "board_id": "...",
+                  "board_list_id": "...", "position": 500, ... },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-09-23T04:12:33Z" } }`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		var id string
+		if len(args) == 1 {
+			id = args[0]
+		}
+
+		boardListID := strings.TrimSpace(taskMoveBoardListID)
+		afterTaskID := strings.TrimSpace(taskMoveAfterTaskID)
+
+		if boardListID == "" {
+			failValidation("--board-list-id is required")
+		}
+		switch {
+		case taskMoveTop && afterTaskID != "":
+			failValidation("give --top or --after-task-id, not both")
+		case !taskMoveTop && afterTaskID == "":
+			failValidation("a placement is required: --top, or --after-task-id <uuid>")
+		}
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(taskMoveTenant, profile)
+		requireOneTaskAddress(id, taskMoveCode, tenant)
+
+		body := map[string]any{"board_list_id": boardListID}
+		if taskMoveTop {
+			body["position"] = "top"
+		} else {
+			body["after_task_id"] = afterTaskID
+		}
+
+		resp, err := client.Do(ctx, "POST", taskPath(id, taskMoveCode)+"/actions/move", body, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope api.RawEnvelope
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		meta := itemMeta(tenant, taskMoveTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
+	},
+}
+
+// tasks transfer-ownership flags
+var (
+	taskTransferOwnershipTenant  string
+	taskTransferOwnershipCode    string
+	taskTransferOwnershipOwnerID string
+)
+
+var tasksTransferOwnershipCmd = &cobra.Command{
+	Use:   "transfer-ownership [<id>]",
+	Short: "Hand a task to another member",
+	Long: `Hand a task to another active member of its tenant.
+
+PURPOSE
+  Give a task a different owner — the person accountable for it. Two people can
+  do this: the task's current owner, and a tenant owner of the task's tenant
+  (ADR-061). Everyone else is refused, including a tenant owner of another
+  tenant. To change who works on a task instead, use tasks update --assignee.
+
+USAGE
+  capigo tasks transfer-ownership (<id> | --code <code>) --owner-id <uuid>
+                                 [--tenant <code>]
+
+FLAGS
+  <id>
+      Task UUID. Positional. Give this or --code, never both.
+
+  --code <code>
+      Address the task by its code — the key a person quotes, like ACMEC-68.
+      A code is unique within a tenant, not across them, so --code needs a
+      tenant: pass --tenant, or set a default.
+
+  --tenant <code>
+      Tenant to scope the lookup to. Optional with an id; required with
+      --code.
+
+  --owner-id <uuid>
+      User id of the new owner. Required. That user must be an active member
+      of the task's tenant, otherwise the API answers 400 INVALID_OWNER.
+      Resolve a member with members list or members get; never invent an id.
+
+        capigo tasks transfer-ownership ACMEC-68 --tenant acme \
+            --owner-id 7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10
+
+  Naming the current owner is a no-op that still answers 200, so a retry is
+  safe. The change touches the owner alone: assignee, followers and board
+  placement stay as they were.
+
+OUTPUT
+  The task as it now stands, in the same shape as tasks get. Read the new
+  owner back from the payload rather than trusting the 200:
+
+      { "data": { "id": "...", "code": "TASK-104", "title": "...",
+                  "owner": { "id": "...", "display_name": "Minh",
+                             "member_code": "NV001" }, ... },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-09-22T04:12:33Z" } }`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		var id string
+		if len(args) == 1 {
+			id = args[0]
+		}
+
+		newOwnerID := strings.TrimSpace(taskTransferOwnershipOwnerID)
+		if newOwnerID == "" {
+			failValidation("--owner-id is required")
+		}
+		if _, err := uuid.Parse(newOwnerID); err != nil {
+			failValidation("--owner-id must be a user UUID, not a member code or a name")
+		}
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(taskTransferOwnershipTenant, profile)
+		requireOneTaskAddress(id, taskTransferOwnershipCode, tenant)
+
+		// taskPath already escapes the address and picks the code route.
+		resp, err := client.Do(ctx, "POST", taskPath(id, taskTransferOwnershipCode)+"/actions/transfer-ownership", map[string]any{
+			"owner_id": newOwnerID,
+		}, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope api.RawEnvelope
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		meta := itemMeta(tenant, taskTransferOwnershipTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
+	},
+}
+
+// tasks claim flags
+var (
+	taskClaimTenant string
+	taskClaimCode   string
+)
+
+var tasksClaimCmd = &cobra.Command{
+	Use:   "claim [<id>]",
+	Short: "Take an unassigned task yourself",
+	Long: `Claim an unassigned task as yourself.
+
+PURPOSE
+  Take a task nobody has picked up yet. The assignee is always you: the call
+  sends no body and takes no flag that names a user, so it cannot assign a task
+  to somebody else. Any active member of the task's tenant may claim — no owner
+  or manager role is needed. This is the command behind the task screen's
+  "Assign to me" control. It is not the same as tasks update --assignee: that
+  call reassigns a task, while this one only takes a task that is still free.
+
+  The task must be unassigned. One that already has an assignee is refused with
+  409 TASK_ALREADY_ASSIGNED, and that is the same answer whether another member
+  took it first or you already hold it — so a retry after a dropped connection
+  is not a silent no-op. Re-read the task to see who holds it.
+
+USAGE
+  capigo tasks claim (<id> | --code <code>) [--tenant <code>]
+
+FLAGS
+  <id>
+      Task UUID. Positional. Give this or --code, never both.
+
+  --code <code>
+      Address the task by its code — the key a person quotes, like ACMEC-68.
+      A code is unique within a tenant, not across them, so --code needs a
+      tenant: pass --tenant, or set a default.
+
+  --tenant <code>
+      Tenant to scope the lookup to. Optional with an id; required with
+      --code.
+
+OUTPUT
+  The task as it now stands, in the same shape as tasks get. Read your own id
+  back from assignee rather than trusting the 200:
+
+      { "data": { "id": "...", "code": "TASK-104", "title": "...",
+                  "assignee": { "id": "<your user id>", "display_name": "Minh",
+                                "member_code": "NV001" },
+                  "owner": { "id": "...", "display_name": "Lan" }, ... },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-09-22T04:12:33Z" } }
+
+  Ownership does not move: owner stays who it was, and so do the status,
+  followers and board placement.`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		var id string
+		if len(args) == 1 {
+			id = args[0]
+		}
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(taskClaimTenant, profile)
+		requireOneTaskAddress(id, taskClaimCode, tenant)
+
+		// taskPath already escapes the address and picks the code route. No body:
+		// the API assigns the task to whoever the key authenticated as.
+		resp, err := client.Do(ctx, "POST", taskPath(id, taskClaimCode)+"/actions/claim", nil, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope api.RawEnvelope
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		meta := itemMeta(tenant, taskClaimTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
+	},
+}
+
+// tasks archive flags
+var (
+	taskArchiveTenant string
+	taskArchiveCode   string
+)
+
+var tasksArchiveCmd = &cobra.Command{
+	Use:   "archive [<id>]",
+	Short: "Retire a task (a parent takes its subtasks with it)",
+	Long: `Archive a task: it leaves every task read, and only the GUI can bring it back.
+
+PURPOSE
+  Retire a task that is finished, duplicated or wrong. This is the command behind
+  the task screen's archive control. The task's owner, its assignee, or a tenant
+  owner of the task's tenant may call it — a plain member, and a member of the
+  task's board, are refused with 403. A subtask is stricter still: archiving one
+  asks the parent's owner or assignee, so a subtask's own assignee alone cannot
+  retire it.
+
+  Archiving a parent sweeps its family: its active subtasks are archived with it
+  and marked as taken by that archive, so restoring the parent later releases
+  exactly those. Naming a subtask is not a family operation: only that subtask is
+  archived, and its parent and siblings are left exactly as they are. Only the task
+  you name records a task:archived event; the rows a parent's sweep carries go
+  quietly. Nothing else about any of them changes: title, owner, assignee, status,
+  followers and board placement stay as they were.
+
+  There is no undo here. Unarchive is a GUI action, and an archived task is
+  outside every read, so a second call exits 4 (not found) like any other read of
+  that task — do not treat the 4 as a transient failure and retry.
+
+USAGE
+  capigo tasks archive (<id> | --code <code>) [--tenant <code>]
+
+FLAGS
+  <id>
+      Task UUID. Positional. Give this or --code, never both.
+
+  --code <code>
+      Address the task by its code — the key a person quotes, like ACMEC-68.
+      A code is unique within a tenant, not across them, so --code needs a
+      tenant: pass --tenant, or set a default.
+
+  --tenant <code>
+      Tenant to scope the lookup to. Optional with an id; required with
+      --code.
+
+OUTPUT
+  The archived task's id, because the task itself is outside every read from now
+  on:
+
+      { "data": { "id": "…" },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-09-23T04:12:33Z" } }`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		var id string
+		if len(args) == 1 {
+			id = args[0]
+		}
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(taskArchiveTenant, profile)
+		requireOneTaskAddress(id, taskArchiveCode, tenant)
+
+		// taskPath already escapes the address and picks the code route. No body:
+		// the API archives the task the address names.
+		resp, err := client.Do(ctx, "POST", taskPath(id, taskArchiveCode)+"/actions/archive", nil, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope api.RawEnvelope
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		meta := itemMeta(tenant, taskArchiveTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
+	},
+}
+
+// tasks unarchive flags
+var (
+	taskUnarchiveTenant string
+	taskUnarchiveCode   string
+)
+
+var tasksUnarchiveCmd = &cobra.Command{
+	Use:   "unarchive [<id>]",
+	Short: "Restore an archived task",
+	Long: `Restore an archived task: it comes back into every task read.
+
+PURPOSE
+  Bring back a task that was archived — by you, by a colleague, or through the API.
+  This is the command behind the task screen's restore control, and the same three
+  actors may call it as may archive: the task's owner, its assignee, or a tenant
+  owner of the task's tenant. Anyone else is refused with 403.
+
+  Restoring asks the same three actors as archiving, and a subtask is the same
+  case there: it answers to its parent's owner or assignee, not to its own. A
+  subtask whose parent is still archived cannot be restored at all (400
+  PARENT_TASK_ARCHIVED) — restoring that parent is what releases the subtasks its
+  archive took, and a subtask that was archived on its own stays archived either
+  way. An archived list holding the task comes back with it.
+
+  A task that is already live is not an error: nothing is written, no event is
+  recorded, and the answer is the task as it stands.
+
+USAGE
+  capigo tasks unarchive (<id> | --code <code>) [--tenant <code>]
+
+FLAGS
+  <id>
+      Task UUID. Positional. Give this or --code, never both.
+
+  --code <code>
+      Address the task by its code — the key a person quotes, like ACMEC-68.
+      A code is unique within a tenant, not across them, so --code needs a
+      tenant: pass --tenant, or set a default.
+
+  --tenant <code>
+      Tenant to scope the lookup to. Optional with an id; required with
+      --code.
+
+OUTPUT
+  The task as it now stands, in the same shape as tasks get — a restored task is
+  readable again:
+
+      { "data": { "id": "…", "code": "ACME-42", "title": "…",
+                  "status": "To-Do",
+                  "assignee": { "id": "…", "display_name": "Minh" },
+                  "owner": { "id": "…", "display_name": "Lan" }, ... },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-09-23T04:12:33Z" } }`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		var id string
+		if len(args) == 1 {
+			id = args[0]
+		}
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(taskUnarchiveTenant, profile)
+		requireOneTaskAddress(id, taskUnarchiveCode, tenant)
+
+		// taskPath already escapes the address and picks the code route. No body:
+		// the API restores the task the address names.
+		resp, err := client.Do(ctx, "POST", taskPath(id, taskUnarchiveCode)+"/actions/unarchive", nil, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope api.RawEnvelope
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		meta := itemMeta(tenant, taskUnarchiveTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
+	},
+}
+
+// tasks delete flags
+var (
+	taskDeleteTenant string
+	taskDeleteCode   string
+)
+
+var tasksDeleteCmd = &cobra.Command{
+	Use:   "delete [<id>]",
+	Short: "Delete a task (soft delete; a parent takes its subtasks)",
+	Long: `Delete a task: it leaves every task read and lands in the archive.
+
+PURPOSE
+  Remove a task you no longer need — a duplicate, a mistake, work filed in the
+  wrong place. This is a soft delete: nothing is erased, and the task can be
+  restored from the GUI's archived view. It is the write the tasks archive
+  command performs, offered under the verb callers reach for.
+
+  Deleting a SUBTASK retires that subtask alone: its parent and its siblings keep
+  their state. Deleting a TOP-LEVEL task retires its active subtasks with it, in
+  the same write.
+
+  The task's owner, its assignee, or a tenant owner of the task's tenant may call
+  it; a plain member, and a member of the task's board, are refused with 403
+  (exit 3). A subtask is stricter: deleting one asks the parent's owner or
+  assignee, so a subtask's own assignee alone cannot retire it.
+
+  There is no undo here. An archived task is outside every read, so a second call
+  exits 4 (not found) like any other read of that task — do not treat the 4 as a
+  transient failure and retry.
+
+USAGE
+  capigo tasks delete (<id> | --code <code>) [--tenant <code>]
+
+FLAGS
+  <id>
+      Task UUID. Positional. Give this or --code, never both.
+
+  --code <code>
+      Address the task by its code — the key a person quotes, like ACMEC-68.
+      A code is unique within a tenant, not across them, so --code needs a
+      tenant: pass --tenant, or set a default.
+
+  --tenant <code>
+      Tenant to scope the lookup to. Optional with an id; required with
+      --code.
+
+OUTPUT
+  The deleted task's id, because the task itself is outside every read from now
+  on:
+
+      { "data": { "id": "…" },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-09-25T04:12:33Z" } }
+
+  No Idempotency-Key is accepted: the API reads a repeat as a fact about the
+  task — it is already gone, answered with 404 — not as a duplicate write to
+  dedupe.`,
+	Args: cobra.MaximumNArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		var id string
+		if len(args) == 1 {
+			id = args[0]
+		}
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(taskDeleteTenant, profile)
+		requireOneTaskAddress(id, taskDeleteCode, tenant)
+
+		// taskPath already escapes the address and picks the code route. No body:
+		// the API deletes the task the address names.
+		resp, err := client.Do(ctx, "DELETE", taskPath(id, taskDeleteCode), nil, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope api.RawEnvelope
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		meta := itemMeta(tenant, taskDeleteTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
+	},
+}
+
 // tasks create flags
 var (
-	taskCreateTenant       string
-	taskCreateTitle        string
-	taskCreateDescription  string
-	taskCreatePriority     string
-	taskCreateStatus       string
-	taskCreateDueDate      string
-	taskCreateAssignee     string
-	taskCreateBoard        string
-	taskCreateList         string
-	taskCreateFollowerIDs  []string
-	taskCreateSubtasksJSON string
+	taskCreateTenant         string
+	taskCreateTitle          string
+	taskCreateDescription    string
+	taskCreatePriority       string
+	taskCreateStatus         string
+	taskCreateDueDate        string
+	taskCreateAssignee       string
+	taskCreateBoard          string
+	taskCreateList           string
+	taskCreateFollowerIDs    []string
+	taskCreateAfterTaskID    string
+	taskCreateTop            bool
+	taskCreateIdempotencyKey string
+	taskCreateSubtasksJSON   string
 )
 
 // --------------------------------------------------------------------------
@@ -790,11 +1963,12 @@ var (
 
 var tasksSubtasksCmd = &cobra.Command{
 	Use:   "subtasks",
-	Short: "List or create a task's subtasks",
+	Short: "List, create, reorder or delete a task's subtasks",
 	Long: `The children of one task.
 
-A subtask is a task: the same object, with a parent. Reading them and creating
-them are separate calls to the API, so they are separate commands here.
+A subtask is a task: the same object, with a parent. Reading them, creating
+them, reordering them and deleting them are separate calls to the API, so they
+are separate commands here.
 
 USAGE
   capigo tasks subtasks <command> (<parent-id> | --code <code>) [<args>]`,
@@ -851,6 +2025,7 @@ OUTPUT
             "parent": { "id": "7c1f2e88-...", "code": "ACMEC-68",
                         "title": "Fix login bug" },
             "has_subtasks": false, "attachments": [],
+            "responsible_type": "human", "assigned_agent_key": null,
             "followers": [...], "meta_data": {...},
             "created_at": "...", "updated_at": "..." }
         ],
@@ -935,7 +2110,9 @@ USAGE
                        [--priority <text>] [--status <text>]
                        [--due-date <ts>] [--assignee <uuid>]
                        [--board <uuid> --list <uuid>]
-                       [--follower-id <uuid>]... [--subtasks-json <path|->]
+                       [--top | --after-task-id <uuid>]
+                       [--follower-id <uuid>]... [--idempotency-key <key>]
+                       [--subtasks-json <path|->]
 
 FLAGS
   --tenant <code>
@@ -966,8 +2143,40 @@ FLAGS
   --list <uuid>
       Board list id. See --board.
 
+      Naming a list also changes who may create. The API writes such a create
+      through the board's own card-creation path: the caller must be a member
+      of that board or a tenant owner (anyone else exits 3), and the board's
+      owners are added as followers alongside --follower-id. A create with no
+      list keeps the plain path, which needs neither.
+
+  --top
+      Place the new card first in --list. Give this or --after-task-id, never
+      both, and only with --list. Omit both and the card is appended.
+
+        capigo tasks create --tenant acme --title "Fix login bug" \
+            --board <uuid> --list <uuid> --top
+
+  --after-task-id <uuid>
+      Place the new card directly behind this one, which must already be in
+      --list — an anchor in another column exits 4.
+
+        capigo tasks create --tenant acme --title "Fix login bug" \
+            --board <uuid> --list <uuid> --after-task-id <uuid>
+
   --follower-id <uuid>
       Follower user id. Repeatable.
+
+  --idempotency-key <key>
+      Make this create safe to retry. Use the same key and the same body when
+      a call fails mid-flight: the API replays the task it already created
+      instead of creating a second one. The key is scoped to the tenant, so
+      two tenants may use the same key. A key reused with a different body is
+      rejected with 409 E0601 — pick a new key for a genuinely new task.
+      Refused together with --subtasks-json, whose endpoint has no idempotency
+      contract.
+
+        capigo tasks create --tenant acme --title "Fix login bug" \
+            --idempotency-key "fix-login-$(date +%s)"
 
   --subtasks-json <path|->
       A JSON array of subtask items, at most 25, creating the parent and its
@@ -992,6 +2201,7 @@ OUTPUT
 
       {
         "data": { "id": "...", "code": "TASK-104", "title": "...",
+                  "responsible_type": "human", "assigned_agent_key": null,
                   "followers": [...], "meta_data": {...}, ... },
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "server_time": "2026-07-09T04:12:33Z" }
@@ -1006,11 +2216,28 @@ OUTPUT
 
   meta.tenant is the tenant the task was written to. Read it: a write that
   landed in the wrong tenant looks exactly like a write that succeeded.`,
-	RunE: func(_ *cobra.Command, _ []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		ctx := context.Background()
 
 		if taskCreateTitle == "" {
 			failValidation("--title is required")
+		}
+
+		afterTaskID := strings.TrimSpace(taskCreateAfterTaskID)
+		placementGiven := taskCreateTop || afterTaskID != ""
+		switch {
+		case taskCreateTop && afterTaskID != "":
+			failValidation("give --top or --after-task-id, not both")
+		case placementGiven && taskCreateSubtasksJSON != "":
+			failValidation("--top and --after-task-id are not supported with --subtasks-json: POST /mission/tasks/with-subtasks takes no placement")
+		case placementGiven && taskCreateList == "":
+			failValidation("a placement needs --list: the card is placed in that column")
+		}
+		// Refused here rather than in the --subtasks-json branch below, which runs
+		// after the client is built: a flag combination the endpoint cannot take
+		// must exit 5 whether or not credentials are configured.
+		if taskCreateIdempotencyKey != "" && taskCreateSubtasksJSON != "" {
+			failValidation("--idempotency-key is not supported with --subtasks-json: POST /mission/tasks/with-subtasks has no idempotency contract")
 		}
 
 		client, cfg, err := buildClient()
@@ -1112,9 +2339,29 @@ OUTPUT
 		if len(taskCreateFollowerIDs) > 0 {
 			body.FollowerIDs = taskCreateFollowerIDs
 		}
+		if afterTaskID != "" {
+			body.AfterTaskID = &afterTaskID
+		}
+		if taskCreateTop {
+			top := "top"
+			body.Position = &top
+		}
 
 		// POST /mission/tasks: tenant_code is in the body; also send X-Tenant-Code header for consistency.
-		resp, err := client.Do(ctx, "POST", "/mission/tasks", body, tenant)
+		// An Idempotency-Key makes a retry after a timeout replay the task the
+		// first attempt created instead of creating a second one. A key of
+		// whitespace is refused rather than sent: the API trims the header and
+		// reads a blank value as no key at all, which is the duplicate this flag
+		// exists to prevent.
+		var createHeaders map[string]string
+		if key := requireUsableKey(
+			cmd.Flags().Changed("idempotency-key"),
+			taskCreateIdempotencyKey,
+			"idempotency-key",
+		); key != "" {
+			createHeaders = map[string]string{"Idempotency-Key": key}
+		}
+		resp, err := client.DoWithHeaders(ctx, "POST", "/mission/tasks", body, tenant, createHeaders)
 		if err != nil {
 			return handleErr(err)
 		}
@@ -1204,9 +2451,11 @@ OUTPUT
       {
         "data": {
           "parent_task": { "id": "...", "code": "TASK-104", "title": "...",
+                           "responsible_type": "human", "assigned_agent_key": null,
                            "has_subtasks": true, "followers": [...],
                            "meta_data": {...}, ... },
           "subtasks": [ { "id": "...", "code": "TASK-105", "title": "Design",
+                          "responsible_type": "human", "assigned_agent_key": null,
                           "followers": [...], "meta_data": {...}, ... } ]
         },
         "meta": { "tenant": "acme", "tenant_source": "flag",
@@ -1289,6 +2538,253 @@ OUTPUT
 	},
 }
 
+// tasks subtasks move flags
+var (
+	taskSubtasksMoveTenant         string
+	taskSubtasksMoveCode           string
+	taskSubtasksMoveTop            bool
+	taskSubtasksMoveAfterSubtaskID string
+)
+
+var tasksSubtasksMoveCmd = &cobra.Command{
+	Use:   "move (<parent-id> | --code <code>) <subtask-id>",
+	Short: "Reorder a subtask among its siblings",
+	Long: `Reorder a subtask: first among its siblings, or directly behind one of them.
+
+PURPOSE
+  Change where a subtask sits in its parent's list. A subtask lives in no board
+  column, so it does not move between lists — it only moves among its siblings.
+  Moving a top-level card between columns is tasks move.
+
+  The caller must be the PARENT task's owner, its assignee, or a tenant owner of
+  its tenant. A subtask's own assignee is refused with 403 (exit 3): reordering
+  is a structural change, not a board edit.
+
+  The subtask must belong to the parent named in the address. Quote the wrong
+  parent and the API answers 404 (exit 4), not a misleading success.
+
+  The position is computed by the server, under a lock, from the card it finds —
+  so a retry lands the subtask in the same place and no Idempotency-Key is
+  needed or accepted.
+
+USAGE
+  capigo tasks subtasks move (<parent-id> | --code <code>) <subtask-id>
+                                 (--top | --after-subtask-id <uuid>)
+                                 [--tenant <code>]
+
+FLAGS
+  <parent-id>
+      Parent task UUID. Positional, omitted when --code supplies the address.
+
+  --code <code>
+      Address the parent task by its code — the key a person quotes, like
+      ACMEC-68. A code is unique within a tenant, not across them, so --code
+      needs a tenant: pass --tenant, or set a default.
+
+  <subtask-id>
+      The subtask to move, always the last positional.
+
+  --top
+      Place the subtask first among its siblings. Give this or
+      --after-subtask-id, never both.
+
+        capigo tasks subtasks move 7c1f2e88-... 9ab2c744-... --tenant acme --top
+
+  --after-subtask-id <uuid>
+      Place the subtask directly behind this sibling, which must belong to the
+      same parent — an anchor under another parent exits 4, and naming the
+      subtask itself exits 5 (the API answers 400).
+
+        capigo tasks subtasks move --code ACMEC-68 9ab2c744-... --tenant acme \
+            --after-subtask-id <uuid>
+
+  --tenant <code>
+      Tenant to scope the lookup to. Optional with an id; required with
+      --code.
+
+OUTPUT
+  The subtask as it now stands, in the same shape as tasks get, with its
+  server-computed position:
+
+      { "data": { "id": "…", "code": "ACMEC-69", "title": "…",
+                  "parent": { "id": "…", "code": "ACMEC-68", "title": "…" },
+                  "position": 500, ... },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-09-25T04:12:33Z" } }`,
+	Args: cobra.MaximumNArgs(2),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		// A code address supplies the parent, so only the subtask is positional;
+		// an id address takes parent then subtask.
+		var parentID, subtaskID string
+		if taskSubtasksMoveCode != "" {
+			if len(args) != 1 {
+				failValidation("a subtask id is required: capigo tasks subtasks move --code <parent-code> <subtask-id>")
+			}
+			subtaskID = args[0]
+		} else {
+			if len(args) != 2 {
+				failValidation("a parent id and a subtask id are required: capigo tasks subtasks move <parent-id> <subtask-id>")
+			}
+			parentID = args[0]
+			subtaskID = args[1]
+		}
+
+		afterSubtaskID := strings.TrimSpace(taskSubtasksMoveAfterSubtaskID)
+		switch {
+		case taskSubtasksMoveTop && afterSubtaskID != "":
+			failValidation("give --top or --after-subtask-id, not both")
+		case !taskSubtasksMoveTop && afterSubtaskID == "":
+			failValidation("a placement is required: --top, or --after-subtask-id <uuid>")
+		}
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(taskSubtasksMoveTenant, profile)
+		requireOneTaskAddress(parentID, taskSubtasksMoveCode, tenant)
+
+		// The API takes one field: the sibling to sit behind, or null for the
+		// front. --top is this CLI's spelling of that null, so a caller never has
+		// to type a JSON null.
+		var anchor any
+		if !taskSubtasksMoveTop {
+			anchor = afterSubtaskID
+		}
+		body := map[string]any{"after_subtask_id": anchor}
+
+		path := subtaskPath(parentID, taskSubtasksMoveCode, subtaskID)
+		resp, err := client.Do(ctx, "PATCH", path, body, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope api.RawEnvelope
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		meta := itemMeta(tenant, taskSubtasksMoveTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
+	},
+}
+
+// tasks subtasks delete flags
+var (
+	taskSubtasksDeleteTenant string
+	taskSubtasksDeleteCode   string
+)
+
+var tasksSubtasksDeleteCmd = &cobra.Command{
+	Use:   "delete (<parent-id> | --code <code>) <subtask-id>",
+	Short: "Delete a subtask (soft delete; its parent stays)",
+	Long: `Delete one subtask, leaving its parent task and its sibling subtasks alone.
+
+PURPOSE
+  Remove a subtask you no longer need. This is a soft delete: nothing is erased,
+  and the subtask can be restored from the GUI's archived view. Deleting the
+  whole task — a parent with its subtasks — is tasks delete.
+
+  The caller must be the PARENT task's owner, its assignee, or a tenant owner of
+  its tenant. A subtask's own assignee is refused with 403 (exit 3): deleting is
+  a lifecycle operation, not a board edit.
+
+  The subtask must belong to the parent named in the address. Quote the wrong
+  parent and the API answers 404 (exit 4) rather than deleting anything.
+
+  An archived subtask is outside every read, so a second call exits 4 as well —
+  do not treat that as a transient failure and retry.
+
+USAGE
+  capigo tasks subtasks delete (<parent-id> | --code <code>) <subtask-id>
+                                   [--tenant <code>]
+
+FLAGS
+  <parent-id>
+      Parent task UUID. Positional, omitted when --code supplies the address.
+
+  --code <code>
+      Address the parent task by its code — the key a person quotes, like
+      ACMEC-68. A code is unique within a tenant, not across them, so --code
+      needs a tenant: pass --tenant, or set a default.
+
+  <subtask-id>
+      The subtask to delete, always the last positional.
+
+  --tenant <code>
+      Tenant to scope the lookup to. Optional with an id; required with
+      --code.
+
+OUTPUT
+  The deleted subtask's id, because the subtask itself is outside every read
+  from now on:
+
+      { "data": { "id": "…" },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-09-25T04:12:33Z" } }
+
+  No Idempotency-Key is accepted: the API reads a repeat as a fact about the
+  subtask — it is already gone, answered with 404 — not as a duplicate write to
+  dedupe.`,
+	Args: cobra.MaximumNArgs(2),
+	RunE: func(_ *cobra.Command, args []string) error {
+		ctx := context.Background()
+
+		// A code address supplies the parent, so only the subtask is positional;
+		// an id address takes parent then subtask.
+		var parentID, subtaskID string
+		if taskSubtasksDeleteCode != "" {
+			if len(args) != 1 {
+				failValidation("a subtask id is required: capigo tasks subtasks delete --code <parent-code> <subtask-id>")
+			}
+			subtaskID = args[0]
+		} else {
+			if len(args) != 2 {
+				failValidation("a parent id and a subtask id are required: capigo tasks subtasks delete <parent-id> <subtask-id>")
+			}
+			parentID = args[0]
+			subtaskID = args[1]
+		}
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile, err := config.ActiveProfile(cfg)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		tenant := resolveTenant(taskSubtasksDeleteTenant, profile)
+		requireOneTaskAddress(parentID, taskSubtasksDeleteCode, tenant)
+
+		path := subtaskPath(parentID, taskSubtasksDeleteCode, subtaskID)
+		resp, err := client.Do(ctx, "DELETE", path, nil, tenant)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope api.RawEnvelope
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		meta := itemMeta(tenant, taskSubtasksDeleteTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
+	},
+}
+
 func init() {
 	// tasks list flags
 	tasksListCmd.Flags().StringVar(&taskListTenant, "tenant", "", "scope to this tenant code")
@@ -1303,13 +2799,24 @@ func init() {
 	tasksListCmd.Flags().StringVar(&taskListDueBefore, "due-before", "", "filter to tasks due on/before this ISO 8601 date")
 	tasksListCmd.Flags().StringVar(&taskListCreatedAfter, "created-after", "", "filter to tasks created on/after this ISO 8601 timestamp")
 	tasksListCmd.Flags().StringVar(&taskListCreatedBefore, "created-before", "", "filter to tasks created on/before this ISO 8601 timestamp")
+	tasksListCmd.Flags().StringVar(&taskListUpdatedAfter, "updated-after", "", "filter to tasks last updated on/after this ISO 8601 timestamp")
+	tasksListCmd.Flags().StringVar(&taskListUpdatedBefore, "updated-before", "", "filter to tasks last updated on/before this ISO 8601 timestamp")
 	tasksListCmd.Flags().StringVar(&taskListParentTaskID, "parent-task-id", "", "filter by parent task ID (use 'null' for top-level only)")
+	tasksListCmd.Flags().StringVar(&taskListScope, "scope", "", "whose tasks to list: 'mine' for your own (owner or assignee), or omit for the whole tenant")
+	tasksListCmd.Flags().BoolVar(&taskListUnassigned, "unassigned", false, "only tasks with no assignee (board tasks the key can see)")
+	tasksListCmd.Flags().StringVar(&taskListDateField, "date-field", "", "date column --date-from/--date-to bound: created_at, due_date or updated_at")
+	tasksListCmd.Flags().StringVar(&taskListDateFrom, "date-from", "", "inclusive lower bound on --date-field, ISO 8601 with a timezone offset")
+	tasksListCmd.Flags().StringVar(&taskListDateTo, "date-to", "", "inclusive upper bound on --date-field, ISO 8601 with a timezone offset")
+	tasksListCmd.Flags().BoolVar(&taskListArchived, "archived", false, "only the archived tasks you own or are assigned to")
+	tasksListCmd.Flags().StringVar(&taskListSort, "sort", "", "order by column:direction, e.g. updated_at:desc")
 	tasksListCmd.Flags().IntVar(&taskListPage, "page", 0, "page number")
 	tasksListCmd.Flags().IntVar(&taskListLimit, "limit", 0, "items per page")
+	tasksListCmd.Flags().BoolVar(&taskListArchive, "include-archived", false, "also list archived tasks")
 
 	// tasks get flags
 	tasksGetCmd.Flags().StringVar(&taskGetTenant, "tenant", "", "scope to this tenant code")
 	tasksGetCmd.Flags().StringVar(&taskGetCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
+	tasksGetCmd.Flags().BoolVar(&taskGetArchive, "include-archived", false, "read an archived task (404 answers without it)")
 
 	// tasks comments flags
 	tasksCommentsCmd.Flags().StringVar(&taskCommentsTenant, "tenant", "", "scope to this tenant code")
@@ -1319,10 +2826,18 @@ func init() {
 	tasksCommentsCmd.Flags().IntVar(&taskCommentsPage, "page", 0, "page number (1-based)")
 	tasksCommentsCmd.Flags().IntVar(&taskCommentsLimit, "limit", 0, "items per page (max 50)")
 
+	tasksHistoryCmd.Flags().StringVar(&taskHistoryTenant, "tenant", "", "scope to this tenant code")
+	tasksHistoryCmd.Flags().StringVar(&taskHistoryCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
+	tasksHistoryCmd.Flags().IntVar(&taskHistoryPage, "page", 0, "page number (1-based)")
+	tasksHistoryCmd.Flags().IntVar(&taskHistoryLimit, "limit", 0, "entries per page (max 50)")
+
 	// tasks comments create flags
 	tasksCommentsCreateCmd.Flags().StringVar(&taskCommentsCreateTenant, "tenant", "", "scope to this tenant code")
 	tasksCommentsCreateCmd.Flags().StringVar(&taskCommentsCreateCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
-	tasksCommentsCreateCmd.Flags().StringVar(&taskCommentsCreateContent, "content", "", "comment text (required unless --attachments-json is used)")
+	tasksCommentsCreateCmd.Flags().StringVar(&taskCommentsCreateContent, "content", "", "comment text (required unless --file or --attachments-json is used)")
+	tasksCommentsCreateCmd.Flags().StringArrayVar(&taskCommentsCreateFiles, "file", nil, "path to a file to attach; repeat for more than one (at most 10)")
+	tasksCommentsCreateCmd.Flags().StringVar(&taskCommentsCreateContentType, "content-type", "", "declare this media type for every --file instead of detecting it")
+	tasksCommentsCreateCmd.Flags().StringVar(&taskCommentsCreateIdempotencyKey, "idempotency-key", "", "make a retry safe: reuse this key to re-send the same comment without posting it twice")
 	tasksCommentsCreateCmd.Flags().StringVar(&taskCommentsCreateAttachmentsJSON, "attachments-json", "", "path to a JSON object of pre-uploaded attachment references keyed by UUID (use - for stdin)")
 	tasksCommentsCmd.AddCommand(tasksCommentsCreateCmd)
 
@@ -1335,8 +2850,36 @@ func init() {
 	tasksUpdateCmd.Flags().StringVar(&taskUpdateAssignee, "assignee", "", "assignee user UUID (set to empty string to unassign)")
 	tasksUpdateCmd.Flags().StringVar(&taskUpdateBoard, "board", "", `board UUID; sent together with --list (pass --board "" --list "" to remove from board)`)
 	tasksUpdateCmd.Flags().StringVar(&taskUpdateList, "list", "", "board list UUID; sent together with --board")
-	tasksUpdateCmd.Flags().StringArrayVar(&taskUpdateFollowerIDs, "follower-id", nil, "follower user UUID (repeatable: --follower-id <uuid>); additive — removes are not supported")
+	tasksUpdateCmd.Flags().StringArrayVar(&taskUpdateFollowerIDs, "follower-id", nil, "follower user UUID to add (repeatable: --follower-id <uuid>); additive and idempotent")
+	tasksUpdateCmd.Flags().StringArrayVar(&taskUpdateRemoveFollowerIDs, "remove-follower-id", nil, "follower user UUID to remove (repeatable: --remove-follower-id <uuid>); a user who does not follow the task is a no-op")
 	tasksUpdateCmd.Flags().StringVar(&taskUpdateDueDate, "due-date", "", "due date (RFC3339; empty string clears it)")
+
+	// tasks assign-agent flags
+	tasksAssignAgentCmd.Flags().StringVar(&taskAssignAgentTenant, "tenant", "", "scope to this tenant code")
+	tasksAssignAgentCmd.Flags().StringVar(&taskAssignAgentCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
+	tasksAssignAgentCmd.Flags().StringVar(&taskAssignAgentAgentKey, "agent-key", "", "key of the agent to move the task to (required)")
+	tasksMoveCmd.Flags().StringVar(&taskMoveTenant, "tenant", "", "scope to this tenant code")
+	tasksMoveCmd.Flags().StringVar(&taskMoveCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
+	tasksMoveCmd.Flags().StringVar(&taskMoveBoardListID, "board-list-id", "", "destination board list UUID (required)")
+	tasksMoveCmd.Flags().StringVar(&taskMoveAfterTaskID, "after-task-id", "", "place the task behind this task, which must be in the destination list")
+	tasksMoveCmd.Flags().BoolVar(&taskMoveTop, "top", false, "place the task first in the destination list")
+
+	// tasks transfer-ownership flags
+	tasksTransferOwnershipCmd.Flags().StringVar(&taskTransferOwnershipTenant, "tenant", "", "scope to this tenant code")
+	tasksTransferOwnershipCmd.Flags().StringVar(&taskTransferOwnershipCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
+	tasksTransferOwnershipCmd.Flags().StringVar(&taskTransferOwnershipOwnerID, "owner-id", "", "user UUID of the new owner (required; must be an active member of the task's tenant)")
+
+	// tasks claim flags
+	tasksClaimCmd.Flags().StringVar(&taskClaimTenant, "tenant", "", "scope to this tenant code")
+	tasksClaimCmd.Flags().StringVar(&taskClaimCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
+
+	// tasks archive flags
+	tasksArchiveCmd.Flags().StringVar(&taskArchiveTenant, "tenant", "", "scope to this tenant code")
+	tasksArchiveCmd.Flags().StringVar(&taskArchiveCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
+
+	// tasks unarchive flags
+	tasksUnarchiveCmd.Flags().StringVar(&taskUnarchiveTenant, "tenant", "", "scope to this tenant code")
+	tasksUnarchiveCmd.Flags().StringVar(&taskUnarchiveCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
 
 	// tasks create flags
 	tasksCreateCmd.Flags().StringVar(&taskCreateTenant, "tenant", "", "tenant code (required)")
@@ -1348,7 +2891,10 @@ func init() {
 	tasksCreateCmd.Flags().StringVar(&taskCreateAssignee, "assignee", "", "assignee user ID")
 	tasksCreateCmd.Flags().StringVar(&taskCreateBoard, "board", "", "board ID")
 	tasksCreateCmd.Flags().StringVar(&taskCreateList, "list", "", "board list ID")
+	tasksCreateCmd.Flags().StringVar(&taskCreateAfterTaskID, "after-task-id", "", "place the new card directly behind this task in --list (needs --list; exclusive with --top)")
+	tasksCreateCmd.Flags().BoolVar(&taskCreateTop, "top", false, "place the new card first in --list (needs --list; exclusive with --after-task-id)")
 	tasksCreateCmd.Flags().StringArrayVar(&taskCreateFollowerIDs, "follower-id", nil, "follower user ID (repeatable: --follower-id <uuid> --follower-id <uuid>)")
+	tasksCreateCmd.Flags().StringVar(&taskCreateIdempotencyKey, "idempotency-key", "", "make the create safe to retry: the same key replays the task it created; a different body under the same key exits 1 with E0601 (not supported with --subtasks-json)")
 	tasksCreateCmd.Flags().StringVar(&taskCreateSubtasksJSON, "subtasks-json", "", "path to a JSON array of subtask items (use - for stdin); creates the task and its subtasks atomically via POST /mission/tasks/with-subtasks")
 
 	// tasks subtasks flags
@@ -1365,11 +2911,25 @@ func init() {
 	tasksSubtasksCreateCmd.Flags().StringVar(&taskSubtasksPriority, "priority", "", "priority (Low, Normal, High, Urgent)")
 	tasksSubtasksCreateCmd.Flags().StringVar(&taskSubtasksStatus, "status", "", "status (Pending, To-Do, Doing, Done, Closed, Cancelled)")
 
+	// tasks subtasks move flags
+	tasksSubtasksMoveCmd.Flags().StringVar(&taskSubtasksMoveTenant, "tenant", "", "scope to this tenant code")
+	tasksSubtasksMoveCmd.Flags().StringVar(&taskSubtasksMoveCode, "code", "", "address the parent task by its code (e.g. ACMEC-68) instead of by id")
+	tasksSubtasksMoveCmd.Flags().BoolVar(&taskSubtasksMoveTop, "top", false, "place the subtask first among its siblings (exclusive with --after-subtask-id)")
+	tasksSubtasksMoveCmd.Flags().StringVar(&taskSubtasksMoveAfterSubtaskID, "after-subtask-id", "", "place the subtask directly behind this sibling (exclusive with --top)")
+
+	// tasks delete flags
+	tasksDeleteCmd.Flags().StringVar(&taskDeleteTenant, "tenant", "", "scope to this tenant code")
+	tasksDeleteCmd.Flags().StringVar(&taskDeleteCode, "code", "", "address the task by its code (e.g. ACMEC-68) instead of by id")
+
+	// tasks subtasks delete flags
+	tasksSubtasksDeleteCmd.Flags().StringVar(&taskSubtasksDeleteTenant, "tenant", "", "scope to this tenant code")
+	tasksSubtasksDeleteCmd.Flags().StringVar(&taskSubtasksDeleteCode, "code", "", "address the parent task by its code (e.g. ACMEC-68) instead of by id")
+
 	// Registration order is display order (cobra.EnableCommandSorting is off).
 	// tasksAttachmentsCmd is defined in task_attachments.go, whose init() runs
 	// first — it is registered here so it lands after the verbs, not above them.
-	tasksSubtasksCmd.AddCommand(tasksSubtasksListCmd, tasksSubtasksCreateCmd)
-	taskCmd.AddCommand(tasksListCmd, tasksGetCmd, tasksCreateCmd, tasksUpdateCmd, tasksCommentsCmd, tasksSubtasksCmd, tasksAttachmentsCmd)
+	tasksSubtasksCmd.AddCommand(tasksSubtasksListCmd, tasksSubtasksCreateCmd, tasksSubtasksMoveCmd, tasksSubtasksDeleteCmd)
+	taskCmd.AddCommand(tasksListCmd, tasksGetCmd, tasksCreateCmd, tasksUpdateCmd, tasksAssignAgentCmd, tasksMoveCmd, tasksTransferOwnershipCmd, tasksClaimCmd, tasksArchiveCmd, tasksUnarchiveCmd, tasksDeleteCmd, tasksCommentsCmd, tasksHistoryCmd, tasksSubtasksCmd, tasksAttachmentsCmd)
 	rootCmd.AddCommand(taskCmd)
 }
 
@@ -1421,9 +2981,28 @@ type taskListFilters struct {
 	dueBefore     string
 	createdAfter  string
 	createdBefore string
+	updatedAfter  string
+	updatedBefore string
 	parentTaskID  string
-	page          int
-	limit         int
+	// scope maps to the API's scope=mine. Empty means the tenant-wide read.
+	scope string
+	// unassigned and the date triplet select the API's board task search, so
+	// they are set together with the restrictions validateTaskListFlags
+	// enforces rather than independently of them.
+	unassigned bool
+	dateField  string
+	dateFrom   string
+	dateTo     string
+	// archived maps to the API's archived=true: the retired rows the caller
+	// owns or is assigned to, not a widening of the live list.
+	archived bool
+	sort     string
+	page     int
+	limit    int
+	// archive maps to the API's include_archived=true. Omitted when false, so
+	// the server's own default — archived tasks left out — is what an unflagged
+	// call gets.
+	archive bool
 }
 
 // tasksListPath builds the request path + query string for `tasks list`.
@@ -1463,8 +3042,38 @@ func tasksListPath(f taskListFilters) string {
 	if f.createdBefore != "" {
 		params.Set("filters[created_at][$lte]", f.createdBefore)
 	}
+	if f.updatedAfter != "" {
+		params.Set("filters[updated_at][$gte]", f.updatedAfter)
+	}
+	if f.updatedBefore != "" {
+		params.Set("filters[updated_at][$lte]", f.updatedBefore)
+	}
 	if f.parentTaskID != "" {
 		params.Set("parent_task_id", f.parentTaskID)
+	}
+	if f.scope != "" {
+		params.Set("scope", f.scope)
+	}
+	if f.unassigned {
+		params.Set("unassigned", "true")
+	}
+	if f.archived {
+		params.Set("archived", "true")
+	}
+	if f.dateField != "" {
+		params.Set("date_field", f.dateField)
+	}
+	if f.dateFrom != "" {
+		params.Set("date_from", f.dateFrom)
+	}
+	if f.dateTo != "" {
+		params.Set("date_to", f.dateTo)
+	}
+	if f.sort != "" {
+		params.Set("sort", f.sort)
+	}
+	if f.archive {
+		params.Set("include_archived", "true")
 	}
 	if f.page > 0 {
 		params.Set("page", strconv.Itoa(f.page))
@@ -1478,6 +3087,133 @@ func tasksListPath(f taskListFilters) string {
 		path += "?" + params.Encode()
 	}
 	return path
+}
+
+// boardTaskSearchSortColumns are the only orderings the API's board task search
+// accepts, in the `column:direction` spelling the CLI takes.
+var boardTaskSearchSortColumns = map[string]bool{
+	"created_at": true,
+	"updated_at": true,
+	"due_date":   true,
+	"status":     true,
+}
+
+// taskListValidationError builds the refusal every rule below returns: the
+// API's own VALIDATION_ERROR shape, so the answer reads the same whichever side
+// caught it (HTTP 400 → exit 5).
+func taskListValidationError(format string, args ...any) *api.APIError {
+	return &api.APIError{
+		Code:       "VALIDATION_ERROR",
+		Message:    fmt.Sprintf(format, args...),
+		HTTPStatus: 400,
+	}
+}
+
+// validateTaskListFlags refuses flag combinations the API answers with a 400,
+// before the request leaves the machine. Returns nil when the flags are
+// coherent, or the first refusal as a VALIDATION_ERROR.
+//
+// The endpoint picks a different database function per group of flags, and
+// three of these combinations are ones the server can only refuse — or worse,
+// answer with a different list than the flags read as asking for. Catching them
+// here costs no round trip and names the flag rather than the query parameter.
+func validateTaskListFlags(f taskListFilters) *api.APIError {
+	switch f.scope {
+	case "", "all", "mine":
+	default:
+		return taskListValidationError(
+			"--scope %q is not a scope the API serves; use mine, or omit it for every task the tenant has", f.scope)
+	}
+
+	boardMode := f.unassigned || f.dateField != "" || f.dateFrom != "" || f.dateTo != ""
+	if f.archived && (f.scope == "mine" || f.archive || boardMode) {
+		return taskListValidationError(
+			"--archived cannot be combined with %s: archived tasks are their own list, not a wider one", f.modesGiven())
+	}
+
+	if boardMode {
+		if f.scope == "mine" {
+			return taskListValidationError(
+				"--scope mine and --unassigned/--date-field read different lists and cannot be combined")
+		}
+		if blocked := f.boardModeBlockingFlag(); blocked != "" {
+			return taskListValidationError(
+				"--unassigned and --date-field/--date-from/--date-to are served by the board task search, which cannot apply %s; drop one side", blocked)
+		}
+		if f.sort != "" {
+			column := f.sort
+			if i := strings.Index(f.sort, ":"); i >= 0 {
+				column = f.sort[:i]
+			}
+			if !boardTaskSearchSortColumns[column] {
+				return taskListValidationError(
+					"--sort %s is not available with --unassigned or a date range; those may sort by created_at, updated_at, due_date or status", f.sort)
+			}
+		}
+	}
+
+	switch f.dateField {
+	case "":
+		if f.dateFrom != "" || f.dateTo != "" {
+			return taskListValidationError(
+				"--date-from and --date-to need --date-field (created_at, due_date or updated_at) to say which date they bound")
+		}
+	case "created_at", "due_date", "updated_at":
+		if f.dateFrom == "" && f.dateTo == "" {
+			return taskListValidationError(
+				"--date-field %s needs --date-from, --date-to, or both; on its own it filters nothing", f.dateField)
+		}
+	default:
+		return taskListValidationError(
+			"--date-field %q is not a date column the API filters on; use created_at, due_date or updated_at", f.dateField)
+	}
+
+	return nil
+}
+
+// boardModeBlockingFlag names the first flag whose filter the board task search
+// cannot express, or "" when none is set.
+func (f taskListFilters) boardModeBlockingFlag() string {
+	switch {
+	case f.priority != "":
+		return "--priority"
+	case f.assigneeID != "":
+		return "--assignee-id"
+	case f.ownerID != "":
+		return "--owner-id"
+	case f.boardListID != "":
+		return "--board-list-id"
+	case f.dueAfter != "" || f.dueBefore != "":
+		return "--due-after/--due-before"
+	case f.createdAfter != "" || f.createdBefore != "":
+		return "--created-after/--created-before"
+	case f.updatedAfter != "" || f.updatedBefore != "":
+		return "--updated-after/--updated-before"
+	case f.parentTaskID != "":
+		return "--parent-task-id"
+	case f.archive:
+		return "--include-archived"
+	}
+	return ""
+}
+
+// modesGiven lists the mutually exclusive modes the caller set, for a message
+// that names what actually clashed.
+func (f taskListFilters) modesGiven() string {
+	names := []string{}
+	if f.scope == "mine" {
+		names = append(names, "--scope mine")
+	}
+	if f.archive {
+		names = append(names, "--include-archived")
+	}
+	if f.unassigned || f.dateField != "" || f.dateFrom != "" || f.dateTo != "" {
+		names = append(names, "--unassigned/--date-field")
+	}
+	if len(names) == 0 {
+		return "these flags"
+	}
+	return strings.Join(names, ", ")
 }
 
 // commentsPath builds the request path + query string for `tasks comments`.
