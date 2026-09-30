@@ -26,6 +26,7 @@
 //	board_id     → board        (shorter flag name for usability)
 //	board_list_id → list        (short flag name; context makes it clear)
 //	assignee_id  → assignee     (trailing _id dropped for usability)
+//	position     → top          (one accepted value; exposed as the boolean --top)
 //
 // Verifying the guard catches real regressions:
 // To confirm this test would fail if --follower-id were removed from tasks create,
@@ -65,6 +66,10 @@ var bodyFieldAliasMap = map[string]string{
 	// follower_ids is a plural field; the CLI exposes it as a singular repeatable
 	// flag --follower-id so callers write: --follower-id <uuid> --follower-id <uuid>
 	"follower_ids": "follower-id",
+	// follower_remove_ids is the removal half of the same pair; the flag reads
+	// --remove-follower-id (verb first) so add and remove stay distinguishable
+	// at a glance: --follower-id <uuid> --remove-follower-id <uuid>.
+	"follower_remove_ids": "remove-follower-id",
 	// tenant_code is required by the API body but the CLI exposes it as --tenant
 	// (consistent with all other tenant-scoped commands).
 	"tenant_code": "tenant",
@@ -74,9 +79,17 @@ var bodyFieldAliasMap = map[string]string{
 	"board_list_id": "list",
 	// assignee_id → assignee: the _id suffix dropped for usability.
 	"assignee_id": "assignee",
+	// position accepts exactly one value ("top"), so the create command exposes
+	// it as the boolean --top rather than --position <value>: the same flag the
+	// move action uses for the same intent.
+	"position": "top",
 	// POST /mission/tasks/with-subtasks: the subtasks array is supplied as a JSON
 	// file via --subtasks-json on `tasks create`.
 	"subtasks": "subtasks-json",
+	// POST /mission/boards/{id}/members: user_ids is a plural field, and the CLI
+	// exposes it as a singular repeatable flag — the shape every other
+	// repeatable id/name list here uses: --user-id <uuid> --user-id <uuid>.
+	"user_ids": "user-id",
 }
 
 // intentionallyUnexposedBodyFields lists body fields that the CLI deliberately
@@ -129,6 +142,15 @@ func buildWriteCommandMapping() []writeCommandEntry {
 			method:    "post",
 			hasFlag:   func(n string) bool { return tasksSubtasksCreateCmd.Flags().Lookup(n) != nil },
 		},
+		// tasks subtasks move: no --from-json, so every body field must have a flag.
+		// The body carries one field, after_subtask_id→--after-subtask-id; --top is
+		// this CLI's spelling of `after_subtask_id: null` and adds no body field.
+		{
+			humanName: "tasks subtasks move",
+			path:      "/mission/tasks/{id}/subtasks/{subtaskId}",
+			method:    "patch",
+			hasFlag:   func(n string) bool { return tasksSubtasksMoveCmd.Flags().Lookup(n) != nil },
+		},
 		// tasks create --subtasks-json drives with-subtasks: tenant_code→--tenant,
 		// subtasks→--subtasks-json (alias), and the nested task object is built from
 		// the individual create flags (task is intentionallyUnexposed).
@@ -145,6 +167,58 @@ func buildWriteCommandMapping() []writeCommandEntry {
 			path:      "/mission/tasks/{id}",
 			method:    "patch",
 			hasFlag:   func(n string) bool { return tasksUpdateCmd.Flags().Lookup(n) != nil },
+		},
+		// tasks assign-agent: body is one field, agent_key→--agent-key (the naive
+		// snake_case→kebab-case transform), so no alias entry is needed.
+		{
+			humanName: "tasks assign-agent",
+			path:      "/mission/tasks/{id}/actions/assign-agent",
+			method:    "post",
+			hasFlag:   func(n string) bool { return tasksAssignAgentCmd.Flags().Lookup(n) != nil },
+		},
+		// tasks transfer-ownership: same shape, owner_id→--owner-id.
+		{
+			humanName: "tasks transfer-ownership",
+			path:      "/mission/tasks/{id}/actions/transfer-ownership",
+			method:    "post",
+			hasFlag:   func(n string) bool { return tasksTransferOwnershipCmd.Flags().Lookup(n) != nil },
+		},
+		// boards members add: no --from-json, so every body field needs a flag —
+		// tenant_code→--tenant, user_ids→--user-id (repeatable), role→--role.
+		{
+			humanName: "boards members add",
+			path:      "/mission/boards/{id}/members",
+			method:    "post",
+			hasFlag:   func(n string) bool { return boardMembersAddCmd.Flags().Lookup(n) != nil },
+		},
+		// boards members update: the PATCH body is tenant_code + role, both
+		// flagged, and no --from-json escape hatch exists to hide a new field.
+		{
+			humanName: "boards members update",
+			path:      "/mission/boards/{id}/members/{userId}",
+			method:    "patch",
+			hasFlag:   func(n string) bool { return boardMembersUpdateCmd.Flags().Lookup(n) != nil },
+		},
+		// The DELETE commands carry a body too, and until now the guard had no
+		// DELETE case at all — so a body field could be added to one of them with
+		// nothing failing. Each registers --tenant for tenant_code.
+		{
+			humanName: "boards delete",
+			path:      "/mission/boards/{id}",
+			method:    "delete",
+			hasFlag:   func(n string) bool { return boardsDeleteCmd.Flags().Lookup(n) != nil },
+		},
+		{
+			humanName: "boards lists delete",
+			path:      "/mission/boards/{id}/lists/{listId}",
+			method:    "delete",
+			hasFlag:   func(n string) bool { return boardListsDeleteCmd.Flags().Lookup(n) != nil },
+		},
+		{
+			humanName: "boards members remove",
+			path:      "/mission/boards/{id}/members/{userId}",
+			method:    "delete",
+			hasFlag:   func(n string) bool { return boardMembersRemoveCmd.Flags().Lookup(n) != nil },
 		},
 		// PCMS resource commands: all register --from-json, so per-field assertion is
 		// skipped. Listed here so NEW spec fields still surface as a test failure when
@@ -255,9 +329,10 @@ type openAPIBodySpec struct {
 }
 
 type openAPIBodyPathItem struct {
-	Post  *openAPIBodyOperation `json:"post"`
-	Patch *openAPIBodyOperation `json:"patch"`
-	Put   *openAPIBodyOperation `json:"put"`
+	Post   *openAPIBodyOperation `json:"post"`
+	Patch  *openAPIBodyOperation `json:"patch"`
+	Put    *openAPIBodyOperation `json:"put"`
+	Delete *openAPIBodyOperation `json:"delete"`
 }
 
 type openAPIBodyOperation struct {
@@ -322,6 +397,8 @@ func TestOpenAPIBodyCoverage(t *testing.T) {
 				op = pathItem.Patch
 			case "put":
 				op = pathItem.Put
+			case "delete":
+				op = pathItem.Delete
 			}
 			if op == nil {
 				t.Fatalf("path %q has no %s operation in openapi.json", entry.path, strings.ToUpper(entry.method))

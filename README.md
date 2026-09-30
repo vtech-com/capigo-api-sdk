@@ -184,25 +184,74 @@ capigo tenants list      List tenants you can access
 
 capigo tasks list                    List tasks (--query/-q, --status, --priority, --assignee-id,
                                       --owner-id, --board-id, --board-list-id, --due-after/--due-before,
-                                      --created-after/--created-before, --parent-task-id, --page, --limit)
-capigo tasks get <id|--code>           Get task by ID or code (--code requires --tenant)
+                                      --created-after/--created-before, --updated-after/--updated-before,
+                                      --parent-task-id, --sort <column:direction>, --include-archived,
+                                      --page, --limit)
+                                      Three modes of its own, mutually exclusive: --scope mine (your own
+                                      tasks — the API's AND-only filters cannot ask for owner OR assignee),
+                                      --unassigned or --date-field/--date-from/--date-to (board tasks with
+                                      no assignee, or in a date window), and --archived (the archived
+                                      tasks you own or are assigned to, which is not --include-archived).
+                                      The first two read one tenant at a time, so pass --tenant when the
+                                      key can reach several.
+capigo tasks get <id|--code>           Get task by ID or code (--code requires --tenant; --include-archived
+                                       reads an archived task, which 404s without it)
 capigo tasks comments <id|--code>      List a task's comment + activity timeline (--type comment|activity,
                                        --sort asc|desc, --page, --limit; --code requires --tenant)
+capigo tasks history <id|--code>       List a task's status log, newest first: from_status, to_status,
+                                       changed_at, changed_by (--page, --limit; --code requires --tenant;
+                                       no --sort — the API's read is newest-first only and refuses one)
+capigo tasks attachments upload <task-id|--code> <path>              Upload a file to a task in one call
+                                                                     (--content-type, --idempotency-key)
+capigo tasks attachments remove <task-id|--code> <attachment-id>    Remove a file from a task (final; no key)
 capigo tasks attachments download <task-id|--code> <attachment-id>          Download a task-level attachment
 capigo tasks comments attachments download <task-id|--code> <attachment-id> Download a comment/activity attachment
-capigo tasks update <id>              Partial update a task (PATCH; --tenant optional; at least one field required)
+capigo tasks update <id>              Partial update a task (PATCH; --tenant optional; at least one field required;
+                                     --follower-id adds, --remove-follower-id removes; --due-date sets or clears it)
+capigo tasks assign-agent <id|--code> Move an agent-owned task to another agent (--agent-key required;
+                                     --code requires --tenant)
+capigo tasks move <id|--code>       Move a task into a board list (--board-list-id required; --top or
+                                    --after-task-id <uuid>; --code requires --tenant)
+capigo tasks transfer-ownership <id|--code> Hand a task to another member (--owner-id required, an active
+                                     member of the tenant; only the current owner may call it)
+capigo tasks claim <id|--code>        Take an unassigned task yourself (--code requires --tenant;
+                                      any active member may claim; a task already assigned is a 409)
+capigo tasks archive <id|--code>      Retire a task (--code requires --tenant; owner, assignee or
+                                      tenant owner only; subtasks go with it; restore with tasks unarchive)
+capigo tasks unarchive <id|--code>    Restore an archived task (--code requires --tenant; owner,
+                                      assignee or tenant owner; a subtask's assignee may restore it)
+capigo tasks delete <id|--code>       Delete a task (--code requires --tenant; owner, assignee or tenant
+                                      owner only; a subtask is deleted alone, a parent takes its
+                                      subtasks with it; soft delete, so the GUI's archive can restore it)
 capigo tasks create                   Create a new task (--title + --tenant required; --follower-id repeatable;
-                                       --subtasks-json to create subtasks atomically)
+                                     --board + --list to file it on a board, with --top or
+                                     --after-task-id <uuid> to choose where; --idempotency-key makes a
+                                     retry replay instead of duplicating; --subtasks-json to create
+                                     subtasks atomically)
 capigo tasks subtasks list <id|--code>     List a task's subtasks (--code requires --tenant)
 capigo tasks subtasks create <id|--code>   Add subtask(s) to an existing task (--title, or --from-json for a batch;
                                        --code requires --tenant)
+capigo tasks subtasks move <id|--code> <subtask-id>  Reorder a subtask among its siblings (--top, or
+                                       --after-subtask-id <uuid>; --code requires --tenant; the parent's
+                                       owner, assignee or tenant owner only)
+capigo tasks subtasks delete <id|--code> <subtask-id>  Delete one subtask (soft delete; its parent and
+                                       siblings stay; --code requires --tenant; the parent's owner,
+                                       assignee or tenant owner only)
 
 capigo boards list       List boards (supports --query/-q, --page, --limit)
 capigo boards get <id>   Get board by ID (includes its `lists` array)
 capigo boards create     Create a board (--name + --tenant required, or --from-json)
 capigo boards update <id>        Partial update a board (PATCH; --tenant required; at least one field required)
+capigo boards delete <id>        Delete a board (soft delete; its lists and their tasks stay live)
 capigo boards lists create <board-id>        Create a list in a board (--name + --tenant required)
-capigo boards lists update <board-id> <list-id>  Update a list in a board (PATCH; --tenant required)
+capigo boards lists update <board-id> <list-id>  Update a list (--name/--wip-limit/--is-archived) or
+                                       reorder it (--after-list-id or --before-list-id, one only)
+capigo boards lists delete <board-id> <list-id>  Delete a list (soft delete; the tasks in it stay live)
+capigo boards members list <board-id>        List a board's members (--tenant optional)
+capigo boards members add <board-id>         Add 1-50 members in one call (--user-id repeatable, --role;
+                                       a member the board already has is skipped, not refused)
+capigo boards members update <board-id> <user-id>  Change a member's board role (--role required)
+capigo boards members remove <board-id> <user-id>  Remove a member from a board (prints nothing)
 
 capigo members list      List workspace members (supports --query/-q, --page, --limit)
 capigo members get <id>  Get a member by ID
@@ -254,7 +303,7 @@ Run `capigo <group> <command> --help` for the complete, authoritative flag list 
 
 `--tenant <code>` appears as a local flag on commands that require or accept a tenant scope (e.g. `capigo products list --tenant acme`). It is not a global flag. The active config profile is always read from `~/.capigo/config.json` and cannot be overridden at runtime.
 
-Every PCMS command (`products`, `variants`, `brands`, `categories`, `product-types`, `units`) **requires** a tenant on every verb. `tasks list`/`get`, `boards list`/`get`, and `members list`/`get` accept an *optional* `--tenant` — omit it to read across every tenant you can access (`meta.tenant` is then absent — there is no single tenant to name). `tasks create` and `tasks subtasks create` always require a tenant; `tasks subtasks list` requires a tenant only when addressed by `--code`. Board writes — `boards create`, `boards update`, `boards lists create`, `boards lists update` — always require a tenant.
+Every PCMS command (`products`, `variants`, `brands`, `categories`, `product-types`, `units`) **requires** a tenant on every verb. `tasks list`/`get`, `boards list`/`get`, `boards members list`, and `members list`/`get` accept an *optional* `--tenant` — omit it to read across every tenant you can access (`meta.tenant` is then absent — there is no single tenant to name). `tasks create` and `tasks subtasks create` always require a tenant; `tasks subtasks list` requires a tenant only when addressed by `--code`. Board writes — `boards create`, `boards update`, `boards delete`, `boards lists create`, `boards lists update`, `boards lists delete`, and `boards members add`/`update`/`remove` — always require a tenant: they write into one workspace.
 
 ## Products
 
@@ -382,10 +431,46 @@ echo '[{"title":"Subtask A"},{"title":"Subtask B"}]' \
 echo '[{"title":"Design"},{"title":"Build","priority":"High"}]' \
   | capigo tasks subtasks create <parent-uuid> --tenant acme --from-json -
 
+# Upload a file onto a task (the server stores it and records it in one call)
+capigo tasks attachments upload <task-uuid> ./invoice.pdf --tenant acme
+# Retry safely: the same key with the same file returns the attachment already
+# stored instead of a second copy
+capigo tasks attachments upload --code ACMEC-68 ./invoice.pdf --idempotency-key upload-42
+
 # Download an attachment (task-level or from a comment/activity entry)
 capigo tasks attachments download <task-uuid> <attachment-uuid> --dest ./downloads/
 capigo tasks comments attachments download <task-uuid> <attachment-uuid>
+
+# Remove a file from a task (final: the stored object is deleted too)
+capigo tasks attachments remove <task-uuid> <attachment-uuid>
+
+# Comment with files: the comment and its files travel in one request
+capigo tasks comments create <task-uuid> --content "Here is the invoice" --file ./invoice.pdf
+# Retry safely: the same key with the same comment does not post it twice
+capigo tasks comments create <task-uuid> --content "Here is the invoice" \
+  --file ./invoice.pdf --idempotency-key comment-42
 ```
+
+An upload is one request: the CLI sends the bytes, the server stores them and records the
+attachment, and stdout names the attachment id that `tasks attachments download` takes next.
+There is no presigned-URL round trip to drive. `data.replayed` is `false` when the call stored
+the file and `true` when the server returned an attachment an earlier call with the same
+`--idempotency-key` had already stored — a successful retry, not a second copy. The media type
+is detected from the path, then from the file's first bytes; pass `--content-type` when the
+detection is wrong (a `.md` file on a system with no MIME database, say). The API accepts a
+fixed set of types and a 50 MB ceiling, the same ones the web UI enforces. An `--idempotency-key`
+that is empty or all whitespace exits 5: the API trims the header and reads the blank as no key
+at all, so the retry the flag promises would not happen.
+
+A comment carries its own files the same way — `--file`, repeatable, at most 10 (an eleventh exits
+5 before anything goes up) — and `--content-type` declares one media type for all of them when the
+detection would guess wrong.
+
+
+A removal is final and takes no `--idempotency-key`: removing an attachment the task no longer
+holds exits 4 (`Attachment not found`), so a retry tells you the file is already gone rather
+than deleting twice. stdout names the file that was removed, which is the last chance to check
+it was the right one — every task read stops listing it from there.
 
 Attachment downloads fetch a signed, short-lived URL (5-minute lifetime) and write the bytes to
 disk in the same call — there's no separate "get the URL" step, and the CLI never prints the

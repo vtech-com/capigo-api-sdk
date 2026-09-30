@@ -31,12 +31,27 @@ type CommentAuthor struct {
 	Type string `json:"type"` // "user" | "agent"
 }
 
-// CommentAttachment is flat attachment metadata on a task comment.
-type CommentAttachment struct {
+// AttachmentMetadata is flat attachment metadata as the API returns it. One
+// shape covers three places: a task's own attachments, a comment's attachments,
+// and the body of a successful upload — the CLI reads the same four fields in
+// each, so it keeps one struct rather than three copies that drift.
+type AttachmentMetadata struct {
 	ID        string `json:"id"`
 	FileName  string `json:"file_name"`
 	MimeType  string `json:"mime_type"`
 	SizeBytes int64  `json:"size_bytes"`
+}
+
+// CommentAttachment is the comment-facing name for that shape, kept so existing
+// callers of this package compile unchanged.
+type CommentAttachment = AttachmentMetadata
+
+// TaskAttachmentEnvelope is the body of a successful write that answers with an
+// attachment: `POST /mission/tasks/{id}/attachments` (the file that was stored)
+// and `DELETE /mission/tasks/{id}/attachments/{attachmentId}` (the file that was
+// removed). One type, because the API answers the same shape either way.
+type TaskAttachmentEnvelope struct {
+	Data AttachmentMetadata `json:"data"`
 }
 
 // AttachmentDownload is the response of both attachment download endpoints:
@@ -56,12 +71,18 @@ type AttachmentDownload struct {
 // CreateTaskRequest is the body for POST /mission/tasks.
 // tenant_code is required and is sent as a body field (not a header).
 type CreateTaskRequest struct {
-	TenantCode  string   `json:"tenant_code"`
-	Title       string   `json:"title"`
-	Description *string  `json:"description,omitempty"`
-	AssigneeID  *string  `json:"assignee_id,omitempty"`
-	BoardID     *string  `json:"board_id,omitempty"`
-	BoardListID *string  `json:"board_list_id,omitempty"`
+	TenantCode  string  `json:"tenant_code"`
+	Title       string  `json:"title"`
+	Description *string `json:"description,omitempty"`
+	AssigneeID  *string `json:"assignee_id,omitempty"`
+	BoardID     *string `json:"board_id,omitempty"`
+	BoardListID *string `json:"board_list_id,omitempty"`
+	// AfterTaskID places the new card directly behind that task in BoardListID.
+	// At most one of AfterTaskID and Position may be set, and neither without
+	// BoardListID. A JSON null is rejected by the API: use Position for "first".
+	AfterTaskID *string `json:"after_task_id,omitempty"`
+	// Position places the new card first in BoardListID. Only "top" is accepted.
+	Position    *string  `json:"position,omitempty"`
 	FollowerIDs []string `json:"follower_ids,omitempty"`
 	Priority    *string  `json:"priority,omitempty"`
 	Status      *string  `json:"status,omitempty"`
@@ -156,11 +177,50 @@ type CreateBoardListRequest struct {
 }
 
 // UpdateBoardListRequest is the body for PATCH /mission/boards/{id}/lists/{listId}.
+// Two intents share the endpoint and are never sent together: a field update
+// (Name/Limit/IsArchived), or a reorder naming one anchor (AfterListID XOR
+// BeforeListID), which changes Position and nothing else.
 type UpdateBoardListRequest struct {
-	TenantCode string  `json:"tenant_code"`
-	Name       *string `json:"name,omitempty"`
-	Limit      *int    `json:"limit,omitempty"`
-	IsArchived *bool   `json:"is_archived,omitempty"`
+	TenantCode   string  `json:"tenant_code"`
+	Name         *string `json:"name,omitempty"`
+	Limit        *int    `json:"limit,omitempty"`
+	IsArchived   *bool   `json:"is_archived,omitempty"`
+	AfterListID  *string `json:"after_list_id,omitempty"`
+	BeforeListID *string `json:"before_list_id,omitempty"`
+}
+
+// DeleteBoardRequest is the body for DELETE /mission/boards/{id}.
+// The address names the board; the body carries the tenant only.
+type DeleteBoardRequest struct {
+	TenantCode string `json:"tenant_code"`
+}
+
+// DeleteBoardListRequest is the body for DELETE /mission/boards/{id}/lists/{listId}.
+// The address names the board and the list; the body carries the tenant only.
+type DeleteBoardListRequest struct {
+	TenantCode string `json:"tenant_code"`
+}
+
+// AddBoardMembersRequest is the body for POST /mission/boards/{id}/members.
+// UserIDs is the array the endpoint exists for: 1 to 50 members in one request.
+// Role applies to the whole request, because the API takes one role per batch.
+type AddBoardMembersRequest struct {
+	TenantCode string   `json:"tenant_code"`
+	UserIDs    []string `json:"user_ids"`
+	Role       *string  `json:"role,omitempty"`
+}
+
+// UpdateBoardMemberRequest is the body for PATCH /mission/boards/{id}/members/{userId}.
+// Role is required: the endpoint changes the board role and nothing else.
+type UpdateBoardMemberRequest struct {
+	TenantCode string `json:"tenant_code"`
+	Role       string `json:"role"`
+}
+
+// RemoveBoardMemberRequest is the body for DELETE /mission/boards/{id}/members/{userId}.
+// The member is named by the address; the body carries only the tenant.
+type RemoveBoardMemberRequest struct {
+	TenantCode string `json:"tenant_code"`
 }
 
 // ProductVariantDimensions holds physical dimensions of a variant.

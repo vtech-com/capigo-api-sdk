@@ -178,9 +178,12 @@ of an error message is not.
   6   Network error. The API could not be reached, or the connection failed
       before a response arrived.
   7   Rate limited (HTTP 429).
-  8   Conflict (HTTP 409). A server-enforced unique value already exists — a
-      duplicate variant sku, for example. Note that alias and barcode are not
-      server-enforced unique, so duplicates of those do not produce this code.
+  8   Conflict (HTTP 409). The server refused the change because of the state
+      it found: a server-enforced unique value already exists (a duplicate
+      variant sku, for example — alias and barcode are not server-enforced
+      unique, so duplicates of those do not produce this code), or the
+      resource is in a state that refuses the operation — a task that already
+      has an assignee, for example; re-read it rather than retrying.
 
 WHEN A COMMAND FAILS
   stdout carries a JSON object with an error key; stderr carries a one-line

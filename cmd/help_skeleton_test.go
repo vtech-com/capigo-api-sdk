@@ -216,6 +216,10 @@ func TestOutputSectionNamesTheEnvelope(t *testing.T) {
 		"capigo config set":                  true,
 		"capigo config set-default-tenant":   true,
 		"capigo config unset-default-tenant": true,
+		// The API answers 204 with no body, and the CLI prints only what the
+		// server sent — inventing a payload here would be a second definition
+		// of the endpoint's shape.
+		"capigo boards members remove": true,
 	}
 	for _, c := range callableCommands {
 		if silent[c.CommandPath()] {

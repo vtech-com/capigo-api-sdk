@@ -67,6 +67,91 @@
           }
         }
       },
+      "AddBoardMemberRequest": {
+        "type": "object",
+        "required": [
+          "tenant_code",
+          "user_ids"
+        ],
+        "properties": {
+          "tenant_code": {
+            "type": "string",
+            "description": "The tenant/workspace code where the board lives."
+          },
+          "user_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Auth user ids of the tenant members to add — the id `GET /mission/boards/{id}/members` reports and the per-member routes address. 1 to 50 in one request. A member the board already holds is skipped, never an error."
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "member"
+            ],
+            "default": "member",
+            "description": "Board role for the whole request. Defaults to `member`."
+          }
+        }
+      },
+      "PublicBoardMemberResponse": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "john@example.com"
+          },
+          "display_name": {
+            "type": "string",
+            "example": "John Doe"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "member"
+            ],
+            "example": "member"
+          },
+          "avatar_url": {
+            "type": "string",
+            "nullable": true,
+            "example": "https://example.com/avatar.jpg"
+          }
+        }
+      },
+      "UpdateBoardMemberRequest": {
+        "type": "object",
+        "required": [
+          "tenant_code",
+          "role"
+        ],
+        "properties": {
+          "tenant_code": {
+            "type": "string",
+            "description": "The tenant/workspace code where the board lives."
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "member"
+            ],
+            "description": "The new board role."
+          }
+        }
+      },
       "PublicTaskCommentResponse": {
         "type": "object",
         "required": [
@@ -161,6 +246,78 @@
           "created_at": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "PublicTaskStatusHistoryEntry": {
+        "type": "object",
+        "description": "One recorded status change on a task — the row `mission.task_status_histories` holds, not the activity message the same change also posts.",
+        "required": [
+          "id",
+          "task_id",
+          "from_status",
+          "to_status",
+          "changed_by",
+          "changed_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "task_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "from_status": {
+            "type": "string",
+            "nullable": true,
+            "description": "The status left behind. `null` on the entry a task's creation wrote — there was no status to leave.",
+            "example": "To-Do"
+          },
+          "to_status": {
+            "type": "string",
+            "description": "The status entered.",
+            "example": "Doing"
+          },
+          "changed_by": {
+            "type": "object",
+            "nullable": true,
+            "description": "Who made the change, in the same person-ref shape a task's `owner` and `assignee` use. `null` when the row records no actor — a change made by a removed member or by a system path. The email address itself is never exposed; a member with no display name falls back to the address's local part, the same rule `owner` and `assignee` follow.",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "display_name": {
+                "type": "string"
+              },
+              "member_code": {
+                "type": "string",
+                "nullable": true
+              }
+            }
+          },
+          "changed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "PublicTaskStatusHistoryListResponse": {
+        "type": "object",
+        "required": [
+          "data",
+          "meta"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicTaskStatusHistoryEntry"
+            }
+          },
+          "meta": {
+            "$ref": "#/components/schemas/MetaPagination"
           }
         }
       },
@@ -526,6 +683,21 @@
                 "nullable": true
               }
             }
+          },
+          "responsible_type": {
+            "type": "string",
+            "enum": [
+              "human",
+              "agent"
+            ],
+            "description": "Who is responsible: `human` (a person in `assignee`) or `agent` (the key in `assigned_agent_key`). The two are exclusive — a task has one or the other.",
+            "example": "agent"
+          },
+          "assigned_agent_key": {
+            "type": "string",
+            "nullable": true,
+            "description": "Agent key when `responsible_type` is `agent`; null for a person-owned task. Move it with POST /mission/tasks/{id}/actions/assign-agent.",
+            "example": "task-pilot"
           },
           "board_id": {
             "type": "string",
@@ -1140,6 +1312,7 @@
         "required": [
           "tenant_code"
         ],
+        "description": "A field update, or a reorder, never both. At least one of `name`, `limit` or `is_archived` is required for an update; a reorder names exactly one of `after_list_id` / `before_list_id` and no field, because the two directions are two different services and one request is one write.",
         "properties": {
           "tenant_code": {
             "type": "string",
@@ -1158,6 +1331,16 @@
           "is_archived": {
             "type": "boolean",
             "description": "Archive (true) or unarchive (false) the list."
+          },
+          "after_list_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Move the list to sit directly behind this list on the same board. Mutually exclusive with `before_list_id` and with every field above. The anchor must be one of the board's own visible lists: an anchor on another board, or an archived one, answers 404 — a list no read reports is not a place to sit behind."
+          },
+          "before_list_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Move the list to sit directly in front of this list on the same board. Mutually exclusive with `after_list_id` and with every field above, and the same anchor rule applies."
           }
         }
       },
@@ -1282,6 +1465,18 @@
             "type": "string",
             "format": "uuid",
             "nullable": true
+          },
+          "after_task_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Place the new card directly behind this task in `board_list_id`. Send at most one of `after_task_id` and `position`, and never without `board_list_id`. `null` is refused — send `position: \"top\"` to place the card first. Omit both to append."
+          },
+          "position": {
+            "type": "string",
+            "enum": [
+              "top"
+            ],
+            "description": "Place the new card first in `board_list_id`. Requires `board_list_id`, and is mutually exclusive with `after_task_id`."
           },
           "follower_ids": {
             "type": "array",
@@ -1422,6 +1617,32 @@
           }
         }
       },
+    "PublicTaskAttachment": {
+      "type": "object",
+      "description": "Flat metadata for one task attachment. No download URL — fetch one via GET /mission/tasks/{id}/attachments/{attachmentId}/download. This is the same shape a task read returns in its `attachments` array, and the body of a successful upload.",
+      "required": [
+        "id",
+        "file_name",
+        "mime_type",
+        "size_bytes"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Attachment id. Keep it: it is what the download and remove endpoints address."
+        },
+        "file_name": {
+          "type": "string"
+        },
+        "mime_type": {
+          "type": "string"
+        },
+        "size_bytes": {
+          "type": "integer"
+        }
+      }
+    },
       "PublicWmsWarehouseReference": {
         "type": "object",
         "required": [
@@ -4216,6 +4437,78 @@
             "description": "Board not found"
           }
         }
+      },
+      "delete": {
+        "summary": "Delete Board",
+        "tags": [
+          "Boards"
+        ],
+        "description": "Retire a board. A soft delete: the board leaves every read for good, and the work inside it is left alone — its lists and their tasks stay live rows. A list is addressed inside its board, so once the board is gone the list endpoints answer 404 for those lists, while the tasks stay reachable through the task endpoints, which consult no board. Nothing brings a deleted board back: the update body has no un-delete and there is no restore endpoint. Requires board-edit permission (board owner or tenant owner), and the write emits `board:deleted` naming the caller. The answer names the board by id rather than returning the row every read now answers 404 for; a repeat is a 404 as well, so no `Idempotency-Key` is accepted for it.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "tenant_code"
+                ],
+                "properties": {
+                  "tenant_code": {
+                    "type": "string",
+                    "description": "The tenant/workspace code where the board lives."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Board retired. `data.id` names the board that was deleted, which every read answers 404 for from here on.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "401": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "403": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "404": {
+            "description": "Board not found, not public, or already retired"
+          }
+        }
       }
     },
     "/mission/boards/{id}/lists": {
@@ -4276,11 +4569,11 @@
     },
     "/mission/boards/{id}/lists/{listId}": {
       "patch": {
-        "summary": "Update List in Board",
+        "summary": "Update or Reorder List in Board",
         "tags": [
           "Boards"
         ],
-        "description": "Apply a partial update to a list under an existing public board. At least one of `name`, `limit`, or `is_archived` must be provided.",
+        "description": "Apply a partial update to a list under an existing public board (`name`, `limit`, `is_archived`), or move it to a position relative to another list on the same board (`after_list_id` or `before_list_id`). The two are never asked for at once: at least one field is required for an update, and a reorder names exactly one anchor and no field. A reorder answers the list with the `position` the server computed between the anchor's neighbours; a list that is already where it is asked to go is a successful no-op.",
         "parameters": [
           {
             "name": "id",
@@ -4334,7 +4627,383 @@
             "$ref": "#/components/schemas/Error"
           },
           "404": {
-            "description": "Board or list not found"
+            "description": "Board or list not found — or, on a reorder, the anchor is unknown, archived, or on another board"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete List from Board",
+        "tags": [
+          "Boards"
+        ],
+        "description": "Retire a list from a public board — a soft delete, and a different write from archiving it. The list leaves every read for good, and the work inside it is left alone: the tasks filed in the list stay active and keep pointing at it, where `PATCH` with `is_archived` hides the list and archives its active tasks. Nothing brings a deleted list back. The answer names the list by id rather than returning the row every read now answers 404 for; a repeat is a 404 as well, so no `Idempotency-Key` is accepted for it.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "listId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "tenant_code"
+                ],
+                "properties": {
+                  "tenant_code": {
+                    "type": "string",
+                    "description": "The tenant/workspace code where the board lives."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "List retired. `data.id` names the list that was deleted, which every read answers 404 for from here on.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "403": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "404": {
+            "description": "Board not found or not public, or the list is unknown, another board's, or already retired"
+          }
+        }
+      }
+    },
+    "/mission/boards/{id}/members": {
+      "get": {
+        "summary": "List Board Members",
+        "tags": [
+          "Boards"
+        ],
+        "description": "Retrieve the members of a public board together with their board roles. Requires board membership (any role) or tenant ownership.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "maximum": 50
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicBoardMemberResponse"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/MetaPagination"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "403": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "404": {
+            "description": "Board not found"
+          }
+        }
+      },
+      "post": {
+        "summary": "Add Board Members",
+        "tags": [
+          "Boards"
+        ],
+        "description": "Add tenant members to a public board in one request. Requires board-edit permission (board owner or tenant owner). A member the board already holds is skipped rather than refused, which is also what makes the call safe to retry: the same request again writes nothing and reports every member as `skipped`.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddBoardMemberRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "One entry per requested member, in request order. `added` means this request wrote the membership; `skipped` means the board already held it (reason `already_member`), including a user id sent twice in one request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "results": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "required": [
+                              "user_id",
+                              "status"
+                            ],
+                            "properties": {
+                              "user_id": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "status": {
+                                "type": "string",
+                                "enum": [
+                                  "added",
+                                  "skipped"
+                                ]
+                              },
+                              "reason": {
+                                "type": "string",
+                                "enum": [
+                                  "already_member"
+                                ]
+                              }
+                            }
+                          }
+                        },
+                        "added_count": {
+                          "type": "integer"
+                        },
+                        "skipped_count": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "403": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "404": {
+            "description": "Board not found, or a user is not an active tenant member of the tenant"
+          }
+        }
+      }
+    },
+    "/mission/boards/{id}/members/{userId}": {
+      "patch": {
+        "summary": "Change Board Member Role",
+        "tags": [
+          "Boards"
+        ],
+        "description": "Change a member's role on a public board (`owner` or `member`). Requires board-edit permission (board owner or tenant owner).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateBoardMemberRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Member role updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicBoardMemberResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "403": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "404": {
+            "description": "Board or member not found"
+          },
+          "409": {
+            "description": "Cannot remove or demote the last board owner"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove Board Member",
+        "tags": [
+          "Boards"
+        ],
+        "description": "Remove a member from a public board. Requires board-edit permission (board owner or tenant owner).",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "tenant_code"
+                ],
+                "properties": {
+                  "tenant_code": {
+                    "type": "string",
+                    "description": "The tenant/workspace code where the board lives."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Member removed successfully"
+          },
+          "400": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "403": {
+            "$ref": "#/components/schemas/Error"
+          },
+          "404": {
+            "description": "Board or member not found"
+          },
+          "409": {
+            "description": "Cannot remove or demote the last board owner"
           }
         }
       }
@@ -4345,7 +5014,7 @@
         "tags": [
           "Tasks"
         ],
-        "description": "Search and filter tasks.",
+        "description": "Search and filter tasks. Archived tasks are excluded unless `include_archived=true`. The `filters[...]` grammar joins every rule with AND, so three questions it cannot ask are answered by their own parameter, each backed by the database function the corresponding screen already uses: `scope=mine` (the caller's own tasks — owner OR assignee OR follower), `unassigned`/`date_field`, and `archived=true`. Each of the three reads one tenant at a time and they are mutually exclusive with each other.",
         "parameters": [
           {
             "name": "X-Tenant-Code",
@@ -4357,7 +5026,7 @@
           {
             "name": "q",
             "in": "query",
-            "description": "Search by task title",
+            "description": "Search by task text, case-insensitive and escaped (a literal `%` or `_` stays literal). Matches `title`, `description` and `code` on the default, board and archived lists. On `scope=mine` it matches `title` and `code` only: the personal read queries `mission.v_tasks`, which has no description column, so a term there cannot reach one.",
             "schema": {
               "type": "string"
             }
@@ -4383,9 +5052,24 @@
             "in": "query",
             "style": "deepObject",
             "explode": true,
-            "description": "Filter by fields, e.g. filters[status][$eq]=Done",
+            "description": "Filter by fields, e.g. filters[status][$eq]=Done. Rules are joined with AND, and the columns are `status`, `priority`, `assignee_id`, `owner_id`, `board_id`, `board_list_id`, `due_date`, `created_at` and `updated_at`. `filters[assignee_id]` compares against a value, so \"no assignee\" is the `unassigned` parameter rather than a filter.",
             "schema": {
               "type": "object"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "description": "Order the page, as `column:direction` (the direction defaults to ascending). `created_at`, `updated_at`, `due_date` and `priority` are accepted; `created_at` is the default. When `unassigned` or a date range selects the board task search, only `created_at`, `updated_at`, `due_date` and `status` are accepted and anything else is HTTP 400 `INVALID_SORT_COLUMN`.",
+            "schema": {
+              "type": "string"
+            },
+            "examples": {
+              "mostRecentlyChanged": {
+                "value": "updated_at:desc",
+                "summary": "Most recently updated first"
+              }
             }
           },
           {
@@ -4405,6 +5089,84 @@
                 "value": "550e8400-e29b-41d4-a716-446655440000",
                 "summary": "Return only subtasks of the given parent"
               }
+            }
+          },
+          {
+            "name": "include_archived",
+            "in": "query",
+            "required": false,
+            "description": "Include archived tasks in the answer. Omitted or `false` leaves them out — the default on every task read. `true` widens this one request, and archived rows come back alongside live ones. Any other value returns HTTP 400 with `INVALID_INCLUDE_ARCHIVED`.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "scope",
+            "in": "query",
+            "required": false,
+            "description": "Whose tasks to answer with. Omitted or `all` is the tenant-wide read this endpoint has always served. `mine` answers with the caller's own tasks — those they own, are assigned to, or follow — which is the one shape the AND-only `filters[...]` grammar cannot express. `scope=mine` reads a single tenant at a time, so it needs a resolvable tenant (a tenant-scoped key, or the `X-Tenant-Code` header); otherwise HTTP 400 `INVALID_TENANT_SCOPE`. It is mutually exclusive with the `unassigned`/date filters and with `archived=true`, and any other value returns HTTP 400 `INVALID_SCOPE`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "mine"
+              ],
+              "default": "all"
+            }
+          },
+          {
+            "name": "unassigned",
+            "in": "query",
+            "required": false,
+            "description": "Answer with tasks that have no assignee — the other question the AND-only grammar cannot ask, since `filters[assignee_id]` can only compare against a value. This filter is served by the board task search (`mission.search_board_tasks`), so the rows are board tasks the caller can view, and archived rows are never among them. Combining it with a filter other than `filters[board_id]` or `filters[status]`, with `parent_task_id`, with `include_archived=true`, or with a sort column outside `created_at`/`updated_at`/`due_date`/`status` returns HTTP 400 `INVALID_QUERY_PARAMS` (or `INVALID_SORT_COLUMN`) rather than answering without that part. Any value other than `true`/`false` returns HTTP 400 `INVALID_UNASSIGNED`.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "date_field",
+            "in": "query",
+            "required": false,
+            "description": "Which date column `date_from`/`date_to` bound. Required when either bound is set — a bound with no field would silently filter nothing — and refused on its own when neither bound is set. Served by the same board task search as `unassigned`, so the same row scope and the same 400s apply. Any other value returns HTTP 400 `INVALID_DATE_FIELD`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "created_at",
+                "due_date",
+                "updated_at"
+              ]
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive lower bound on `date_field`. ISO 8601 date-time **with a timezone offset** — percent-encode the `+`, as in `2026-09-01T00:00:00%2B07:00`. An offset-less value such as `2026-09-01` is refused (HTTP 400 `INVALID_DATE_RANGE`) rather than read as UTC midnight and silently shifting the window by the caller's offset. For overdue tasks, use `date_field=due_date` with `date_to` set to now and no `date_from`.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": false,
+            "description": "Inclusive upper bound on `date_field`. Same format and same refusals as `date_from`; a `date_from` after its `date_to` returns HTTP 400 `INVALID_DATE_RANGE` rather than an empty page that looks like a real answer.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "archived",
+            "in": "query",
+            "required": false,
+            "description": "Answer with the archived tasks the caller owns or is assigned to — the archived screen's own list, newest archive first. This is not `include_archived`: that widens the live list, this replaces it with the retired one, and a task matching neither test (board membership included) is not returned. Reads a single tenant at a time, so it needs a resolvable tenant (HTTP 400 `INVALID_TENANT_SCOPE` otherwise), and it is mutually exclusive with `scope=mine`, the `unassigned`/date filters, and `include_archived=true`. Any value other than `true`/`false` returns HTTP 400 `INVALID_ARCHIVED`.",
+            "schema": {
+              "type": "boolean",
+              "default": false
             }
           }
         ],
@@ -4431,7 +5193,7 @@
             }
           },
           "400": {
-            "description": "Invalid query parameter (e.g. malformed parent_task_id)",
+            "description": "Invalid query parameter (e.g. malformed `parent_task_id`, `include_archived`, `scope`, `unassigned`, `archived` or date range, or a mode combined with something it cannot express)",
             "content": {
               "application/json": {
                 "schema": {
@@ -4446,6 +5208,42 @@
                         "message": "invalid parent_task_id filter"
                       }
                     }
+                  },
+                  "invalidIncludeArchived": {
+                    "summary": "Malformed include_archived value",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_INCLUDE_ARCHIVED",
+                        "message": "include_archived must be true or false"
+                      }
+                    }
+                  },
+                  "invalidScope": {
+                    "summary": "A scope that names no backend",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_SCOPE",
+                        "message": "Invalid scope: team"
+                      }
+                    }
+                  },
+                  "tenantScopeRequired": {
+                    "summary": "A single-tenant mode asked for while the key spans several",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_TENANT_SCOPE",
+                        "message": "scope=mine read one tenant at a time; send X-Tenant-Code to name it"
+                      }
+                    }
+                  },
+                  "invalidDateRange": {
+                    "summary": "A bound with no timezone offset",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_DATE_RANGE",
+                        "message": "date_to is not a valid ISO 8601 date-time with a timezone offset"
+                      }
+                    }
                   }
                 }
               }
@@ -4458,7 +5256,18 @@
         "tags": [
           "Tasks"
         ],
-        "description": "Create a new task.",
+        "description": "Create a new task. A body that names `board_list_id` creates the card through the board's own card-creation path: it requires membership of that board (or a tenant owner), seeds the board owners as followers, and accepts an optional placement (`after_task_id`, or `position: \"top\"`) — omit both to append. A body with no list keeps the plain create. An optional `Idempotency-Key` header makes a retry safe: the first application returns 201, a replay of the same key with an identical canonical body returns 200 with the existing task, and the same key with a different body returns 409 (E0601).",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Optional idempotency key, scoped to the tenant. First application returns 201; a replay of the same key with an identical canonical body returns 200 with the existing task; the same key with a different body — or with a task archived since — returns 409 (E0601).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "requestBody": {
           "required": true,
           "content": {
@@ -4470,6 +5279,21 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "Replay: the same Idempotency-Key was applied with an identical canonical body — returns that task and writes nothing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
           "201": {
             "description": "Task created successfully",
             "content": {
@@ -4489,7 +5313,77 @@
             "$ref": "#/components/schemas/Error"
           },
           "403": {
-            "$ref": "#/components/schemas/Error"
+            "description": "Access to this tenant is denied, or the caller is neither a member of the board named by `board_list_id` nor a tenant owner (the latter answers `BOARD_FORBIDDEN`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "tenantDenied": {
+                    "summary": "The key or the X-Tenant-Code names another tenant",
+                    "value": {
+                      "error": {
+                        "code": "AUTH_TENANT_MISMATCH",
+                        "message": "Access to this tenant is denied"
+                      }
+                    }
+                  },
+                  "boardDenied": {
+                    "summary": "A tenant member who is not on that board",
+                    "value": {
+                      "error": {
+                        "code": "BOARD_FORBIDDEN",
+                        "message": "You must be a member of the board, or a tenant owner, to create a task in its list"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The `board_list_id` no longer resolves to a live list in this tenant",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The Idempotency-Key was already used with a different request body (E0601), or the task was created and the requested position could not be applied (PLACEMENT_FAILED — the answer names the created task in `data.id`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "idempotencyConflict": {
+                    "summary": "Same key, different body",
+                    "value": {
+                      "error": {
+                        "code": "E0601",
+                        "message": "Idempotency-Key was already used with a different request body"
+                      }
+                    }
+                  },
+                  "placementFailed": {
+                    "summary": "The card exists at the end of the list; the placement did not happen",
+                    "value": {
+                      "error": {
+                        "code": "PLACEMENT_FAILED",
+                        "message": "The task was created at the end of the list, but the requested position could not be applied. Place it with POST /v1/mission/tasks/{id}/actions/move"
+                      },
+                      "data": {
+                        "id": "the created task id"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -4517,6 +5411,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "include_archived",
+            "in": "query",
+            "required": false,
+            "description": "Read an archived task. Omitted or `false` keeps today's answer — 404 for an archived task. `true` resolves the archived row as well, through the same tenant gate. Any other value returns HTTP 400 with `INVALID_INCLUDE_ARCHIVED`.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
           }
         ],
         "responses": {
@@ -4535,15 +5439,36 @@
               }
             }
           },
+          "400": {
+            "description": "Malformed `include_archived` value",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "invalidIncludeArchived": {
+                    "summary": "Malformed include_archived value",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_INCLUDE_ARCHIVED",
+                        "message": "include_archived must be true or false"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Task not found"
           }
         },
-        "description": "Retrieve a single task by UUID."
+        "description": "Retrieve a single task by UUID. An archived task answers 404 unless the request carries `include_archived=true`."
       },
       "patch": {
         "summary": "Update Task",
-        "description": "Partial update of a task. Any subset of fields may be provided; at least one is required. Each changed field emits its corresponding domain event. `PATCH` is partial-update (cf. there is no full-replace `PUT` for tasks).",
+        "description": "Partial update of a task. Any subset of fields may be provided; at least one is required. Each changed field emits its corresponding domain event. `PATCH` is partial-update (cf. there is no full-replace `PUT` for tasks). Assigning a task that is a subtask follows the subtask rule, not the task rule: the caller must be the parent task's owner or assignee, a tenant owner, or an active member of the parent task's board — the same check the GUI applies. A subtask's own assignee cannot reassign it through this endpoint.",
         "tags": [
           "Tasks"
         ],
@@ -4620,13 +5545,22 @@
                     "nullable": true,
                     "description": "Set to null to clear the due date. Must be today or in the future."
                   },
+
                   "follower_ids": {
                     "type": "array",
                     "items": {
                       "type": "string",
                       "format": "uuid"
                     },
-                    "description": "Additive: listed users are added as followers (idempotent)."
+                    "description": "Users to add as followers. Additive and idempotent: a listed user who already follows the task is left alone."
+                  },
+                  "follower_remove_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "description": "Users to remove from the followers. Removing a user who does not follow the task is a no-op. Must not repeat an id from follower_ids (400)."
                   }
                 }
               }
@@ -4662,6 +5596,455 @@
           },
           "403": {
             "description": "Insufficient permission to perform the update"
+          },
+          "404": {
+            "description": "Task not found"
+          }
+        }
+      }
+,
+      "delete": {
+        "summary": "Delete Task",
+        "description": "Retire a task: soft-delete it, exactly as the archive action does. A **top-level task** is retired together with its active subtasks, which the database's family cascade retires in the same write; a subtask named here is retired alone, and its dedicated address is `DELETE /mission/tasks/{id}/subtasks/{subtaskId}`. The caller must be the task's **owner**, its **assignee**, or a **tenant owner of the task's tenant**; board membership does not qualify. The body carries no fields: the task is named by its address and the delete records no reason. The answer names the task by id rather than returning the task, because every task read answers `404` once the delete has run — a repeat answers `404` too, which is also why no `Idempotency-Key` is accepted: a replay is a read-side fact, not a duplicate write.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Task UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The task was retired; `data.id` names it",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A body was sent (delete takes no fields), or the body is not valid JSON"
+          },
+          "403": {
+            "description": "The caller is not the task's owner, its assignee, or a tenant owner of its tenant"
+          },
+          "404": {
+            "description": "Task not found — including a task that is already deleted, and another tenant's task"
+          }
+        }
+      }
+    },
+    "/mission/tasks/{id}/actions/transfer-ownership": {
+      "post": {
+        "summary": "Transfer Task Ownership",
+        "description": "Hand a task to another active member of its tenant. Two actors may call this: the task's **current owner**, or a **tenant owner of the task's own tenant** (ADR-061) — the change runs through `public.mission_transfer_task_ownership`, whose trigger accepts exactly those two, so a tenant owner of some other tenant gets the same 403. `owner_id` must be an active member of the task's tenant, and the task must be live: an archived task answers 404 like every other task endpoint. The write changes `owner_id` alone — assignee, followers, board placement and status stay as they are — and writes the `task:ownership:transferred` event in the same transaction, carrying `actor_authority` (`owner` or `tenant_owner`) and naming the former owner as a recipient. Naming the current owner is a successful no-op, so no `Idempotency-Key` is needed or accepted.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Task UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "owner_id"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "owner_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "User id of the new owner — an active member of the task's tenant."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The task after the transfer",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing owner_id, or INVALID_OWNER: the id does not name an active member of the task's tenant"
+          },
+          "403": {
+            "description": "The caller is not the task's current owner"
+          },
+          "404": {
+            "description": "Task not found"
+          },
+          "409": {
+            "description": "TASK_NOT_TRANSFERABLE: another ownership change won the race, or the database refused the transfer — re-read the task and retry"
+          }
+        }
+      }
+    },
+    "/mission/tasks/{id}/actions/archive": {
+      "post": {
+        "summary": "Archive Task",
+        "description": "Retire a task: set `archived_at` and take the task out of every task read. The caller must be the task's **owner**, its **assignee**, or a **tenant owner of the task's tenant** — board membership does not qualify, and a subtask is stricter: archiving it asks the *parent's* owner or assignee, so a subtask's own assignee is refused. Archiving a subtask retires that subtask alone — its parent and siblings are untouched — while archiving a **parent** retires its active subtasks with it and marks them as taken by that archive, which is what its own restore later releases (`docs/adr/adr-078-parent-archive-sweeps-and-records.md`). The body carries no fields: the task is named by its address and the archive records no reason. The answer names the task by id rather than returning the task, because every task read answers `404` once the archive has run — a repeat answers `404` too, which is also why no `Idempotency-Key` is accepted: a replay is a read-side fact, not a duplicate write.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Task UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The task was archived; `data.id` names it",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A body was sent (archive takes no fields), or the body is not valid JSON"
+          },
+          "403": {
+            "description": "The caller is not the task's owner, its assignee, or a tenant owner of its tenant — for a subtask, not the parent's owner or assignee"
+          },
+          "404": {
+            "description": "Task not found — including a task that is already archived, and another tenant's task"
+          }
+        }
+      }
+    },
+    "/mission/tasks/{id}/actions/unarchive": {
+      "post": {
+        "summary": "Unarchive Task",
+        "description": "Restore an archived task: clear `archived_at` and bring it back into every task read. The caller must be the task's **owner**, its **assignee**, or a **tenant owner of the task's tenant** — board membership does not qualify. A subtask answers to its parent's coordinators here too, so a subtask's own assignee is refused. A subtask whose parent is still archived cannot be restored at all (`400 PARENT_TASK_ARCHIVED`): restoring that parent is what releases the subtasks its archive took, and it leaves a subtask that was archived on its own archived (`docs/adr/adr-078-parent-archive-sweeps-and-records.md`). The body carries no fields: the task is named by its address and the restore records no reason. Restoring a task that is already live is a successful no-op — the answer is that task and nothing is written. The answer is the task in the `GET /mission/tasks/{id}` shape, and one `task:unarchived` event is recorded unless the task was already live. The database's own triggers ride along: an archived list holding the task is unarchived with it, and a subtask deleted on its own has `is_deleted` cleared.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Task UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The task, restored",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A body was sent (unarchive takes no fields), or the body is not valid JSON"
+          },
+          "403": {
+            "description": "The caller is not the task's owner, its assignee, or a tenant owner of its tenant"
+          },
+          "404": {
+            "description": "Task not found — including another tenant's task, a deactivated caller, and a task that stopped being archived before the write"
+          },
+          "409": {
+            "description": "TASK_NOT_RESTORABLE: another call restored the task first, or the database refused the change — re-read the task"
+          }
+        }
+      }
+    },
+    "/mission/tasks/{id}/actions/claim": {
+      "post": {
+        "summary": "Claim Task (assign it to the caller)",
+        "description": "Assign an unassigned task to the caller. Any **active member of the task's tenant** may claim it — no owner or manager role is needed — and the assignee is always the authenticated caller, taken from the key: the body carries no fields, so a request can never assign the task to somebody else. Only an unassigned, live task can be claimed. An archived task answers `404` like every other task endpoint. A task that already has an assignee answers `409 TASK_ALREADY_ASSIGNED`, which is the same answer whether another member claimed it first or the caller already holds it — that is why no `Idempotency-Key` is accepted, and why the answer tells the caller to re-read the task. The write sets `assignee_id` alone, so ownership, followers, status and board placement stay as they were, and one `task:assigned` event is recorded. Addressed by task UUID.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Task UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The task with the caller as its assignee",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A body was sent (claim takes no fields), or the body is not valid JSON"
+          },
+          "403": {
+            "description": "The caller's membership of the task's tenant changed between the gate and the write. A caller who is simply not a member is answered 404 by the tenant gate before the service runs"
+          },
+          "404": {
+            "description": "Task not found"
+          },
+          "409": {
+            "description": "TASK_ALREADY_ASSIGNED: the task is not unassigned — another member claimed it, or the caller already did; re-read the task to see its assignee"
+          }
+        }
+      }
+    },
+    "/mission/tasks/{id}/actions/assign-agent": {
+      "post": {
+        "summary": "Assign Task To Agent",
+        "description": "Move an agent-responsible task to another agent. The task decides what is legal: it must already be assigned to an agent (`responsible_type = 'agent'` or an `assigned_agent_key`), and its agent task must still be `pending`. A task assigned to a person has no agent task to reassign, so it returns 400 — the two are exclusive; use `PATCH /mission/tasks/{id}` with `assignee_id` for a person. `agent_key` must name a published agent of this tenant or a system-scoped one. The reassignment updates `mission.tasks` and `ai.agent_tasks` in one transaction and emits `task:agent:reassigned`. No `Idempotency-Key`: naming the agent the task already has is a successful no-op, so a retry cannot duplicate anything.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Task UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "agent_key"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "agent_key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Key of the agent to move the task to, e.g. task-pilot."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The task after the reassignment",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing agent_key, or INVALID_AGENT: the task is not agent-responsible, its agent task is not pending, or the key names no published agent in this tenant"
+          },
+          "403": {
+            "description": "Insufficient permission to reassign the task"
           },
           "404": {
             "description": "Task not found"
@@ -4721,6 +6104,269 @@
           },
           "500": {
             "description": "Signed URL generation failed"
+          }
+        }
+      }
+    },
+    "/mission/tasks/{id}/attachments": {
+      "post": {
+        "summary": "Upload Task Attachment",
+        "description": "Attach a file to a task in one request. The file is the `file` part of a `multipart/form-data` body; the server stores the bytes and records the metadata, so there is no presigned-URL round trip to orchestrate. Limits are the web UI's own: the MIME type must be one of the allowed types (`image/png`, `image/jpeg`, `image/webp`, `image/gif`, `application/pdf`, Word/Excel/PowerPoint, `text/plain`, `text/markdown`, `text/csv`, `application/zip`, `application/x-zip-compressed`) and the file must be larger than 0 bytes and no larger than 50 MB (52428800 bytes). The caller must be an active member of the task's tenant and the task's owner, its assignee, a tenant owner, or a member of its board. An optional `Idempotency-Key` header makes a retry safe: the first application returns 201, a replay of the same key with the same file returns 200 with the attachment already stored, and the same key with a different file (name, type or size) returns 409 (E0601).",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Task UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Optional idempotency key, scoped to the tenant and the task. First application returns 201; a replay of the same key with the same file returns 200 with the attachment already stored; the same key with a different file returns 409 (E0601).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "The file. Its part header supplies the file name and the Content-Type the allow-list is checked against; send no separate fields."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Replay: the same Idempotency-Key was applied with the same file — the attachment stored by the earlier attempt, and nothing written.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskAttachment"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The file is stored and recorded on the task.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskAttachment"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request was refused before anything was stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "notMultipart": {
+                    "summary": "Body is not multipart/form-data",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_CONTENT_TYPE",
+                        "message": "Request body must be multipart/form-data carrying the file in a part named `file`"
+                      }
+                    }
+                  },
+                  "noFilePart": {
+                    "summary": "No part named `file`",
+                    "value": {
+                      "error": {
+                        "code": "MISSING_FILE_PART",
+                        "message": "The request must carry the file in a part named `file`"
+                      }
+                    }
+                  },
+                  "badType": {
+                    "summary": "MIME type not on the allow-list",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_FILE_TYPE",
+                        "message": "File type \"application/x-msdownload\" is not allowed"
+                      }
+                    }
+                  },
+                  "badSize": {
+                    "summary": "Empty file, or larger than 50 MB",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_FILE_SIZE",
+                        "message": "File size must be greater than 0 and at most 52428800 bytes"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not the task's owner, its assignee, a tenant owner, or a member of its board",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Task not found (also the answer for another tenant's task — no existence leak)"
+          },
+          "409": {
+            "description": "The Idempotency-Key was already used to attach a different file to this task (E0601)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "idempotencyConflict": {
+                    "summary": "Same key, different file",
+                    "value": {
+                      "error": {
+                        "code": "E0601",
+                        "message": "Idempotency-Key was already used to attach a different file to this task"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The storage write or the metadata write failed — nothing is left behind"
+          }
+        }
+      }
+    },
+    "/mission/tasks/{id}/attachments/{attachmentId}": {
+      "delete": {
+        "summary": "Remove Task Attachment",
+        "description": "Retire a file from a task: the metadata leaves the task's attachment list and the stored object is deleted with it, in one request. The caller must be an active member of the task's tenant and the task's owner, its assignee, a tenant owner, or a member of its board. The answer names the attachment that was removed — the file name, type and size — which is a fact the caller cannot read back afterwards. No `Idempotency-Key` is accepted: a repeat is a read-side fact, not a duplicate write, so a second `DELETE` of the same attachment answers `404` (the same reasoning the archive action follows). A task description that embedded the file as markdown is not edited: the web UI strips that text itself (`apps/web/src/actions/task/task-attachment-actions.ts`), and this endpoint does not touch the description.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Task UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "attachmentId",
+            "in": "path",
+            "required": true,
+            "description": "Attachment id, from a task read's `attachments[].id` or from the upload response.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The attachment was removed, and this is what it was.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskAttachment"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not the task's owner, its assignee, a tenant owner, or a member of its board",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Task not found (also the answer for another tenant's task — no existence leak), or the task holds no attachment with that id (which is also what a repeated DELETE answers), or the attachment id is not a UUID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "alreadyRemoved": {
+                    "summary": "The attachment is not on this task any more",
+                    "value": {
+                      "error": {
+                        "code": "NOT_FOUND",
+                        "message": "Attachment not found"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The metadata write failed — the attachment is still on the task. A storage delete that fails after the metadata is gone is logged, not raised: the request still answers 200"
           }
         }
       }
@@ -4840,7 +6486,7 @@
       },
       "post": {
         "summary": "Create Task Comment",
-        "description": "Add a text-and-attachment comment to a task by its UUID. At least content (non-empty string) or one attachment entry must be provided.",
+        "description": "Add a comment to a task. Two bodies are accepted on the same endpoint. A `multipart/form-data` body carries the comment and its files together: a `content` text field and one `file` part per attachment (at most 10 files, each larger than 0 bytes and at most 50 MB, each of a type the web UI accepts — images, PDF, Word/Excel/PowerPoint, text/plain, text/markdown, text/csv, zip). The server stores each file and records the attachment, so a caller never orchestrates a presigned URL. An `application/json` body is unchanged: it takes `content` and/or `attachments`, an object of pre-uploaded attachment references keyed by attachment id. Either way, at least text or one file/attachment is required. The caller must be an active member of the task's tenant. On the multipart body an optional `Idempotency-Key` header makes a retry safe: the first application returns 201, a replay of the same key with the same comment returns 200 with the comment already written, and the same key with a different comment returns 409 (E0601).",
         "tags": [
           "Tasks"
         ],
@@ -4856,6 +6502,15 @@
             "description": "Task UUID"
           },
           {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Optional idempotency key, scoped to the tenant, the task's thread and the caller. Read on a `multipart/form-data` body: the first application returns 201, a replay of the same key with the same comment returns 200 with the comment already written, and the same key with a different comment returns 409 (E0601). A JSON body does not carry a key.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "X-Tenant-Code",
             "in": "header",
             "schema": {
@@ -4866,6 +6521,22 @@
         "requestBody": {
           "required": true,
           "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "content": {
+                    "type": "string",
+                    "description": "Comment text. May be omitted when at least one `file` part is sent."
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "A file to attach. Repeat the part for more than one file (at most 10). Each part's header supplies the file name and the Content-Type the allow-list is checked against."
+                  }
+                }
+              }
+            },
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/PostTaskCommentRequest"
@@ -4874,6 +6545,16 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "Replay: the same Idempotency-Key was applied with the same comment — the comment the earlier attempt wrote, and nothing stored a second time. Multipart bodies only.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicTaskCommentResponse"
+                }
+              }
+            }
+          },
           "201": {
             "description": "Comment created",
             "headers": {
@@ -4893,13 +6574,61 @@
             }
           },
           "400": {
-            "description": "Invalid request body (missing content and attachments, or non-JSON)"
+            "description": "Invalid request body: neither text nor a file, an unreadable multipart body, more than 10 files (`TOO_MANY_FILES`), a file type outside the allow-list (`INVALID_FILE_TYPE`), or an empty or oversized file (`INVALID_FILE_SIZE`). For a JSON body: missing content and attachments, or non-JSON.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "nothingToSay": {
+                    "summary": "A multipart body with no `content` and no file",
+                    "value": {
+                      "error": {
+                        "code": "VALIDATION_ERROR",
+                        "message": "A comment must carry text (a `content` field), a file, or both"
+                      }
+                    }
+                  },
+                  "tooManyFiles": {
+                    "summary": "More files than a comment carries",
+                    "value": {
+                      "error": {
+                        "code": "TOO_MANY_FILES",
+                        "message": "A comment carries at most 10 files"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "403": {
             "description": "Caller lacks task visibility"
           },
           "404": {
             "description": "Task not found"
+          },
+          "409": {
+            "description": "The Idempotency-Key was already used to post a different comment to this task (E0601). Multipart bodies only.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "idempotencyConflict": {
+                    "summary": "Same key, different comment",
+                    "value": {
+                      "error": {
+                        "code": "E0601",
+                        "message": "Idempotency-Key was already used to post a different comment to this task"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -4956,6 +6685,100 @@
           },
           "500": {
             "description": "Signed URL generation failed"
+          }
+        }
+      }
+    },
+    "/mission/tasks/{id}/history": {
+      "get": {
+        "summary": "List Task Status History",
+        "description": "Every status change a task has been through, newest first, with the member who made each one. This is the status log, not the activity timeline: the same change also posts an activity message on `/mission/tasks/{id}/comments?type=activity`, which reads as \"what happened to this card\", while this answers \"which status did it hold, from when, changed by whom\" — the shape an integrator syncs against. The order is fixed newest first, so **`sort` is refused with HTTP 400 `INVALID_QUERY_PARAMS`** rather than accepted and ignored: the sibling comments endpoint takes a sort because its service honours one, and this read has none to expose. The caller must be an active member of the task's tenant; another tenant's task, and an archived one, answer `404` like every other task read.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Task UUID"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size. Values > 50 are rejected with 400 (not clamped).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task status history, newest first",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicTaskStatusHistoryListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "An invalid page or limit, or a `sort` — this read is always newest first and has no sort to expose",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "sortRefused": {
+                    "summary": "A sort on a read whose order is fixed",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_QUERY_PARAMS",
+                        "message": "this read is always newest first and takes no sort parameter"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Task not found"
           }
         }
       }
@@ -5037,7 +6860,7 @@
             }
           },
           "400": {
-            "description": "Validation error (all-or-nothing) — nothing was created. Possible codes: SUBTASK_VALIDATION_ERROR, PARENT_TASK_NOT_FOUND, SUBTASK_INVALID, PARENT_TASK_ARCHIVED, INVALID_ASSIGNEE.",
+            "description": "Validation error (all-or-nothing) — nothing was created. Possible codes: SUBTASK_VALIDATION_ERROR, SUBTASK_INVALID, INVALID_ASSIGNEE. PARENT_TASK_NOT_FOUND and PARENT_TASK_ARCHIVED exist in the service layer but are not reachable here: the parent lookup answers 404 first.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5048,6 +6871,16 @@
           },
           "403": {
             "description": "Permission denied — not parent task owner or tenant owner, or not a tenant member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Parent task not found — unknown, archived, or in another tenant. The Public API treats an archived task as absent, so the parent lookup answers before the PARENT_TASK_ARCHIVED branch can run.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5201,6 +7034,182 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/mission/tasks/{id}/subtasks/{subtaskId}": {
+      "delete": {
+        "summary": "Delete a Subtask",
+        "description": "Retire one subtask, leaving its parent task and its sibling subtasks exactly as they are. The caller must be the **parent task's** owner, its assignee, or a **tenant owner of its tenant**; a subtask's own assignee is refused — deleting is a lifecycle operation, not a board edit — and board membership does not qualify either. The subtask must belong to the parent named in the address — a subtask under a different parent answers `404`. The body carries no fields: the subtask is named by its address and the delete records no reason. The answer names the subtask by id (`200 { \"data\": { \"id\": … } }`) rather than returning a row every read now answers `404` for. A repeat answers `404`, which is also why no `Idempotency-Key` is accepted: a replay is a read-side fact, not a duplicate write. Retiring a top-level task with its subtasks is `DELETE /mission/tasks/{id}`.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Parent task UUID"
+          },
+          {
+            "name": "subtaskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Subtask UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The subtask was retired; `data.id` names it",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A body was sent (delete takes no fields), or the body is not valid JSON"
+          },
+          "403": {
+            "description": "The caller is not the parent task's owner, its assignee, or a tenant owner of its tenant — a subtask's own assignee is refused"
+          },
+          "404": {
+            "description": "Parent task or subtask not found — unknown, archived, another tenant's, or a subtask that belongs to a different parent"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Reorder a Subtask",
+        "description": "Reorder one subtask among its siblings. The body carries a single field, `after_subtask_id`: the sibling to sit directly behind, or `null` to sit first among them — `serviceMoveSubtaskToAfter`'s own meaning for a null anchor, so there is one spelling per intent. The caller must be the **parent task's** owner, its assignee, or a **tenant owner of its tenant**; a subtask's own assignee is refused, because reordering is structural rather than a board edit, and board membership does not qualify either. The subtask must belong to the parent named in the address — a subtask under a different parent answers `404`. The answer is the subtask in the same shape `GET /mission/tasks/{id}` returns, with its server-computed `position`: the placement is computed by one atomic, row-locking RPC, so a retry lands the subtask in the same place and no `Idempotency-Key` is needed or accepted. A subtask lives in no board list — moving a top-level card between lists is `POST /mission/tasks/{id}/actions/move`.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Parent task UUID"
+          },
+          {
+            "name": "subtaskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Subtask UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "after_subtask_id"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "after_subtask_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true,
+                    "description": "Place the subtask immediately after this sibling; null places it first."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The subtask after the move, with its server-computed `position`",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error: a missing or unknown field, `after_subtask_id` that is not a UUID, or `after_subtask_id` naming the subtask itself"
+          },
+          "403": {
+            "description": "Permission denied — not the parent task's owner or assignee, nor a tenant owner of its tenant"
+          },
+          "404": {
+            "description": "Parent task or subtask not found — unknown, archived, another tenant's, a subtask that belongs to a different parent, or an `after_subtask_id` that is a live sibling under another parent. An `after_subtask_id` that is archived, deleted, or in another tenant is not found either, but does not fail: it places the subtask first among its siblings, the same fall-back the card move makes."
           }
         }
       }
@@ -11023,6 +13032,16 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "include_archived",
+            "in": "query",
+            "required": false,
+            "description": "Read an archived task by its code. Omitted or `false` keeps today's answer — 404 for an archived task. `true` resolves the archived row as well, through the same tenant gate. Any other value returns HTTP 400 with `INVALID_INCLUDE_ARCHIVED`.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
           }
         ],
         "responses": {
@@ -11041,11 +13060,32 @@
               }
             }
           },
+          "400": {
+            "description": "Malformed `include_archived` value",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "invalidIncludeArchived": {
+                    "summary": "Malformed include_archived value",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_INCLUDE_ARCHIVED",
+                        "message": "include_archived must be true or false"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
           "404": {
             "description": "Task not found"
           }
         },
-        "description": "Retrieve a single task by code."
+        "description": "Retrieve a single task by code. An archived task answers 404 unless the request carries `include_archived=true`."
       },
       "patch": {
         "summary": "Update Task (by Code)",
@@ -11131,7 +13171,15 @@
                       "type": "string",
                       "format": "uuid"
                     },
-                    "description": "Additive: listed users are added as followers (idempotent)."
+                    "description": "Users to add as followers. Additive and idempotent: a listed user who already follows the task is left alone."
+                  },
+                  "follower_remove_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "description": "Users to remove from the followers. Removing a user who does not follow the task is a no-op. Must not repeat an id from follower_ids (400)."
                   }
                 }
               }
@@ -11170,6 +13218,78 @@
           },
           "404": {
             "description": "Task not found"
+          }
+        }
+      }
+,
+      "delete": {
+        "summary": "Delete Task (by Code)",
+        "description": "Same contract as `DELETE /mission/tasks/{id}`, with the task addressed by its natural code instead of its UUID. The code is resolved inside the tenant first, so an unknown or foreign code answers `404` before anything else runs.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task code (e.g. ACME-42), resolved within the tenant"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The task was retired; `data.id` names it",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A body was sent (delete takes no fields), the body is not valid JSON, or X-Tenant-Code is missing (a code lookup needs the tenant)"
+          },
+          "403": {
+            "description": "The caller is not the task's owner, its assignee, or a tenant owner of its tenant"
+          },
+          "404": {
+            "description": "Task not found — including a task that is already deleted, and another tenant's task"
           }
         }
       }
@@ -11288,7 +13408,7 @@
       },
       "post": {
         "summary": "Create Task Comment (by Code)",
-        "description": "Add a text-and-attachment comment to a task by its taskCode. Same contract as POST /mission/tasks/{id}/comments, keyed by taskCode instead of UUID.",
+        "description": "Add a comment to a task addressed by its taskCode. The same two bodies as POST /mission/tasks/{id}/comments: a `multipart/form-data` body of `content` plus one `file` part per attachment — stored and recorded by the server, no presigned URL — or the unchanged JSON body of `content` and/or pre-uploaded `attachments`. On the multipart body an optional `Idempotency-Key` makes a retry safe: 201 the first time, 200 when the same key replays the same comment, 409 (E0601) when the key meets a different one. Requires `X-Tenant-Code`.",
         "tags": [
           "Tasks"
         ],
@@ -11303,8 +13423,19 @@
             "description": "Task code (e.g., ACME-42)"
           },
           {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Optional idempotency key, scoped to the tenant, the task's thread and the caller. Read on a `multipart/form-data` body: the first application returns 201, a replay of the same key with the same comment returns 200 with the comment already written, and the same key with a different comment returns 409 (E0601). A JSON body does not carry a key.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "X-Tenant-Code",
             "in": "header",
+            "required": true,
+            "description": "Required: a task code is unique within a tenant, not across them.",
             "schema": {
               "type": "string"
             }
@@ -11313,6 +13444,22 @@
         "requestBody": {
           "required": true,
           "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "content": {
+                    "type": "string",
+                    "description": "Comment text. May be omitted when at least one `file` part is sent."
+                  },
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "A file to attach. Repeat the part for more than one file (at most 10)."
+                  }
+                }
+              }
+            },
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/PostTaskCommentRequest"
@@ -11321,6 +13468,16 @@
           }
         },
         "responses": {
+          "200": {
+            "description": "Replay: the same Idempotency-Key was applied with the same comment — the comment the earlier attempt wrote, and nothing stored a second time. Multipart bodies only.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicTaskCommentResponse"
+                }
+              }
+            }
+          },
           "201": {
             "description": "Comment created",
             "headers": {
@@ -11340,10 +13497,107 @@
             }
           },
           "400": {
-            "description": "Invalid request body (missing content and attachments, or non-JSON)"
+            "description": "Invalid request body: missing `X-Tenant-Code`, neither text nor a file, more than 10 files (`TOO_MANY_FILES`), a file type outside the allow-list (`INVALID_FILE_TYPE`), or an empty or oversized file (`INVALID_FILE_SIZE`)"
           },
           "403": {
             "description": "Caller lacks task visibility"
+          },
+          "404": {
+            "description": "Task not found"
+          },
+          "409": {
+            "description": "The Idempotency-Key was already used to post a different comment to this task (E0601). Multipart bodies only."
+          }
+        }
+      }
+    },
+    "/mission/tasks/code/{code}/history": {
+      "get": {
+        "summary": "List Task Status History by Code",
+        "description": "Every status change a task has been through, newest first, with the member who made each one — the same read as `/mission/tasks/{id}/history`, addressed by the task's natural code instead of its UUID. `X-Tenant-Code` is required, because a code is only unique within its tenant. The order is fixed newest first, so **`sort` is refused with HTTP 400 `INVALID_QUERY_PARAMS`**, exactly as on the UUID address.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task code, e.g. ACME-42"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Page size. Values > 50 are rejected with 400 (not clamped).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Task status history, newest first",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicTaskStatusHistoryListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing X-Tenant-Code, an invalid page or limit, or a `sort` — this read is always newest first and has no sort to expose",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "sortRefused": {
+                    "summary": "A sort on a read whose order is fixed",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_QUERY_PARAMS",
+                        "message": "this read is always newest first and takes no sort parameter"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "404": {
             "description": "Task not found"
@@ -11427,7 +13681,7 @@
             }
           },
           "400": {
-            "description": "Validation error (all-or-nothing) — nothing was created. Possible codes: SUBTASK_VALIDATION_ERROR, PARENT_TASK_NOT_FOUND, SUBTASK_INVALID, PARENT_TASK_ARCHIVED, INVALID_ASSIGNEE.",
+            "description": "Validation error (all-or-nothing) — nothing was created. Possible codes: SUBTASK_VALIDATION_ERROR, SUBTASK_INVALID, INVALID_ASSIGNEE. PARENT_TASK_NOT_FOUND and PARENT_TASK_ARCHIVED exist in the service layer but are not reachable here: the parent lookup answers 404 first.",
             "content": {
               "application/json": {
                 "schema": {
@@ -11438,6 +13692,16 @@
           },
           "403": {
             "description": "Permission denied — not parent task owner or tenant owner, or not a tenant member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Parent task not found — unknown, archived, or in another tenant. The Public API treats an archived task as absent, so the parent lookup answers before the PARENT_TASK_ARCHIVED branch can run.",
             "content": {
               "application/json": {
                 "schema": {
@@ -11594,6 +13858,551 @@
         }
       }
     },
+    "/mission/tasks/code/{code}/subtasks/{subtaskId}": {
+      "delete": {
+        "summary": "Delete a Subtask (by Code)",
+        "description": "Same contract as `DELETE /mission/tasks/{id}/subtasks/{subtaskId}`, with the parent task addressed by its natural code instead of its UUID.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Parent task code (e.g. ACME-42)"
+          },
+          {
+            "name": "subtaskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Subtask UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The subtask was retired; `data.id` names it",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A body was sent (delete takes no fields), the body is not valid JSON, or X-Tenant-Code is missing (a code lookup needs the tenant)"
+          },
+          "403": {
+            "description": "The caller is not the parent task's owner, its assignee, or a tenant owner of its tenant — a subtask's own assignee is refused"
+          },
+          "404": {
+            "description": "Parent task or subtask not found — unknown, archived, another tenant's, or a subtask that belongs to a different parent"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Reorder a Subtask (by Code)",
+        "description": "Same contract as `PATCH /mission/tasks/{id}/subtasks/{subtaskId}`, with the parent task addressed by its natural code instead of its UUID.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Parent task code (e.g. ACME-42)"
+          },
+          {
+            "name": "subtaskId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Subtask UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "after_subtask_id"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "after_subtask_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true,
+                    "description": "Place the subtask immediately after this sibling; null places it first."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The subtask after the move, with its server-computed `position`",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error: a missing or unknown field, `after_subtask_id` that is not a UUID, or `after_subtask_id` naming the subtask itself, or X-Tenant-Code is missing (a code lookup needs the tenant)"
+          },
+          "403": {
+            "description": "Permission denied — not the parent task's owner or assignee, nor a tenant owner of its tenant"
+          },
+          "404": {
+            "description": "Parent task or subtask not found — unknown, archived, another tenant's, a subtask that belongs to a different parent, or an `after_subtask_id` that is a live sibling under another parent. An `after_subtask_id` that is archived, deleted, or in another tenant is not found either, but does not fail: it places the subtask first among its siblings, the same fall-back the card move makes."
+          }
+        }
+      }
+    },
+    "/mission/tasks/code/{code}/actions/transfer-ownership": {
+      "post": {
+        "summary": "Transfer Task Ownership (by Code)",
+        "description": "Same contract as `POST /mission/tasks/{id}/actions/transfer-ownership`, with the task addressed by its natural code. The task's current owner or a tenant owner of the task's own tenant may call it, `owner_id` must be an active member of the task's tenant, and the task must be live.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task code (e.g. ACME-42)"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "owner_id"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "owner_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "User id of the new owner — an active member of the task's tenant."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The task after the transfer",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing owner_id, or INVALID_OWNER: the id does not name an active member of the task's tenant"
+          },
+          "403": {
+            "description": "The caller is not the task's current owner"
+          },
+          "404": {
+            "description": "Task not found"
+          },
+          "409": {
+            "description": "TASK_NOT_TRANSFERABLE: another ownership change won the race, or the database refused the transfer — re-read the task and retry"
+          }
+        }
+      }
+    },
+    "/mission/tasks/code/{code}/actions/archive": {
+      "post": {
+        "summary": "Archive Task (by Code)",
+        "description": "Same contract as `POST /mission/tasks/{id}/actions/archive`, with the task addressed by its natural code instead of its UUID. The code is resolved inside the tenant first, so an unknown or foreign code answers `404` before anything else runs.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task code (e.g. ACME-42), resolved within the tenant"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The task was archived; `data.id` names it",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A body was sent (archive takes no fields), the body is not valid JSON, or X-Tenant-Code is missing (a code lookup needs the tenant)"
+          },
+          "403": {
+            "description": "The caller is not the task's owner, its assignee, or a tenant owner of its tenant — for a subtask, not the parent's owner or assignee"
+          },
+          "404": {
+            "description": "Task not found — including a task that is already archived, and another tenant's task"
+          }
+        }
+      }
+    },
+    "/mission/tasks/code/{code}/actions/unarchive": {
+      "post": {
+        "summary": "Unarchive Task (by Code)",
+        "description": "Same contract as `POST /mission/tasks/{id}/actions/unarchive`, with the task addressed by its natural code instead of its UUID. The code is resolved inside the tenant first, and archived rows are resolvable here — unlike a read, which answers `404` for them.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task code (e.g. ACME-42), resolved within the tenant"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The task, restored",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A body was sent (unarchive takes no fields), the body is not valid JSON, or X-Tenant-Code is missing (a code lookup needs the tenant)"
+          },
+          "403": {
+            "description": "The caller is not the task's owner, its assignee, or a tenant owner of its tenant"
+          },
+          "404": {
+            "description": "Task not found — including another tenant's task, a deactivated caller, and a task that stopped being archived before the write"
+          },
+          "409": {
+            "description": "TASK_NOT_RESTORABLE: another call restored the task first, or the database refused the change — re-read the task"
+          }
+        }
+      }
+    },
+    "/mission/tasks/code/{code}/actions/claim": {
+      "post": {
+        "summary": "Claim Task (by Code)",
+        "description": "Assign an unassigned task to the caller. Any **active member of the task's tenant** may claim it — no owner or manager role is needed — and the assignee is always the authenticated caller, taken from the key: the body carries no fields, so a request can never assign the task to somebody else. Only an unassigned, live task can be claimed. An archived task answers `404` like every other task endpoint. A task that already has an assignee answers `409 TASK_ALREADY_ASSIGNED`, which is the same answer whether another member claimed it first or the caller already holds it — that is why no `Idempotency-Key` is accepted, and why the answer tells the caller to re-read the task. The write sets `assignee_id` alone, so ownership, followers, status and board placement stay as they were, and one `task:assigned` event is recorded. A `code/{code}` sibling of this operation: the task is resolved by its natural code instead of its UUID, and every other rule is identical.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task code (e.g. ACME-42), resolved within the tenant"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The task with the caller as its assignee",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A body was sent (claim takes no fields), the body is not valid JSON, or X-Tenant-Code is missing (a code lookup needs the tenant)"
+          },
+          "403": {
+            "description": "The caller's membership of the task's tenant changed between the gate and the write. A caller who is simply not a member is answered 404 by the tenant gate before the service runs"
+          },
+          "404": {
+            "description": "Task not found"
+          },
+          "409": {
+            "description": "TASK_ALREADY_ASSIGNED: the task is not unassigned — another member claimed it, or the caller already did; re-read the task to see its assignee"
+          }
+        }
+      }
+    },
+    "/mission/tasks/code/{code}/actions/assign-agent": {
+      "post": {
+        "summary": "Assign Task To Agent (by Code)",
+        "description": "Same contract as `POST /mission/tasks/{id}/actions/assign-agent`, with the task addressed by its natural code. The task must already be agent-responsible and its agent task must still be `pending`; a task assigned to a person is rejected with 400.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task code (e.g. ACME-42)"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "agent_key"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "agent_key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "Key of the agent to move the task to, e.g. task-pilot."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The task after the reassignment",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing agent_key, or INVALID_AGENT: the task is not agent-responsible, its agent task is not pending, or the key names no published agent in this tenant"
+          },
+          "403": {
+            "description": "Insufficient permission to reassign the task"
+          },
+          "404": {
+            "description": "Task not found"
+          }
+        }
+      }
+    },
     "/mission/tasks/code/{code}/attachments/{attachmentId}/download": {
       "get": {
         "summary": "Download Task Attachment (by Code)",
@@ -11645,6 +14454,193 @@
           },
           "500": {
             "description": "Signed URL generation failed"
+          }
+        }
+      }
+    },
+    "/mission/tasks/code/{code}/attachments": {
+      "post": {
+        "summary": "Upload Task Attachment (by Code)",
+        "description": "The `code/{code}` sibling of `POST /mission/tasks/{id}/attachments`: the task is addressed by its natural code instead of its UUID, and every other rule is identical — a `multipart/form-data` body whose `file` part carries the bytes, the web UI's MIME allow-list and 50 MB size limit, the same permission set, and the same optional `Idempotency-Key`. Requires `X-Tenant-Code`.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "description": "Task code (e.g. ACME-42)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Optional idempotency key, scoped to the tenant and the task. First application returns 201; a replay of the same key with the same file returns 200 with the attachment already stored; the same key with a different file returns 409 (E0601).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Required: a task code is unique within a tenant, not across them.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "The file. Its part header supplies the file name and the Content-Type the allow-list is checked against."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Replay: the same Idempotency-Key was applied with the same file — the attachment stored by the earlier attempt, and nothing written.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskAttachment"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The file is stored and recorded on the task.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskAttachment"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing `X-Tenant-Code`, or a request refused before anything was stored (`INVALID_CONTENT_TYPE`, `MISSING_FILE_PART`, `INVALID_FILE_TYPE`, `INVALID_FILE_SIZE`)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not the task's owner, its assignee, a tenant owner, or a member of its board"
+          },
+          "404": {
+            "description": "Task not found — the answer for a malformed code, an unknown code, and another tenant's task alike (no existence leak)"
+          },
+          "409": {
+            "description": "The Idempotency-Key was already used to attach a different file to this task (E0601)"
+          },
+          "500": {
+            "description": "The storage write or the metadata write failed — nothing is left behind"
+          }
+        }
+      }
+    },
+    "/mission/tasks/code/{code}/attachments/{attachmentId}": {
+      "delete": {
+        "summary": "Remove Task Attachment (by Code)",
+        "description": "The `code/{code}` sibling of `DELETE /mission/tasks/{id}/attachments/{attachmentId}`: the task is addressed by its natural code instead of its UUID, and every other rule is identical — the permission set, the answer naming the removed file, and the `404` a repeat answers. Requires `X-Tenant-Code`.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "description": "Task code (e.g. ACME-42)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "attachmentId",
+            "in": "path",
+            "required": true,
+            "description": "Attachment id, from a task read's `attachments[].id` or from the upload response.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Required: a task code is unique within a tenant, not across them.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The attachment was removed, and this is what it was.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskAttachment"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing `X-Tenant-Code`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not the task's owner, its assignee, a tenant owner, or a member of its board"
+          },
+          "404": {
+            "description": "Task not found — the answer for a malformed code, an unknown code, and another tenant's task alike (no existence leak) — or the task holds no attachment with that id, which is also what a repeated DELETE answers"
+          },
+          "500": {
+            "description": "The metadata write failed — the attachment is still on the task"
           }
         }
       }
@@ -11831,6 +14827,213 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/mission/tasks/{id}/actions/move": {
+      "post": {
+        "summary": "Move Task",
+        "description": "Place a top-level task in a board list: at the top of it, or behind a task already there. The caller must be the task's **owner**, its **assignee**, or a **tenant owner of the task's tenant** — board membership does not qualify, and the rule is the database's own update policy, so a caller who may read the task but not move it gets the same 404 a missing task gets. Exactly one placement per request: `after_task_id` (a task in the target list) or `position` = `\"top\"`. A subtask answers 400 — it has no board placement — and an archived task, or a target list that is archived, deleted or in another tenant, answers 404. An `after_task_id` that was archived between the read and the call places the task at the top instead of failing: the fallback the board's own drag relies on. An `after_task_id` naming the task being moved is 400 before anything is read: a card cannot be placed behind itself. The position is computed by one atomic, row-locking RPC, so no `Idempotency-Key` is needed or accepted — a retry lands the card in the same place.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Task UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "board_list_id"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "board_list_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Destination board list."
+                  },
+                  "after_task_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Place the task immediately after this task, which must be in the destination list."
+                  },
+                  "position": {
+                    "type": "string",
+                    "enum": [
+                      "top"
+                    ],
+                    "description": "Place the task first in the destination list."
+                  }
+                },
+                "oneOf": [
+                  {
+                    "required": [
+                      "after_task_id"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "position"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The task after the move",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error: both placements or neither, `position` other than `top`, a malformed list or task id, an unknown field, or SUBTASK_BOARD_FORBIDDEN for a subtask"
+          },
+          "404": {
+            "description": "Task not found, not movable by this caller, or the destination list is not readable for them"
+          }
+        }
+      }
+    },
+    "/mission/tasks/code/{code}/actions/move": {
+      "post": {
+        "summary": "Move Task (by Code)",
+        "description": "Place a top-level task in a board list: at the top of it, or behind a task already there. The caller must be the task's **owner**, its **assignee**, or a **tenant owner of the task's tenant** — board membership does not qualify, and the rule is the database's own update policy, so a caller who may read the task but not move it gets the same 404 a missing task gets. Exactly one placement per request: `after_task_id` (a task in the target list) or `position` = `\"top\"`. A subtask answers 400 — it has no board placement — and an archived task, or a target list that is archived, deleted or in another tenant, answers 404. An `after_task_id` that was archived between the read and the call places the task at the top instead of failing: the fallback the board's own drag relies on. An `after_task_id` naming the task being moved is 400 before anything is read: a card cannot be placed behind itself. The position is computed by one atomic, row-locking RPC, so no `Idempotency-Key` is needed or accepted — a retry lands the card in the same place.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task code (e.g. ACME-42)"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "board_list_id"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "board_list_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Destination board list."
+                  },
+                  "after_task_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Place the task immediately after this task, which must be in the destination list."
+                  },
+                  "position": {
+                    "type": "string",
+                    "enum": [
+                      "top"
+                    ],
+                    "description": "Place the task first in the destination list."
+                  }
+                },
+                "oneOf": [
+                  {
+                    "required": [
+                      "after_task_id"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "position"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The task after the move",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error: both placements or neither, `position` other than `top`, a malformed list or task id, an unknown field, or SUBTASK_BOARD_FORBIDDEN for a subtask"
+          },
+          "404": {
+            "description": "Task not found, not movable by this caller, or the destination list is not readable for them"
           }
         }
       }

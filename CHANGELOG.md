@@ -10,6 +10,259 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.26.0] — 2026-09-30
+
+### Added
+
+- **The bundled skill picks people for a board task from the board first.** When a task is on a
+  board, `skills/capigo-api` now resolves an assignee, new owner, or follower from
+  `boards members list` before the tenant's `members list`, checks the board member is still in the
+  tenant, and asks the user to confirm before assigning someone who is
+  not on the board — or when the key cannot read the board's members.
+
+- **`boards delete` retires a board — and it deletes no work.** `capigo boards delete <board-id>
+  --tenant <code>` sends `DELETE /mission/boards/{id}`. The board leaves every read, and a repeat is
+  exit 4. Its lists and the tasks in them stay live rows: the lists become unreachable — a list is
+  addressed inside its board — while the tasks stay readable through `tasks get` and `tasks list`. To
+  close the work instead, archive each list: `boards lists update --is-archived` archives the tasks in
+  that list. Nothing brings a deleted board back.
+  - The answer is the id it retired, at `.data.id`, not the row: every read answers 404 for the board
+    from here on. Exit 3 when the caller may not edit the board (board owner or tenant owner only), and
+    exit 4 when it is unknown, private, or already retired — a private board cannot be deleted through
+    the API at all, because the visibility check runs before the write.
+  - Confirm it by reading: `boards list` no longer shows it, and `boards get` answers 404. The write
+    also records a `board:deleted` event naming the caller.
+  - No `--idempotency-key` is accepted: there is no create here, and a repeat is refused by the read
+    that gates the call rather than by a stored key. `api/openapi.json` gained the operation.
+
+- **`boards lists delete` retires a list — and it is not the same as archiving it.** `capigo boards
+  lists delete <board-id> <list-id> --tenant <code>` sends `DELETE /mission/boards/{id}/lists/{listId}`.
+  The list leaves every read for good, while the tasks filed in it stay active and keep pointing at it:
+  the archive cascade fires on the `is_archived` edge only, so `boards lists update --is-archived` is the
+  write that moves the work, and this one leaves it exactly where it is. Nothing brings a deleted list
+  back — there is no un-delete in the CLI or the API.
+  - The answer is the id it retired, at `.data.id`, not the row: every read answers 404 for the list
+    from here on. A repeat is exit 4, and so is a list belonging to another board — the address names
+    both the board and the list.
+  - Confirm it by reading: `boards get` no longer lists it and `meta.list_count` has dropped.
+  - Needs board ownership or tenant ownership (exit 3 otherwise), and it reaches an archived list too —
+    a caller holding an id may retire what they hid. No `--idempotency-key` is accepted: there is no
+    create here, and a repeat is refused by the read that gates the call rather than by a stored key.
+  - `api/openapi.json` gained the operation; the path-coverage guard now covers it.
+
+- **`boards lists update` reorders a list — `--after-list-id` / `--before-list-id`.** `capigo boards
+  lists update <board-id> <list-id> --tenant <code> --after-list-id <uuid>` moves the list to sit
+  directly behind that list on the same board; `--before-list-id <uuid>` puts it directly in front.
+  The API computes the position, so a numeric one is never sent, and `.data.position` in the answer is
+  the position the server now holds — the same number `boards get` reports for that list.
+  - One anchor only, and never together with `--name`, `--wip-limit` or `--is-archived`: the API takes
+    an update or a reorder, not both, and the CLI exits 5 on the pair before sending anything.
+    `--from-json` beside **any** of those flags — an anchor, a field, any of the five — is also exit 5,
+    because the file is the whole body and the flag beside it would otherwise be dropped silently.
+  - A list already where it is asked to go is **exit 0**, not an error: the reorder is a normal write, and
+    one that keeps the order may still rewrite the position between the same neighbours. Nothing in the
+    answer says "moved" — read `.data.position` if you need to report where it landed.
+  - The anchor must be another list on the same board that `boards get` still shows. An anchor on
+    another board, an archived anchor (archived lists are absent from every read) or an unknown one
+    exits 4. A list named as its own anchor is refused with exit 5, and so is
+    `--after-list-id` with `--before-list-id`.
+  - `api/openapi.json` carries `after_list_id` / `before_list_id` on the update body and the widened
+    404.
+
+- **`boards members` manages a board's people, and `add` writes a batch in one call.** Four commands cover
+  the four endpoints: `capigo boards members list <board-id> --tenant <code>` reads who is on a board and
+  their board role; `capigo boards members add <board-id> --tenant <code> --user-id <uuid>
+  [--user-id <uuid> ...] [--role <owner|member>]` adds 1 to 50 members in one request; `capigo boards
+  members update <board-id> <user-id> --tenant <code> --role <owner|member>` changes one member's board
+  role; and `capigo boards members remove <board-id> <user-id> --tenant <code>` takes one member off.
+  - `add` answers per member, at `.data.results[]`, in the order the `--user-id` flags were given:
+    `added` means this call wrote the membership, `skipped` (reason `already_member`) means the board
+    already had it. Read `added_count`: a repeat of the same call reports 0 and changes nothing, which
+    is what makes the call safe to retry. There is no `--idempotency-key` to pass and none is needed —
+    a member is unique on `(board_id, user_id)`, so a retry cannot write a second row.
+  - `--role` applies to the whole request, because the API takes one role per batch: adding a member and
+    promoting another is two calls, and promoting someone already on the board is `boards members
+    update`.
+  - `--user-id` is the `user_id` that `boards members list` reports — the same id `members list` reports.
+    The server refuses (exit 4) an id that is not an active member of the tenant.
+  - `boards members remove` prints nothing on success: the API answers 204 with no body, and this CLI
+    prints only what the server sent. Exit 0 is the whole confirmation.
+  - `boards members list` needs board membership (any role) or tenant ownership; the three writes need
+    board ownership or tenant ownership and exit 3 otherwise. The last active owner cannot be removed or
+    demoted — exit 8, a board always keeps one. All four require a tenant.
+  - `api/openapi.json` carries both paths — they were the only endpoints in the platform's spec missing
+    here — and the request/response schemas this CLI sends and reads.
+
+- **`tasks history` reads a task's status log.** `capigo tasks history (<id> | --code <code>) [--tenant <code>]
+  [--page <n>] [--limit <n>]` sends `GET /mission/tasks/{id}/history` (or the `code/{code}` sibling). Each
+  entry carries `from_status`, `to_status`, `changed_at` and `changed_by` — the same person ref a task's
+  owner and assignee use, and `null` when the row records no actor, which is what a change by a departed
+  member or a system path leaves behind. `from_status` is `null` on the entry a task's creation wrote.
+  - This is the status log, not the activity timeline: `tasks comments` returns the entries that read as
+    "what happened to this card", and this returns "which status did it hold, from when, changed by whom".
+    Sync against this one.
+  - Entries come back newest first and there is **no `--sort`**: the API's read has no ordering to expose
+    and refuses a sort parameter with `400 INVALID_QUERY_PARAMS` rather than answering in another order.
+    `--code` requires `--tenant`; `--limit` above 50 exits 5 before the request.
+  - An unknown task exits 4, and so does an archived one — the same answer every task read gives. A task
+    that was created and never moved returns one entry, its creation, and exit 0.
+  - `api/openapi.json` carries the path and the row schema.
+
+- **`tasks list` gains three list modes and `updated_at`.** The endpoint's `filters[...]` grammar joins
+  every rule with AND, so `capigo tasks list` could not ask three questions a task list is asked: whose
+  tasks are mine (`--owner-id` and `--assignee-id` together mean "both roles", not "either"), which
+  tasks have nobody assigned, and what changed since I last looked. Each mode is a flag of its own,
+  backed by the same database function the matching screen uses.
+  - `--scope mine` lists your own tasks — owned, assigned or followed. Every other flag still applies
+    on top, including `--include-archived`. `-q` narrows to the title and the code here, where the
+    plain list also searches the description: the personal read answers from a view that carries none.
+  - `--unassigned`, and `--date-field <created_at|due_date|updated_at>` with `--date-from`/`--date-to`
+    (inclusive, ISO 8601 with a timezone offset), list board tasks your key can see; archived tasks are
+    never among them, because that is what the board task search answers. Overdue tasks are
+    `--date-field due_date --date-to <now>`. The pair is refused together with a filter the board
+    search cannot express (`--priority`, `--assignee-id`, `--owner-id`, `--board-list-id`,
+    `--due-*`/`--created-*`/`--updated-*`, `--parent-task-id`, `--include-archived`) and with a `--sort`
+    outside `created_at`, `updated_at`, `due_date` and `status` — exit 5, before any request.
+  - `--archived` lists the archived tasks you own or are assigned to, newest archive first. It
+    **replaces** `--include-archived` rather than extending it, so the two together exit 5, as do
+    `--scope mine` and the unassigned/date pair.
+  - `--updated-after`/`--updated-before` filter on when a task last changed, and `--sort
+    <column:direction>` orders the page — both of which the API's `updated_at` support now allows.
+  - The three modes each read one tenant at a time; a key that spans several exits 5 with the API's
+    `INVALID_TENANT_SCOPE` unless `--tenant` (or a default) names one. Without any of them the
+    tenant-wide list is unchanged.
+  - `api/openapi.json` carries the new query parameters and their refusals.
+
+- **`tasks delete` soft-deletes a task — and a parent takes its subtasks with it.** `capigo tasks
+  delete (<id> | --code <code>) [--tenant <code>]` sends `DELETE /mission/tasks/{id}` (or the
+  `code/{code}` sibling). Deleting a **top-level task** retires its active subtasks with it, so a
+  family always shares one state. The caller must be the task's owner, its assignee, or a tenant owner
+  of its tenant, and a subtask's own assignee exits 4 when a subtask is named here. stdout names the
+  deleted task's id, because the task itself is outside every read from then on. A repeat exits 4 —
+  the task is no longer live — which is also why there is no `--idempotency-key`: the API reads a
+  replay as a fact about the task, not as a duplicate write to dedupe. Nothing is erased; the GUI's
+  archived view can restore it.
+
+- **`tasks subtasks delete` retires one subtask and leaves its parent alone.** `capigo tasks subtasks
+  delete (<parent-id> | --code <code>) <subtask-id>` sends
+  `DELETE /mission/tasks/{id}/subtasks/{subtaskId}` (or the `code/{code}` sibling). Unlike
+  `tasks delete`, the parent task and the sibling subtasks keep their state. The caller must be the
+  **parent task's** owner, its assignee, or a tenant owner of its tenant — a subtask's own assignee
+  exits 4, because deleting is a lifecycle operation rather than a board edit. The subtask must belong
+  to the parent named in the address; quoting any other parent exits 4. stdout names the deleted
+  subtask's id, and a repeat exits 4 — so no `--idempotency-key` here either: a replay is a read-side
+  fact, not a duplicate write to dedupe.
+
+- **`tasks subtasks move` reorders a subtask among its siblings.** `capigo tasks subtasks move
+  (<parent-id> | --code <code>) <subtask-id> (--top | --after-subtask-id <uuid>)` sends
+  `PATCH /mission/tasks/{id}/subtasks/{subtaskId}` (or the `code/{code}` sibling) with the one field
+  that resource carries: `{"after_subtask_id": "<uuid>"}`, or `{"after_subtask_id": null}` for `--top`
+  — the CLI's own spelling of a null anchor, so a caller never types a JSON null. A subtask lives in
+  no board column, so it only moves among its siblings; moving a top-level card between columns stays
+  `tasks move`. The caller must be the **parent task's** owner, its assignee, or a tenant owner of its
+  tenant — a subtask's own assignee exits 4, because reordering is structural rather than a board
+  edit. The subtask must belong to the parent named in the address; quoting another parent's subtask
+  exits 4. stdout is the subtask as it now stands, with its server-computed `position`. That position
+  is recomputed under a lock, so a retry is safe and no `--idempotency-key` is accepted.
+
+- **The spec copy is re-synced.** `api/openapi.json` gains `DELETE /mission/tasks/{id}` and its
+  `code/{code}` sibling, and the two subtask paths, each carrying `patch` (reorder) and `delete`
+  (retire) — 75 paths.
+
+- **`tasks comments create --file` sends the comment and its files in one request.** `capigo tasks
+  comments create (<id> | --code <code>) --content <text> --file <path> [--file <path> ...]` posts
+  `multipart/form-data` to `POST /mission/tasks/{id}/comments` (or the `code/{code}` sibling): the
+  server stores each file, records the attachment, and writes the comment with it, so there is no
+  upload step first. Up to 10 files per comment — eleven exits 5 without uploading anything; the
+  media type is detected from the path, then from the file's first bytes, and the server checks it
+  against its own allow-list (images, PDF, Office documents, text/markdown/csv, zip), answering 400
+  `INVALID_FILE_TYPE` naming the type it saw; `--content-type` declares one for every `--file`
+  instead, which is the fix when the detection guesses wrong or this machine has no mapping for the
+  format. `--file` and `--attachments-json` cannot be combined (exit 5) — a comment carries either
+  files or pre-uploaded ids.
+- **`tasks comments create --idempotency-key` makes a comment retry-safe.** With it, re-sending the
+  same key with the same comment does not post a second one: the answer is the comment the first
+  attempt wrote, with `meta.replayed: true` on stdout so an agent reading only stdout can tell a
+  replay from a fresh post (the server answers 200 instead of 201). The key needs `--file`, because
+  the API takes one only on a comment that carries its files; passing it without `--file` exits 5
+  rather than sending a key the server would ignore, and a key with no characters exits 5 too —
+  the API trims it and reads it as no key at all, which would make the retry unsafe while looking
+  safe. Reusing the key for a different comment exits 8 with `E0601`.
+
+- **`tasks attachments remove` retires a file from a task.** `capigo tasks attachments remove
+  (<id> | --code <code>) <attachment-id>` sends `DELETE /mission/tasks/{id}/attachments/{attachmentId}`
+  (or the `code/{code}` sibling). The attachment leaves the task's list and the stored object is deleted
+  in the same call, and stdout names the file that was removed — the last chance to check it was the
+  right one, because every task read stops listing it from there, with `"removed": true` so an agent
+  reading only stdout does not have to infer that the delete happened. It takes no `--idempotency-key`
+  and needs none: the API accepts no key on a delete, and removing an attachment the task no longer
+  holds exits 4 with `Attachment not found`, so a retry tells you the file is already gone instead of
+  deleting anything twice. A second exit 4 — the task out of reach, or another tenant's — is the same
+  answer the API gives for a task that does not exist, so it never leaks whether the task is real.
+  Note the web UI also strips markdown references to a removed file from the task description; this
+  endpoint and this command do not touch the description.
+
+- **`tasks attachments upload` puts a file on a task in one call.** `capigo tasks attachments
+  upload (<id> | --code <code>) <path>` posts the bytes as `multipart/form-data` to
+  `POST /mission/tasks/{id}/attachments` (or the `code/{code}` sibling), and the server stores the
+  file and records the attachment — there is no presigned URL to fetch and no second call to make
+  the file visible. `.data` carries the stored attachment plus `source_path`, and `.data.id` is
+  what `tasks attachments download` takes next. The media type is detected from the path, then from
+  the file's first bytes; `--content-type` overrides it, which is the fix when detection guesses
+  wrong (the server answers 400 `INVALID_FILE_TYPE` naming the type it saw). The API's own limits
+  apply: a fixed set of accepted types and 50 MB. `--idempotency-key` makes a retry safe — the
+  second attempt answers with the attachment the first one stored, and `.data.replayed` says so
+  (`false` for the call that stored the file, `true` for a replay), while reusing the key for a
+  different file exits 8 with `E0601`; a key with no characters exits 5, since the API trims it and
+  reads it as no key at all. An empty file, an unreadable path, or one over the limit is
+  refused locally (exit 5) without spending the upload first. Attachments on *comments* remain
+  reference-only: `tasks comments create --attachments-json` takes ids the caller already has.
+
+- **`tasks create` can put the new card where you want it.** `capigo tasks create ... --board <uuid>
+  --list <uuid> (--top | --after-task-id <uuid>)` creates the task through the board's own
+  card-creation path and places it first in the column (`--top`) or directly behind a card already
+  there (`--after-task-id`). Omit both and the card is appended, as before. `--top` and
+  `--after-task-id` need `--list` and are mutually exclusive; either one without a list, both
+  together, or either with `--subtasks-json` exits 5 before any request is sent. A create that names a
+  list now also asks for membership of that board (or a tenant owner) — anyone else exits 4 with
+  `FORBIDDEN` — and adds the board's owners as followers alongside `--follower-id`. A create with no
+  list keeps the plain path and needs neither.
+
+- **`tasks move` places a card the way a drag does.** `capigo tasks move (<id> | --code <code>)
+  --board-list-id <uuid> (--top | --after-task-id <uuid>)` posts to
+  `POST /mission/tasks/{id}/actions/move`. The destination list is required and exactly one placement:
+  `--top` for first in the column, or `--after-task-id` to land directly behind a card already there. The
+  task's owner, its assignee, or a tenant owner of its tenant may move it; anyone else exits 4, which is
+  the same answer a task that does not exist gets. A subtask exits 5 with `SUBTASK_BOARD_FORBIDDEN` —
+  subtasks live in no column — and an archived task, or an archived destination list, exits 4. Moving a
+  task that had no board placement files it onto the board. A retry is safe, because the server recomputes
+  the position from the card it finds, so no `--idempotency-key` is sent.
+
+- **`tasks list --include-archived` and `tasks get --include-archived` find a task that was archived.**
+  Archived tasks are left out of every task read by default — on the boards, in `tasks list`, and on both
+  detail addresses — so a task that exists can be missing from a list, and `tasks get` exits 4 for it. Both
+  flags send `include_archived=true` on that one request: `tasks list` adds it to the query string, and
+  `tasks get` appends it to whichever address you used, by id or by code. A code someone quoted still finds
+  the task after it was archived, which is the case these flags exist for. The flag is a read and only a
+  read: `tasks update` on an archived task still exits 4, and bringing one back is still `tasks unarchive`.
+
+- **`tasks unarchive` restores an archived task.** `capigo tasks unarchive (<id> | --code <code>)` posts
+  to `POST /mission/tasks/{id}/actions/unarchive` with no body. The same three actors as archive may call
+  it — the task's owner, its assignee, or a tenant owner of the task's tenant — and unlike archive a
+  subtask's own assignee is enough, because restore does not ask the parent. The answer is the task itself
+  (a restored task is readable again), an archived list holding it comes back with it, and restoring a task
+  that is already live writes nothing and records no event.
+
+- **`tasks archive` retires a task — and its whole family.** `capigo tasks archive (<id> | --code <code>)`
+  posts to `POST /mission/tasks/{id}/actions/archive` with no body: the task is named by its address and
+  the API records no reason. The task's owner, its assignee, or a tenant owner of the task's tenant may
+  call it — a plain member, and a member of the task's board, are refused (403, exit 3). Archiving is a
+  family operation in the database: naming a parent archives its subtasks with it, and naming a subtask
+  archives its parent and siblings, while only the task you name records the `task:archived` event. There
+  is no undo in this command — restore with `tasks unarchive` — and an archived task is outside every
+  default read, so a second call exits 4 (not found); do not retry a 4. Read one back deliberately with
+  `tasks get --include-archived`, or list them with `tasks list --include-archived`.
+
 ### Changed
 
 - **The release workflow pins GoReleaser to the `2.18` line** (`version: "~> v2.18"`) instead of
@@ -17,13 +270,74 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   `Casks/capigo.rb` in `vtech-com/homebrew-tap`, so an unreviewed minor bump changes the
   published cask without anyone approving it. Patch releases still flow in automatically.
 
+- **`boards lists update` refuses a flag beside `--from-json` (exit 5), where it used to drop the flag and
+  send the file.** A dropped flag was silent: the caller believed the rename or the reorder had been
+  asked for, and the list did not move. Any of `--name`, `--wip-limit`, `--is-archived`, `--after-list-id`
+  or `--before-list-id` beside `--from-json` is now named and refused instead. `--from-json` alone is
+  unchanged, and `--tenant` is still folded into the file's body.
+- **`boards members list` no longer requires `--tenant`.** Omitting it searches the board across every
+  tenant the key can reach and leaves `meta.tenant` empty, exactly as `boards list` and `boards get`
+  behave. The board's own members are the same either way; `boards members add`/`update`/`remove` still
+  require the tenant, because they write into one workspace.
+
+### Fixed
+
+- **`capigo help exit-codes` now covers exit-8 state conflicts, and a refused claim says what to do
+  next.** Exit 8 was explained as a duplicate-unique-value conflict only, but a task that already has
+  an assignee exits 8 as well — the server refused the change because of the state it found. The topic
+  now names both cases, and `TASK_ALREADY_ASSIGNED` carries a `Next` step ("re-read the task; retrying
+  the same claim will not help") plus the capability brake in the error catalog, pinned by the catalog
+  test.
+
 ## [0.25.0] — 2026-08-27
 
 ### Added
 
+- **`tasks claim` takes an unassigned task as yourself.**
+  `capigo tasks claim (<id> | --code <code>)` posts to `POST /mission/tasks/{id}/actions/claim`, the
+  endpoint the task screen's "Assign to me" control uses, and sends no body: the assignee is the user
+  the key authenticates as, so the call cannot be used to hand a task to somebody else. Any active
+  member of the task's tenant may claim — no owner or manager role is needed — which is why this is
+  not `tasks update --assignee`: that call reassigns a task, this one only takes a free one. A task
+  that already has an assignee exits 8 with `TASK_ALREADY_ASSIGNED`, and that is the same answer
+  whether another member claimed it first or you already hold it, so a retry after a dropped
+  connection is not a silent no-op — re-read the task with `tasks get` to see who has it. Claiming
+  changes the assignee alone: owner, status, followers and board placement stay as they were.
+- **`tasks transfer-ownership` hands a task to another member.**
+  `capigo tasks transfer-ownership (<id> | --code <code>) --owner-id <uuid>` posts to
+  `POST /mission/tasks/{id}/actions/transfer-ownership`, the endpoint the task screen's
+  `transferTaskOwnership` action uses. Two actors may call it: the task's **current owner**, and a
+  **tenant owner of the task's tenant** (ADR-061) — so an orphaned task can be handed on without a
+  database intervention. Everyone else, including a tenant owner of another tenant, gets a 403.
+  `--owner-id` must name an active member of the task's tenant (resolve it with `members list`,
+  never by hand; a local check rejects anything that is not a UUID before the round trip). The change
+  touches the owner alone: assignee, followers and board placement stay as they were. Naming the
+  current owner is a no-op that still answers 200, and the new owner and the former owner each
+  receive an inbox message.
+- **`tasks assign-agent` moves an agent-owned task to another agent.**
+  `capigo tasks assign-agent (<id> | --code <code>) --agent-key <key>` posts to
+  `POST /mission/tasks/{id}/actions/assign-agent`, the endpoint the task screen's agent picker
+  uses. It moves the agent assignment only: a task assigned to a person has no agent run to move, so
+  the API refuses it with `INVALID_AGENT` (exit 5) — that is a `tasks update --assignee` edit. The
+  agent run must still be `pending`, and the target agent must be published in the task's tenant (a
+  system agent is accepted too). Naming the agent the task already has is a no-op that still answers
+  200, so a retry needs no `Idempotency-Key`.
+- **`tasks update` can remove a follower.** `--remove-follower-id <uuid>` (repeatable) sends the
+  `follower_remove_ids` field on `PATCH /mission/tasks/{id}` (and `/code/{code}`), so a task's
+  watcher list can be corrected without the web UI — the endpoint's previous add-only limitation is
+  gone. `--follower-id` keeps adding. Removing someone who does not follow the task is a no-op;
+  naming the same user in both flags is rejected by the API with 400.
+- **`tasks create --idempotency-key <key>` makes a create safe to retry.** The key travels as the
+  `Idempotency-Key` header on `POST /mission/tasks`. A retry with the same key replays the task the
+  first attempt created (the API answers 200 instead of 201, with that task) instead of creating a
+  second one; the same key with a different body is 409 E0601. The key is scoped to the tenant.
+  Combining it with `--subtasks-json` fails locally (exit 5): `POST /mission/tasks/with-subtasks`
+  has no idempotency contract, and a silently dropped key would be a promise the CLI did not keep.
+
 - **Command help now names the response fields the API returns.** `members list`/`get`
-  document `title`, `department` and `birthday`; `tasks` commands document `followers` and
-  `meta_data`; `products` commands document `notes` and `media`; `variants` commands document
+  document `title`, `department` and `birthday`; `tasks` commands document `followers`,
+  `meta_data`, `responsible_type` and `assigned_agent_key`; `products` commands document `notes`
+  and `media`; `variants` commands document
   `status` and `media`. These fields were already present in the JSON output — the CLI passes
   `data` through unchanged — but a field the help page never named is a field an agent could
   not know existed. `make verify-api` now reports every checked page agrees with the server.

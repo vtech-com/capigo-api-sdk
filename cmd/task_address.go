@@ -22,6 +22,29 @@ func taskPath(id, code string) string {
 	return "/mission/tasks/" + url.PathEscape(id)
 }
 
+// subtaskPath builds the address of one subtask under a parent task. Every verb
+// that acts on a single subtask (delete, reorder) hangs off the same shape, so
+// the composition lives here once instead of inline in each command.
+//
+// Both the parent and the subtask are values someone typed, so both are escaped:
+// a subtask id containing a slash addresses a subtask rather than a different
+// route.
+func subtaskPath(parentID, parentCode, subtaskID string) string {
+	return taskPath(parentID, parentCode) + "/subtasks/" + url.PathEscape(subtaskID)
+}
+
+// includeArchivedPath adds `include_archived=true` to a task read path.
+//
+// Only reads take it, and only as a deliberate act: an archived task is
+// invisible to every default answer, so the caller who holds a code and no task
+// says so here rather than reading the 404 as "never existed".
+func includeArchivedPath(path string, includeArchived bool) string {
+	if !includeArchived {
+		return path
+	}
+	return path + "?include_archived=true"
+}
+
 // requireOneTaskAddress exits 5 unless exactly one address was given, and
 // unless a code came with a tenant.
 //
@@ -75,5 +98,14 @@ func splitAttachmentArgs(args []string, code string) (taskID, attachmentID strin
 func requireAttachmentID(attachmentID string) {
 	if attachmentID == "" {
 		failValidation("an attachment id is required")
+	}
+}
+
+// requireUploadPath exits 5 when the file to upload was never named. An empty
+// path would otherwise be read as a file that does not exist, which reports the
+// wrong repair — the argument is missing, not the file.
+func requireUploadPath(path string) {
+	if path == "" {
+		failValidation("a file path is required: the file to upload, as a path on this machine")
 	}
 }
