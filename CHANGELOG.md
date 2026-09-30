@@ -265,6 +265,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **The release workflow pins GoReleaser to the `2.18` line** (`version: "~> v2.18"`) instead of
+  tracking whatever the latest `v2` is. GoReleaser's cask template is what generates
+  `Casks/capigo.rb` in `vtech-com/homebrew-tap`, so an unreviewed minor bump changes the
+  published cask without anyone approving it. Patch releases still flow in automatically.
+
 - **`boards lists update` refuses a flag beside `--from-json` (exit 5), where it used to drop the flag and
   send the file.** A dropped flag was silent: the caller believed the rename or the reorder had been
   asked for, and the list did not move. Any of `--name`, `--wip-limit`, `--is-archived`, `--after-list-id`
