@@ -10,6 +10,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **A release is now a merged `release/vX.Y.Z` PR, not a hand-pushed tag.** The new
+  `release-on-merge.yml` checks the branch name against the `CHANGELOG.md` section and the latest
+  tag, tags the merge commit on `main`, publishes through `release.yml`, and opens the
+  `main` → `develop` sync PR. `release.yml` keeps its tag trigger as a fallback, but now refuses a
+  tag that is not on `main` or has no matching `CHANGELOG.md` section, so write access alone no
+  longer publishes an arbitrary commit.
+
 ## [0.26.0] — 2026-09-30
 
 ### Added
