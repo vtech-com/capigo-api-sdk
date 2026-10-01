@@ -91,16 +91,23 @@ jobs:
     needs: [tag, release]
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       pull-requests: write
     steps:
       # Needs "Allow GitHub Actions to create and approve pull requests" in the
-      # repo settings. A PR opened with GITHUB_TOKEN does not trigger ci.yml, so
-      # develop must not require status checks for this PR to be mergeable.
+      # repo settings. ci.yml runs on a PR opened with GITHUB_TOKEN only after
+      # someone with write access approves the run, so develop must not require
+      # status checks, or this PR waits on an approval nobody knows to give.
+      #
+      # REST rather than `gh pr create`: there is no checkout in this job, and
+      # gh's create path expects a local repository to resolve branches.
       - name: Open the PR
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.tag.outputs.tag }}
         run: |
-          gh pr create --repo "$GITHUB_REPOSITORY" --base develop --head main \
-            --title "chore: sync main into develop after $TAG" \
-            --body "Brings the $TAG release commit (CHANGELOG section) back into develop. Opened by release-on-merge.yml."
+          gh api -X POST "repos/$GITHUB_REPOSITORY/pulls" \
+            -f base=develop -f head=main \
+            -f title="chore: sync main into develop after $TAG" \
+            -f body="Brings the $TAG release commit (CHANGELOG section) back into develop. Opened by release-on-merge.yml." \
+            --jq .html_url
