@@ -127,7 +127,8 @@ capigo-api-sdk/                          # Standalone repo on GitHub
 ├── .github/
 │   ├── workflows/
 │   │   ├── ci.yml                   # Test + lint on every PR
-│   │   ├── release.yml              # GoReleaser on tag v*
+│   │   ├── release-on-merge.yml     # Tags a merged release/vX.Y.Z PR into main
+│   │   ├── release.yml              # GoReleaser; called by release-on-merge.yml, or on tag v*
 │   │   └── codeql.yml               # Security scanning
 │   ├── ISSUE_TEMPLATE/
 │   │   ├── bug_report.md
