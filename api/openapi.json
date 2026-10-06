@@ -28,6 +28,45 @@
       }
     },
     "schemas": {
+      "InviteMemberResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "id",
+              "status",
+              "expires_at",
+              "created_at"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "status": {
+                "type": "string",
+                "description": "Current status of the invitation, e.g. `pending`."
+              },
+              "expires_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "created_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "token": {
+                "type": "string",
+                "description": "Accept-link secret. Present only in the `201` that created the invitation."
+              }
+            }
+          }
+        }
+      },
       "Error": {
         "type": "object",
         "properties": {
@@ -4081,6 +4120,702 @@
           },
           "401": {
             "description": "Unauthorized — missing or invalid API key"
+          }
+        }
+      }
+    },
+    "/members/invitations": {
+      "get": {
+        "summary": "List Invitations",
+        "tags": [
+          "Members"
+        ],
+        "description": "List the invitations of the tenant named by `X-Tenant-Code`, newest first. Only an **active tenant owner** may call it. A caller who lost the `201` that created an invitation (the only answer carrying the `token`) recovers by listing, cancelling the pending invitation and inviting again with a new `Idempotency-Key`. Each item shows the invitee's `invitee_email` and `invitee_mobile` (a stored mobile has no leading `+`), the contact data an owner already sees on the members screen. The `token` is in no list. Each item's `status` is the stored value: `pending`, `approved` (accepted) or `cancelled` (cancelled by the owner or refused by the invitee, which cannot be told apart). An invitation still stored `pending` after its `expires_at` has lapsed: its `expired` is `true`, and `?status=expired` lists exactly those. `?status=pending` lists only the stored `pending` invitations that have not lapsed. `approved` and `cancelled` filter by stored status whatever the date, and their `expired` is `false`. `custom_message` is the message the inviter sent, or `null`. `total` counts the filtered set. Of two invitations created at the same instant the order is stable, so paging shows each once. This list and the join request list are the only answers that carry contact data. A list read page by page is consistent only while nothing changes between the requests.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": false,
+            "description": "Code of the tenant that owns the invitations. Required unless the API key is pinned to one tenant.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "`pending` (stored `pending` and not past `expires_at`), `approved`, `cancelled` (stored status), or `expired` (stored `pending` and past `expires_at`). Anything else is `400`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "approved",
+                "cancelled",
+                "expired"
+              ]
+            }
+          },
+          {
+            "name": "email",
+            "in": "query",
+            "required": false,
+            "description": "Return only the invitations sent to this address. Trimmed and lowercased, then compared exactly (no partial match), so `a@x.com` does not find `a@x.com.vn`; an invitation sent to a mobile number only never matches. Combines with `status`. Blank, or longer than 254 characters, is `400 INVALID_QUERY_PARAMS`.",
+            "schema": {
+              "type": "string",
+              "maxLength": 254
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "Page number, from 1. A page past the last one answers `200` with an empty `data`.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Items per page.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of invitations.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "status",
+                          "invitee_email",
+                          "invitee_mobile",
+                          "expires_at",
+                          "expired",
+                          "custom_message",
+                          "created_at"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "approved",
+                              "cancelled"
+                            ]
+                          },
+                          "invitee_email": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "invitee_mobile": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "expires_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                          },
+                          "expired": {
+                            "type": "boolean",
+                            "description": "True when the invitation is stored `pending` and past `expires_at`."
+                          },
+                          "custom_message": {
+                            "type": "string",
+                            "nullable": true,
+                            "description": "The message the inviter sent, shown to the invitee."
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/MetaPagination"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A query parameter is invalid (`INVALID_QUERY_PARAMS`: unknown `status`, `page` under 1, `limit` over 50), or no tenant could be resolved (`TENANT_CODE_REQUIRED`)"
+          },
+          "403": {
+            "description": "The caller is not an active owner of the tenant (`FORBIDDEN`), or the key cannot reach the tenant"
+          }
+        }
+      },
+      "post": {
+        "summary": "Invite Member",
+        "tags": [
+          "Members"
+        ],
+        "description": "Invite a person to the tenant named by `X-Tenant-Code`, by email, mobile or both. Only an **active tenant owner** may call it. The platform sends no email or SMS: the `201` that creates the invitation returns the accept-link `token` **once** — it appears in no replay, error or later read, so store it. Build the link as `{web origin}/invite?token={token}`; the web origin is your workspace's app origin, not this API's. The invitee must sign in with an account whose email or mobile matches the invitation to accept it. The invitation expires 30 days after creation. This answer carries no contact data; only the invitation list shows it. An optional `Idempotency-Key` header makes a retry safe: the same key with an identical body returns `200` with the same invitation (its current status, **without** `token`) and writes nothing; the same key with a different body returns `409` (E0601). A caller who loses the `201` loses the token: list the invitations (`GET /members/invitations`), cancel the pending one (`POST /members/invitations/{id}/actions/cancel`) and invite again with a new `Idempotency-Key`. A cancelled invitation keeps its key: replaying the creating call answers `200` with status `cancelled` and no `token`.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": false,
+            "description": "Code of the tenant to invite into. Required unless the API key is pinned to one tenant.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Optional idempotency key, scoped to the tenant. A replay of the same key with an identical body returns 200 with the stored invitation and no `token`; the same key with a different body returns 409 (E0601).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "At least one of `invitee_email` and `invitee_mobile` is required.",
+                "properties": {
+                  "invitee_email": {
+                    "type": "string",
+                    "format": "email",
+                    "description": "Stored lowercase."
+                  },
+                  "invitee_mobile": {
+                    "type": "string",
+                    "description": "Any common phone format; stored normalized to E.164 without the leading `+`."
+                  },
+                  "custom_message": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 500,
+                    "description": "Optional message the invitee sees on the invite page, shown as text. Trimmed; blank or `null` means none; over 500 characters is `400`. It is part of the `Idempotency-Key` body comparison and is not echoed in the answer."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Replay: the same Idempotency-Key was applied with an identical body. Returns the stored invitation with its current status and no `token`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteMemberResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The invitation was created. `data.token` is returned only here.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteMemberResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not valid JSON or fails validation, or no tenant could be resolved (`TENANT_CODE_REQUIRED`)"
+          },
+          "403": {
+            "description": "The caller is not an active owner of the tenant (`FORBIDDEN`), or the key cannot reach the tenant"
+          },
+          "409": {
+            "description": "The invitee is already a member (E2302), already has a live pending invitation (E2301), or the Idempotency-Key was already used with a different body (E0601)"
+          }
+        }
+      }
+    },
+    "/members/invitations/{id}/actions/cancel": {
+      "post": {
+        "summary": "Cancel Invitation",
+        "tags": [
+          "Members"
+        ],
+        "description": "Cancel a pending invitation of the tenant named by `X-Tenant-Code`; its link no longer accepts. Only an **active tenant owner** may call it. The body must be empty: a field is refused with `400`. Only a `pending` invitation can be cancelled, even one past its `expires_at`; an invitation that was accepted, refused or already cancelled answers `409` (`E2308`) and nothing changes. Another tenant's invitation answers exactly like an unknown id. Cancelling keeps the invitation's `Idempotency-Key` bound to it: replaying the creating call afterwards answers `200` with status `cancelled` and no `token`, so a new invitation needs a new key. Find the id with `GET /members/invitations`. A cancel retried after a lost answer gets `409` (`E2308`); a client that already saw the invitation `cancelled` should treat that `409` as done. The answer carries no contact data.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Invitation id (UUID).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": false,
+            "description": "Code of the tenant that owns the invitation. Required unless the API key is pinned to one tenant.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The invitation is cancelled.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "status"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "cancelled"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The id is not a UUID, the body is not valid JSON or has a field, or no tenant could be resolved (`TENANT_CODE_REQUIRED`)"
+          },
+          "403": {
+            "description": "The caller is not an active owner of the tenant (`FORBIDDEN`), or the key cannot reach the tenant"
+          },
+          "404": {
+            "description": "No such invitation in the tenant. Another tenant's invitation answers exactly like an unknown id."
+          },
+          "409": {
+            "description": "The invitation is no longer pending: accepted, refused or already cancelled (`E2308`)"
+          }
+        }
+      }
+    },
+    "/join-requests": {
+      "get": {
+        "summary": "List Join Requests",
+        "tags": [
+          "Members"
+        ],
+        "description": "List the join requests of the tenant named by `X-Tenant-Code`, newest first, so the `id` that approve and reject need can be found. Only an **active tenant owner** may call it. Each item shows who asked and how to reach them (`contact_email`, `contact_mobile`, `bio`), the contact data an owner already sees on the members screen; each is `null` when the request holds no text for it. The requester's account id is never shown. `status` is the stored value: `pending`, `approved` or `rejected`. `total` counts the filtered set. Of two requests created at the same instant the order is stable, so paging shows each once. This list and the invitation list are the only answers that carry contact data. A list read page by page is consistent only while nothing changes between the requests.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": false,
+            "description": "Code of the tenant that owns the requests. Required unless the API key is pinned to one tenant.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Only records with this stored status. Anything else is `400`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "approved",
+                "rejected"
+              ]
+            }
+          },
+          {
+            "name": "email",
+            "in": "query",
+            "required": false,
+            "description": "Return only the requests whose `contact_email` is this address. Trimmed and lowercased, then compared exactly (no partial match). A request that left no email never matches. Combines with `status`. Blank, or longer than 254 characters, is `400 INVALID_QUERY_PARAMS`.",
+            "schema": {
+              "type": "string",
+              "maxLength": 254
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "Page number, from 1. A page past the last one answers `200` with an empty `data`.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Items per page.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of join requests.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "status",
+                          "contact_email",
+                          "contact_mobile",
+                          "bio",
+                          "created_at",
+                          "updated_at"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "approved",
+                              "rejected"
+                            ]
+                          },
+                          "contact_email": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "contact_mobile": {
+                            "type": "string",
+                            "nullable": true,
+                            "description": "Stored without a leading `+`."
+                          },
+                          "bio": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "updated_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/MetaPagination"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A query parameter is invalid (`INVALID_QUERY_PARAMS`: unknown `status`, `page` under 1, `limit` over 50), or no tenant could be resolved (`TENANT_CODE_REQUIRED`)"
+          },
+          "403": {
+            "description": "The caller is not an active owner of the tenant (`FORBIDDEN`), or the key cannot reach the tenant"
+          }
+        }
+      }
+    },
+    "/join-requests/{id}/actions/approve": {
+      "post": {
+        "summary": "Approve Join Request",
+        "tags": [
+          "Members"
+        ],
+        "description": "Approve a pending join request (find its id with `GET /join-requests`): the requester becomes a `member` of the tenant named by `X-Tenant-Code`. Only an **active tenant owner** may call it. `display_name` is required; `member_code`, `job_title` and `department` are optional. Of two concurrent decisions on one request exactly one wins and the other answers `409` (E2403). A requester whose membership exists but is not `active` (`inactive`, `banned`) is refused with `409` (E2302) and the request stays pending; a requester who is already an active member is marked approved without a second member and the answer has no `member_id`. If creating the member fails the request is restored to `pending`. No response carries the requester's email or mobile.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Join request id (UUID).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": false,
+            "description": "Code of the tenant that owns the request. Required unless the API key is pinned to one tenant.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "display_name"
+                ],
+                "properties": {
+                  "display_name": {
+                    "type": "string",
+                    "description": "Name shown for the new member. Must not be blank."
+                  },
+                  "member_code": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Optional; generated when omitted. A code already used in the tenant answers `409` (E4103)."
+                  },
+                  "job_title": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "department": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The request is approved.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "status"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "member_id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "description": "The new member's id; absent when the requester was already an active member."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The id is not a UUID, the body is not valid JSON or fails validation, or no tenant could be resolved (`TENANT_CODE_REQUIRED`)"
+          },
+          "403": {
+            "description": "The caller is not an active owner of the tenant (`FORBIDDEN`), or the key cannot reach the tenant"
+          },
+          "404": {
+            "description": "No such join request in the tenant. Another tenant's request answers exactly like an unknown id."
+          },
+          "409": {
+            "description": "The request has already been decided, or a concurrent decision won (E2403)"
+          }
+        }
+      }
+    },
+    "/join-requests/{id}/actions/reject": {
+      "post": {
+        "summary": "Reject Join Request",
+        "tags": [
+          "Members"
+        ],
+        "description": "Reject a pending join request (find its id with `GET /join-requests`) of the tenant named by `X-Tenant-Code`. Only an **active tenant owner** may call it. The body must be empty: the service collects no reason, so a field is refused with `400`. No member is created. Of two concurrent decisions on one request exactly one wins and the other answers `409` (E2403). No response carries the requester's email or mobile.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Join request id (UUID).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": false,
+            "description": "Code of the tenant that owns the request. Required unless the API key is pinned to one tenant.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request is rejected.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "status"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "status": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The id is not a UUID, the body is not valid JSON or fails validation, or no tenant could be resolved (`TENANT_CODE_REQUIRED`)"
+          },
+          "403": {
+            "description": "The caller is not an active owner of the tenant (`FORBIDDEN`), or the key cannot reach the tenant"
+          },
+          "404": {
+            "description": "No such join request in the tenant. Another tenant's request answers exactly like an unknown id."
+          },
+          "409": {
+            "description": "The request has already been decided, or a concurrent decision won (E2403)"
           }
         }
       }

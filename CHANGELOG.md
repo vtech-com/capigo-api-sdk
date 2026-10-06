@@ -19,6 +19,32 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   tag that is not on `main` or has no matching `CHANGELOG.md` section, so write access alone no
   longer publishes an arbitrary commit.
 
+### Added
+
+- **`members invite` invites a person.** `capigo members invite --tenant <code> (--email <address> |
+  --mobile <number>) [--idempotency-key <key>]` sends `POST /members/invitations`. Only an active tenant
+  owner may call it. The platform sends no email or SMS, so the creating answer carries the accept-link
+  `token` once — a replay, an error or a later read never does — and the caller builds
+  `{web origin}/invite?token={token}`. A retry with the same `--idempotency-key` and invitee returns the
+  same invitation without the token; the same key with another invitee is exit 8 (`E0601`).
+- **`join-requests approve` and `join-requests reject` decide a join request.** `capigo join-requests
+  approve <id> --tenant <code> --display-name <name> [--member-code <c>] [--job-title <t>]
+  [--department <d>]` and `capigo join-requests reject <id> --tenant <code>` send
+  `POST /join-requests/{id}/actions/approve` and `/reject`. Only an active tenant owner may call them.
+  Only one decision counts: a request already decided, or lost to a concurrent decision, is exit 8
+  (`E2403`); a requester whose membership is inactive or banned is exit 8 (`E2302`) and the request stays
+  pending. No answer carries the requester's email or mobile.
+- **`members invitations list` and `members invitations cancel`, `join-requests list`.** `capigo members
+  invitations list --tenant <code> [--status pending|approved|cancelled|expired] [--email <a>] [--page <n>]
+  [--limit <n>]` and `capigo join-requests list --tenant <code> [--status pending|approved|rejected]
+  [--email <a>] [--page <n>] [--limit <n>]` read `GET /members/invitations` and `GET /join-requests`, newest
+  first, for an active tenant owner only; `capigo members invitations cancel <id> --tenant <code>` sends
+  `POST /members/invitations/{id}/actions/cancel` (exit 8, `E2308`, when the invitation is no longer
+  pending). An unknown `--status` is exit 5 before any call. No row carries the accept-link token.
+- **`members invite --custom-message <text>`** adds a note of up to 500 characters shown to the invitee.
+- The three commands read the profile with `activeProfileOrEmpty`, so a key supplied only through
+  `CAPIGO_API_KEY` works without `capigo auth login`.
+
 ## [0.26.0] — 2026-09-30
 
 ### Added

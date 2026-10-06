@@ -38,6 +38,13 @@ var implementedOps = map[string]string{
 	"GET /members":      "members list",
 	"GET /members/{id}": "members get",
 
+	"POST /members/invitations":                     "members invite",
+	"GET /members/invitations":                      "members invitations list",
+	"POST /members/invitations/{id}/actions/cancel": "members invitations cancel",
+	"GET /join-requests":                            "join-requests list",
+	"POST /join-requests/{id}/actions/approve":      "join-requests approve",
+	"POST /join-requests/{id}/actions/reject":       "join-requests reject",
+
 	"GET /mission/boards":                        "boards list",
 	"GET /mission/boards/{id}":                   "boards get",
 	"POST /mission/boards":                       "boards create",
