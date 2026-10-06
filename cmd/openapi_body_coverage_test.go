@@ -90,6 +90,11 @@ var bodyFieldAliasMap = map[string]string{
 	// exposes it as a singular repeatable flag — the shape every other
 	// repeatable id/name list here uses: --user-id <uuid> --user-id <uuid>.
 	"user_ids": "user-id",
+	// POST /members/invitations: the invitee_ prefix only says whose address it
+	// is, which --email and --mobile already say on a command about inviting.
+	"invitee_email":  "email",
+	"invitee_mobile": "mobile",
+	"custom_message": "custom-message",
 }
 
 // intentionallyUnexposedBodyFields lists body fields that the CLI deliberately
@@ -127,6 +132,18 @@ type writeCommandEntry struct {
 // cobra commands are fully initialised (init() has run).
 func buildWriteCommandMapping() []writeCommandEntry {
 	return []writeCommandEntry{
+		{
+			humanName: "members invite",
+			path:      "/members/invitations",
+			method:    "post",
+			hasFlag:   func(n string) bool { return membersInviteCmd.Flags().Lookup(n) != nil },
+		},
+		{
+			humanName: "join-requests approve",
+			path:      "/join-requests/{id}/actions/approve",
+			method:    "post",
+			hasFlag:   func(n string) bool { return joinRequestsApproveCmd.Flags().Lookup(n) != nil },
+		},
 		// tasks create: no --from-json; must have per-field flags for everything.
 		{
 			humanName: "tasks create",

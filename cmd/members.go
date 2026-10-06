@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
@@ -207,6 +208,144 @@ OUTPUT
 	},
 }
 
+// members invite flags
+var (
+	memberInviteTenant         string
+	memberInviteEmail          string
+	memberInviteMobile         string
+	memberInviteIdempotencyKey string
+	memberInviteCustomMessage  string
+)
+
+var membersInviteCmd = &cobra.Command{
+	Use:   "invite",
+	Short: "Invite a person to a tenant",
+	Long: `Invite a person to a tenant by email, mobile or both.
+
+PURPOSE
+  Put a person on a tenant's pending invitations — the command behind the
+  members screen's invite form. Only an active tenant owner may call it; a plain
+  member is refused with 403. The platform sends no email or SMS, so delivering
+  the invitation is your job: the answer that creates it carries the accept-link
+  token, and the link is {your workspace's web origin}/invite?token={token}. The
+  person must sign in with an account whose email or mobile matches the invitation
+  to accept it. An invitation expires 30 days after it is created.
+
+  The token is shown once. It is in the answer that creates the invitation and
+  nowhere else: not in a replay, not in an error, not in any later read. If you
+  lose that answer, cancel the invitation (members invitations cancel) and invite
+  again; a new invite for the same person is refused while the first is live.
+  Store the token before anything else. No answer carries the invitee's email or mobile.
+
+USAGE
+  capigo members invite --tenant <code> (--email <address> | --mobile <number>)
+                        [--custom-message <text>] [--idempotency-key <key>]
+
+FLAGS
+  --tenant <code>
+      Tenant to invite into. Required here: an invitation belongs to one tenant.
+      See capigo help tenancy.
+
+        capigo members invite --tenant acme --email tram@acme.vn
+
+  --email <address>
+      Invitee's email. Stored lowercase. Give this or --mobile, or both.
+
+  --mobile <number>
+      Invitee's mobile, in any common format; it is stored normalized.
+
+        capigo members invite --tenant acme --mobile "+84 912 345 678"
+
+  --custom-message <text>
+      A note shown to the invitee, up to 500 characters. Blank means no message.
+
+        capigo members invite --tenant acme --email tram@acme.vn \
+          --custom-message "Welcome to the team"
+
+  --idempotency-key <key>
+      Make a retry safe. The same key with the same invitee returns the same
+      invitation, in its current status and without the token, and writes nothing
+      new; the same key with a different invitee is refused with exit 8 and code
+      E0601. A blank key is refused here, because the API would read it as no key.
+
+        capigo members invite --tenant acme --email tram@acme.vn \
+          --idempotency-key onboard-tram-001
+
+OUTPUT
+  The invitation is at .data. The token is there only on the call that created it:
+
+      { "data": { "id": "…", "status": "pending",
+                  "expires_at": "2026-11-04T03:00:10.255+00:00",
+                  "created_at": "2026-10-05T03:00:10.255561+00:00",
+                  "token": "…" },
+        "meta": { "tenant": "acme", "tenant_source": "flag",
+                  "server_time": "2026-10-05T03:00:10Z" } }
+
+  Exit 5 when neither --email nor --mobile is given or an address does not
+  validate. Exit 8 when the invitee is already a member or already has a live
+  invitation, or when the key was used with a different invitee (E0601). Exit 3 for
+  a caller who is not a tenant owner.`,
+	Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		ctx := context.Background()
+
+		email := strings.TrimSpace(memberInviteEmail)
+		mobile := strings.TrimSpace(memberInviteMobile)
+		if email == "" && mobile == "" {
+			failValidation("members invite: give --email, --mobile or both; an invitation needs someone to reach")
+		}
+		idempotencyKey := requireUsableKey(
+			cmd.Flags().Changed("idempotency-key"),
+			memberInviteIdempotencyKey,
+			"idempotency-key",
+		)
+
+		client, cfg, err := buildClient()
+		if err != nil {
+			return handleErr(err)
+		}
+
+		profile := activeProfileOrEmpty(cfg)
+
+		tenant := resolveTenant(memberInviteTenant, profile)
+		requireTenant(tenant, "members invite")
+
+		body := map[string]string{}
+		if email != "" {
+			body["invitee_email"] = email
+		}
+		if mobile != "" {
+			body["invitee_mobile"] = mobile
+		}
+
+		if v := strings.TrimSpace(memberInviteCustomMessage); v != "" {
+			if len([]rune(v)) > 500 {
+				failValidation("members invite: --custom-message must be at most 500 characters")
+			}
+			body["custom_message"] = v
+		}
+
+		headers := map[string]string{}
+		if idempotencyKey != "" {
+			headers["Idempotency-Key"] = idempotencyKey
+		}
+
+		resp, err := client.DoWithHeaders(ctx, "POST", "/members/invitations", body, tenant, headers)
+		if err != nil {
+			return handleErr(err)
+		}
+
+		var envelope api.RawEnvelope
+		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
+			return handleErr(fmt.Errorf("decode response: %w", err))
+		}
+
+		meta := itemMeta(tenant, memberInviteTenant, envelope.Meta)
+		meta.ServerTime = resp.ServerTime
+		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
+	},
+}
+
 func init() {
 	membersListCmd.Flags().StringVar(&memberListTenant, "tenant", "", "scope to this tenant code")
 	membersListCmd.Flags().StringVarP(&memberListQuery, "query", "q", "", "filter by member name or email")
@@ -215,6 +354,12 @@ func init() {
 
 	membersGetCmd.Flags().StringVar(&memberGetTenant, "tenant", "", "scope to this tenant code")
 
-	memberCmd.AddCommand(membersListCmd, membersGetCmd)
+	membersInviteCmd.Flags().StringVar(&memberInviteTenant, "tenant", "", "tenant to invite into (required)")
+	membersInviteCmd.Flags().StringVar(&memberInviteEmail, "email", "", "invitee's email")
+	membersInviteCmd.Flags().StringVar(&memberInviteMobile, "mobile", "", "invitee's mobile")
+	membersInviteCmd.Flags().StringVar(&memberInviteCustomMessage, "custom-message", "", "note shown to the invitee, up to 500 characters")
+	membersInviteCmd.Flags().StringVar(&memberInviteIdempotencyKey, "idempotency-key", "", "make a retry safe; the same key with the same invitee replays")
+
+	memberCmd.AddCommand(membersListCmd, membersGetCmd, membersInviteCmd, memberInvitationsCmd)
 	rootCmd.AddCommand(memberCmd)
 }
