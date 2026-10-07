@@ -87,27 +87,45 @@ jobs:
     secrets: inherit
 
   sync-develop:
-    name: Open the main -> develop sync PR
+    name: Merge main back into develop
     needs: [tag, release]
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
     steps:
+      # The back-merge is part of the release, not a follow-up someone has to
+      # remember: until it lands, develop still lists the released entries under
+      # [Unreleased] and the next release would ship them twice.
+      #
+      # It goes through a PR so the history reads like every other merge, and
+      # is merged straight away with GITHUB_TOKEN. A conflict leaves the PR open
+      # and turns this job red, rather than failing quietly.
+      #
       # Needs "Allow GitHub Actions to create and approve pull requests" in the
-      # repo settings. ci.yml runs on a PR opened with GITHUB_TOKEN only after
-      # someone with write access approves the run, so develop must not require
-      # status checks, or this PR waits on an approval nobody knows to give.
+      # repo settings, and develop must not require status checks: ci.yml runs
+      # on a PR opened with GITHUB_TOKEN only after someone approves the run.
       #
       # REST rather than `gh pr create`: there is no checkout in this job, and
       # gh's create path expects a local repository to resolve branches.
-      - name: Open the PR
+      - name: Open and merge the sync PR
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.tag.outputs.tag }}
         run: |
-          gh api -X POST "repos/$GITHUB_REPOSITORY/pulls" \
+          pr=$(gh api -X POST "repos/$GITHUB_REPOSITORY/pulls" \
             -f base=develop -f head=main \
             -f title="chore: sync main into develop after $TAG" \
-            -f body="Brings the $TAG release commit (CHANGELOG section) back into develop. Opened by release-on-merge.yml." \
-            --jq .html_url
+            -f body="Brings the $TAG release commit (CHANGELOG section) back into develop. Opened and merged by release-on-merge.yml." \
+            --jq .number)
+          echo "sync PR: #$pr"
+          # Mergeability is computed asynchronously right after the PR opens.
+          for attempt in 1 2 3 4 5; do
+            if gh api -X PUT "repos/$GITHUB_REPOSITORY/pulls/$pr/merge" -f merge_method=merge >/dev/null; then
+              echo "merged #$pr into develop"
+              exit 0
+            fi
+            sleep $((attempt * 5))
+          done
+          echo "::error::could not merge sync PR #$pr into develop (conflict?). Resolve and merge it by hand."
+          exit 1
