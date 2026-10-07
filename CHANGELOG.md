@@ -18,6 +18,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   `main` → `develop` sync PR. `release.yml` keeps its tag trigger as a fallback, but now refuses a
   tag that is not on `main` or has no matching `CHANGELOG.md` section, so write access alone no
   longer publishes an arbitrary commit.
+- **The release also merges `main` back into `develop`.** `release-on-merge.yml` opens the sync PR and
+  merges it straight away; a conflict leaves the PR open and fails the run. `CONTRIBUTING.md` now says
+  that only a `release/vX.Y.Z` branch releases, and that a merge from any other branch is silently
+  not a release.
 
 ### Added
 

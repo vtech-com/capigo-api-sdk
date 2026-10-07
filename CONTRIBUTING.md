@@ -263,13 +263,16 @@ Tests must not make real HTTP calls. Use the `httptest` package to mock the Capi
 Releases are managed by maintainers via [GoReleaser](https://goreleaser.com/) and GitHub Actions.
 Merging a release branch into `main` is the release; nobody pushes a tag by hand.
 
-1. Cut `release/vX.Y.Z` from `develop`. The branch name is the version.
+1. Cut `release/vX.Y.Z` from `develop`. The branch name is the version, and the leading `v` is
+   required. A PR from any other branch — `develop` itself, `release/0.27.0`, `chore/cut-v0.27.0` —
+   merges into `main` without releasing anything, and nothing reports that it did not.
 2. On that branch, move the `[Unreleased]` entries to a new `## [X.Y.Z] — YYYY-MM-DD` section in
    `CHANGELOG.md`, commit, and open a PR into `main`.
 3. Review and merge the PR. `release-on-merge.yml` then checks that the branch name and the
    `CHANGELOG.md` section agree and that the version is newer than the latest tag, tags the merge
-   commit, publishes through `release.yml`, and opens a `main` → `develop` sync PR.
-4. Merge the sync PR.
+   commit, publishes through `release.yml`, and merges `main` back into `develop` through a sync PR.
+4. If the back-merge hits a conflict, the workflow run goes red and leaves the sync PR open: resolve
+   and merge it by hand.
 
 `release.yml` still runs on a hand-pushed `v*` tag as a fallback, but it refuses any tag that does
 not point at a commit on `main` or whose `CHANGELOG.md` lacks the matching section.
