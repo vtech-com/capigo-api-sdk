@@ -8,7 +8,7 @@
 A CLI tool and Go SDK for the [Capigo](https://capigo.app) platform — built for third-party AI agents, automation scripts, and developers who need a scriptable interface to Capigo's Public API.
 
 ```bash
-# List tasks (omit --tenant to see tasks across all your tenants)
+# List tasks (omit --tenant to read across every workspace the key can reach)
 capigo tasks list
 
 # Create a task in a specific tenant
@@ -17,6 +17,13 @@ capigo tasks create --title "Fix login bug" --tenant acme
 # Pipe to jq for AI agent processing
 capigo tasks list | jq '.data[] | select(.status=="To-Do")'
 ```
+
+> **How far a key reaches is a property of the key, not of the flag.** A key is bound to one
+> workspace when it is created, and the API keys page on the platform shows which. Omitting
+> `--tenant` reads across every workspace *that key* can reach — for a bound key, the one it is
+> bound to. Only a key created before the binding became mandatory may carry none and reach all of
+> yours. Working across several workspaces therefore means one key per workspace; see
+> [Working across several workspaces](#working-across-several-workspaces).
 
 ## Why Capigo CLI?
 
@@ -167,6 +174,13 @@ capigo tasks list | jq '.data[] | select(.status=="To-Do")'
 > is exit `2`. `capigo health` is the preflight that works: exit `0` means the API is reachable
 > *and* the key is accepted.
 
+> **Step 3 lists the workspaces you belong to — not the one this key reaches.** A key is bound to
+> the single workspace it was created in, and `tenants list` is not narrowed to it: it answers for
+> the account, so it can name workspaces a given key cannot touch. Step 4's `--tenant acme` must
+> name the key's own workspace, or the call fails with exit `3`. Which workspace that is: the API
+> keys page on the platform. See
+> [Working across several workspaces](#working-across-several-workspaces).
+
 ## Commands
 
 ```
@@ -255,12 +269,21 @@ capigo boards members remove <board-id> <user-id>  Remove a member from a board 
 
 capigo members list      List workspace members (supports --query/-q, --page, --limit)
 capigo members get <id>  Get a member by ID
+capigo members invite --tenant <code> (--email <a> | --mobile <n>)   Invite a person; owner only, the token is shown once
+capigo members invitations list --tenant <code> [--status <s>]       List a tenant's invitations; owner only
+capigo members invitations cancel <id> --tenant <code>               Cancel a pending invitation; owner only
+capigo members update <id> --tenant <code> [--role <r>] ...            Update a member (HRIS sync); owner only
+capigo join-requests list --tenant <code> [--status <s>]             List a tenant's join requests; owner only
+capigo join-requests approve <id> --tenant <code> --display-name <n> Approve a join request; owner only
+capigo join-requests reject <id> --tenant <code>                     Reject a join request; owner only
 
 capigo products list     List products (supports --query, --updated-since, --ids, --all)
 capigo products get <id> Get a product by ID
 capigo products create   Create a product (--name required, or --from-json; --aliases/--tags repeatable)
 capigo products update   Update a product (partial; --aliases/--tags repeatable, or --from-json)
 capigo products variants Upsert product variants
+capigo products options <id> --tenant <code> --strategy <s> --option <N=v1,v2>  Save a product's options and regenerate its variants
+capigo products media add|update|delete <product-id> --tenant <code> ...     Add, change or delete a product's images and videos
 
 capigo brands list           List reference brands (supports --query)
 capigo brands get <id>       Get a brand by ID
@@ -269,6 +292,7 @@ capigo brands update <id>    Partial update a brand (PATCH)
 capigo brands replace <id>   Full replace a brand (PUT, all fields required)
 
 capigo categories list           List reference categories (supports --query)
+capigo brands|categories|product-types|units delete <id> --tenant <code>     Soft-delete catalog structure; refused while a live product uses it
 capigo categories get <id>       Get a category by ID
 capigo categories create         Create a category (--name required)
 capigo categories update <id>    Partial update a category (PATCH)
@@ -288,6 +312,7 @@ capigo units replace <id>   Full replace a unit (PUT, all fields required)
 
 capigo variants list            List variants by barcode prefix (supports --barcode-prefix, --sort)
 capigo variants get <id|--sku>  Get a variant by ID or SKU (--sku requires --tenant)
+capigo variants lookup --tenant <code> [--sku <s>]... [--barcode <b>]...  Look up up to 100 SKUs/barcodes at once
 
 capigo version           Print version info
 ```
@@ -303,7 +328,7 @@ Run `capigo <group> <command> --help` for the complete, authoritative flag list 
 
 `--tenant <code>` appears as a local flag on commands that require or accept a tenant scope (e.g. `capigo products list --tenant acme`). It is not a global flag. The active config profile is always read from `~/.capigo/config.json` and cannot be overridden at runtime.
 
-Every PCMS command (`products`, `variants`, `brands`, `categories`, `product-types`, `units`) **requires** a tenant on every verb. `tasks list`/`get`, `boards list`/`get`, `boards members list`, and `members list`/`get` accept an *optional* `--tenant` — omit it to read across every tenant you can access (`meta.tenant` is then absent — there is no single tenant to name). `tasks create` and `tasks subtasks create` always require a tenant; `tasks subtasks list` requires a tenant only when addressed by `--code`. Board writes — `boards create`, `boards update`, `boards delete`, `boards lists create`, `boards lists update`, `boards lists delete`, and `boards members add`/`update`/`remove` — always require a tenant: they write into one workspace.
+Every PCMS command (`products`, `variants`, `brands`, `categories`, `product-types`, `units`) **requires** a tenant on every verb. `tasks list`/`get`, `boards list`/`get`, `boards members list`, and `members list`/`get` accept an *optional* `--tenant` — omit it to read across every tenant the API key can reach (`meta.tenant` is then absent — there is no single tenant to name). A key bound to one workspace narrows that read to that workspace, and naming any other one with `--tenant` fails with exit `3`; see [Working across several workspaces](#working-across-several-workspaces). `tasks create` and `tasks subtasks create` always require a tenant; `tasks subtasks list` requires a tenant only when addressed by `--code`. Board writes — `boards create`, `boards update`, `boards delete`, `boards lists create`, `boards lists update`, `boards lists delete`, and `boards members add`/`update`/`remove` — always require a tenant: they write into one workspace.
 
 ## Products
 
@@ -497,6 +522,65 @@ Credentials and settings are stored in `~/.capigo/config.json` (permissions `600
 ```
 
 There is exactly one active profile (`active_profile`); the CLI does not take a `--profile` flag.
+Two keys are worth knowing before you rely on them:
+
+- The active profile is the only one a command reads. Selecting a different profile is a write to
+  the config file, not a flag: `capigo config set default_profile <name>`, and it exits `5` if
+  `<name>` is not already in the file.
+- **No command creates a profile.** `capigo auth login` writes the key into the profile that is
+  already active, creating `default` when the file has none. A second profile is added by editing
+  `~/.capigo/config.json` by hand.
+
+### Working across several workspaces
+
+A key is bound to one workspace when it is created, and the API keys page on the platform shows
+which. One key therefore reaches one workspace, and a call that names a different one — through
+`--tenant`, `CAPIGO_TENANT`, or a `default_tenant` belonging to another key — fails with exit `3`,
+*Permission denied: the key is valid but not allowed to reach that tenant*.
+
+Two traps follow from that, and both cost a caller real time:
+
+- **`capigo tenants list` is not the key's reach.** It returns the workspaces the *account* is an
+  active member of, so a key bound to one workspace can sit beside a list of five. Reading it as a
+  capability list is how a script ends up choosing a workspace it will be refused.
+- **A scoped key reads its own workspace even when you name none.** Omit `--tenant` and the request
+  still comes back holding only the key's workspace — but `meta` names no tenant, because the CLI
+  reports the tenant *it* resolved and it resolved none. A caller that reads `meta.tenant` to learn
+  where a row lives gets nothing. Pass `--tenant <the key's workspace>` when that matters: the
+  answer is the same rows, and `meta.tenant` is now on stdout.
+
+To work in more than one workspace, keep one key per workspace. There are two ways to hold them.
+
+**Per invocation, with environment variables** — no profile involved, and the right shape for an
+agent or a script that moves between workspaces in one run:
+
+```bash
+CAPIGO_API_KEY=csk_acme...   CAPIGO_TENANT=acme   capigo tasks list
+CAPIGO_API_KEY=csk_globex... CAPIGO_TENANT=globex capigo tasks create --title "…"
+```
+
+**One profile per key** — steadier when a human switches between them by hand, and the only way to
+keep several keys side by side on disk. Add the profiles to `~/.capigo/config.json` yourself, since
+no command creates one, then move the active marker:
+
+```json
+{
+  "version": 1,
+  "profiles": {
+    "acme":   { "api_key": "csk_acme...",   "api_url": "https://platform.capigo.app", "default_tenant": "acme" },
+    "globex": { "api_key": "csk_globex...", "api_url": "https://platform.capigo.app", "default_tenant": "globex" }
+  },
+  "active_profile": "acme"
+}
+```
+
+```bash
+capigo config set default_profile globex   # exit 5 if the profile is not in the file
+capigo config get default_profile
+```
+
+Switching is per machine, not per call: `capigo config set default_profile` changes what the *next*
+command resolves, and cannot be scoped to a single invocation.
 
 ### Configuration precedence
 
@@ -546,7 +630,7 @@ shape to stdout:
 ```bash
 capigo tasks list --tenant acme | jq '.data[] | {id, title, status}'
 
-# Omit --tenant on a spanning read to see tasks across every tenant you can access
+# Omit --tenant on a spanning read to see tasks across every tenant the key can reach
 capigo tasks list
 
 capigo tasks create --title "New task" --tenant acme | jq -r '.data.id'

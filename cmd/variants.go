@@ -34,6 +34,8 @@ USAGE
 var (
 	variantListTenant        string
 	variantListBarcodePrefix string
+	variantListProductID     string
+	variantListStatus        string
 	variantListSort          string
 	variantListPage          int
 	variantListLimit         int
@@ -41,8 +43,8 @@ var (
 
 var variantsListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List variants by barcode prefix",
-	Long: `List product variants, filtered by the leading digits of their barcode.
+	Short: "List variants by barcode prefix, product or status",
+	Long: `List product variants, filtered by barcode prefix, product or status.
 
 PURPOSE
   Find variants whose barcode begins with a given string. The usual reason is
@@ -50,13 +52,22 @@ PURPOSE
   next one can be chosen.
 
 USAGE
-  capigo variants list --tenant <code> [--barcode-prefix <p>] [--sort <order>]
+  capigo variants list --tenant <code> [--product-id <id>] [--status <s>]
+                       [--barcode-prefix <p>] [--sort <order>]
                        [--page <n>] [--limit <n>]
 
 FLAGS
   --tenant <code>
       Tenant to read from. Required. Falls back to CAPIGO_TENANT, then to
       default_tenant in the config file. Exits 5 if none resolves.
+
+  --product-id <uuid>
+      Only the variants of this product. A value that is not a UUID is exit 5.
+
+        capigo variants list --tenant acme --product-id 8f2a1c07-...
+
+  --status <active|inactive>
+      Only variants with this status. Left out, both are listed.
 
   --barcode-prefix <p>
       Match variants whose barcode starts with p. The special characters %
@@ -111,6 +122,9 @@ OUTPUT
 
 		validatePCMSLimit(variantListLimit)
 
+		if variantListStatus != "" && variantListStatus != "active" && variantListStatus != "inactive" {
+			failValidation("--status must be active or inactive")
+		}
 		validSorts := map[string]bool{"barcode": true, "-barcode": true}
 		if variantListSort != "" && !validSorts[variantListSort] {
 			failValidation("--sort must be one of: barcode, -barcode")
@@ -121,15 +135,12 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(variantListTenant, profile)
 		requireTenant(tenant, "variants commands")
 
-		resp, err := client.ListVariants(ctx, tenant, variantListBarcodePrefix, variantListSort, variantListPage, variantListLimit)
+		resp, err := client.ListVariants(ctx, tenant, variantListBarcodePrefix, variantListSort, variantListProductID, variantListStatus, variantListPage, variantListLimit)
 		if err != nil {
 			return handleErr(err)
 		}
@@ -279,6 +290,8 @@ OUTPUT
 
 func init() {
 	variantsListCmd.Flags().StringVar(&variantListTenant, "tenant", "", "tenant code (required)")
+	variantsListCmd.Flags().StringVar(&variantListProductID, "product-id", "", "only variants of this product (UUID)")
+	variantsListCmd.Flags().StringVar(&variantListStatus, "status", "", "only active or inactive variants")
 	variantsListCmd.Flags().StringVar(&variantListBarcodePrefix, "barcode-prefix", "", "filter variants whose barcode starts with this value")
 	variantsListCmd.Flags().StringVar(&variantListSort, "sort", "-barcode", `sort order: "barcode" (ascending) or "-barcode" (descending)`)
 	variantsListCmd.Flags().IntVar(&variantListPage, "page", 0, "page number")

@@ -70,6 +70,28 @@ credential files or environment variables to recover it, print it, place it in e
 it through shell tracing. Guide the user through `capigo auth login --help` and let them enter the
 key locally through the supported flow.
 
+### A key reaches one workspace
+
+A key is bound to the single workspace it was created in; the platform's API keys page shows which.
+That bound is enforced server-side on every request, so it holds regardless of what the CLI sends:
+
+- Naming another workspace — `--tenant`, `CAPIGO_TENANT`, or a `default_tenant` that belongs to a
+  different key — fails with exit `3`. The key is valid; the workspace is not its own.
+- Naming none does **not** widen the call. The request still reads only the key's workspace, and
+  `meta` names no tenant, because the CLI reports the tenant it resolved and it resolved none. If
+  the user needs to know which workspace an answer belongs to, pass the key's own workspace as
+  `--tenant`: same rows, and `meta.tenant` appears.
+- `capigo tenants list` is **not** this key's reach. It lists the workspaces the account belongs to
+  and is not narrowed to the key, so treat it as a directory of the account, never as the set of
+  workspaces the current key can be pointed at.
+- Older keys may carry no workspace and reach every workspace the account has. Do not infer a key's
+  reach from its prefix or age; take it from the API keys page, or from the exit code of the call
+  you were about to make.
+
+Working in several workspaces therefore takes one key each — one profile per key, or
+`CAPIGO_API_KEY` and `CAPIGO_TENANT` set per invocation. There is no `--profile` flag, and no
+command creates a profile: a second one is a hand edit of `~/.capigo/config.json`.
+
 ## 2. Discover the live command surface
 
 Once `capigo version` succeeds, use built-in help progressively:
@@ -106,7 +128,9 @@ Before a call:
 3. Read the leaf command's help before constructing flags or JSON.
 4. Resolve the tenant. If a write's tenant is ambiguous, ask before writing. Do not add a
    redundant confirmation when the user already authorized the exact resource, change, and
-   tenant. Task creation still follows the separate assignee-choice gate below.
+   tenant. Task creation still follows the separate assignee-choice gate below. Remember that a
+   key is bound to one workspace: on a write, name that workspace explicitly rather than letting
+   the default carry it, so `meta.tenant` is on stdout to verify afterwards.
 5. Use the conventions in [`references/cli-conventions.md`](./references/cli-conventions.md).
 
 After a call:

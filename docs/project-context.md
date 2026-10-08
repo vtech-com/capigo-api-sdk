@@ -127,7 +127,8 @@ capigo-api-sdk/                          # Standalone repo on GitHub
 ├── .github/
 │   ├── workflows/
 │   │   ├── ci.yml                   # Test + lint on every PR
-│   │   ├── release.yml              # GoReleaser on tag v*
+│   │   ├── release-on-merge.yml     # Tags a merged release/vX.Y.Z PR into main
+│   │   ├── release.yml              # GoReleaser; called by release-on-merge.yml, or on tag v*
 │   │   └── codeql.yml               # Security scanning
 │   ├── ISSUE_TEMPLATE/
 │   │   ├── bug_report.md
@@ -195,6 +196,7 @@ Additional profiles can be added (e.g. for different API keys or environments) b
 - `default_tenant` is **optional**. If set, it's used when no `--tenant` flag is passed. It is a **soft default**, not a hard lock — every command can override it per call.
 - `known_tenants` is a local cache populated from `GET /api/v1/tenants` (refreshed on `capigo tenants list` or on auth). Used for shell completion and validation. Not authoritative.
 - A user typically belongs to multiple tenants and may switch between them often (e.g. a product manager working across several tenants in one session), so the CLI must not bind to a single "active tenant".
+- A **key** is bound to exactly one tenant, and the bound is enforced server-side: naming any other tenant fails with exit `3`, and omitting the tenant does not widen the call, because the API scopes it to the key's own. The CLI's freedom to switch tenants per call is therefore limited by how many keys the account holds — one per tenant. This is why profiles exist and why they matter more than they did: see [GH #1064](https://github.com/vtech-com/capigo/issues/1064) in `capigo`. `tenants list` reports the account's memberships, **not** the current key's reach.
 
 **File permissions:** Must `chmod 600` on create/update (contains secrets).
 
@@ -225,6 +227,8 @@ CAPIGO_API_KEY=csk_... CAPIGO_TENANT=acme capigo tasks list
 ```
 
 **Default behavior when nothing is configured: global mode** (no tenant header sent). The API returns data across all accessible tenants. This is intentional — it lets new users see something useful immediately without configuration.
+
+**What global mode is worth depends on the key.** The server resolves the tenant from the key before it looks at the header, so for a key bound to one tenant the cross-tenant read returns that tenant and nothing else, while `meta` names no tenant — the CLI reports the tenant it resolved, and it resolved none. A caller that reads `meta.tenant` to learn where a row lives therefore gets nothing on exactly the call that needed it most, and should name the tenant explicitly instead. Only a key that carries no tenant still reads across all of them.
 
 ---
 
@@ -399,6 +403,8 @@ User-Agent: capigo-api-sdk/1.0.0 (darwin; arm64)
 - `X-Request-Id: <uuid>` (for debugging)
 
 API keys are issued by Capigo through the Capigo platform UI. The CLI never creates or rotates keys — it only consumes them.
+
+A key created through that UI is **scoped to one tenant**: the platform binds it at creation and refuses to change the binding afterwards ([GH #1064](https://github.com/vtech-com/capigo/issues/1064)). Keys issued before that rule took effect may carry no tenant and reach every tenant their owner belongs to; the API keys page shows which, and it is the only authoritative answer — neither `tenants list` nor the key's prefix reveals it. Because the CLI authenticates with one key at a time, reaching N tenants takes N keys, which is what a profile per key is for. The CLI has no `--profile` flag and no command that creates a profile, so additional profiles are written into `~/.capigo/config.json` by hand and selected with `capigo config set default_profile <name>`.
 
 ### 5.3 Tenant handling per endpoint
 

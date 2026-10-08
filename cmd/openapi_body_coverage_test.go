@@ -90,6 +90,23 @@ var bodyFieldAliasMap = map[string]string{
 	// exposes it as a singular repeatable flag — the shape every other
 	// repeatable id/name list here uses: --user-id <uuid> --user-id <uuid>.
 	"user_ids": "user-id",
+	// POST /members/invitations: the invitee_ prefix only says whose address it
+	// is, which --email and --mobile already say on a command about inviting.
+	"invitee_email":  "email",
+	"invitee_mobile": "mobile",
+	"custom_message": "custom-message",
+	// PATCH /members/{id}: plural fields are repeatable singular flags, like follower_ids.
+	"positions":   "position",
+	"permissions": "permission",
+	// POST /pcms/variants/lookup: arrays are repeatable singular flags.
+	"skus":     "sku",
+	"barcodes": "barcode",
+	// PUT /pcms/products/{id}/options: options are repeatable Name=v1,v2 flags and overrides come from a file.
+	"options":   "option",
+	"overrides": "overrides-file",
+	// /pcms/products/{id}/media: variant_ids is a repeatable singular flag; is_default is the boolean --default.
+	"variant_ids": "variant-id",
+	"is_default":  "default",
 }
 
 // intentionallyUnexposedBodyFields lists body fields that the CLI deliberately
@@ -106,6 +123,11 @@ var intentionallyUnexposedBodyFields = map[string]map[string]string{
 	// (--title, --description, --priority, …), so there is no single `--task` flag.
 	"POST /mission/tasks/with-subtasks": {
 		"task": "parent-task fields come from the individual tasks-create flags, not a single --task flag",
+	},
+	// The tasks alias maps position to the boolean --top; a media item's position is a
+	// 1-based integer, exposed as --position.
+	"PATCH /pcms/products/{id}/media/{mediaId}": {
+		"position": "exposed as the integer --position, not the tasks --top alias",
 	},
 }
 
@@ -127,6 +149,48 @@ type writeCommandEntry struct {
 // cobra commands are fully initialised (init() has run).
 func buildWriteCommandMapping() []writeCommandEntry {
 	return []writeCommandEntry{
+		{
+			humanName: "members update",
+			path:      "/members/{id}",
+			method:    "patch",
+			hasFlag:   func(n string) bool { return membersUpdateCmd.Flags().Lookup(n) != nil },
+		},
+		{
+			humanName: "variants lookup",
+			path:      "/pcms/variants/lookup",
+			method:    "post",
+			hasFlag:   func(n string) bool { return variantsLookupCmd.Flags().Lookup(n) != nil },
+		},
+		{
+			humanName: "products options",
+			path:      "/pcms/products/{id}/options",
+			method:    "put",
+			hasFlag:   func(n string) bool { return productsOptionsCmd.Flags().Lookup(n) != nil },
+		},
+		{
+			humanName: "products media add",
+			path:      "/pcms/products/{id}/media",
+			method:    "post",
+			hasFlag:   func(n string) bool { return productsMediaAddCmd.Flags().Lookup(n) != nil },
+		},
+		{
+			humanName: "products media update",
+			path:      "/pcms/products/{id}/media/{mediaId}",
+			method:    "patch",
+			hasFlag:   func(n string) bool { return productsMediaUpdateCmd.Flags().Lookup(n) != nil },
+		},
+		{
+			humanName: "members invite",
+			path:      "/members/invitations",
+			method:    "post",
+			hasFlag:   func(n string) bool { return membersInviteCmd.Flags().Lookup(n) != nil },
+		},
+		{
+			humanName: "join-requests approve",
+			path:      "/join-requests/{id}/actions/approve",
+			method:    "post",
+			hasFlag:   func(n string) bool { return joinRequestsApproveCmd.Flags().Lookup(n) != nil },
+		},
 		// tasks create: no --from-json; must have per-field flags for everything.
 		{
 			humanName: "tasks create",

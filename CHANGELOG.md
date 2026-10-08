@@ -7,8 +7,106 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ---
 
-
 ## [Unreleased]
+
+## [0.27.0] — 2026-10-08
+
+### Added
+
+- **`members update` changes a member.** `capigo members update <id> --tenant <code> [--display-name]
+  [--email] [--mobile] [--member-code] [--job-title] [--department] [--bio] [--role owner|member]
+  [--status active|inactive|banned] [--position <uuid>]... [--clear-positions] [--permission <key>]...
+  [--clear-permissions]` sends `PATCH /members/{id}`, the HRIS-sync call. Only the flags you give are
+  sent, and an empty value clears a field. The writes are separate steps with no rollback; an owner
+  cannot change their own role or status (exit 3, `E9206`), and a member code or email already in use
+  is exit 8 (`E4103`, `E4104`).
+- **`variants lookup` and `variants resolve` turn codes into variants.** `capigo variants lookup --tenant
+  <code> [--sku <s>]... [--barcode <b>]... [--sku-file <path>] [--barcode-file <path>]` sends
+  `POST /pcms/variants/lookup` for up to 100 codes at once and answers the variants found plus the codes
+  that matched nothing; `capigo variants resolve --tenant <code> --code <c>` sends
+  `GET /pcms/variants/resolve` for one code of any kind (SKU, QR link, barcode, manufacturer code) and
+  names which one matched. The batch reads the search index and can lag by about a minute; resolve reads
+  the tables. A retired SKU is exit 4 with `E9483`.
+- **`products options` saves a product's options.** `capigo products options <id> --tenant <code>
+  --strategy replace_all|add_new|keep_as_manual (--option "Color=Red,Blue" ... | --no-options)
+  [--overrides-file <path|->]` sends `PUT /pcms/products/{id}/options`: the complete option set after
+  the save (at most two options of ten values) and the variants for every combination, in one
+  transaction. A repeat changes nothing, and `meta` reports zero changes.
+- **`products variants --delete-variant <uuid>` retires a variant.** Repeatable; it appends
+  `{ variant_id, _delete: true }` items to the call, so it needs no `--from-json`. The variant must
+  belong to the product (`E9425`, exit 4) and a product keeps one live variant (`E9447`, exit 5).
+- **`variants list --product-id <uuid> --status active|inactive`** filters by product and status.
+- `products variants` and `variants list` read the profile with `activeProfileOrEmpty`, so a key given
+  only through `CAPIGO_API_KEY` works without `capigo auth login`.
+- **`products media add|update|delete` manage a product's gallery.** `capigo products media add
+  <product-id> --tenant <code> (--file <path> | --source-url <https-url>) [--filename] [--variant-id <uuid>]...
+  [--default] [--idempotency-key]` sends `POST /pcms/products/{id}/media` as multipart (file) or JSON
+  (address): the server checks for a duplicate, stores the bytes, creates the item, links the variants and
+  sets the default. `products media update <product-id> <media-id> [--position <n>] [--default]
+  [--variant-id]... [--clear-variants] [--alt-text | --clear-alt-text]` sends `PATCH`, and `products media
+  delete <product-id> <media-id>` sends `DELETE` (soft delete, no restore). The type is decided from the
+  bytes, at most 50 items per product (`E9454`), 10 MB for an image and 50 MB for a video.
+- **`brands|categories|product-types|units delete <id>` soft-delete catalog structure.** `capigo brands
+  delete <id> --tenant <code>` (and the same for `categories`, `product-types`, `units`) sends `DELETE
+  /pcms/{resource}/{id}`, as the PCMS editor does: the item leaves every read and its slug or name is free
+  at once. It is refused with exit 8 while a live product uses it (`E9435` brand, `E9437` product type,
+  `E9442` unit) or, for a category, while it has a live child (`E9439`) or a live product (`E9440`).
+  A repeated delete is exit 4, so a retry after a lost answer can treat exit 4 as done. Only an owner or
+  a catalog admin may call it.
+- **`categories list --parent-id <uuid> | --root`** lists the direct children of a category, or the root
+  categories (`parent_id=null`).
+- `categories list` reads the profile with `activeProfileOrEmpty`, so a key given only through
+  `CAPIGO_API_KEY` works without `capigo auth login`.
+- **`members invite` invites a person.** `capigo members invite --tenant <code> (--email <address> |
+  --mobile <number>) [--idempotency-key <key>]` sends `POST /members/invitations`. Only an active tenant
+  owner may call it. The platform sends no email or SMS, so the creating answer carries the accept-link
+  `token` once — a replay, an error or a later read never does — and the caller builds
+  `{web origin}/invite?token={token}`. A retry with the same `--idempotency-key` and invitee returns the
+  same invitation without the token; the same key with another invitee is exit 8 (`E0601`).
+- **`join-requests approve` and `join-requests reject` decide a join request.** `capigo join-requests
+  approve <id> --tenant <code> --display-name <name> [--member-code <c>] [--job-title <t>]
+  [--department <d>]` and `capigo join-requests reject <id> --tenant <code>` send
+  `POST /join-requests/{id}/actions/approve` and `/reject`. Only an active tenant owner may call them.
+  Only one decision counts: a request already decided, or lost to a concurrent decision, is exit 8
+  (`E2403`); a requester whose membership is inactive or banned is exit 8 (`E2302`) and the request stays
+  pending. No answer carries the requester's email or mobile.
+- **`members invitations list` and `members invitations cancel`, `join-requests list`.** `capigo members
+  invitations list --tenant <code> [--status pending|approved|cancelled|expired] [--email <a>] [--page <n>]
+  [--limit <n>]` and `capigo join-requests list --tenant <code> [--status pending|approved|rejected]
+  [--email <a>] [--page <n>] [--limit <n>]` read `GET /members/invitations` and `GET /join-requests`, newest
+  first, for an active tenant owner only; `capigo members invitations cancel <id> --tenant <code>` sends
+  `POST /members/invitations/{id}/actions/cancel` (exit 8, `E2308`, when the invitation is no longer
+  pending). An unknown `--status` is exit 5 before any call. No row carries the accept-link token.
+- **`members invite --custom-message <text>`** adds a note of up to 500 characters shown to the invitee.
+- The three commands read the profile with `activeProfileOrEmpty`, so a key supplied only through
+  `CAPIGO_API_KEY` works without `capigo auth login`.
+
+### Changed
+
+- **A release is now a merged `release/vX.Y.Z` PR, not a hand-pushed tag.** The new
+  `release-on-merge.yml` checks the branch name against the `CHANGELOG.md` section and the latest
+  tag, tags the merge commit on `main`, publishes through `release.yml`, and opens the
+  `main` → `develop` sync PR. `release.yml` keeps its tag trigger as a fallback, but now refuses a
+  tag that is not on `main` or has no matching `CHANGELOG.md` section, so write access alone no
+  longer publishes an arbitrary commit.
+- **The release also merges `main` back into `develop`.** `release-on-merge.yml` opens the sync PR and
+  merges it straight away; a conflict leaves the PR open and fails the run. `CONTRIBUTING.md` now says
+  that only a `release/vX.Y.Z` branch releases, and that a merge from any other branch is silently
+  not a release.
+
+### Docs
+
+- **A key reaches one tenant, and the docs now say so.** Capigo binds a key to a single tenant at
+  creation and refuses to re-point it ([capigo#1064](https://github.com/vtech-com/capigo/issues/1064)),
+  so `--tenant` naming any other tenant is exit `3`, and omitting `--tenant` no longer widens a read:
+  the API scopes the call to the key's own tenant, while `meta` names no tenant because the CLI
+  reports the tenant *it* resolved and it resolved none. Three README passages that promised a
+  cross-tenant read without qualification, and the same claim in `docs/project-context.md`, are
+  corrected; `skills/capigo-api/` gains the rule for agents. `capigo tenants list` is documented as
+  the account's memberships, not the current key's reach — it can name tenants a given key cannot
+  touch. A cross-tenant workflow is one key per tenant, i.e. one profile per key; the README now
+  states that the CLI has no `--profile` flag and that no command creates a profile, so an extra
+  profile is a hand edit of `~/.capigo/config.json`. No CLI behaviour changed.
 
 ## [0.26.0] — 2026-09-30
 

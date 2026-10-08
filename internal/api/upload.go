@@ -248,3 +248,43 @@ func (c *Client) PostTaskCommentWithAttachments(
 
 	return c.postMultipart(ctx, path, fields, files, tenant, headers)
 }
+
+// UploadProductMedia posts a product media file to path as multipart/form-data: a
+// `file` part plus `variant_ids` (the field repeated once per id) and `is_default`
+// as text. The server decides the file type from the bytes, so the part's own
+// Content-Type is informative only.
+//
+// idempotencyKey, when non-empty, is sent as the Idempotency-Key header: the same
+// key with the same file answers 200 and stores nothing a second time, and a
+// different file with it is 409 E0601.
+func (c *Client) UploadProductMedia(
+	ctx context.Context,
+	path string,
+	fileName string,
+	contentType string,
+	data []byte,
+	variantIDs []string,
+	isDefault bool,
+	tenant *string,
+	idempotencyKey string,
+) (*Response, error) {
+	headers := map[string]string{}
+	if idempotencyKey != "" {
+		headers["Idempotency-Key"] = idempotencyKey
+	}
+
+	var fields []UploadField
+	for _, id := range variantIDs {
+		fields = append(fields, UploadField{Name: "variant_ids", Value: id})
+	}
+	if isDefault {
+		fields = append(fields, UploadField{Name: "is_default", Value: "true"})
+	}
+
+	return c.postMultipart(ctx, path, fields, []UploadPart{{
+		FieldName:   "file",
+		FileName:    fileName,
+		ContentType: contentType,
+		Data:        data,
+	}}, tenant, headers)
+}

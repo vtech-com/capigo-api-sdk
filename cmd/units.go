@@ -592,6 +592,6 @@ func init() {
 	unitsReplaceCmd.Flags().StringVar(&unitReplaceAbbreviation, "abbreviation", "", "unit abbreviation, e.g. kg (required)")
 	unitsReplaceCmd.Flags().StringVar(&unitReplaceFromJSON, "from-json", "", "path to JSON file with full request body (use - for stdin); mutually exclusive with individual field flags")
 
-	unitsCmd.AddCommand(unitsListCmd, unitsGetCmd, unitsCreateCmd, unitsUpdateCmd, unitsReplaceCmd)
+	unitsCmd.AddCommand(unitsListCmd, unitsGetCmd, unitsCreateCmd, unitsUpdateCmd, unitsReplaceCmd, unitsDeleteCmd)
 	rootCmd.AddCommand(unitsCmd)
 }

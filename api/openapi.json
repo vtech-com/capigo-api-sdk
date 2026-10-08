@@ -28,6 +28,45 @@
       }
     },
     "schemas": {
+      "InviteMemberResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "id",
+              "status",
+              "expires_at",
+              "created_at"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "status": {
+                "type": "string",
+                "description": "Current status of the invitation, e.g. `pending`."
+              },
+              "expires_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "created_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "token": {
+                "type": "string",
+                "description": "Accept-link secret. Present only in the `201` that created the invitation."
+              }
+            }
+          }
+        }
+      },
       "Error": {
         "type": "object",
         "properties": {
@@ -128,6 +167,102 @@
             "type": "string",
             "nullable": true,
             "example": "https://example.com/avatar.jpg"
+          }
+        }
+      },
+      "PublicProductMedia": {
+        "type": "object",
+        "description": "One media item of a product, as the media endpoints answer. `url` is a signed, time-limited link valid until `expires_at`; no storage path is ever returned. `position` is the 1-based place among the product's live items.",
+        "required": [
+          "id",
+          "product_id",
+          "type",
+          "filename",
+          "file_size",
+          "width",
+          "height",
+          "content_version",
+          "position",
+          "is_default",
+          "alt_text",
+          "variant_ids",
+          "url",
+          "expires_at",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "product_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "image",
+              "video"
+            ]
+          },
+          "filename": {
+            "type": "string",
+            "description": "Trimmed and lower-cased, the form the duplicate check compares."
+          },
+          "file_size": {
+            "type": "integer",
+            "description": "Bytes."
+          },
+          "width": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Null for a video."
+          },
+          "height": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Null for a video."
+          },
+          "content_version": {
+            "type": "integer",
+            "description": "Starts at 1 and rises each time the content is replaced."
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "is_default": {
+            "type": "boolean"
+          },
+          "alt_text": {
+            "type": "string",
+            "nullable": true
+          },
+          "variant_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Live variants this item is linked to."
+          },
+          "url": {
+            "type": "string",
+            "description": "Signed link, valid until `expires_at`."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
           }
         }
       },
@@ -4085,6 +4220,702 @@
         }
       }
     },
+    "/members/invitations": {
+      "get": {
+        "summary": "List Invitations",
+        "tags": [
+          "Members"
+        ],
+        "description": "List the invitations of the tenant named by `X-Tenant-Code`, newest first. Only an **active tenant owner** may call it. A caller who lost the `201` that created an invitation (the only answer carrying the `token`) recovers by listing, cancelling the pending invitation and inviting again with a new `Idempotency-Key`. Each item shows the invitee's `invitee_email` and `invitee_mobile` (a stored mobile has no leading `+`), the contact data an owner already sees on the members screen. The `token` is in no list. Each item's `status` is the stored value: `pending`, `approved` (accepted) or `cancelled` (cancelled by the owner or refused by the invitee, which cannot be told apart). An invitation still stored `pending` after its `expires_at` has lapsed: its `expired` is `true`, and `?status=expired` lists exactly those. `?status=pending` lists only the stored `pending` invitations that have not lapsed. `approved` and `cancelled` filter by stored status whatever the date, and their `expired` is `false`. `custom_message` is the message the inviter sent, or `null`. `total` counts the filtered set. Of two invitations created at the same instant the order is stable, so paging shows each once. This list and the join request list are the only answers that carry contact data. A list read page by page is consistent only while nothing changes between the requests.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": false,
+            "description": "Code of the tenant that owns the invitations. Required unless the API key is pinned to one tenant.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "`pending` (stored `pending` and not past `expires_at`), `approved`, `cancelled` (stored status), or `expired` (stored `pending` and past `expires_at`). Anything else is `400`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "approved",
+                "cancelled",
+                "expired"
+              ]
+            }
+          },
+          {
+            "name": "email",
+            "in": "query",
+            "required": false,
+            "description": "Return only the invitations sent to this address. Trimmed and lowercased, then compared exactly (no partial match), so `a@x.com` does not find `a@x.com.vn`; an invitation sent to a mobile number only never matches. Combines with `status`. Blank, or longer than 254 characters, is `400 INVALID_QUERY_PARAMS`.",
+            "schema": {
+              "type": "string",
+              "maxLength": 254
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "Page number, from 1. A page past the last one answers `200` with an empty `data`.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Items per page.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of invitations.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "status",
+                          "invitee_email",
+                          "invitee_mobile",
+                          "expires_at",
+                          "expired",
+                          "custom_message",
+                          "created_at"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "approved",
+                              "cancelled"
+                            ]
+                          },
+                          "invitee_email": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "invitee_mobile": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "expires_at": {
+                            "type": "string",
+                            "format": "date-time",
+                            "nullable": true
+                          },
+                          "expired": {
+                            "type": "boolean",
+                            "description": "True when the invitation is stored `pending` and past `expires_at`."
+                          },
+                          "custom_message": {
+                            "type": "string",
+                            "nullable": true,
+                            "description": "The message the inviter sent, shown to the invitee."
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/MetaPagination"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A query parameter is invalid (`INVALID_QUERY_PARAMS`: unknown `status`, `page` under 1, `limit` over 50), or no tenant could be resolved (`TENANT_CODE_REQUIRED`)"
+          },
+          "403": {
+            "description": "The caller is not an active owner of the tenant (`FORBIDDEN`), or the key cannot reach the tenant"
+          }
+        }
+      },
+      "post": {
+        "summary": "Invite Member",
+        "tags": [
+          "Members"
+        ],
+        "description": "Invite a person to the tenant named by `X-Tenant-Code`, by email, mobile or both. Only an **active tenant owner** may call it. The platform sends no email or SMS: the `201` that creates the invitation returns the accept-link `token` **once** — it appears in no replay, error or later read, so store it. Build the link as `{web origin}/invite?token={token}`; the web origin is your workspace's app origin, not this API's. The invitee must sign in with an account whose email or mobile matches the invitation to accept it. The invitation expires 30 days after creation. This answer carries no contact data; only the invitation list shows it. An optional `Idempotency-Key` header makes a retry safe: the same key with an identical body returns `200` with the same invitation (its current status, **without** `token`) and writes nothing; the same key with a different body returns `409` (E0601). A caller who loses the `201` loses the token: list the invitations (`GET /members/invitations`), cancel the pending one (`POST /members/invitations/{id}/actions/cancel`) and invite again with a new `Idempotency-Key`. A cancelled invitation keeps its key: replaying the creating call answers `200` with status `cancelled` and no `token`.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": false,
+            "description": "Code of the tenant to invite into. Required unless the API key is pinned to one tenant.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Optional idempotency key, scoped to the tenant. A replay of the same key with an identical body returns 200 with the stored invitation and no `token`; the same key with a different body returns 409 (E0601).",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "At least one of `invitee_email` and `invitee_mobile` is required.",
+                "properties": {
+                  "invitee_email": {
+                    "type": "string",
+                    "format": "email",
+                    "description": "Stored lowercase."
+                  },
+                  "invitee_mobile": {
+                    "type": "string",
+                    "description": "Any common phone format; stored normalized to E.164 without the leading `+`."
+                  },
+                  "custom_message": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 500,
+                    "description": "Optional message the invitee sees on the invite page, shown as text. Trimmed; blank or `null` means none; over 500 characters is `400`. It is part of the `Idempotency-Key` body comparison and is not echoed in the answer."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Replay: the same Idempotency-Key was applied with an identical body. Returns the stored invitation with its current status and no `token`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteMemberResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The invitation was created. `data.token` is returned only here.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteMemberResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not valid JSON or fails validation, or no tenant could be resolved (`TENANT_CODE_REQUIRED`)"
+          },
+          "403": {
+            "description": "The caller is not an active owner of the tenant (`FORBIDDEN`), or the key cannot reach the tenant"
+          },
+          "409": {
+            "description": "The invitee is already a member (E2302), already has a live pending invitation (E2301), or the Idempotency-Key was already used with a different body (E0601)"
+          }
+        }
+      }
+    },
+    "/members/invitations/{id}/actions/cancel": {
+      "post": {
+        "summary": "Cancel Invitation",
+        "tags": [
+          "Members"
+        ],
+        "description": "Cancel a pending invitation of the tenant named by `X-Tenant-Code`; its link no longer accepts. Only an **active tenant owner** may call it. The body must be empty: a field is refused with `400`. Only a `pending` invitation can be cancelled, even one past its `expires_at`; an invitation that was accepted, refused or already cancelled answers `409` (`E2308`) and nothing changes. Another tenant's invitation answers exactly like an unknown id. Cancelling keeps the invitation's `Idempotency-Key` bound to it: replaying the creating call afterwards answers `200` with status `cancelled` and no `token`, so a new invitation needs a new key. Find the id with `GET /members/invitations`. A cancel retried after a lost answer gets `409` (`E2308`); a client that already saw the invitation `cancelled` should treat that `409` as done. The answer carries no contact data.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Invitation id (UUID).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": false,
+            "description": "Code of the tenant that owns the invitation. Required unless the API key is pinned to one tenant.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The invitation is cancelled.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "status"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "cancelled"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The id is not a UUID, the body is not valid JSON or has a field, or no tenant could be resolved (`TENANT_CODE_REQUIRED`)"
+          },
+          "403": {
+            "description": "The caller is not an active owner of the tenant (`FORBIDDEN`), or the key cannot reach the tenant"
+          },
+          "404": {
+            "description": "No such invitation in the tenant. Another tenant's invitation answers exactly like an unknown id."
+          },
+          "409": {
+            "description": "The invitation is no longer pending: accepted, refused or already cancelled (`E2308`)"
+          }
+        }
+      }
+    },
+    "/join-requests": {
+      "get": {
+        "summary": "List Join Requests",
+        "tags": [
+          "Members"
+        ],
+        "description": "List the join requests of the tenant named by `X-Tenant-Code`, newest first, so the `id` that approve and reject need can be found. Only an **active tenant owner** may call it. Each item shows who asked and how to reach them (`contact_email`, `contact_mobile`, `bio`), the contact data an owner already sees on the members screen; each is `null` when the request holds no text for it. The requester's account id is never shown. `status` is the stored value: `pending`, `approved` or `rejected`. `total` counts the filtered set. Of two requests created at the same instant the order is stable, so paging shows each once. This list and the invitation list are the only answers that carry contact data. A list read page by page is consistent only while nothing changes between the requests.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": false,
+            "description": "Code of the tenant that owns the requests. Required unless the API key is pinned to one tenant.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Only records with this stored status. Anything else is `400`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "approved",
+                "rejected"
+              ]
+            }
+          },
+          {
+            "name": "email",
+            "in": "query",
+            "required": false,
+            "description": "Return only the requests whose `contact_email` is this address. Trimmed and lowercased, then compared exactly (no partial match). A request that left no email never matches. Combines with `status`. Blank, or longer than 254 characters, is `400 INVALID_QUERY_PARAMS`.",
+            "schema": {
+              "type": "string",
+              "maxLength": 254
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "Page number, from 1. A page past the last one answers `200` with an empty `data`.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Items per page.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of join requests.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "status",
+                          "contact_email",
+                          "contact_mobile",
+                          "bio",
+                          "created_at",
+                          "updated_at"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "status": {
+                            "type": "string",
+                            "enum": [
+                              "pending",
+                              "approved",
+                              "rejected"
+                            ]
+                          },
+                          "contact_email": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "contact_mobile": {
+                            "type": "string",
+                            "nullable": true,
+                            "description": "Stored without a leading `+`."
+                          },
+                          "bio": {
+                            "type": "string",
+                            "nullable": true
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          },
+                          "updated_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/MetaPagination"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A query parameter is invalid (`INVALID_QUERY_PARAMS`: unknown `status`, `page` under 1, `limit` over 50), or no tenant could be resolved (`TENANT_CODE_REQUIRED`)"
+          },
+          "403": {
+            "description": "The caller is not an active owner of the tenant (`FORBIDDEN`), or the key cannot reach the tenant"
+          }
+        }
+      }
+    },
+    "/join-requests/{id}/actions/approve": {
+      "post": {
+        "summary": "Approve Join Request",
+        "tags": [
+          "Members"
+        ],
+        "description": "Approve a pending join request (find its id with `GET /join-requests`): the requester becomes a `member` of the tenant named by `X-Tenant-Code`. Only an **active tenant owner** may call it. `display_name` is required; `member_code`, `job_title` and `department` are optional. Of two concurrent decisions on one request exactly one wins and the other answers `409` (E2403). A requester whose membership exists but is not `active` (`inactive`, `banned`) is refused with `409` (E2302) and the request stays pending; a requester who is already an active member is marked approved without a second member and the answer has no `member_id`. If creating the member fails the request is restored to `pending`. No response carries the requester's email or mobile.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Join request id (UUID).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": false,
+            "description": "Code of the tenant that owns the request. Required unless the API key is pinned to one tenant.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "display_name"
+                ],
+                "properties": {
+                  "display_name": {
+                    "type": "string",
+                    "description": "Name shown for the new member. Must not be blank."
+                  },
+                  "member_code": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Optional; generated when omitted. A code already used in the tenant answers `409` (E4103)."
+                  },
+                  "job_title": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "department": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The request is approved.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "status"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "status": {
+                          "type": "string"
+                        },
+                        "member_id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "description": "The new member's id; absent when the requester was already an active member."
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The id is not a UUID, the body is not valid JSON or fails validation, or no tenant could be resolved (`TENANT_CODE_REQUIRED`)"
+          },
+          "403": {
+            "description": "The caller is not an active owner of the tenant (`FORBIDDEN`), or the key cannot reach the tenant"
+          },
+          "404": {
+            "description": "No such join request in the tenant. Another tenant's request answers exactly like an unknown id."
+          },
+          "409": {
+            "description": "The request has already been decided, or a concurrent decision won (E2403)"
+          }
+        }
+      }
+    },
+    "/join-requests/{id}/actions/reject": {
+      "post": {
+        "summary": "Reject Join Request",
+        "tags": [
+          "Members"
+        ],
+        "description": "Reject a pending join request (find its id with `GET /join-requests`) of the tenant named by `X-Tenant-Code`. Only an **active tenant owner** may call it. The body must be empty: the service collects no reason, so a field is refused with `400`. No member is created. Of two concurrent decisions on one request exactly one wins and the other answers `409` (E2403). No response carries the requester's email or mobile.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Join request id (UUID).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": false,
+            "description": "Code of the tenant that owns the request. Required unless the API key is pinned to one tenant.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The request is rejected.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "status"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "status": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The id is not a UUID, the body is not valid JSON or fails validation, or no tenant could be resolved (`TENANT_CODE_REQUIRED`)"
+          },
+          "403": {
+            "description": "The caller is not an active owner of the tenant (`FORBIDDEN`), or the key cannot reach the tenant"
+          },
+          "404": {
+            "description": "No such join request in the tenant. Another tenant's request answers exactly like an unknown id."
+          },
+          "409": {
+            "description": "The request has already been decided, or a concurrent decision won (E2403)"
+          }
+        }
+      }
+    },
     "/members": {
       "get": {
         "summary": "List Members",
@@ -4204,6 +5035,233 @@
           },
           "404": {
             "description": "Member not found"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update Member",
+        "tags": [
+          "Members"
+        ],
+        "description": "Update a member of the tenant named by `X-Tenant-Code`. `{id}` is the member's user id, as in `GET /members/{id}`. Only an **active tenant owner** may call it. The body takes any of the profile fields the member edit page changes (`display_name`, `email`, `mobile`, `member_code`, `job_title`, `department`, `bio`) plus `role`, `status`, `positions` and `permissions`; a field left out is not changed, and `avatar_url` and `birth_date` are not offered. The writes are separate transactions applied in a fixed order: profile, `status: active`, `role`, `permissions`, `positions`, then `status: inactive|banned`. There is **no rollback**: if a step fails after earlier ones applied, the answer is that step's error and its message names the groups already applied; send the same body again to complete it. A field that already holds its value is a no-op that emits no event, so the verb is idempotent by value and takes no `Idempotency-Key`. A caller who is not an active owner gets `403` before anything else. A `role` equal to the member's stored role is ignored, so a finished call can be repeated. Refused before any write: the caller's own `role` or `status` (`403`, E9206), `permissions` for a member who is or becomes an owner (`409`), a `role` on a member who is not active and is not reactivated by the same call (`409`), and a member code or email another member already uses (`409`, E4103, E4104). Demoting or deactivating the last active owner answers `409` (E9205). A removed member, an unknown id and another tenant's member answer the same `404`. The answer is the stored state and never carries the member's email, mobile or other contact data. There is no member-create call: a member joins through an invitation or an approved join request.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The member's user id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": false,
+            "description": "Code of the tenant the member belongs to. Required unless the API key is pinned to one tenant.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "At least one field. A field left out is not changed.",
+                "properties": {
+                  "display_name": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "description": "Must not be blank; the name cannot be cleared."
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 254,
+                    "nullable": true,
+                    "description": "`null` or blank clears it. An address another non-removed member of the tenant already uses, in any letter case, answers `409` (E4104)."
+                  },
+                  "mobile": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Normalized like the invitation mobile; `null` or blank clears it."
+                  },
+                  "member_code": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "nullable": true,
+                    "description": "Trimmed and upper-cased; `null` or blank clears it. A code another member of the tenant uses answers `409` (E4103)."
+                  },
+                  "job_title": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 100
+                  },
+                  "department": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 100
+                  },
+                  "bio": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 2000
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "owner",
+                      "member"
+                    ],
+                    "description": "The caller's own role cannot change (`403`, E9206). The member must be active, or reactivated by `status: active` in the same call."
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "inactive",
+                      "banned"
+                    ],
+                    "description": "The caller's own status cannot change (`403`, E9206)."
+                  },
+                  "positions": {
+                    "type": "array",
+                    "maxItems": 200,
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "description": "Replaces all of the member's positions; `[]` clears them. A position outside the tenant answers `400`."
+                  },
+                  "permissions": {
+                    "type": "array",
+                    "maxItems": 200,
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Replaces all granular permission keys; `[]` clears them. Refused with `409` for a member who is or becomes an owner."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The member after the update.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "role",
+                        "status",
+                        "display_name",
+                        "member_code",
+                        "job_title",
+                        "department",
+                        "bio",
+                        "permissions",
+                        "positions"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "description": "The member's user id."
+                        },
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "owner",
+                            "member"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "inactive",
+                            "banned"
+                          ]
+                        },
+                        "display_name": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "member_code": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "job_title": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "department": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "bio": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "permissions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "positions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "format": "uuid"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The id is not a UUID, the body is not valid JSON or fails validation (no field, an unknown field, a bad value, an unknown permission key, a non-UUID or unknown position), or no tenant could be resolved (`TENANT_CODE_REQUIRED`)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "The caller is not an active owner of the tenant (`FORBIDDEN`), the key cannot reach the tenant, or the body changes the caller's own role or status (E9206)"
+          },
+          "404": {
+            "description": "The member is unknown, removed or belongs to another tenant"
+          },
+          "409": {
+            "description": "Refused. `code` is one of `E4103` (member code already used), `E4104` (email already used), `E9205` (the last active owner would be lost), `PERMISSIONS_NOT_APPLICABLE` (permissions for a member who is or becomes an owner) or `MEMBER_NOT_ACTIVE` (a role change on a member who is not active and is not reactivated by the same call). After earlier steps applied, the message names them"
+          },
+          "500": {
+            "description": "Internal server error. After earlier steps applied, the message names them"
           }
         }
       }
@@ -7627,6 +8685,88 @@
             "description": "A brand with this name (slug) already exists in the tenant"
           }
         }
+      },
+      "delete": {
+        "summary": "Delete Brand",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Soft-delete a brand, as the PCMS editor does. The brand leaves every read, is never purged, and its slug is free for a new brand at once. Only the tenant owner or a member with the catalog admin permission may delete; the key acts as the member it belongs to. A brand a live product uses, whatever the product's status, is refused with `409` and nothing is deleted. Deleted products do not count. A repeated delete answers `404`: the first one succeeded and the brand is gone, so a client that lost the response and retries should treat `404` as done. The answer names the item by id, because every read answers `404` once the delete has run. Any request body and any query parameter are ignored; the tenant is the one the key and `X-Tenant-Code` name.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Brand UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The brand was deleted; `data.id` names it",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing X-Tenant-Code"
+          },
+          "401": {
+            "description": "Missing or invalid API key (`E0004` when the token cannot be used)"
+          },
+          "403": {
+            "description": "The key's member is not in the tenant (`E2002`), or lacks the owner or catalog admin right (`E0102`)"
+          },
+          "404": {
+            "description": "Brand not found: unknown, malformed id, already deleted, or another tenant's. Error code `E9401`"
+          },
+          "409": {
+            "description": "The brand is used by a live product (`E9435`)"
+          },
+          "500": {
+            "description": "The use check or the delete itself failed; nothing was deleted"
+          }
+        }
       }
     },
     "/pcms/categories": {
@@ -7719,7 +8859,7 @@
         "tags": [
           "PCMS"
         ],
-        "description": "Paginated, name-sorted list of categories for a tenant. Use `?q=` for name-contains search.",
+        "description": "Paginated, name-sorted list of categories for a tenant; categories with the same name are ordered by `id`, so each appears once across the pages. Use `?q=` for name-contains search. Use `?parent_id=` to list the direct children of one category, or `?parent_id=null` for the root categories; the list stays flat, with the same item shape. A deeper level is read by repeating the call with a child's id.",
         "parameters": [
           {
             "name": "X-Tenant-Code",
@@ -7735,6 +8875,15 @@
             "schema": {
               "type": "string",
               "maxLength": 200
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "query",
+            "description": "A category UUID lists its direct children; the word `null` (lowercase) lists the root categories. Supplied once. A parent that does not exist, is deleted or belongs to another tenant gives an empty page, not `404`.",
+            "schema": {
+              "type": "string",
+              "example": "null"
             }
           },
           {
@@ -7788,7 +8937,7 @@
             }
           },
           "400": {
-            "description": "Missing X-Tenant-Code or invalid query parameters"
+            "description": "Missing X-Tenant-Code or invalid query parameters, including a `parent_id` that is neither a UUID nor `null`, empty or repeated"
           },
           "401": {
             "description": "Missing or invalid API key"
@@ -8045,6 +9194,88 @@
           },
           "422": {
             "description": "Circular reference or invalid parent_id"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Category",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Soft-delete a category, as the PCMS editor does. The category leaves every read, is never purged, and its slug is free for a new category at once. Only the tenant owner or a member with the catalog admin permission may delete; the key acts as the member it belongs to. A category with a live child category, or a live product of any status filed under it, is refused with `409` and nothing is deleted; a category with both answers the children code. Deleted children and deleted products do not count. A repeated delete answers `404`: the first one succeeded and the category is gone, so a client that lost the response and retries should treat `404` as done. The answer names the item by id, because every read answers `404` once the delete has run. Any request body and any query parameter are ignored; the tenant is the one the key and `X-Tenant-Code` name.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Category UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The category was deleted; `data.id` names it",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing X-Tenant-Code"
+          },
+          "401": {
+            "description": "Missing or invalid API key (`E0004` when the token cannot be used)"
+          },
+          "403": {
+            "description": "The key's member is not in the tenant (`E2002`), or lacks the owner or catalog admin right (`E0102`)"
+          },
+          "404": {
+            "description": "Category not found: unknown, malformed id, already deleted, or another tenant's. Error code `E9405`"
+          },
+          "409": {
+            "description": "The category has a live child category (`E9439`) or a live product (`E9440`); a category with both answers `E9439`"
+          },
+          "500": {
+            "description": "The use check or the delete itself failed; nothing was deleted"
           }
         }
       }
@@ -8453,6 +9684,88 @@
           },
           "409": {
             "description": "A product type with this name already exists in the tenant"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Product Type",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Soft-delete a product type, as the PCMS editor does. The product type leaves every read, is never purged, and its name is free for a new product type at once. Only the tenant owner or a member with the catalog admin permission may delete; the key acts as the member it belongs to. A product type a live product uses, whatever the product's status, is refused with `409` and nothing is deleted. Deleted products do not count. A repeated delete answers `404`: the first one succeeded and the product type is gone, so a client that lost the response and retries should treat `404` as done. The answer names the item by id, because every read answers `404` once the delete has run. Any request body and any query parameter are ignored; the tenant is the one the key and `X-Tenant-Code` name.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Product type UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The product type was deleted; `data.id` names it",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing X-Tenant-Code"
+          },
+          "401": {
+            "description": "Missing or invalid API key (`E0004` when the token cannot be used)"
+          },
+          "403": {
+            "description": "The key's member is not in the tenant (`E2002`), or lacks the owner or catalog admin right (`E0102`)"
+          },
+          "404": {
+            "description": "Product type not found: unknown, malformed id, already deleted, or another tenant's. Error code `E9409`"
+          },
+          "409": {
+            "description": "The product type is used by a live product (`E9437`)"
+          },
+          "500": {
+            "description": "The use check or the delete itself failed; nothing was deleted"
           }
         }
       }
@@ -9077,13 +10390,666 @@
         }
       }
     },
+    "/pcms/products/{id}/media": {
+      "post": {
+        "summary": "Add product media",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Add an image or video to a product's gallery. Send a `multipart/form-data` body with a `file` part, or a JSON body `{ \"source_url\": \"https://...\" }`, never both. Optional `variant_ids` links the item to those variants of this product, and `is_default: true` makes it the product default. The first item of a product is the product default without asking.\n\nOne call does what the PCMS editor does in several steps: it checks for a duplicate, stores the bytes in private storage, creates (or replaces) the item, links the variants and sets the default.\n\n**Limits.** A product holds at most 50 live media items (`E9454`). JPEG, PNG, WebP and GIF up to 10 MB (`E9452`), MP4 up to 50 MB, no empty file (`E9460`). The type is decided from the bytes, never from the `Content-Type` or the file name; anything else is `E9453`. The stored file's extension follows the detected type. The response never carries a storage path: the item carries a signed link in `url` and its expiry in `expires_at`.\n\n**File name.** An upload's name is the multipart file name. For `source_url` it is the last path segment, percent-decoded once, with the query and fragment dropped; `filename` in the JSON body overrides it. A name must be 1 to 200 characters with no path separator or control character. The duplicate check compares the name as given (trimmed, case-insensitive) with the file size.\n\n**Duplicates.** The same name and size as a live item, with the same width and height, answers `200` with the existing item and stores nothing. The same name and size with different dimensions replaces that item's content (`200`, `content_version` +1; its links, position and default are kept); a caller without content rights is refused with `403`.\n\n**`source_url`.** Fetched by the server: `https` only, port 443, no user or password in the address. Every address the host resolves to must be public (loopback, private, link-local including the cloud metadata address, shared, unspecified and reserved ranges are refused, at every redirect), the connection is made to the address that was checked, at most 3 redirects, 10 seconds in total, and the download is cut at the size limit whatever `Content-Length` says. A refused address or a redirect loop is `400 INVALID_SOURCE_URL`; a host that does not answer, times out or answers with an error is `502 SOURCE_FETCH_FAILED`.\n\n**Retry.** A repeat of the same file is safe without a key (the duplicate rule). `Idempotency-Key` adds the usual contract for a **new** item: the same key with the same request answers `200` with that item (and re-applies `variant_ids` and `is_default`), the same key with another request is `409` `E0601`. A request that resolves to an identical or replaced item stores no key, so reusing a key with another request is not detected there; the duplicate rule still makes that retry safe.\n\n**Not atomic.** The bytes are stored first, then the item, then the links and the default. If a step after the item exists fails (for example a variant that is not this product's, `404`), the item stays in place, the message names the step (`linking variants` or `setting the default`), and the item's id is in `data.id`; retry with the same key or use `PATCH`. A failure before the item exists leaves no stored file.\n\n**Request size.** The whole body is read in memory. The hosting platform may refuse a large request body before it reaches this endpoint (the limit has not been measured for this endpoint); if a large upload is refused by the host, send the file by `source_url` instead.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Product UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Code of the tenant that owns the product.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Optional, at most 255 characters. Makes a retry of a new item safe.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "The image or video. The part's file name is the item's name."
+                  },
+                  "variant_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "maxItems": 50,
+                    "description": "Repeat the field for each variant id (a single JSON array string is also read)."
+                  },
+                  "is_default": {
+                    "type": "boolean",
+                    "description": "Send `true` or `false` as text."
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "source_url"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "source_url": {
+                    "type": "string",
+                    "maxLength": 2048,
+                    "description": "Public `https` address of the file, port 443."
+                  },
+                  "filename": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "description": "Overrides the name taken from the address."
+                  },
+                  "variant_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "maxItems": 50,
+                    "description": "Variants of this product to link."
+                  },
+                  "is_default": {
+                    "type": "boolean",
+                    "description": "Make this item the product default."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Nothing new was stored: an identical file, a content replace, or a replay of the same Idempotency-Key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicProductMedia"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The item was created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicProductMedia"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Refused before anything was stored: invalid body or file name, `E9452` too large, `E9453` not an accepted type, `E9454` product holds 50 items, `E9460` empty file, `INVALID_SOURCE_URL`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key's member lacks content rights (owner, catalog admin or catalog contributor).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Product not found (or another tenant's), or a variant in `variant_ids` is not this product's. In the second case the item exists and `data.id` names it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`E0601`: the Idempotency-Key was used for a different request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`SOURCE_FETCH_FAILED`: the `source_url` host did not answer, timed out or answered with an error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pcms/products/{id}/media/{mediaId}": {
+      "patch": {
+        "summary": "Change a product media item",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Change one item's order, default, variant links or alt text. At least one field is required; unknown fields are refused.\n\n- `position`: 1-based place among the product's live items. The other items keep their relative order and the default does not change. A value below 1 or past the number of items is `400`; it is never clamped.\n- `is_default`: only `true`. The item becomes the product default; the order does not change.\n- `variant_ids`: the complete set of this product's variants the item is linked to. Missing links are added and the others removed; `[]` removes every link and the item stays. A variant that is not this product's is `404` and the links do not change.\n- `alt_text`: up to 500 characters, or `null` to clear.\n\nWhen several fields are sent they are applied in a fixed order: alt text, links, default, position. A later failure leaves the earlier steps in place. A reorder applies whole or not at all. The answer is the item as it now stands.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Product UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "mediaId",
+            "in": "path",
+            "required": true,
+            "description": "Media item UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Code of the tenant that owns the product.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "minProperties": 1,
+                "properties": {
+                  "position": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "is_default": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  },
+                  "variant_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "maxItems": 50
+                  },
+                  "alt_text": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 500
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The item after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicProductMedia"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body, or `position` outside 1 to the number of items. Nothing was written.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key's member lacks content rights.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Product or item not found (an item of another product, another tenant or already deleted included), or a variant in `variant_ids` is not this product's.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a product media item",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Soft-deletes the item: it leaves every read at once and every variant link to it is removed. If it was the product default, the product has no default afterwards; no other item is promoted. The storage file is then removed on a best-effort basis, so a failed file removal never undoes the delete. There is no restore; add the file again if needed.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Product UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "mediaId",
+            "in": "path",
+            "required": true,
+            "description": "Media item UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Code of the tenant that owns the product.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key's member lacks content rights.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Product or item not found, another tenant's, or already deleted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pcms/products/{id}/options": {
+      "put": {
+        "summary": "Save Product Options",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Change a product's options and regenerate its variants in one database transaction: the save the PCMS editor runs. `strategy` is required and says what happens to the product's current `matrix` variants: **`replace_all`** orphans them (kept as history, no longer sellable) and generates the new matrix; **`keep_as_manual`** turns them `manual` and generates the new matrix; **`add_new`** only adds the combinations the new options introduce, and refuses (`400` `E9444`) any change that removes or renames a value. A product has at most two options; each needs a name and at least two distinct values (padding and repeats are normalized as the editor does); `replace_all` with no options is `400` `E9444`. A product that has only its default variant keeps it: `replace_all` orphans it and `keep_as_manual` turns it `manual`, and no price is copied to the generated variants, so set prices afterwards with `PUT /pcms/products/{id}/variants`. `overrides` set a SKU, barcode, weight or dimensions on a generated variant, matched by its name (for example `Red / S`); an override naming no generated variant is ignored, and an unknown field is `400`. A barcode that a deleted variant held is allowed and returned in `meta.code_warnings` (ADR-054). `overrides` apply only when the save writes: on a repeat that finds nothing to change they are ignored, and `meta` reports zero changes. A clashing live SKU or barcode is `400` (`E9445`, `E9464`) and the whole save is rolled back. **A repeat is safe:** when the options equal the product's current options and, for `replace_all` and `keep_as_manual`, the live matrix variants are exactly the combinations the save would generate, nothing is written and `meta` reports zero changes. That also covers a complete matrix with unchanged options. A missing, extra or inactive matrix variant makes the same request a real save. `add_new` with equal options never regenerates a combination whose variant was deleted; use `replace_all`, or create the variant with `PUT /pcms/products/{id}/variants`. Two identical requests sent at once: one applies and the other is refused `409` (`E9446`). `X-Tenant-Code` is required; a product of another tenant is `404`.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Product UUID.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant of the product.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "options",
+                  "strategy"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "options": {
+                    "type": "array",
+                    "maxItems": 2,
+                    "description": "The product's complete option set after the save, in order.",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "name",
+                        "values"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "values": {
+                          "type": "array",
+                          "maxItems": 10,
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "strategy": {
+                    "type": "string",
+                    "enum": [
+                      "replace_all",
+                      "add_new",
+                      "keep_as_manual"
+                    ]
+                  },
+                  "overrides": {
+                    "type": "array",
+                    "maxItems": 200,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "name"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "description": "Name of the generated variant, for example `Red / S`."
+                        },
+                        "sku": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "barcode": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "weight": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "width": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "height": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "depth": {
+                          "type": "number",
+                          "nullable": true
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The product with its variants, and what the save changed",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicProductResponse"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "updated_variant_count": {
+                          "type": "integer",
+                          "description": "Matrix variants orphaned or turned manual."
+                        },
+                        "new_variant_count": {
+                          "type": "integer",
+                          "description": "Variants generated."
+                        },
+                        "code_warnings": {
+                          "type": "array",
+                          "description": "Barcodes that a deleted or changed variant held before.",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "field": {
+                                "type": "string",
+                                "enum": [
+                                  "barcode"
+                                ]
+                              },
+                              "value": {
+                                "type": "string"
+                              },
+                              "previousVariantId": {
+                                "type": "string"
+                              },
+                              "previousVariantName": {
+                                "type": "string"
+                              },
+                              "isDeleted": {
+                                "type": "boolean"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body, strategy or options (`VALIDATION_ERROR`, `E9443`, `E9444`), a clashing SKU or barcode (`E9445`, `E9464`), or `X-Tenant-Code` missing"
+          },
+          "403": {
+            "description": "The key's user may not change this tenant's catalog"
+          },
+          "404": {
+            "description": "Product not found in the tenant"
+          },
+          "409": {
+            "description": "The same option combination was created by another request at the same time (`E9446`)"
+          }
+        }
+      }
+    },
     "/pcms/products/{id}/variants": {
       "put": {
         "summary": "Upsert product variants",
         "tags": [
           "PCMS"
         ],
-        "description": "Upsert variants of a product. The request body is an array of items.\n\n- Items **with** `variant_id` (UUID) → update the existing variant.\n- Items **without** `variant_id` → create a new variant (`name` is required; `option1`/`option2` should match the product's option matrix).\n\nA single request may mix create and update items. Variants **not** included in the payload are left untouched (this endpoint does not delete variants). Unknown `variant_id` values return 404.",
+        "description": "Upsert variants of a product. The request body is an array of items.\n\n- Items **with** `variant_id` (UUID) → update the existing variant.\n- Items **without** `variant_id` → create a new variant (`name` is required; `option1`/`option2` should match the product's option matrix).\n\nA single request may mix create and update items. Variants **not** included in the payload are left untouched. Unknown `variant_id` values return 404.\n\n**Deleting.** An item `{ \"variant_id\": \"<uuid>\", \"_delete\": true }` retires that variant, the same soft delete the PCMS editor does. A delete item carries no other field (`_delete` must be exactly `true`; anything else is `400`), and a `variant_id` may appear once in the request. The variant must belong to the product in the address: one of another product or tenant is `404` and nothing in the request is written. A product keeps at least one live variant: a request whose deletes would empty it is `400` `E9447` and deletes nothing. A deleted variant's SKU is never free again (ADR-054). **A request mixing writes is not atomic:** creates and updates run first, all deletes last in one all-or-nothing step, so a failed delete leaves the earlier creates and updates in place. Deleting a variant that stock or documents still reference is not checked here, as in the editor.",
         "parameters": [
           {
             "name": "id",
@@ -9112,12 +11078,19 @@
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "description": "Either `variant_id` (update) OR `name` (create) is required.",
+                  "description": "An update (`variant_id`), a create (`name`), or a delete (`variant_id` with `_delete: true` and nothing else). Either `variant_id` or `name` is required.",
                   "properties": {
                     "variant_id": {
                       "type": "string",
                       "format": "uuid",
                       "description": "Omit to create a new variant; include to update an existing one."
+                    },
+                    "_delete": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ],
+                      "description": "Exactly `true` retires the variant named by `variant_id`; the item may carry no other field."
                     },
                     "name": {
                       "type": "string",
@@ -9125,7 +11098,8 @@
                     },
                     "sku": {
                       "type": "string",
-                      "nullable": true
+                      "nullable": true,
+                      "description": "Can change only while the product has never been published; otherwise E9471."
                     },
                     "barcode": {
                       "type": "string",
@@ -9634,6 +11608,88 @@
             "description": "A unit with this abbreviation already exists in the tenant"
           }
         }
+      },
+      "delete": {
+        "summary": "Delete Unit",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Soft-delete a unit, as the PCMS editor does. The unit leaves every read, is never purged, and its name is free for a new unit at once. Only the tenant owner or a member with the catalog admin permission may delete; the key acts as the member it belongs to. A unit a live product uses, whatever the product's status, is refused with `409` and nothing is deleted. Deleted products do not count. A repeated delete answers `404`: the first one succeeded and the unit is gone, so a client that lost the response and retries should treat `404` as done. The answer names the item by id, because every read answers `404` once the delete has run. Any request body and any query parameter are ignored; the tenant is the one the key and `X-Tenant-Code` name.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Unit UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The unit was deleted; `data.id` names it",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing X-Tenant-Code"
+          },
+          "401": {
+            "description": "Missing or invalid API key (`E0004` when the token cannot be used)"
+          },
+          "403": {
+            "description": "The key's member is not in the tenant (`E2002`), or lacks the owner or catalog admin right (`E0102`)"
+          },
+          "404": {
+            "description": "Unit not found: unknown, malformed id, already deleted, or another tenant's. Error code `E9413`"
+          },
+          "409": {
+            "description": "The unit is used by a live product (`E9442`)"
+          },
+          "500": {
+            "description": "The use check or the delete itself failed; nothing was deleted"
+          }
+        }
       }
     },
     "/pcms/variants": {
@@ -9642,7 +11698,7 @@
         "tags": [
           "PCMS"
         ],
-        "description": "Paginated flat list of product variants. Accepts an optional `barcode_prefix` to filter variants whose barcode starts with the given string (ilike prefix-match with `%` and `_` escaped). Useful for finding the highest barcode already assigned in a prefix namespace to auto-increment without collisions.",
+        "description": "Paginated flat list of product variants. Accepts optional `product_id` and `status` filters (a malformed value is `400`), and an optional `barcode_prefix` to filter variants whose barcode starts with the given string (ilike prefix-match with `%` and `_` escaped). Useful for finding the highest barcode already assigned in a prefix namespace to auto-increment without collisions.",
         "parameters": [
           {
             "name": "X-Tenant-Code",
@@ -9651,6 +11707,29 @@
             "description": "Code of the tenant to scope the request to.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "product_id",
+            "in": "query",
+            "required": false,
+            "description": "Only the variants of this product (a UUID, given once). The tenant filter still applies, so another tenant's or an unknown product id lists nothing. Combines with the other filters.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Only variants with this lifecycle status. Exactly `active` or `inactive`, lower case, given once. Combines with the other filters.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "inactive"
+              ]
             }
           },
           {
@@ -9791,6 +11870,194 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/pcms/variants/lookup": {
+      "post": {
+        "summary": "Look Up Variants by SKU and Barcode (batch)",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Look up many variants at once, for an import or a POS sync. Send up to **100 codes in total** (`skus` and `barcodes` together, counted after trimming and removing repeats; each code at most 200 characters). A missing or null array counts as empty; a blank entry is dropped. Codes are trimmed and then matched **exactly, case included**. Answers the variants found, in the `GET /pcms/variants/{id}` shape, and the codes that matched nothing under `not_found`; a variant matched by both a SKU and a barcode appears once. Orphaned and deleted variants are never returned, and an `inactive` variant is returned with `status: \"inactive\"`. Items carry the product's `currency` and `media: []` (use the variant read for images). **Freshness:** this reads the catalog search index, which refreshes about once a minute, so a variant created or deleted in the last minute may be missing or still listed; `GET /pcms/variants/resolve` reads the live tables. This is a read: it takes no `Idempotency-Key`, and sending it again writes nothing.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to look in. Required: a SKU, barcode or manufacturer code is unique per tenant, not globally.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "skus": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 200
+                    },
+                    "description": "SKUs to look up."
+                  },
+                  "barcodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 200
+                    },
+                    "description": "Barcodes to look up."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The variants found and the codes that matched nothing",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "variants": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/PublicProductVariantResponse"
+                          }
+                        },
+                        "not_found": {
+                          "type": "object",
+                          "properties": {
+                            "skus": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "barcodes": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not JSON (`INVALID_JSON_BODY`), is not an object, holds no code, holds more than 100 codes, has a code over 200 characters or a non-string code (`VALIDATION_ERROR`), or `X-Tenant-Code` is missing"
+          },
+          "403": {
+            "description": "The key's user is not an active member of the tenant"
+          },
+          "500": {
+            "description": "The lookup failed; no partial answer is returned"
+          }
+        }
+      }
+    },
+    "/pcms/variants/resolve": {
+      "get": {
+        "summary": "Resolve a Code to One Variant",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Turn one code of any kind into one variant, the way the PCMS scan screen does. The code is trimmed and tried in this order, stopping at the first live variant: SKU, the SKU inside a QR link, barcode, manufacturer code. For each kind an exact match is tried first, then a case-insensitive one, so an exact-case row wins. `matched_by` is `sku`, `qr_url`, `barcode` or `manufacturer_code`. The answer is in the `GET /pcms/variants/{id}` shape and reads the live tables. **Encoding:** pass `code` percent-encoded; a QR link's own `?` and `&` and a `+` in a code (`%2B`) are otherwise cut or read as a space. `404` means no live, non-orphaned variant matched: an unknown code, an orphaned variant (even when a live variant would match the same code by barcode or manufacturer code), or a retired SKU, which answers with code `E9483` and names the old SKU in the message so an out-of-date label can be told from an unknown code. Under a database failure inside a lookup step the resolver reads the step as a miss, so a `404` is not proof the code is unknown; a failure the resolver itself reports is `500`. An `inactive` variant resolves with `status: \"inactive\"`.",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": true,
+            "description": "The code to resolve, once, at most 2048 characters. Percent-encode it.",
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to look in. Required: a SKU, barcode or manufacturer code is unique per tenant, not globally.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The variant and which identifier matched",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "variant": {
+                          "$ref": "#/components/schemas/PublicProductVariantResponse"
+                        },
+                        "matched_by": {
+                          "type": "string",
+                          "enum": [
+                            "sku",
+                            "qr_url",
+                            "barcode",
+                            "manufacturer_code"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`code` is missing, blank, repeated or over 2048 characters (`VALIDATION_ERROR`), or `X-Tenant-Code` is missing"
+          },
+          "403": {
+            "description": "The key's user is not an active member of the tenant"
+          },
+          "404": {
+            "description": "No live, non-orphaned variant matched; `E9483` marks a retired SKU"
+          },
+          "500": {
+            "description": "The resolver reported an error"
           }
         }
       }
