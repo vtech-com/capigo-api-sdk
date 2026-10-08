@@ -95,6 +95,20 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - The three commands read the profile with `activeProfileOrEmpty`, so a key supplied only through
   `CAPIGO_API_KEY` works without `capigo auth login`.
 
+### Docs
+
+- **A key reaches one tenant, and the docs now say so.** Capigo binds a key to a single tenant at
+  creation and refuses to re-point it ([capigo#1064](https://github.com/vtech-com/capigo/issues/1064)),
+  so `--tenant` naming any other tenant is exit `3`, and omitting `--tenant` no longer widens a read:
+  the API scopes the call to the key's own tenant, while `meta` names no tenant because the CLI
+  reports the tenant *it* resolved and it resolved none. Three README passages that promised a
+  cross-tenant read without qualification, and the same claim in `docs/project-context.md`, are
+  corrected; `skills/capigo-api/` gains the rule for agents. `capigo tenants list` is documented as
+  the account's memberships, not the current key's reach — it can name tenants a given key cannot
+  touch. A cross-tenant workflow is one key per tenant, i.e. one profile per key; the README now
+  states that the CLI has no `--profile` flag and that no command creates a profile, so an extra
+  profile is a hand edit of `~/.capigo/config.json`. No CLI behaviour changed.
+
 ## [0.26.0] — 2026-09-30
 
 ### Added

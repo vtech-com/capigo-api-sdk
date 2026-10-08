@@ -38,6 +38,11 @@ may be used when the flag is omitted. On every write, read `meta.tenant` and
 When a read spans tenants, do not attribute a returned record to a specific tenant unless the
 response actually identifies it.
 
+A key is bound to one workspace, and the bound is enforced server-side, so omitting `--tenant` does
+not widen a call: it still reads that one workspace, and `meta` names no tenant because the CLI
+resolved none. Name the key's workspace explicitly when the answer's workspace must be on stdout.
+`capigo tenants list` is not the key's reach — it lists the account's workspaces.
+
 ## Output contract
 
 Run `capigo help output` for the contract of the installed build. Current builds write one JSON
