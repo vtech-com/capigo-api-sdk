@@ -269,6 +269,7 @@ capigo products create   Create a product (--name required, or --from-json; --al
 capigo products update   Update a product (partial; --aliases/--tags repeatable, or --from-json)
 capigo products variants Upsert product variants
 capigo products options <id> --tenant <code> --strategy <s> --option <N=v1,v2>  Save a product's options and regenerate its variants
+capigo products media add|update|delete <product-id> --tenant <code> ...     Add, change or delete a product's images and videos
 
 capigo brands list           List reference brands (supports --query)
 capigo brands get <id>       Get a brand by ID

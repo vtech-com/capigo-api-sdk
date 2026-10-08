@@ -104,6 +104,9 @@ var bodyFieldAliasMap = map[string]string{
 	// PUT /pcms/products/{id}/options: options are repeatable Name=v1,v2 flags and overrides come from a file.
 	"options":   "option",
 	"overrides": "overrides-file",
+	// /pcms/products/{id}/media: variant_ids is a repeatable singular flag; is_default is the boolean --default.
+	"variant_ids": "variant-id",
+	"is_default":  "default",
 }
 
 // intentionallyUnexposedBodyFields lists body fields that the CLI deliberately
@@ -120,6 +123,11 @@ var intentionallyUnexposedBodyFields = map[string]map[string]string{
 	// (--title, --description, --priority, …), so there is no single `--task` flag.
 	"POST /mission/tasks/with-subtasks": {
 		"task": "parent-task fields come from the individual tasks-create flags, not a single --task flag",
+	},
+	// The tasks alias maps position to the boolean --top; a media item's position is a
+	// 1-based integer, exposed as --position.
+	"PATCH /pcms/products/{id}/media/{mediaId}": {
+		"position": "exposed as the integer --position, not the tasks --top alias",
 	},
 }
 
@@ -158,6 +166,18 @@ func buildWriteCommandMapping() []writeCommandEntry {
 			path:      "/pcms/products/{id}/options",
 			method:    "put",
 			hasFlag:   func(n string) bool { return productsOptionsCmd.Flags().Lookup(n) != nil },
+		},
+		{
+			humanName: "products media add",
+			path:      "/pcms/products/{id}/media",
+			method:    "post",
+			hasFlag:   func(n string) bool { return productsMediaAddCmd.Flags().Lookup(n) != nil },
+		},
+		{
+			humanName: "products media update",
+			path:      "/pcms/products/{id}/media/{mediaId}",
+			method:    "patch",
+			hasFlag:   func(n string) bool { return productsMediaUpdateCmd.Flags().Lookup(n) != nil },
 		},
 		{
 			humanName: "members invite",

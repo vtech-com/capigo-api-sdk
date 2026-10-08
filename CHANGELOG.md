@@ -37,6 +37,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - **`variants list --product-id <uuid> --status active|inactive`** filters by product and status.
 - `products variants` and `variants list` read the profile with `activeProfileOrEmpty`, so a key given
   only through `CAPIGO_API_KEY` works without `capigo auth login`.
+- **`products media add|update|delete` manage a product's gallery.** `capigo products media add
+  <product-id> --tenant <code> (--file <path> | --source-url <https-url>) [--filename] [--variant-id <uuid>]...
+  [--default] [--idempotency-key]` sends `POST /pcms/products/{id}/media` as multipart (file) or JSON
+  (address): the server checks for a duplicate, stores the bytes, creates the item, links the variants and
+  sets the default. `products media update <product-id> <media-id> [--position <n>] [--default]
+  [--variant-id]... [--clear-variants] [--alt-text | --clear-alt-text]` sends `PATCH`, and `products media
+  delete <product-id> <media-id>` sends `DELETE` (soft delete, no restore). The type is decided from the
+  bytes, at most 50 items per product (`E9454`), 10 MB for an image and 50 MB for a video.
 
 ### Changed
 
