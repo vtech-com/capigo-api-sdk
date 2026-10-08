@@ -56,6 +56,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   categories (`parent_id=null`).
 - `categories list` reads the profile with `activeProfileOrEmpty`, so a key given only through
   `CAPIGO_API_KEY` works without `capigo auth login`.
+- **`products duplicate <id>` copies a product as a new draft.** `capigo products duplicate <id> --tenant
+  <code> [--name <name>] [--idempotency-key <key>]` sends `POST /pcms/products/{id}/actions/duplicate`: the
+  options and the live, active variants come across with new generated SKUs, and the barcode, manufacturer
+  code, media, notes and stock data do not. The copy is always a draft. A product with no copyable variant
+  is exit 5 (`E9485`). The same `--idempotency-key` with the same source and name replays the copy as it
+  is now (HTTP 200); without a key a retry can make a second copy.
 
 ### Changed
 

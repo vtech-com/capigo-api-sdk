@@ -115,6 +115,7 @@ var implementedOps = map[string]string{
 	"POST /pcms/products/{id}/media":             "products media add",
 	"PATCH /pcms/products/{id}/media/{mediaId}":  "products media update",
 	"DELETE /pcms/products/{id}/media/{mediaId}": "products media delete",
+	"POST /pcms/products/{id}/actions/duplicate": "products duplicate",
 	"PUT /pcms/products/{id}/options":            "products options",
 	"GET /pcms/variants":                         "variants list",
 	"POST /pcms/variants/lookup":                 "variants lookup",
