@@ -270,7 +270,6 @@ capigo products update   Update a product (partial; --aliases/--tags repeatable,
 capigo products variants Upsert product variants
 capigo products options <id> --tenant <code> --strategy <s> --option <N=v1,v2>  Save a product's options and regenerate its variants
 capigo products media add|update|delete <product-id> --tenant <code> ...     Add, change or delete a product's images and videos
-capigo products duplicate <id> --tenant <code> [--name <n>]               Copy a product (options and variants) as a new draft
 
 capigo brands list           List reference brands (supports --query)
 capigo brands get <id>       Get a brand by ID
