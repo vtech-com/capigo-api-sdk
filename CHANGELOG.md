@@ -10,6 +10,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **`members update` changes a member.** `capigo members update <id> --tenant <code> [--display-name]
+  [--email] [--mobile] [--member-code] [--job-title] [--department] [--bio] [--role owner|member]
+  [--status active|inactive|banned] [--position <uuid>]... [--clear-positions] [--permission <key>]...
+  [--clear-permissions]` sends `PATCH /members/{id}`, the HRIS-sync call. Only the flags you give are
+  sent, and an empty value clears a field. The writes are separate steps with no rollback; an owner
+  cannot change their own role or status (exit 3, `E9206`), and a member code or email already in use
+  is exit 8 (`E4103`, `E4104`).
+
 ### Changed
 
 - **A release is now a merged `release/vX.Y.Z` PR, not a hand-pushed tag.** The new
