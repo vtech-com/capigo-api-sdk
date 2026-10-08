@@ -95,6 +95,9 @@ var bodyFieldAliasMap = map[string]string{
 	"invitee_email":  "email",
 	"invitee_mobile": "mobile",
 	"custom_message": "custom-message",
+	// PATCH /members/{id}: plural fields are repeatable singular flags, like follower_ids.
+	"positions":   "position",
+	"permissions": "permission",
 }
 
 // intentionallyUnexposedBodyFields lists body fields that the CLI deliberately
@@ -132,6 +135,12 @@ type writeCommandEntry struct {
 // cobra commands are fully initialised (init() has run).
 func buildWriteCommandMapping() []writeCommandEntry {
 	return []writeCommandEntry{
+		{
+			humanName: "members update",
+			path:      "/members/{id}",
+			method:    "patch",
+			hasFlag:   func(n string) bool { return membersUpdateCmd.Flags().Lookup(n) != nil },
+		},
 		{
 			humanName: "members invite",
 			path:      "/members/invitations",

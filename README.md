@@ -258,6 +258,7 @@ capigo members get <id>  Get a member by ID
 capigo members invite --tenant <code> (--email <a> | --mobile <n>)   Invite a person; owner only, the token is shown once
 capigo members invitations list --tenant <code> [--status <s>]       List a tenant's invitations; owner only
 capigo members invitations cancel <id> --tenant <code>               Cancel a pending invitation; owner only
+capigo members update <id> --tenant <code> [--role <r>] ...            Update a member (HRIS sync); owner only
 capigo join-requests list --tenant <code> [--status <s>]             List a tenant's join requests; owner only
 capigo join-requests approve <id> --tenant <code> --display-name <n> Approve a join request; owner only
 capigo join-requests reject <id> --tenant <code>                     Reject a join request; owner only

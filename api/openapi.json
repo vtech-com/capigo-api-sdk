@@ -4941,6 +4941,233 @@
             "description": "Member not found"
           }
         }
+      },
+      "patch": {
+        "summary": "Update Member",
+        "tags": [
+          "Members"
+        ],
+        "description": "Update a member of the tenant named by `X-Tenant-Code`. `{id}` is the member's user id, as in `GET /members/{id}`. Only an **active tenant owner** may call it. The body takes any of the profile fields the member edit page changes (`display_name`, `email`, `mobile`, `member_code`, `job_title`, `department`, `bio`) plus `role`, `status`, `positions` and `permissions`; a field left out is not changed, and `avatar_url` and `birth_date` are not offered. The writes are separate transactions applied in a fixed order: profile, `status: active`, `role`, `permissions`, `positions`, then `status: inactive|banned`. There is **no rollback**: if a step fails after earlier ones applied, the answer is that step's error and its message names the groups already applied; send the same body again to complete it. A field that already holds its value is a no-op that emits no event, so the verb is idempotent by value and takes no `Idempotency-Key`. A caller who is not an active owner gets `403` before anything else. A `role` equal to the member's stored role is ignored, so a finished call can be repeated. Refused before any write: the caller's own `role` or `status` (`403`, E9206), `permissions` for a member who is or becomes an owner (`409`), a `role` on a member who is not active and is not reactivated by the same call (`409`), and a member code or email another member already uses (`409`, E4103, E4104). Demoting or deactivating the last active owner answers `409` (E9205). A removed member, an unknown id and another tenant's member answer the same `404`. The answer is the stored state and never carries the member's email, mobile or other contact data. There is no member-create call: a member joins through an invitation or an approved join request.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The member's user id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": false,
+            "description": "Code of the tenant the member belongs to. Required unless the API key is pinned to one tenant.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "description": "At least one field. A field left out is not changed.",
+                "properties": {
+                  "display_name": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "description": "Must not be blank; the name cannot be cleared."
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 254,
+                    "nullable": true,
+                    "description": "`null` or blank clears it. An address another non-removed member of the tenant already uses, in any letter case, answers `409` (E4104)."
+                  },
+                  "mobile": {
+                    "type": "string",
+                    "nullable": true,
+                    "description": "Normalized like the invitation mobile; `null` or blank clears it."
+                  },
+                  "member_code": {
+                    "type": "string",
+                    "maxLength": 50,
+                    "nullable": true,
+                    "description": "Trimmed and upper-cased; `null` or blank clears it. A code another member of the tenant uses answers `409` (E4103)."
+                  },
+                  "job_title": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 100
+                  },
+                  "department": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 100
+                  },
+                  "bio": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 2000
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "owner",
+                      "member"
+                    ],
+                    "description": "The caller's own role cannot change (`403`, E9206). The member must be active, or reactivated by `status: active` in the same call."
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "active",
+                      "inactive",
+                      "banned"
+                    ],
+                    "description": "The caller's own status cannot change (`403`, E9206)."
+                  },
+                  "positions": {
+                    "type": "array",
+                    "maxItems": 200,
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "description": "Replaces all of the member's positions; `[]` clears them. A position outside the tenant answers `400`."
+                  },
+                  "permissions": {
+                    "type": "array",
+                    "maxItems": 200,
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Replaces all granular permission keys; `[]` clears them. Refused with `409` for a member who is or becomes an owner."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The member after the update.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "role",
+                        "status",
+                        "display_name",
+                        "member_code",
+                        "job_title",
+                        "department",
+                        "bio",
+                        "permissions",
+                        "positions"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "description": "The member's user id."
+                        },
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "owner",
+                            "member"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "inactive",
+                            "banned"
+                          ]
+                        },
+                        "display_name": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "member_code": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "job_title": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "department": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "bio": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "permissions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "positions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "format": "uuid"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The id is not a UUID, the body is not valid JSON or fails validation (no field, an unknown field, a bad value, an unknown permission key, a non-UUID or unknown position), or no tenant could be resolved (`TENANT_CODE_REQUIRED`)"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "The caller is not an active owner of the tenant (`FORBIDDEN`), the key cannot reach the tenant, or the body changes the caller's own role or status (E9206)"
+          },
+          "404": {
+            "description": "The member is unknown, removed or belongs to another tenant"
+          },
+          "409": {
+            "description": "Refused. `code` is one of `E4103` (member code already used), `E4104` (email already used), `E9205` (the last active owner would be lost), `PERMISSIONS_NOT_APPLICABLE` (permissions for a member who is or becomes an owner) or `MEMBER_NOT_ACTIVE` (a role change on a member who is not active and is not reactivated by the same call). After earlier steps applied, the message names them"
+          },
+          "500": {
+            "description": "Internal server error. After earlier steps applied, the message names them"
+          }
+        }
       }
     },
     "/mission/boards": {

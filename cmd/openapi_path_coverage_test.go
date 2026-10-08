@@ -35,8 +35,9 @@ var implementedOps = map[string]string{
 
 	"GET /tenants": "tenants list",
 
-	"GET /members":      "members list",
-	"GET /members/{id}": "members get",
+	"GET /members":        "members list",
+	"GET /members/{id}":   "members get",
+	"PATCH /members/{id}": "members update",
 
 	"POST /members/invitations":                     "members invite",
 	"GET /members/invitations":                      "members invitations list",
