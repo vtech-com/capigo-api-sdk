@@ -101,6 +101,9 @@ var bodyFieldAliasMap = map[string]string{
 	// POST /pcms/variants/lookup: arrays are repeatable singular flags.
 	"skus":     "sku",
 	"barcodes": "barcode",
+	// PUT /pcms/products/{id}/options: options are repeatable Name=v1,v2 flags and overrides come from a file.
+	"options":   "option",
+	"overrides": "overrides-file",
 }
 
 // intentionallyUnexposedBodyFields lists body fields that the CLI deliberately
@@ -149,6 +152,12 @@ func buildWriteCommandMapping() []writeCommandEntry {
 			path:      "/pcms/variants/lookup",
 			method:    "post",
 			hasFlag:   func(n string) bool { return variantsLookupCmd.Flags().Lookup(n) != nil },
+		},
+		{
+			humanName: "products options",
+			path:      "/pcms/products/{id}/options",
+			method:    "put",
+			hasFlag:   func(n string) bool { return productsOptionsCmd.Flags().Lookup(n) != nil },
 		},
 		{
 			humanName: "members invite",

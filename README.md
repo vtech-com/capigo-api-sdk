@@ -268,6 +268,7 @@ capigo products get <id> Get a product by ID
 capigo products create   Create a product (--name required, or --from-json; --aliases/--tags repeatable)
 capigo products update   Update a product (partial; --aliases/--tags repeatable, or --from-json)
 capigo products variants Upsert product variants
+capigo products options <id> --tenant <code> --strategy <s> --option <N=v1,v2>  Save a product's options and regenerate its variants
 
 capigo brands list           List reference brands (supports --query)
 capigo brands get <id>       Get a brand by ID
