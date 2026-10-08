@@ -26,6 +26,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   `GET /pcms/variants/resolve` for one code of any kind (SKU, QR link, barcode, manufacturer code) and
   names which one matched. The batch reads the search index and can lag by about a minute; resolve reads
   the tables. A retired SKU is exit 4 with `E9483`.
+- **`products options` saves a product's options.** `capigo products options <id> --tenant <code>
+  --strategy replace_all|add_new|keep_as_manual (--option "Color=Red,Blue" ... | --no-options)
+  [--overrides-file <path|->]` sends `PUT /pcms/products/{id}/options`: the complete option set after
+  the save (at most two options of ten values) and the variants for every combination, in one
+  transaction. A repeat changes nothing, and `meta` reports zero changes.
+- **`products variants --delete-variant <uuid>` retires a variant.** Repeatable; it appends
+  `{ variant_id, _delete: true }` items to the call, so it needs no `--from-json`. The variant must
+  belong to the product (`E9425`, exit 4) and a product keeps one live variant (`E9447`, exit 5).
+- **`variants list --product-id <uuid> --status active|inactive`** filters by product and status.
+- `products variants` and `variants list` read the profile with `activeProfileOrEmpty`, so a key given
+  only through `CAPIGO_API_KEY` works without `capigo auth login`.
 
 ### Changed
 

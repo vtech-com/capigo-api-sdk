@@ -20,6 +20,7 @@ type recordedCall struct {
 	idemKey string
 	body    map[string]any
 	hasBody bool
+	rawBody string
 }
 
 // callAgainst runs a command's RunE against a stub API that answers with reply,
@@ -40,6 +41,7 @@ func callAgainst(t *testing.T, reply string, run func()) (recordedCall, string) 
 		raw, _ := io.ReadAll(r.Body)
 		if len(raw) > 0 {
 			seen.hasBody = true
+			seen.rawBody = string(raw)
 			_ = json.Unmarshal(raw, &seen.body)
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -180,4 +182,11 @@ func TestJoinRequestsRejectSendsNoBody(t *testing.T) {
 	if seen.hasBody {
 		t.Errorf("reject sent a body %v; the API refuses a field and there is none to send", seen.body)
 	}
+}
+
+// callAgainstArray is callAgainst for a command whose body is a JSON array, which
+// callAgainst cannot decode into a map: only rawBody is filled.
+func callAgainstArray(t *testing.T, reply string, run func()) (recordedCall, string) {
+	t.Helper()
+	return callAgainst(t, reply, run)
 }

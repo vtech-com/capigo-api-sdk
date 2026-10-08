@@ -10039,13 +10039,211 @@
         }
       }
     },
+    "/pcms/products/{id}/options": {
+      "put": {
+        "summary": "Save Product Options",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Change a product's options and regenerate its variants in one database transaction: the save the PCMS editor runs. `strategy` is required and says what happens to the product's current `matrix` variants: **`replace_all`** orphans them (kept as history, no longer sellable) and generates the new matrix; **`keep_as_manual`** turns them `manual` and generates the new matrix; **`add_new`** only adds the combinations the new options introduce, and refuses (`400` `E9444`) any change that removes or renames a value. A product has at most two options; each needs a name and at least two distinct values (padding and repeats are normalized as the editor does); `replace_all` with no options is `400` `E9444`. A product that has only its default variant keeps it: `replace_all` orphans it and `keep_as_manual` turns it `manual`, and no price is copied to the generated variants, so set prices afterwards with `PUT /pcms/products/{id}/variants`. `overrides` set a SKU, barcode, weight or dimensions on a generated variant, matched by its name (for example `Red / S`); an override naming no generated variant is ignored, and an unknown field is `400`. A barcode that a deleted variant held is allowed and returned in `meta.code_warnings` (ADR-054). `overrides` apply only when the save writes: on a repeat that finds nothing to change they are ignored, and `meta` reports zero changes. A clashing live SKU or barcode is `400` (`E9445`, `E9464`) and the whole save is rolled back. **A repeat is safe:** when the options equal the product's current options and, for `replace_all` and `keep_as_manual`, the live matrix variants are exactly the combinations the save would generate, nothing is written and `meta` reports zero changes. That also covers a complete matrix with unchanged options. A missing, extra or inactive matrix variant makes the same request a real save. `add_new` with equal options never regenerates a combination whose variant was deleted; use `replace_all`, or create the variant with `PUT /pcms/products/{id}/variants`. Two identical requests sent at once: one applies and the other is refused `409` (`E9446`). `X-Tenant-Code` is required; a product of another tenant is `404`.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Product UUID.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant of the product.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "options",
+                  "strategy"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "options": {
+                    "type": "array",
+                    "maxItems": 2,
+                    "description": "The product's complete option set after the save, in order.",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "name",
+                        "values"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "values": {
+                          "type": "array",
+                          "maxItems": 10,
+                          "items": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "strategy": {
+                    "type": "string",
+                    "enum": [
+                      "replace_all",
+                      "add_new",
+                      "keep_as_manual"
+                    ]
+                  },
+                  "overrides": {
+                    "type": "array",
+                    "maxItems": 200,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "name"
+                      ],
+                      "additionalProperties": false,
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "description": "Name of the generated variant, for example `Red / S`."
+                        },
+                        "sku": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "barcode": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "weight": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "width": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "height": {
+                          "type": "number",
+                          "nullable": true
+                        },
+                        "depth": {
+                          "type": "number",
+                          "nullable": true
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The product with its variants, and what the save changed",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicProductResponse"
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "updated_variant_count": {
+                          "type": "integer",
+                          "description": "Matrix variants orphaned or turned manual."
+                        },
+                        "new_variant_count": {
+                          "type": "integer",
+                          "description": "Variants generated."
+                        },
+                        "code_warnings": {
+                          "type": "array",
+                          "description": "Barcodes that a deleted or changed variant held before.",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "field": {
+                                "type": "string",
+                                "enum": [
+                                  "barcode"
+                                ]
+                              },
+                              "value": {
+                                "type": "string"
+                              },
+                              "previousVariantId": {
+                                "type": "string"
+                              },
+                              "previousVariantName": {
+                                "type": "string"
+                              },
+                              "isDeleted": {
+                                "type": "boolean"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body, strategy or options (`VALIDATION_ERROR`, `E9443`, `E9444`), a clashing SKU or barcode (`E9445`, `E9464`), or `X-Tenant-Code` missing"
+          },
+          "403": {
+            "description": "The key's user may not change this tenant's catalog"
+          },
+          "404": {
+            "description": "Product not found in the tenant"
+          },
+          "409": {
+            "description": "The same option combination was created by another request at the same time (`E9446`)"
+          }
+        }
+      }
+    },
     "/pcms/products/{id}/variants": {
       "put": {
         "summary": "Upsert product variants",
         "tags": [
           "PCMS"
         ],
-        "description": "Upsert variants of a product. The request body is an array of items.\n\n- Items **with** `variant_id` (UUID) → update the existing variant.\n- Items **without** `variant_id` → create a new variant (`name` is required; `option1`/`option2` should match the product's option matrix).\n\nA single request may mix create and update items. Variants **not** included in the payload are left untouched (this endpoint does not delete variants). Unknown `variant_id` values return 404.",
+        "description": "Upsert variants of a product. The request body is an array of items.\n\n- Items **with** `variant_id` (UUID) → update the existing variant.\n- Items **without** `variant_id` → create a new variant (`name` is required; `option1`/`option2` should match the product's option matrix).\n\nA single request may mix create and update items. Variants **not** included in the payload are left untouched. Unknown `variant_id` values return 404.\n\n**Deleting.** An item `{ \"variant_id\": \"<uuid>\", \"_delete\": true }` retires that variant, the same soft delete the PCMS editor does. A delete item carries no other field (`_delete` must be exactly `true`; anything else is `400`), and a `variant_id` may appear once in the request. The variant must belong to the product in the address: one of another product or tenant is `404` and nothing in the request is written. A product keeps at least one live variant: a request whose deletes would empty it is `400` `E9447` and deletes nothing. A deleted variant's SKU is never free again (ADR-054). **A request mixing writes is not atomic:** creates and updates run first, all deletes last in one all-or-nothing step, so a failed delete leaves the earlier creates and updates in place. Deleting a variant that stock or documents still reference is not checked here, as in the editor.",
         "parameters": [
           {
             "name": "id",
@@ -10074,12 +10272,19 @@
                 "type": "array",
                 "items": {
                   "type": "object",
-                  "description": "Either `variant_id` (update) OR `name` (create) is required.",
+                  "description": "An update (`variant_id`), a create (`name`), or a delete (`variant_id` with `_delete: true` and nothing else). Either `variant_id` or `name` is required.",
                   "properties": {
                     "variant_id": {
                       "type": "string",
                       "format": "uuid",
                       "description": "Omit to create a new variant; include to update an existing one."
+                    },
+                    "_delete": {
+                      "type": "boolean",
+                      "enum": [
+                        true
+                      ],
+                      "description": "Exactly `true` retires the variant named by `variant_id`; the item may carry no other field."
                     },
                     "name": {
                       "type": "string",
@@ -10087,7 +10292,8 @@
                     },
                     "sku": {
                       "type": "string",
-                      "nullable": true
+                      "nullable": true,
+                      "description": "Can change only while the product has never been published; otherwise E9471."
                     },
                     "barcode": {
                       "type": "string",
@@ -10604,7 +10810,7 @@
         "tags": [
           "PCMS"
         ],
-        "description": "Paginated flat list of product variants. Accepts an optional `barcode_prefix` to filter variants whose barcode starts with the given string (ilike prefix-match with `%` and `_` escaped). Useful for finding the highest barcode already assigned in a prefix namespace to auto-increment without collisions.",
+        "description": "Paginated flat list of product variants. Accepts optional `product_id` and `status` filters (a malformed value is `400`), and an optional `barcode_prefix` to filter variants whose barcode starts with the given string (ilike prefix-match with `%` and `_` escaped). Useful for finding the highest barcode already assigned in a prefix namespace to auto-increment without collisions.",
         "parameters": [
           {
             "name": "X-Tenant-Code",
@@ -10613,6 +10819,29 @@
             "description": "Code of the tenant to scope the request to.",
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "product_id",
+            "in": "query",
+            "required": false,
+            "description": "Only the variants of this product (a UUID, given once). The tenant filter still applies, so another tenant's or an unknown product id lists nothing. Combines with the other filters.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Only variants with this lifecycle status. Exactly `active` or `inactive`, lower case, given once. Combines with the other filters.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "active",
+                "inactive"
+              ]
             }
           },
           {

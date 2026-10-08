@@ -896,11 +896,12 @@ var (
 	productVariantsTenant    string
 	productVariantsProductID string
 	productVariantsFromJSON  string
+	productVariantsDelete    []string
 )
 
 var productsVariantsCmd = &cobra.Command{
 	Use:   "variants",
-	Short: "Upsert product variants (create or update)",
+	Short: "Create, update or delete product variants",
 	// push: TODO — three traps below reach only a caller who reads this page.
 	// Each needs a line on stdout at the moment it bites before the CAVEATS
 	// section can be called a mitigation rather than a warning:
@@ -912,13 +913,13 @@ var productsVariantsCmd = &cobra.Command{
 PURPOSE
   Write variants onto an existing product. An item carrying variant_id updates
   that variant; an item without one creates a variant. A single call may mix
-  both. Variants not included in the payload are left untouched — this
-  command does not delete variants. It does not change product metadata; use
-  products update for that.
+  both. Variants not included in the payload are left untouched. To retire a
+  variant, name it with --delete-variant (or a delete item in the JSON). It does
+  not change product metadata; use products update for that.
 
 USAGE
   capigo products variants --tenant <code> --product-id <id>
-                           --from-json <path|->
+                           [--from-json <path|->] [--delete-variant <id>]...
 
 FLAGS
   --tenant <code>
@@ -928,8 +929,22 @@ FLAGS
   --product-id <uuid>
       The product to write variants onto. Required.
 
+  --delete-variant <uuid>   (repeatable)
+      Retire this variant of the product. The variant must belong to the product
+      in --product-id (otherwise exit 4, E9425, and nothing in the call is
+      written), and a product keeps at least one live variant (exit 5, E9447).
+      Creates and updates run first and deletes last, so the rule sees the
+      variants this call just created. A deleted variant's SKU is never reused.
+      Needs no --from-json.
+
+        capigo products variants --tenant acme --product-id 8f2a1c07-... \
+          --delete-variant 6f1c1a02-...
+
   --from-json <path|->
-      Required. A JSON ARRAY of variant objects, where - reads stdin.
+      A JSON ARRAY of variant objects, where - reads stdin. Required unless
+      --delete-variant is given; with both, the deletes are appended to the array.
+      An item { "variant_id": "…", "_delete": true } with no other field is a
+      delete item.
 
         Field              Type     Notes
         variant_id         string   present -> UPDATE; absent -> CREATE
@@ -997,8 +1012,8 @@ OUTPUT
 		if productVariantsProductID == "" {
 			failValidation("--product-id is required")
 		}
-		if productVariantsFromJSON == "" {
-			failValidation("--from-json is required")
+		if productVariantsFromJSON == "" && len(productVariantsDelete) == 0 {
+			failValidation("--from-json or --delete-variant is required")
 		}
 
 		client, cfg, err := buildClient()
@@ -1006,20 +1021,21 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(productVariantsTenant, profile)
 		requireTenant(tenant, "products commands")
 
-		raw, err := readJSONInput(productVariantsFromJSON)
-		if err != nil {
-			return handleErr(fmt.Errorf("read --from-json: %w", err))
+		raw := []byte("[]")
+		if productVariantsFromJSON != "" {
+			var err error
+			raw, err = readJSONInput(productVariantsFromJSON)
+			if err != nil {
+				return handleErr(fmt.Errorf("read --from-json: %w", err))
+			}
 		}
 
-		// Validate it is a JSON array, then send the raw bytes untouched (same
+		// Validate it is a JSON array, then send the items untouched (same
 		// raw-passthrough pattern as brands/categories/units --from-json).
 		// Decoding into api.UpsertVariantItem and re-marshaling it here would
 		// silently drop any field the struct doesn't know about (e.g.
@@ -1029,6 +1045,15 @@ OUTPUT
 		if err := json.Unmarshal(raw, &probe); err != nil {
 			return handleErr(fmt.Errorf("--from-json must be a JSON array of variant objects: %w", err))
 		}
+		for _, id := range productVariantsDelete {
+			id = strings.TrimSpace(id)
+			if id == "" {
+				failValidation("--delete-variant needs a variant UUID")
+			}
+			item, _ := json.Marshal(map[string]any{"variant_id": id, "_delete": true})
+			probe = append(probe, item)
+		}
+		raw, _ = json.Marshal(probe)
 
 		resp, err := client.Do(ctx, "PUT",
 			"/pcms/products/"+productVariantsProductID+"/variants",
@@ -1069,6 +1094,8 @@ func init() {
 	productsListCmd.Flags().StringVar(&productListProductTypeIDs, "product-type-ids", "", "comma-separated list of product type UUIDs to filter by (max 50)")
 	productsListCmd.Flags().StringVar(&productListUnitIDs, "unit-ids", "", "comma-separated list of unit UUIDs to filter by (max 50)")
 
+	productsVariantsCmd.Flags().StringArrayVar(&productVariantsDelete, "delete-variant", nil, "variant UUID to retire; repeatable")
+
 	// products create flags
 	productsCreateCmd.Flags().StringVar(&productCreateTenant, "tenant", "", "tenant code (required)")
 	productsCreateCmd.Flags().StringVar(&productCreateName, "name", "", "product name (required unless --from-json is used)")
@@ -1105,7 +1132,7 @@ func init() {
 	productsVariantsCmd.Flags().StringVar(&productVariantsProductID, "product-id", "", "product UUID (required)")
 	productsVariantsCmd.Flags().StringVar(&productVariantsFromJSON, "from-json", "", "path to JSON array file (use - for stdin) (required)")
 
-	productCmd.AddCommand(productsListCmd, productsGetCmd, productsCreateCmd, productsUpdateCmd, productsVariantsCmd)
+	productCmd.AddCommand(productsListCmd, productsGetCmd, productsCreateCmd, productsUpdateCmd, productsVariantsCmd, productsOptionsCmd)
 	rootCmd.AddCommand(productCmd)
 }
 

@@ -258,10 +258,12 @@ func (c *Client) ListUnits(ctx context.Context, tenant *string, q string, page, 
 
 // ListVariants fetches a page of variant records for the given tenant.
 // barcodePrefix and sort are optional; pass empty strings to skip.
-func (c *Client) ListVariants(ctx context.Context, tenant *string, barcodePrefix, sort string, page, limit int) (*Response, error) {
+func (c *Client) ListVariants(ctx context.Context, tenant *string, barcodePrefix, sort, productID, status string, page, limit int) (*Response, error) {
 	params := buildParams(map[string]string{
 		"barcode_prefix": barcodePrefix,
 		"sort":           sort,
+		"product_id":     productID,
+		"status":         status,
 	}, page, limit)
 	path := "/pcms/variants"
 	if len(params) > 0 {
