@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.27.0] — 2026-10-08
+
 ### Added
 
 - **`members update` changes a member.** `capigo members update <id> --tenant <code> [--display-name]
@@ -55,22 +57,6 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   categories (`parent_id=null`).
 - `categories list` reads the profile with `activeProfileOrEmpty`, so a key given only through
   `CAPIGO_API_KEY` works without `capigo auth login`.
-
-### Changed
-
-- **A release is now a merged `release/vX.Y.Z` PR, not a hand-pushed tag.** The new
-  `release-on-merge.yml` checks the branch name against the `CHANGELOG.md` section and the latest
-  tag, tags the merge commit on `main`, publishes through `release.yml`, and opens the
-  `main` → `develop` sync PR. `release.yml` keeps its tag trigger as a fallback, but now refuses a
-  tag that is not on `main` or has no matching `CHANGELOG.md` section, so write access alone no
-  longer publishes an arbitrary commit.
-- **The release also merges `main` back into `develop`.** `release-on-merge.yml` opens the sync PR and
-  merges it straight away; a conflict leaves the PR open and fails the run. `CONTRIBUTING.md` now says
-  that only a `release/vX.Y.Z` branch releases, and that a merge from any other branch is silently
-  not a release.
-
-### Added
-
 - **`members invite` invites a person.** `capigo members invite --tenant <code> (--email <address> |
   --mobile <number>) [--idempotency-key <key>]` sends `POST /members/invitations`. Only an active tenant
   owner may call it. The platform sends no email or SMS, so the creating answer carries the accept-link
@@ -94,6 +80,19 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - **`members invite --custom-message <text>`** adds a note of up to 500 characters shown to the invitee.
 - The three commands read the profile with `activeProfileOrEmpty`, so a key supplied only through
   `CAPIGO_API_KEY` works without `capigo auth login`.
+
+### Changed
+
+- **A release is now a merged `release/vX.Y.Z` PR, not a hand-pushed tag.** The new
+  `release-on-merge.yml` checks the branch name against the `CHANGELOG.md` section and the latest
+  tag, tags the merge commit on `main`, publishes through `release.yml`, and opens the
+  `main` → `develop` sync PR. `release.yml` keeps its tag trigger as a fallback, but now refuses a
+  tag that is not on `main` or has no matching `CHANGELOG.md` section, so write access alone no
+  longer publishes an arbitrary commit.
+- **The release also merges `main` back into `develop`.** `release-on-merge.yml` opens the sync PR and
+  merges it straight away; a conflict leaves the PR open and fails the run. `CONTRIBUTING.md` now says
+  that only a `release/vX.Y.Z` branch releases, and that a merge from any other branch is silently
+  not a release.
 
 ### Docs
 
