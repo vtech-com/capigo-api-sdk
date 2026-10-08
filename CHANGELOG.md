@@ -19,6 +19,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   sent, and an empty value clears a field. The writes are separate steps with no rollback; an owner
   cannot change their own role or status (exit 3, `E9206`), and a member code or email already in use
   is exit 8 (`E4103`, `E4104`).
+- **`variants lookup` and `variants resolve` turn codes into variants.** `capigo variants lookup --tenant
+  <code> [--sku <s>]... [--barcode <b>]... [--sku-file <path>] [--barcode-file <path>]` sends
+  `POST /pcms/variants/lookup` for up to 100 codes at once and answers the variants found plus the codes
+  that matched nothing; `capigo variants resolve --tenant <code> --code <c>` sends
+  `GET /pcms/variants/resolve` for one code of any kind (SKU, QR link, barcode, manufacturer code) and
+  names which one matched. The batch reads the search index and can lag by about a minute; resolve reads
+  the tables. A retired SKU is exit 4 with `E9483`.
 
 ### Changed
 

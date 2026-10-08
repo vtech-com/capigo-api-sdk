@@ -10757,6 +10757,194 @@
         }
       }
     },
+    "/pcms/variants/lookup": {
+      "post": {
+        "summary": "Look Up Variants by SKU and Barcode (batch)",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Look up many variants at once, for an import or a POS sync. Send up to **100 codes in total** (`skus` and `barcodes` together, counted after trimming and removing repeats; each code at most 200 characters). A missing or null array counts as empty; a blank entry is dropped. Codes are trimmed and then matched **exactly, case included**. Answers the variants found, in the `GET /pcms/variants/{id}` shape, and the codes that matched nothing under `not_found`; a variant matched by both a SKU and a barcode appears once. Orphaned and deleted variants are never returned, and an `inactive` variant is returned with `status: \"inactive\"`. Items carry the product's `currency` and `media: []` (use the variant read for images). **Freshness:** this reads the catalog search index, which refreshes about once a minute, so a variant created or deleted in the last minute may be missing or still listed; `GET /pcms/variants/resolve` reads the live tables. This is a read: it takes no `Idempotency-Key`, and sending it again writes nothing.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to look in. Required: a SKU, barcode or manufacturer code is unique per tenant, not globally.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "skus": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 200
+                    },
+                    "description": "SKUs to look up."
+                  },
+                  "barcodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 200
+                    },
+                    "description": "Barcodes to look up."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The variants found and the codes that matched nothing",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "variants": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/PublicProductVariantResponse"
+                          }
+                        },
+                        "not_found": {
+                          "type": "object",
+                          "properties": {
+                            "skus": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "barcodes": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not JSON (`INVALID_JSON_BODY`), is not an object, holds no code, holds more than 100 codes, has a code over 200 characters or a non-string code (`VALIDATION_ERROR`), or `X-Tenant-Code` is missing"
+          },
+          "403": {
+            "description": "The key's user is not an active member of the tenant"
+          },
+          "500": {
+            "description": "The lookup failed; no partial answer is returned"
+          }
+        }
+      }
+    },
+    "/pcms/variants/resolve": {
+      "get": {
+        "summary": "Resolve a Code to One Variant",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Turn one code of any kind into one variant, the way the PCMS scan screen does. The code is trimmed and tried in this order, stopping at the first live variant: SKU, the SKU inside a QR link, barcode, manufacturer code. For each kind an exact match is tried first, then a case-insensitive one, so an exact-case row wins. `matched_by` is `sku`, `qr_url`, `barcode` or `manufacturer_code`. The answer is in the `GET /pcms/variants/{id}` shape and reads the live tables. **Encoding:** pass `code` percent-encoded; a QR link's own `?` and `&` and a `+` in a code (`%2B`) are otherwise cut or read as a space. `404` means no live, non-orphaned variant matched: an unknown code, an orphaned variant (even when a live variant would match the same code by barcode or manufacturer code), or a retired SKU, which answers with code `E9483` and names the old SKU in the message so an out-of-date label can be told from an unknown code. Under a database failure inside a lookup step the resolver reads the step as a miss, so a `404` is not proof the code is unknown; a failure the resolver itself reports is `500`. An `inactive` variant resolves with `status: \"inactive\"`.",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": true,
+            "description": "The code to resolve, once, at most 2048 characters. Percent-encode it.",
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to look in. Required: a SKU, barcode or manufacturer code is unique per tenant, not globally.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The variant and which identifier matched",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "variant": {
+                          "$ref": "#/components/schemas/PublicProductVariantResponse"
+                        },
+                        "matched_by": {
+                          "type": "string",
+                          "enum": [
+                            "sku",
+                            "qr_url",
+                            "barcode",
+                            "manufacturer_code"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`code` is missing, blank, repeated or over 2048 characters (`VALIDATION_ERROR`), or `X-Tenant-Code` is missing"
+          },
+          "403": {
+            "description": "The key's user is not an active member of the tenant"
+          },
+          "404": {
+            "description": "No live, non-orphaned variant matched; `E9483` marks a retired SKU"
+          },
+          "500": {
+            "description": "The resolver reported an error"
+          }
+        }
+      }
+    },
     "/pcms/variants/{id}": {
       "get": {
         "summary": "Get Variant Detail",

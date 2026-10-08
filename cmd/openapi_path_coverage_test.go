@@ -113,6 +113,8 @@ var implementedOps = map[string]string{
 	"PUT /pcms/products/{id}":          "products update — note this PUT takes a partial body, unlike the ref-data PUTs",
 	"PUT /pcms/products/{id}/variants": "products variants (upsert)",
 	"GET /pcms/variants":               "variants list",
+	"POST /pcms/variants/lookup":       "variants lookup",
+	"GET /pcms/variants/resolve":       "variants resolve",
 	"GET /pcms/variants/{id}":          "variants get <id>",
 	"GET /pcms/variants/sku/{sku}":     "variants get --sku <sku> — the same record, addressed by its natural key",
 
