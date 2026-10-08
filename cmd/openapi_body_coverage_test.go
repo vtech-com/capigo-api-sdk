@@ -98,6 +98,9 @@ var bodyFieldAliasMap = map[string]string{
 	// PATCH /members/{id}: plural fields are repeatable singular flags, like follower_ids.
 	"positions":   "position",
 	"permissions": "permission",
+	// POST /pcms/variants/lookup: arrays are repeatable singular flags.
+	"skus":     "sku",
+	"barcodes": "barcode",
 }
 
 // intentionallyUnexposedBodyFields lists body fields that the CLI deliberately
@@ -140,6 +143,12 @@ func buildWriteCommandMapping() []writeCommandEntry {
 			path:      "/members/{id}",
 			method:    "patch",
 			hasFlag:   func(n string) bool { return membersUpdateCmd.Flags().Lookup(n) != nil },
+		},
+		{
+			humanName: "variants lookup",
+			path:      "/pcms/variants/lookup",
+			method:    "post",
+			hasFlag:   func(n string) bool { return variantsLookupCmd.Flags().Lookup(n) != nil },
 		},
 		{
 			humanName: "members invite",

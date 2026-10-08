@@ -295,6 +295,7 @@ capigo units replace <id>   Full replace a unit (PUT, all fields required)
 
 capigo variants list            List variants by barcode prefix (supports --barcode-prefix, --sort)
 capigo variants get <id|--sku>  Get a variant by ID or SKU (--sku requires --tenant)
+capigo variants lookup --tenant <code> [--sku <s>]... [--barcode <b>]...  Look up up to 100 SKUs/barcodes at once
 
 capigo version           Print version info
 ```
