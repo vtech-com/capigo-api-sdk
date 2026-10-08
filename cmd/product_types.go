@@ -621,6 +621,6 @@ func init() {
 	productTypesReplaceCmd.Flags().BoolVar(&productTypeReplaceNoDescription, "no-description", false, "set description to null (mutually exclusive with --description)")
 	productTypesReplaceCmd.Flags().StringVar(&productTypeReplaceFromJSON, "from-json", "", "path to JSON file with full request body (use - for stdin); mutually exclusive with individual field flags")
 
-	productTypesCmd.AddCommand(productTypesListCmd, productTypesGetCmd, productTypesCreateCmd, productTypesUpdateCmd, productTypesReplaceCmd)
+	productTypesCmd.AddCommand(productTypesListCmd, productTypesGetCmd, productTypesCreateCmd, productTypesUpdateCmd, productTypesReplaceCmd, productTypesDeleteCmd)
 	rootCmd.AddCommand(productTypesCmd)
 }
