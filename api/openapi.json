@@ -170,6 +170,102 @@
           }
         }
       },
+      "PublicProductMedia": {
+        "type": "object",
+        "description": "One media item of a product, as the media endpoints answer. `url` is a signed, time-limited link valid until `expires_at`; no storage path is ever returned. `position` is the 1-based place among the product's live items.",
+        "required": [
+          "id",
+          "product_id",
+          "type",
+          "filename",
+          "file_size",
+          "width",
+          "height",
+          "content_version",
+          "position",
+          "is_default",
+          "alt_text",
+          "variant_ids",
+          "url",
+          "expires_at",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "product_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "image",
+              "video"
+            ]
+          },
+          "filename": {
+            "type": "string",
+            "description": "Trimmed and lower-cased, the form the duplicate check compares."
+          },
+          "file_size": {
+            "type": "integer",
+            "description": "Bytes."
+          },
+          "width": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Null for a video."
+          },
+          "height": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Null for a video."
+          },
+          "content_version": {
+            "type": "integer",
+            "description": "Starts at 1 and rises each time the content is replaced."
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "is_default": {
+            "type": "boolean"
+          },
+          "alt_text": {
+            "type": "string",
+            "nullable": true
+          },
+          "variant_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Live variants this item is linked to."
+          },
+          "url": {
+            "type": "string",
+            "description": "Signed link, valid until `expires_at`."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "UpdateBoardMemberRequest": {
         "type": "object",
         "required": [
@@ -10035,6 +10131,461 @@
           },
           "404": {
             "description": "Product not found in the specified tenant"
+          }
+        }
+      }
+    },
+    "/pcms/products/{id}/media": {
+      "post": {
+        "summary": "Add product media",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Add an image or video to a product's gallery. Send a `multipart/form-data` body with a `file` part, or a JSON body `{ \"source_url\": \"https://...\" }`, never both. Optional `variant_ids` links the item to those variants of this product, and `is_default: true` makes it the product default. The first item of a product is the product default without asking.\n\nOne call does what the PCMS editor does in several steps: it checks for a duplicate, stores the bytes in private storage, creates (or replaces) the item, links the variants and sets the default.\n\n**Limits.** A product holds at most 50 live media items (`E9454`). JPEG, PNG, WebP and GIF up to 10 MB (`E9452`), MP4 up to 50 MB, no empty file (`E9460`). The type is decided from the bytes, never from the `Content-Type` or the file name; anything else is `E9453`. The stored file's extension follows the detected type. The response never carries a storage path: the item carries a signed link in `url` and its expiry in `expires_at`.\n\n**File name.** An upload's name is the multipart file name. For `source_url` it is the last path segment, percent-decoded once, with the query and fragment dropped; `filename` in the JSON body overrides it. A name must be 1 to 200 characters with no path separator or control character. The duplicate check compares the name as given (trimmed, case-insensitive) with the file size.\n\n**Duplicates.** The same name and size as a live item, with the same width and height, answers `200` with the existing item and stores nothing. The same name and size with different dimensions replaces that item's content (`200`, `content_version` +1; its links, position and default are kept); a caller without content rights is refused with `403`.\n\n**`source_url`.** Fetched by the server: `https` only, port 443, no user or password in the address. Every address the host resolves to must be public (loopback, private, link-local including the cloud metadata address, shared, unspecified and reserved ranges are refused, at every redirect), the connection is made to the address that was checked, at most 3 redirects, 10 seconds in total, and the download is cut at the size limit whatever `Content-Length` says. A refused address or a redirect loop is `400 INVALID_SOURCE_URL`; a host that does not answer, times out or answers with an error is `502 SOURCE_FETCH_FAILED`.\n\n**Retry.** A repeat of the same file is safe without a key (the duplicate rule). `Idempotency-Key` adds the usual contract for a **new** item: the same key with the same request answers `200` with that item (and re-applies `variant_ids` and `is_default`), the same key with another request is `409` `E0601`. A request that resolves to an identical or replaced item stores no key, so reusing a key with another request is not detected there; the duplicate rule still makes that retry safe.\n\n**Not atomic.** The bytes are stored first, then the item, then the links and the default. If a step after the item exists fails (for example a variant that is not this product's, `404`), the item stays in place, the message names the step (`linking variants` or `setting the default`), and the item's id is in `data.id`; retry with the same key or use `PATCH`. A failure before the item exists leaves no stored file.\n\n**Request size.** The whole body is read in memory. The hosting platform may refuse a large request body before it reaches this endpoint (the limit has not been measured for this endpoint); if a large upload is refused by the host, send the file by `source_url` instead.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Product UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Code of the tenant that owns the product.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "description": "Optional, at most 255 characters. Makes a retry of a new item safe.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "The image or video. The part's file name is the item's name."
+                  },
+                  "variant_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "maxItems": 50,
+                    "description": "Repeat the field for each variant id (a single JSON array string is also read)."
+                  },
+                  "is_default": {
+                    "type": "boolean",
+                    "description": "Send `true` or `false` as text."
+                  }
+                }
+              }
+            },
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "source_url"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "source_url": {
+                    "type": "string",
+                    "maxLength": 2048,
+                    "description": "Public `https` address of the file, port 443."
+                  },
+                  "filename": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "description": "Overrides the name taken from the address."
+                  },
+                  "variant_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "maxItems": 50,
+                    "description": "Variants of this product to link."
+                  },
+                  "is_default": {
+                    "type": "boolean",
+                    "description": "Make this item the product default."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Nothing new was stored: an identical file, a content replace, or a replay of the same Idempotency-Key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicProductMedia"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "The item was created.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicProductMedia"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Refused before anything was stored: invalid body or file name, `E9452` too large, `E9453` not an accepted type, `E9454` product holds 50 items, `E9460` empty file, `INVALID_SOURCE_URL`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key's member lacks content rights (owner, catalog admin or catalog contributor).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Product not found (or another tenant's), or a variant in `variant_ids` is not this product's. In the second case the item exists and `data.id` names it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "`E0601`: the Idempotency-Key was used for a different request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "`SOURCE_FETCH_FAILED`: the `source_url` host did not answer, timed out or answered with an error.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/pcms/products/{id}/media/{mediaId}": {
+      "patch": {
+        "summary": "Change a product media item",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Change one item's order, default, variant links or alt text. At least one field is required; unknown fields are refused.\n\n- `position`: 1-based place among the product's live items. The other items keep their relative order and the default does not change. A value below 1 or past the number of items is `400`; it is never clamped.\n- `is_default`: only `true`. The item becomes the product default; the order does not change.\n- `variant_ids`: the complete set of this product's variants the item is linked to. Missing links are added and the others removed; `[]` removes every link and the item stays. A variant that is not this product's is `404` and the links do not change.\n- `alt_text`: up to 500 characters, or `null` to clear.\n\nWhen several fields are sent they are applied in a fixed order: alt text, links, default, position. A later failure leaves the earlier steps in place. A reorder applies whole or not at all. The answer is the item as it now stands.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Product UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "mediaId",
+            "in": "path",
+            "required": true,
+            "description": "Media item UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Code of the tenant that owns the product.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "minProperties": 1,
+                "properties": {
+                  "position": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "is_default": {
+                    "type": "boolean",
+                    "enum": [
+                      true
+                    ]
+                  },
+                  "variant_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "maxItems": 50
+                  },
+                  "alt_text": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 500
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The item after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicProductMedia"
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body, or `position` outside 1 to the number of items. Nothing was written.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key's member lacks content rights.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Product or item not found (an item of another product, another tenant or already deleted included), or a variant in `variant_ids` is not this product's.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete a product media item",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Soft-deletes the item: it leaves every read at once and every variant link to it is removed. If it was the product default, the product has no default afterwards; no other item is promoted. The storage file is then removed on a best-effort basis, so a failed file removal never undoes the delete. There is no restore; add the file again if needed.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Product UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "mediaId",
+            "in": "path",
+            "required": true,
+            "description": "Media item UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Code of the tenant that owns the product.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The key's member lacks content rights.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Product or item not found, another tenant's, or already deleted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
