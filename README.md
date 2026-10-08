@@ -278,6 +278,7 @@ capigo brands update <id>    Partial update a brand (PATCH)
 capigo brands replace <id>   Full replace a brand (PUT, all fields required)
 
 capigo categories list           List reference categories (supports --query)
+capigo brands|categories|product-types|units delete <id> --tenant <code>     Soft-delete catalog structure; refused while a live product uses it
 capigo categories get <id>       Get a category by ID
 capigo categories create         Create a category (--name required)
 capigo categories update <id>    Partial update a category (PATCH)

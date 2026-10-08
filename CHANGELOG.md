@@ -45,6 +45,17 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   [--variant-id]... [--clear-variants] [--alt-text | --clear-alt-text]` sends `PATCH`, and `products media
   delete <product-id> <media-id>` sends `DELETE` (soft delete, no restore). The type is decided from the
   bytes, at most 50 items per product (`E9454`), 10 MB for an image and 50 MB for a video.
+- **`brands|categories|product-types|units delete <id>` soft-delete catalog structure.** `capigo brands
+  delete <id> --tenant <code>` (and the same for `categories`, `product-types`, `units`) sends `DELETE
+  /pcms/{resource}/{id}`, as the PCMS editor does: the item leaves every read and its slug or name is free
+  at once. It is refused with exit 8 while a live product uses it (`E9435` brand, `E9437` product type,
+  `E9442` unit) or, for a category, while it has a live child (`E9439`) or a live product (`E9440`).
+  A repeated delete is exit 4, so a retry after a lost answer can treat exit 4 as done. Only an owner or
+  a catalog admin may call it.
+- **`categories list --parent-id <uuid> | --root`** lists the direct children of a category, or the root
+  categories (`parent_id=null`).
+- `categories list` reads the profile with `activeProfileOrEmpty`, so a key given only through
+  `CAPIGO_API_KEY` works without `capigo auth login`.
 
 ### Changed
 

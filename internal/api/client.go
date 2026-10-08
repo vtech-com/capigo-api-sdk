@@ -225,8 +225,8 @@ func (c *Client) ListBrands(ctx context.Context, tenant *string, q string, page,
 
 // ListCategories fetches a page of categories for the given tenant.
 // q is an optional name-contains filter; pass empty string to skip.
-func (c *Client) ListCategories(ctx context.Context, tenant *string, q string, page, limit int) (*Response, error) {
-	params := buildParams(map[string]string{"q": q}, page, limit)
+func (c *Client) ListCategories(ctx context.Context, tenant *string, q, parentID string, page, limit int) (*Response, error) {
+	params := buildParams(map[string]string{"q": q, "parent_id": parentID}, page, limit)
 	path := "/pcms/categories"
 	if len(params) > 0 {
 		path += "?" + params.Encode()

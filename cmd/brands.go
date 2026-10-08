@@ -620,6 +620,6 @@ func init() {
 	brandsReplaceCmd.Flags().BoolVar(&brandReplaceNoLogo, "no-logo", false, "set logo_url to null (mutually exclusive with --logo-url)")
 	brandsReplaceCmd.Flags().StringVar(&brandReplaceFromJSON, "from-json", "", "path to JSON file with full request body (use - for stdin); mutually exclusive with individual field flags")
 
-	brandsCmd.AddCommand(brandsListCmd, brandsGetCmd, brandsCreateCmd, brandsUpdateCmd, brandsReplaceCmd)
+	brandsCmd.AddCommand(brandsListCmd, brandsGetCmd, brandsCreateCmd, brandsUpdateCmd, brandsReplaceCmd, brandsDeleteCmd)
 	rootCmd.AddCommand(brandsCmd)
 }

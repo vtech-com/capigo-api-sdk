@@ -8685,6 +8685,88 @@
             "description": "A brand with this name (slug) already exists in the tenant"
           }
         }
+      },
+      "delete": {
+        "summary": "Delete Brand",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Soft-delete a brand, as the PCMS editor does. The brand leaves every read, is never purged, and its slug is free for a new brand at once. Only the tenant owner or a member with the catalog admin permission may delete; the key acts as the member it belongs to. A brand a live product uses, whatever the product's status, is refused with `409` and nothing is deleted. Deleted products do not count. A repeated delete answers `404`: the first one succeeded and the brand is gone, so a client that lost the response and retries should treat `404` as done. The answer names the item by id, because every read answers `404` once the delete has run. Any request body and any query parameter are ignored; the tenant is the one the key and `X-Tenant-Code` name.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Brand UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The brand was deleted; `data.id` names it",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing X-Tenant-Code"
+          },
+          "401": {
+            "description": "Missing or invalid API key (`E0004` when the token cannot be used)"
+          },
+          "403": {
+            "description": "The key's member is not in the tenant (`E2002`), or lacks the owner or catalog admin right (`E0102`)"
+          },
+          "404": {
+            "description": "Brand not found: unknown, malformed id, already deleted, or another tenant's. Error code `E9401`"
+          },
+          "409": {
+            "description": "The brand is used by a live product (`E9435`)"
+          },
+          "500": {
+            "description": "The use check or the delete itself failed; nothing was deleted"
+          }
+        }
       }
     },
     "/pcms/categories": {
@@ -8777,7 +8859,7 @@
         "tags": [
           "PCMS"
         ],
-        "description": "Paginated, name-sorted list of categories for a tenant. Use `?q=` for name-contains search.",
+        "description": "Paginated, name-sorted list of categories for a tenant; categories with the same name are ordered by `id`, so each appears once across the pages. Use `?q=` for name-contains search. Use `?parent_id=` to list the direct children of one category, or `?parent_id=null` for the root categories; the list stays flat, with the same item shape. A deeper level is read by repeating the call with a child's id.",
         "parameters": [
           {
             "name": "X-Tenant-Code",
@@ -8793,6 +8875,15 @@
             "schema": {
               "type": "string",
               "maxLength": 200
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "query",
+            "description": "A category UUID lists its direct children; the word `null` (lowercase) lists the root categories. Supplied once. A parent that does not exist, is deleted or belongs to another tenant gives an empty page, not `404`.",
+            "schema": {
+              "type": "string",
+              "example": "null"
             }
           },
           {
@@ -8846,7 +8937,7 @@
             }
           },
           "400": {
-            "description": "Missing X-Tenant-Code or invalid query parameters"
+            "description": "Missing X-Tenant-Code or invalid query parameters, including a `parent_id` that is neither a UUID nor `null`, empty or repeated"
           },
           "401": {
             "description": "Missing or invalid API key"
@@ -9103,6 +9194,88 @@
           },
           "422": {
             "description": "Circular reference or invalid parent_id"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Category",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Soft-delete a category, as the PCMS editor does. The category leaves every read, is never purged, and its slug is free for a new category at once. Only the tenant owner or a member with the catalog admin permission may delete; the key acts as the member it belongs to. A category with a live child category, or a live product of any status filed under it, is refused with `409` and nothing is deleted; a category with both answers the children code. Deleted children and deleted products do not count. A repeated delete answers `404`: the first one succeeded and the category is gone, so a client that lost the response and retries should treat `404` as done. The answer names the item by id, because every read answers `404` once the delete has run. Any request body and any query parameter are ignored; the tenant is the one the key and `X-Tenant-Code` name.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Category UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The category was deleted; `data.id` names it",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing X-Tenant-Code"
+          },
+          "401": {
+            "description": "Missing or invalid API key (`E0004` when the token cannot be used)"
+          },
+          "403": {
+            "description": "The key's member is not in the tenant (`E2002`), or lacks the owner or catalog admin right (`E0102`)"
+          },
+          "404": {
+            "description": "Category not found: unknown, malformed id, already deleted, or another tenant's. Error code `E9405`"
+          },
+          "409": {
+            "description": "The category has a live child category (`E9439`) or a live product (`E9440`); a category with both answers `E9439`"
+          },
+          "500": {
+            "description": "The use check or the delete itself failed; nothing was deleted"
           }
         }
       }
@@ -9511,6 +9684,88 @@
           },
           "409": {
             "description": "A product type with this name already exists in the tenant"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Product Type",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Soft-delete a product type, as the PCMS editor does. The product type leaves every read, is never purged, and its name is free for a new product type at once. Only the tenant owner or a member with the catalog admin permission may delete; the key acts as the member it belongs to. A product type a live product uses, whatever the product's status, is refused with `409` and nothing is deleted. Deleted products do not count. A repeated delete answers `404`: the first one succeeded and the product type is gone, so a client that lost the response and retries should treat `404` as done. The answer names the item by id, because every read answers `404` once the delete has run. Any request body and any query parameter are ignored; the tenant is the one the key and `X-Tenant-Code` name.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Product type UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The product type was deleted; `data.id` names it",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing X-Tenant-Code"
+          },
+          "401": {
+            "description": "Missing or invalid API key (`E0004` when the token cannot be used)"
+          },
+          "403": {
+            "description": "The key's member is not in the tenant (`E2002`), or lacks the owner or catalog admin right (`E0102`)"
+          },
+          "404": {
+            "description": "Product type not found: unknown, malformed id, already deleted, or another tenant's. Error code `E9409`"
+          },
+          "409": {
+            "description": "The product type is used by a live product (`E9437`)"
+          },
+          "500": {
+            "description": "The use check or the delete itself failed; nothing was deleted"
           }
         }
       }
@@ -11351,6 +11606,88 @@
           },
           "409": {
             "description": "A unit with this abbreviation already exists in the tenant"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Unit",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Soft-delete a unit, as the PCMS editor does. The unit leaves every read, is never purged, and its name is free for a new unit at once. Only the tenant owner or a member with the catalog admin permission may delete; the key acts as the member it belongs to. A unit a live product uses, whatever the product's status, is refused with `409` and nothing is deleted. Deleted products do not count. A repeated delete answers `404`: the first one succeeded and the unit is gone, so a client that lost the response and retries should treat `404` as done. The answer names the item by id, because every read answers `404` once the delete has run. Any request body and any query parameter are ignored; the tenant is the one the key and `X-Tenant-Code` name.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Unit UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The unit was deleted; `data.id` names it",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing X-Tenant-Code"
+          },
+          "401": {
+            "description": "Missing or invalid API key (`E0004` when the token cannot be used)"
+          },
+          "403": {
+            "description": "The key's member is not in the tenant (`E2002`), or lacks the owner or catalog admin right (`E0102`)"
+          },
+          "404": {
+            "description": "Unit not found: unknown, malformed id, already deleted, or another tenant's. Error code `E9413`"
+          },
+          "409": {
+            "description": "The unit is used by a live product (`E9442`)"
+          },
+          "500": {
+            "description": "The use check or the delete itself failed; nothing was deleted"
           }
         }
       }

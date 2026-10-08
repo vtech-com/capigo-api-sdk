@@ -32,6 +32,8 @@ USAGE
 var (
 	categoryListTenant string
 	categoryListQuery  string
+	categoryListParent string
+	categoryListRoot   bool
 	categoryListPage   int
 	categoryListLimit  int
 )
@@ -46,14 +48,24 @@ PURPOSE
   read a single category whose id you already have, use categories get.
 
 USAGE
-  capigo categories list --tenant <code> [-q <term>] [--page <n>]
-                         [--limit <n>]
+  capigo categories list --tenant <code> [-q <term>] [--parent-id <id> | --root]
+                         [--page <n>] [--limit <n>]
 
 FLAGS
   --tenant <code>
       Tenant to read from. Required.
 
         capigo categories list --tenant acme
+
+  --parent-id <uuid>
+      Only the direct children of this category. A parent that does not exist, is
+      deleted or belongs to another tenant gives an empty page.
+
+        capigo categories list --tenant acme --parent-id 4d9a1c07-...
+
+  --root
+      Only the root categories, the ones with no parent (sends parent_id=null).
+      Give --parent-id or --root, not both.
 
   -q, --query <term>
       Name-contains filter, case-insensitive, up to 200 characters.
@@ -99,17 +111,20 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(categoryListTenant, profile)
 		requireTenant(tenant, "categories commands")
 
 		validatePCMSLimit(categoryListLimit)
+		if categoryListRoot && categoryListParent != "" {
+			failValidation("categories list: give --parent-id or --root, not both")
+		}
+		if categoryListRoot {
+			categoryListParent = "null"
+		}
 
-		resp, err := client.ListCategories(ctx, tenant, categoryListQuery, categoryListPage, categoryListLimit)
+		resp, err := client.ListCategories(ctx, tenant, categoryListQuery, categoryListParent, categoryListPage, categoryListLimit)
 		if err != nil {
 			return handleErr(err)
 		}
@@ -604,6 +619,8 @@ OUTPUT
 func init() {
 	categoriesListCmd.Flags().StringVar(&categoryListTenant, "tenant", "", "tenant code (required)")
 	categoriesListCmd.Flags().StringVarP(&categoryListQuery, "query", "q", "", "name-contains filter (case-insensitive, max 200 chars)")
+	categoriesListCmd.Flags().StringVar(&categoryListParent, "parent-id", "", "only the direct children of this category (UUID)")
+	categoriesListCmd.Flags().BoolVar(&categoryListRoot, "root", false, "only the root categories (no parent)")
 	categoriesListCmd.Flags().IntVar(&categoryListPage, "page", 0, "page number")
 	categoriesListCmd.Flags().IntVar(&categoryListLimit, "limit", 20, "items per page (1-100)")
 
@@ -626,6 +643,6 @@ func init() {
 	categoriesReplaceCmd.Flags().BoolVar(&categoryReplaceRoot, "root", false, "set parent_id to null (promote to root; mutually exclusive with --parent-id)")
 	categoriesReplaceCmd.Flags().StringVar(&categoryReplaceFromJSON, "from-json", "", "path to JSON file with full request body (use - for stdin); mutually exclusive with individual field flags")
 
-	categoriesCmd.AddCommand(categoriesListCmd, categoriesGetCmd, categoriesCreateCmd, categoriesUpdateCmd, categoriesReplaceCmd)
+	categoriesCmd.AddCommand(categoriesListCmd, categoriesGetCmd, categoriesCreateCmd, categoriesUpdateCmd, categoriesReplaceCmd, categoriesDeleteCmd)
 	rootCmd.AddCommand(categoriesCmd)
 }
