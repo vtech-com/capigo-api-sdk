@@ -1132,7 +1132,7 @@ func init() {
 	productsVariantsCmd.Flags().StringVar(&productVariantsProductID, "product-id", "", "product UUID (required)")
 	productsVariantsCmd.Flags().StringVar(&productVariantsFromJSON, "from-json", "", "path to JSON array file (use - for stdin) (required)")
 
-	productCmd.AddCommand(productsListCmd, productsGetCmd, productsCreateCmd, productsUpdateCmd, productsVariantsCmd, productsOptionsCmd, productsMediaCmd, productsDuplicateCmd)
+	productCmd.AddCommand(productsListCmd, productsGetCmd, productsCreateCmd, productsUpdateCmd, productsVariantsCmd, productsOptionsCmd, productsMediaCmd)
 	rootCmd.AddCommand(productCmd)
 }
 

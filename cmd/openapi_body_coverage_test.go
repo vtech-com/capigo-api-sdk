@@ -180,12 +180,6 @@ func buildWriteCommandMapping() []writeCommandEntry {
 			hasFlag:   func(n string) bool { return productsMediaUpdateCmd.Flags().Lookup(n) != nil },
 		},
 		{
-			humanName: "products duplicate",
-			path:      "/pcms/products/{id}/actions/duplicate",
-			method:    "post",
-			hasFlag:   func(n string) bool { return productsDuplicateCmd.Flags().Lookup(n) != nil },
-		},
-		{
 			humanName: "members invite",
 			path:      "/members/invitations",
 			method:    "post",
