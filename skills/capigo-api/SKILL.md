@@ -4,10 +4,12 @@ description: >
   Drive the Capigo platform through the installed `capigo` CLI — the entry point for any
   Capigo work an agent does for a tenant. Use this whenever a request maps to Capigo data
   or capabilities — tasks, boards, members, products, variants, brands, categories, product
-  types, units, tenants, authentication, configuration — even when the user never names the
-  CLI or Capigo itself, and in whatever language they ask: "create a task and assign it to
-  someone", "what's on the board this week", "read the comments on that task", "list
-  products", "look up this SKU or barcode", "how many brands do we have". Also the
+  types, units, warehouses, stock locations, inbound receipts, outbound shipments, stock
+  transfers, availability, tenants, authentication, configuration — even when the user never
+  names the CLI or Capigo itself, and in whatever language they ask: "create a task and
+  assign it to someone", "what's on the board this week", "read the comments on that task",
+  "list products", "look up this SKU or barcode", "how many brands do we have", "plan an
+  inbound receipt for this PO", "which warehouse can cover this order". Also the
   reference for how the CLI itself works: detecting the install, logging in, picking a
   tenant, exit codes, JSON output, and self-diagnosing a misbehaving command. If a request
   touches Capigo and you are unsure how to talk to it, reach for this skill first instead
@@ -192,11 +194,15 @@ domain reference after reading leaf help:
 - [`references/domains/tasks.md`](./references/domains/tasks.md) for tasks, assignees, and
   subtasks;
 - [`references/domains/boards.md`](./references/domains/boards.md) when placing a task on a board
-  or list.
+  or list;
+- [`references/domains/wms.md`](./references/domains/wms.md) for anything under `capigo wms`:
+  warehouses, locations, availability, and the four stock documents.
 
 For product creation, read `products.md` after `capigo products create --help`. For task or subtask
 creation, read `tasks.md` after the relevant leaf help; read `boards.md` as well only for board
-placement. Do not load a domain reference for unrelated listing or search work.
+placement. For any `capigo wms` write, and for reporting a WMS read to the user, read `wms.md`: its
+verdicts, null costs, and statuses are easy to report wrongly. Do not load a domain reference for
+unrelated listing or search work.
 
 ## Scope boundary
 

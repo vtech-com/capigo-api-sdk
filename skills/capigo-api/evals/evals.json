@@ -15,13 +15,14 @@
     },
     {
       "id": 2,
-      "prompt": "The installed `capigo` binary's root help does not show a WMS group, but the user asks whether Capigo Public API supports listing inbound receipts and what they should do next. Investigate read-only. Do not call a tenant endpoint and do not use raw authenticated HTTP.",
-      "expected_output": "The agent checks the installed binary/version and live help, confirms the CLI gap, consults the public or repository OpenAPI only because the gap is confirmed, distinguishes API capability from CLI exposure, and recommends an upgrade or CLI feature rather than bypassing the CLI for the user's tenant operation.",
+      "prompt": "The installed `capigo` binary is an older build whose root help does not show a `wms` group, but the user asks whether Capigo can list inbound receipts and what they should do next. Investigate read-only. Do not call a tenant endpoint and do not use raw authenticated HTTP.",
+      "expected_output": "The agent checks the installed binary/version and live help, confirms the gap is in the installed build, consults the public or repository OpenAPI only because the gap is confirmed, distinguishes API capability from what this build exposes, and recommends upgrading the CLI — current builds expose inbound receipts under `capigo wms inbound` — rather than bypassing the CLI for the user's tenant operation.",
       "files": [],
       "assertions": [
         "Uses `capigo version` and root or group help as the first source for the installed CLI surface.",
         "Consults the OpenAPI specification only after confirming the CLI gap.",
-        "Correctly reports that the Public API includes a read operation for inbound receipts while the installed CLI does not expose a WMS group.",
+        "Correctly reports that the Public API includes a read operation for inbound receipts while the installed build does not expose a `wms` group.",
+        "Recommends upgrading the CLI rather than treating the gap as permanent, and does not invent `capigo wms` flags the installed build cannot confirm.",
         "Does not make an authenticated raw API call or claim that a missing CLI command means the platform lacks the capability."
       ]
     },

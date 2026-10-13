@@ -1,6 +1,13 @@
 {
   "version": 1,
   "skills": {
+    "capigo-api-sync": {
+      "source": "git@github.com:vtech-com/agent-skills.git",
+      "sourceUrl": "git@github.com:vtech-com/agent-skills.git",
+      "sourceType": "git",
+      "skillPath": "skills/capigo-api-sync/SKILL.md",
+      "computedHash": "fb6d4ac8794bb1f7e6e2dcddd30cba5777ba280a5cc3ed9d328bb4b4300007ea"
+    },
     "golang-pro": {
       "source": "jeffallan/claude-skills",
       "sourceType": "github",

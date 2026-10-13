@@ -230,6 +230,9 @@ capigo tasks transfer-ownership <id|--code> Hand a task to another member (--own
                                      member of the tenant; only the current owner may call it)
 capigo tasks claim <id|--code>        Take an unassigned task yourself (--code requires --tenant;
                                       any active member may claim; a task already assigned is a 409)
+capigo tasks promote <id|--code>      Turn a subtask into a task of its own (--list <uuid> places it;
+                                      --code requires --tenant; a task already top-level is a no-op
+                                      that ignores --list, flagged as meta.list_applied: false)
 capigo tasks archive <id|--code>      Retire a task (--code requires --tenant; owner, assignee or
                                       tenant owner only; subtasks go with it; restore with tasks unarchive)
 capigo tasks unarchive <id|--code>    Restore an archived task (--code requires --tenant; owner,
@@ -256,11 +259,9 @@ capigo boards list       List boards (supports --query/-q, --page, --limit)
 capigo boards get <id>   Get board by ID (includes its `lists` array)
 capigo boards create     Create a board (--name + --tenant required, or --from-json)
 capigo boards update <id>        Partial update a board (PATCH; --tenant required; at least one field required)
-capigo boards delete <id>        Delete a board (soft delete; its lists and their tasks stay live)
 capigo boards lists create <board-id>        Create a list in a board (--name + --tenant required)
 capigo boards lists update <board-id> <list-id>  Update a list (--name/--wip-limit/--is-archived) or
                                        reorder it (--after-list-id or --before-list-id, one only)
-capigo boards lists delete <board-id> <list-id>  Delete a list (soft delete; the tasks in it stay live)
 capigo boards members list <board-id>        List a board's members (--tenant optional)
 capigo boards members add <board-id>         Add 1-50 members in one call (--user-id repeatable, --role;
                                        a member the board already has is skipped, not refused)
@@ -310,6 +311,30 @@ capigo units create         Create a unit (--name and --abbreviation required)
 capigo units update <id>    Partial update a unit (PATCH)
 capigo units replace <id>   Full replace a unit (PUT, all fields required)
 
+capigo wms warehouses list                   List the warehouses this key can see (-q, --is-active, --sort)
+capigo wms warehouses get <code>             Get a warehouse with its tree of locations
+capigo wms locations list --warehouse <c>    List a warehouse's locations (-q, --is-active, --sort)
+capigo wms locations get <code> --warehouse <c>   Get one location with its parent and children
+capigo wms availability check --warehouse <c>... --line sku=<sku>,demand=<n>...
+                                       Score 0-100 how well each warehouse covers each line; never
+                                       returns on-hand stock
+capigo wms <doc> list --warehouse <c>        List one warehouse's documents (--status, -q, --sort; max 50 a page)
+capigo wms <doc> get <code> --warehouse <c>  Get a document with its lines and history
+capigo wms <doc> validate|preview --warehouse <c> --from-json <path|->
+                                       Check a create body, or see how it was understood; writes nothing
+capigo wms <doc> create --warehouse <c> --from-json <path|-> [--idempotency-key <key>]
+                                       Create a document as a DRAFT
+capigo wms <doc> update <code> --warehouse <c> --if-match <updated_at> --from-json <path|->
+                                       Merge-patch an editable document
+capigo wms <doc> submit|cancel <code> --warehouse <c> --if-match <updated_at> [--reason <text>]
+                                       Move a document on, or end it (cancel is final)
+                                       <doc> is inbound, outbound, internal-transfers or
+                                       warehouse-transfers. Records are addressed by code, not UUID.
+                                       These commands plan: receiving, picking, exporting, moving and
+                                       approving are done in the Capigo app. internal-transfers has no
+                                       submit and its cancel takes no --if-match; outbound cancel takes
+                                       no --reason.
+
 capigo variants list            List variants by barcode prefix (supports --barcode-prefix, --sort)
 capigo variants get <id|--sku>  Get a variant by ID or SKU (--sku requires --tenant)
 capigo variants lookup --tenant <code> [--sku <s>]... [--barcode <b>]...  Look up up to 100 SKUs/barcodes at once
@@ -328,7 +353,7 @@ Run `capigo <group> <command> --help` for the complete, authoritative flag list 
 
 `--tenant <code>` appears as a local flag on commands that require or accept a tenant scope (e.g. `capigo products list --tenant acme`). It is not a global flag. The active config profile is always read from `~/.capigo/config.json` and cannot be overridden at runtime.
 
-Every PCMS command (`products`, `variants`, `brands`, `categories`, `product-types`, `units`) **requires** a tenant on every verb. `tasks list`/`get`, `boards list`/`get`, `boards members list`, and `members list`/`get` accept an *optional* `--tenant` — omit it to read across every tenant the API key can reach (`meta.tenant` is then absent — there is no single tenant to name). A key bound to one workspace narrows that read to that workspace, and naming any other one with `--tenant` fails with exit `3`; see [Working across several workspaces](#working-across-several-workspaces). `tasks create` and `tasks subtasks create` always require a tenant; `tasks subtasks list` requires a tenant only when addressed by `--code`. Board writes — `boards create`, `boards update`, `boards delete`, `boards lists create`, `boards lists update`, `boards lists delete`, and `boards members add`/`update`/`remove` — always require a tenant: they write into one workspace.
+Every PCMS command (`products`, `variants`, `brands`, `categories`, `product-types`, `units`) **requires** a tenant on every verb. `tasks list`/`get`, `boards list`/`get`, `boards members list`, and `members list`/`get` accept an *optional* `--tenant` — omit it to read across every tenant the API key can reach (`meta.tenant` is then absent — there is no single tenant to name). A key bound to one workspace narrows that read to that workspace, and naming any other one with `--tenant` fails with exit `3`; see [Working across several workspaces](#working-across-several-workspaces). `tasks create` and `tasks subtasks create` always require a tenant; `tasks subtasks list` requires a tenant only when addressed by `--code`. Board writes — `boards create`, `boards update`, `boards lists create`, `boards lists update`, and `boards members add`/`update`/`remove` — always require a tenant: they write into one workspace. Every `wms` command requires a tenant too, and every one but `wms warehouses` and `wms availability check` also takes `--warehouse <code>`: a WMS record is addressed by its code inside one warehouse.
 
 ## Products
 

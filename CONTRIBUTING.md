@@ -158,7 +158,9 @@ own `RunE` says what the CLI sends. Only a running API says what the API does.
 
 `make verify-api` asks it. Point it at any server with a key and a tenant; it calls every GET the
 spec declares and checks that each help page's `OUTPUT` sample names every field the response
-actually carries. Forty-five of the forty-nine pages are covered.
+actually carries. It covers the read pages and the writes that echo a record, including every `wms`
+list and get, which it reaches through the first warehouse the key can see. The `wms` write pages are
+not covered: checking them would mean writing.
 
 A field the server returns that the spec never declared is reported and does not fail the run — the
 document is hand-written and incomplete, and a target that is always red is a target nobody runs. A

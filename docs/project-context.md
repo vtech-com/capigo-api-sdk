@@ -814,7 +814,7 @@ We will:
 
 ### Phase 4 — Beyond (future)
 
-- [ ] WMS commands (`capigo wms inbound create`, `capigo wms outbound list`)
+- [x] WMS commands (`capigo wms inbound create`, `capigo wms outbound list`) — the whole published module: warehouses, locations, availability, and list/get/validate/preview/create/update/submit/cancel for inbound receipts, outbound shipments, internal transfers and warehouse transfers. Posting verbs (receive, pick, export, move, approve) are not on the public API and have no command.
 - [ ] Purchasing commands (`capigo po list`)
 - [ ] Interactive mode (`capigo` with no args → TUI)
 - [ ] Plugin system for community extensions

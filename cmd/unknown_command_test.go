@@ -68,8 +68,20 @@ func TestRedirectForUnknownCommand(t *testing.T) {
 		},
 		{
 			name:    "unknown sub on an unrelated group does not misfire",
-			errMsg:  `unknown command "delete" for "capigo boards"`,
+			errMsg:  `unknown command "delete" for "capigo tenants"`,
 			matched: false,
+		},
+		{
+			name:    "boards delete, withdrawn by the API, points at archiving",
+			errMsg:  `unknown command "delete" for "capigo boards"`,
+			matched: true,
+			want:    "boards lists update <board-id> <list-id> --tenant <code> --is-archived",
+		},
+		{
+			name:    "boards lists delete, withdrawn by the API, points at archiving",
+			errMsg:  `unknown command "delete" for "capigo boards lists"`,
+			matched: true,
+			want:    "boards lists update <board-id> <list-id> --tenant <code> --is-archived",
 		},
 		{
 			name:    "unknown sub on variants not in the curated family",

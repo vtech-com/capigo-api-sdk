@@ -51,16 +51,6 @@ func TestBoardWriteBodiesCarryTheSpecKeys(t *testing.T) {
 			body: api.UpdateBoardListRequest{TenantCode: "acme", Name: &listName},
 			want: []string{"tenant_code", "name"},
 		},
-		{
-			name: "boards lists delete",
-			body: api.DeleteBoardListRequest{TenantCode: "acme"},
-			want: []string{"tenant_code"},
-		},
-		{
-			name: "boards delete",
-			body: api.DeleteBoardRequest{TenantCode: "acme"},
-			want: []string{"tenant_code"},
-		},
 	}
 
 	for _, tc := range cases {

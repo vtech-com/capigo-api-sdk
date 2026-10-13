@@ -18,6 +18,7 @@ type recordedCall struct {
 	query   string
 	tenant  string
 	idemKey string
+	ifMatch string
 	body    map[string]any
 	hasBody bool
 	rawBody string
@@ -29,6 +30,13 @@ type recordedCall struct {
 // cannot observe, so only the paths that reach the API run.
 func callAgainst(t *testing.T, reply string, run func()) (recordedCall, string) {
 	t.Helper()
+	return callAgainstStatus(t, http.StatusOK, reply, run)
+}
+
+// callAgainstStatus is callAgainst for a command that reads the status code:
+// a create told 201 made something, and one told 200 was replayed.
+func callAgainstStatus(t *testing.T, status int, reply string, run func()) (recordedCall, string) {
+	t.Helper()
 	withConfig(t, "")
 
 	var seen recordedCall
@@ -38,6 +46,7 @@ func callAgainst(t *testing.T, reply string, run func()) (recordedCall, string) 
 		seen.query = r.URL.RawQuery
 		seen.tenant = r.Header.Get("X-Tenant-Code")
 		seen.idemKey = r.Header.Get("Idempotency-Key")
+		seen.ifMatch = r.Header.Get("If-Match")
 		raw, _ := io.ReadAll(r.Body)
 		if len(raw) > 0 {
 			seen.hasBody = true
@@ -45,6 +54,7 @@ func callAgainst(t *testing.T, reply string, run func()) (recordedCall, string) 
 			_ = json.Unmarshal(raw, &seen.body)
 		}
 		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
 		_, _ = w.Write([]byte(reply))
 	}))
 	t.Cleanup(srv.Close)

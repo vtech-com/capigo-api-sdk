@@ -46,14 +46,12 @@ var implementedOps = map[string]string{
 	"POST /join-requests/{id}/actions/approve":      "join-requests approve",
 	"POST /join-requests/{id}/actions/reject":       "join-requests reject",
 
-	"GET /mission/boards":                        "boards list",
-	"GET /mission/boards/{id}":                   "boards get",
-	"POST /mission/boards":                       "boards create",
-	"PATCH /mission/boards/{id}":                 "boards update",
-	"DELETE /mission/boards/{id}":                "boards delete",
-	"POST /mission/boards/{id}/lists":            "boards lists create",
-	"PATCH /mission/boards/{id}/lists/{listId}":  "boards lists update",
-	"DELETE /mission/boards/{id}/lists/{listId}": "boards lists delete",
+	"GET /mission/boards":                       "boards list",
+	"GET /mission/boards/{id}":                  "boards get",
+	"POST /mission/boards":                      "boards create",
+	"PATCH /mission/boards/{id}":                "boards update",
+	"POST /mission/boards/{id}/lists":           "boards lists create",
+	"PATCH /mission/boards/{id}/lists/{listId}": "boards lists update",
 
 	"GET /mission/boards/{id}/members":             "boards members list",
 	"POST /mission/boards/{id}/members":            "boards members add",
@@ -68,6 +66,7 @@ var implementedOps = map[string]string{
 	"POST /mission/tasks/{id}/actions/move":                                "tasks move",
 	"POST /mission/tasks/{id}/actions/transfer-ownership":                  "tasks transfer-ownership",
 	"POST /mission/tasks/{id}/actions/claim":                               "tasks claim",
+	"POST /mission/tasks/{id}/actions/promote":                             "tasks promote",
 	"POST /mission/tasks/{id}/actions/archive":                             "tasks archive",
 	"POST /mission/tasks/{id}/actions/unarchive":                           "tasks unarchive",
 	"DELETE /mission/tasks/{id}":                                           "tasks delete",
@@ -92,6 +91,7 @@ var implementedOps = map[string]string{
 	"POST /mission/tasks/code/{code}/actions/move":                                "tasks move --code",
 	"POST /mission/tasks/code/{code}/actions/transfer-ownership":                  "tasks transfer-ownership --code",
 	"POST /mission/tasks/code/{code}/actions/claim":                               "tasks claim --code",
+	"POST /mission/tasks/code/{code}/actions/promote":                             "tasks promote --code",
 	"POST /mission/tasks/code/{code}/actions/archive":                             "tasks archive --code",
 	"POST /mission/tasks/code/{code}/actions/unarchive":                           "tasks unarchive --code",
 	"DELETE /mission/tasks/code/{code}":                                           "tasks delete --code",
@@ -149,56 +149,54 @@ var implementedOps = map[string]string{
 	"PATCH /pcms/units/{id}":  "units update",
 	"PUT /pcms/units/{id}":    "units replace",
 	"DELETE /pcms/units/{id}": "units delete",
+
+	// WMS. Every record is addressed by code, inside a warehouse. One command per
+	// operation, except the lifecycle route: its {action} segment is submit or
+	// cancel, and each is its own command — the API answers 404 to any other.
+	"GET /wms/warehouses":           "wms warehouses list",
+	"GET /wms/warehouses/{code}":    "wms warehouses get",
+	"GET /wms/locations":            "wms locations list",
+	"GET /wms/locations/{code}":     "wms locations get",
+	"POST /wms/availability-checks": "wms availability check",
+
+	"GET /wms/inbound-receipts":                          "wms inbound list",
+	"GET /wms/inbound-receipts/{code}":                   "wms inbound get",
+	"POST /wms/inbound-receipts/validate":                "wms inbound validate",
+	"POST /wms/inbound-receipts/preview":                 "wms inbound preview",
+	"POST /wms/inbound-receipts":                         "wms inbound create",
+	"PATCH /wms/inbound-receipts/{code}":                 "wms inbound update",
+	"POST /wms/inbound-receipts/{code}/actions/{action}": "wms inbound submit, wms inbound cancel",
+
+	"GET /wms/outbound-shipments":                          "wms outbound list",
+	"GET /wms/outbound-shipments/{code}":                   "wms outbound get",
+	"POST /wms/outbound-shipments/validate":                "wms outbound validate",
+	"POST /wms/outbound-shipments/preview":                 "wms outbound preview",
+	"POST /wms/outbound-shipments":                         "wms outbound create",
+	"PATCH /wms/outbound-shipments/{code}":                 "wms outbound update",
+	"POST /wms/outbound-shipments/{code}/actions/{action}": "wms outbound submit, wms outbound cancel",
+
+	"GET /wms/internal-transfers":                          "wms internal-transfers list",
+	"GET /wms/internal-transfers/{code}":                   "wms internal-transfers get",
+	"POST /wms/internal-transfers/validate":                "wms internal-transfers validate",
+	"POST /wms/internal-transfers/preview":                 "wms internal-transfers preview",
+	"POST /wms/internal-transfers":                         "wms internal-transfers create",
+	"PATCH /wms/internal-transfers/{code}":                 "wms internal-transfers update",
+	"POST /wms/internal-transfers/{code}/actions/{action}": "wms internal-transfers cancel — this document has no submit",
+
+	"GET /wms/warehouse-transfers":                          "wms warehouse-transfers list",
+	"GET /wms/warehouse-transfers/{code}":                   "wms warehouse-transfers get",
+	"POST /wms/warehouse-transfers/validate":                "wms warehouse-transfers validate",
+	"POST /wms/warehouse-transfers/preview":                 "wms warehouse-transfers preview",
+	"POST /wms/warehouse-transfers":                         "wms warehouse-transfers create",
+	"PATCH /wms/warehouse-transfers/{code}":                 "wms warehouse-transfers update",
+	"POST /wms/warehouse-transfers/{code}/actions/{action}": "wms warehouse-transfers submit, wms warehouse-transfers cancel",
 }
 
 // unimplementedOps is every operation the CLI deliberately does not wrap, each
 // with a reason. Add here — rather than to implementedOps — when an operation is
-// left without a command on purpose.
-var unimplementedOps = map[string]string{
-
-	// WMS: a module addressed by code rather than by id, and no longer read-only —
-	// prod now publishes the full write path (create, update, preview, validate, and
-	// state-machine actions) for every document type. Held out deliberately — the API
-	// surface is not settled yet, and a CLI that wraps an unsettled surface teaches
-	// its callers a shape that will move under them. Revisit when the module stabilises.
-	"GET /wms/warehouses":                 "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
-	"GET /wms/warehouses/{code}":          "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
-	"GET /wms/inbound-receipts":           "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
-	"GET /wms/inbound-receipts/{code}":    "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
-	"GET /wms/outbound-shipments":         "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
-	"GET /wms/outbound-shipments/{code}":  "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
-	"GET /wms/internal-transfers":         "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
-	"GET /wms/internal-transfers/{code}":  "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
-	"GET /wms/locations":                  "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
-	"GET /wms/locations/{code}":           "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
-	"GET /wms/warehouse-transfers":        "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
-	"GET /wms/warehouse-transfers/{code}": "unwrapped: the WMS API is not yet stable; wrapping it would freeze a moving surface",
-
-	// WMS writes. Beyond the stability argument above, these are not single calls but
-	// a stateful workflow — preview and validate feed a create, and the documents then
-	// move through /actions/{action}. Wrapping a workflow whose states are still
-	// moving is how a CLI ends up with commands it cannot later remove. Left for a
-	// dedicated design pass once the module settles, not folded into a spec sync.
-	"POST /wms/inbound-receipts":                            "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
-	"POST /wms/inbound-receipts/preview":                    "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
-	"POST /wms/inbound-receipts/validate":                   "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
-	"PATCH /wms/inbound-receipts/{code}":                    "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
-	"POST /wms/inbound-receipts/{code}/actions/{action}":    "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
-	"POST /wms/outbound-shipments":                          "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
-	"POST /wms/outbound-shipments/preview":                  "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
-	"POST /wms/outbound-shipments/validate":                 "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
-	"PATCH /wms/outbound-shipments/{code}":                  "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
-	"POST /wms/outbound-shipments/{code}/actions/{action}":  "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
-	"POST /wms/internal-transfers":                          "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
-	"POST /wms/internal-transfers/preview":                  "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
-	"POST /wms/internal-transfers/validate":                 "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
-	"PATCH /wms/internal-transfers/{code}":                  "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
-	"POST /wms/warehouse-transfers":                         "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
-	"POST /wms/warehouse-transfers/preview":                 "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
-	"POST /wms/warehouse-transfers/validate":                "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
-	"PATCH /wms/warehouse-transfers/{code}":                 "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
-	"POST /wms/warehouse-transfers/{code}/actions/{action}": "unwrapped: WMS write path is an unsettled stateful workflow; needs its own design pass",
-}
+// left without a command on purpose. Empty today: the WMS module, held out here
+// while its surface was still moving, is wrapped under `capigo wms`.
+var unimplementedOps = map[string]string{}
 
 // openAPIPathOnlySpec is the minimal subset of OpenAPI 3.0 needed to enumerate
 // operations: a path, and the methods hanging off it.
