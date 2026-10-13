@@ -91,6 +91,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - `unimplementedOps` in the path-coverage guard is empty: every operation the spec declares has a
   command.
 
+### Security
+
+- **Release binaries are built with Go 1.26.9, not 1.26.6.** `govulncheck` reported nine
+  standard-library vulnerabilities in the pinned toolchain, all fixed in 1.26.9: GO-2026-6603,
+  GO-2026-6605, GO-2026-6607, GO-2026-6608, GO-2026-6610, GO-2026-6611, GO-2026-6612,
+  GO-2026-6613 and GO-2026-6617 (`net/http`, `crypto/tls`, `net/textproto`). The pin lives in the
+  `ci.yml` matrix, the `setup-go` step inside `codeql.yml`, `release.yml`, and the `go` directive
+  in `go.mod`; all four now say 1.26.9.
+
 ## [0.27.0] — 2026-10-08
 
 ### Added
