@@ -21,7 +21,7 @@ var boardCmd = &cobra.Command{
 
 --tenant is optional on list and get only, which search across every tenant this
 key can reach when it is omitted. Every other command here — create, update,
-delete, lists and members — needs it, because it addresses one workspace's board.
+lists and members — needs it, because it addresses one workspace's board.
   capigo help tenancy
 
 USAGE
@@ -459,91 +459,6 @@ OUTPUT
 }
 
 // --------------------------------------------------------------------------
-// boards delete
-// --------------------------------------------------------------------------
-
-var boardDeleteTenant string
-
-var boardsDeleteCmd = &cobra.Command{
-	Use:   "delete <board-id>",
-	Short: "Delete a board",
-	Long: `Retire a board.
-
-PURPOSE
-  Take a board off the workspace for good. It leaves every read, and a repeat
-  answers exit 4.
-
-  This is not a way to retire the work on the board. Its lists and the tasks in
-  them stay live rows: the lists become unreachable, because a list is addressed
-  inside its board, but the tasks stay readable through tasks get and tasks
-  list. To close the work instead, archive each list — boards lists update
-  --is-archived archives the tasks in that list.
-
-  Nothing brings a deleted board back. There is no un-delete here, and no
-  restore anywhere in the API.
-
-USAGE
-  capigo boards delete <board-id> --tenant <code>
-
-FLAGS
-  <board-id>
-      Board UUID. Positional, required.
-
-  --tenant <code>
-      Tenant the board belongs to. Required.
-
-        capigo boards delete 7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10 \
-          --tenant acme
-
-OUTPUT
-  The id the board was retired under is at .data:
-
-      {
-        "data": { "id": "7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10" },
-        "meta": { "tenant": "acme", "tenant_source": "flag",
-                  "server_time": "2026-09-28T09:00:00Z" }
-      }
-
-  The row itself is not returned: every read answers 404 for the board from here
-  on, so exit 0 and .data.id are the whole answer.
-
-  Confirming it is a read: after this, boards list no longer shows it and
-  boards get answers 404.
-
-  Exit 3 when the caller may not edit the board (board owner or tenant owner
-  only). Exit 4 when the board is unknown, private, or already retired — a
-  private board cannot be deleted through the API at all.`,
-	Args: cobra.ExactArgs(1),
-	RunE: func(_ *cobra.Command, args []string) error {
-		ctx := context.Background()
-
-		client, cfg, err := buildClient()
-		if err != nil {
-			return handleErr(err)
-		}
-
-		tenant := resolveTenant(boardDeleteTenant, activeProfileOrEmpty(cfg))
-		requireTenant(tenant, "boards delete")
-
-		req := api.DeleteBoardRequest{TenantCode: *tenant}
-
-		resp, err := client.DeleteBoard(ctx, args[0], req, tenant)
-		if err != nil {
-			return handleErr(err)
-		}
-
-		var envelope api.RawEnvelope
-		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
-			return handleErr(fmt.Errorf("decode response: %w", err))
-		}
-
-		meta := itemMeta(tenant, boardDeleteTenant, envelope.Meta)
-		meta.ServerTime = resp.ServerTime
-		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
-	},
-}
-
-// --------------------------------------------------------------------------
 // boards lists (group)
 // --------------------------------------------------------------------------
 
@@ -849,92 +764,6 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 		meta := itemMeta(tenant, boardListsUpdateTenant, envelope.Meta)
-		meta.ServerTime = resp.ServerTime
-		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
-	},
-}
-
-var boardListsDeleteTenant string
-
-var boardListsDeleteCmd = &cobra.Command{
-	Use:   "delete <board-id> <list-id>",
-	Short: "Delete a list from a board",
-	Long: `Retire a list from a board.
-
-PURPOSE
-  Take a list off a board for good. This is not archiving: boards lists update
-  --is-archived hides a list and archives the tasks in it, while this retires
-  the row and leaves those tasks exactly where they are — still active, still
-  filed under a list no read reports again.
-
-  Nothing brings a deleted list back. There is no un-delete here, and no
-  restore anywhere in the API.
-
-USAGE
-  capigo boards lists delete <board-id> <list-id> --tenant <code>
-
-FLAGS
-  <board-id>
-      Board UUID. Positional, required.
-
-  <list-id>
-      List UUID. Positional, required.
-
-  --tenant <code>
-      Tenant the board belongs to. Required.
-
-        capigo boards lists delete 7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10 \
-          9ab2c744-2b6e-4f83-a5d1-8c07e2f419bb --tenant acme
-
-OUTPUT
-  The id the list was retired under is at .data:
-
-      {
-        "data": { "id": "9ab2c744-2b6e-4f83-a5d1-8c07e2f419bb" },
-        "meta": { "tenant": "acme", "tenant_source": "flag",
-                  "server_time": "2026-09-28T09:00:00Z" }
-      }
-
-  The row itself is not returned: every read answers 404 for the list from here
-  on, so exit 0 and .data.id are the whole answer. A repeat is exit 4, and so is
-  a list that belongs to another board — the address names both.
-
-  Confirming it is a read: after this, boards get no longer lists it and its
-  meta.list_count has dropped.
-
-  The address reaches an archived list too, exactly as boards lists update
-  does: a caller holding an id may retire what they hid. The list's tasks are
-  left alone either way — this is not the archive, which retires them.
-
-  Exit 3 when the caller may not edit the board (board owner or tenant owner
-  only). Exit 4 when the board is unknown, private or in a tenant this key
-  cannot see, or when the list is unknown, belongs to another board, or has
-  already been retired.`,
-	Args: cobra.ExactArgs(2),
-	RunE: func(_ *cobra.Command, args []string) error {
-		ctx := context.Background()
-
-		client, cfg, err := buildClient()
-		if err != nil {
-			return handleErr(err)
-		}
-
-		tenant := resolveTenant(boardListsDeleteTenant, activeProfileOrEmpty(cfg))
-		requireTenant(tenant, "boards lists delete")
-
-		req := api.DeleteBoardListRequest{TenantCode: *tenant}
-
-		resp, err := client.DeleteBoardList(ctx, args[0], args[1], req, tenant)
-		if err != nil {
-			return handleErr(err)
-		}
-
-		var envelope api.RawEnvelope
-		if err := json.Unmarshal(resp.Body, &envelope); err != nil {
-			return handleErr(fmt.Errorf("decode response: %w", err))
-		}
-
-		meta := itemMeta(tenant, boardListsDeleteTenant, envelope.Meta)
 		meta.ServerTime = resp.ServerTime
 		return output.Write(os.Stdout, rawItem(envelope.Data), meta)
 	},
@@ -1329,8 +1158,6 @@ func init() {
 	boardsUpdateCmd.Flags().BoolVar(&boardUpdateIsPublic, "is-public", false, "set is_public (pass =false for private)")
 	boardsUpdateCmd.Flags().StringVar(&boardUpdateFromJSON, "from-json", "", "path to a JSON object with the update body (use - for stdin)")
 
-	boardsDeleteCmd.Flags().StringVar(&boardDeleteTenant, "tenant", "", "tenant code (required)")
-
 	boardListsCreateCmd.Flags().StringVar(&boardListsCreateTenant, "tenant", "", "tenant code (required)")
 	boardListsCreateCmd.Flags().StringVar(&boardListsCreateName, "name", "", "list name (required unless --from-json is used)")
 	boardListsCreateCmd.Flags().IntVar(&boardListsCreateWIPLimit, "wip-limit", 0, "work-in-progress cap for the list (not pagination)")
@@ -1344,9 +1171,7 @@ func init() {
 	boardListsUpdateCmd.Flags().StringVar(&boardListsUpdateBeforeList, "before-list-id", "", "move the list directly in front of this list")
 	boardListsUpdateCmd.Flags().StringVar(&boardListsUpdateFromJSON, "from-json", "", "path to a JSON object with the update body (use - for stdin)")
 
-	boardListsDeleteCmd.Flags().StringVar(&boardListsDeleteTenant, "tenant", "", "tenant code (required)")
-
-	boardListsCmd.AddCommand(boardListsCreateCmd, boardListsUpdateCmd, boardListsDeleteCmd)
+	boardListsCmd.AddCommand(boardListsCreateCmd, boardListsUpdateCmd)
 	boardMembersListCmd.Flags().StringVar(&boardMembersListTenant, "tenant", "", "tenant code (required)")
 	boardMembersListCmd.Flags().IntVar(&boardMembersListPage, "page", 0, "page number")
 	boardMembersListCmd.Flags().IntVar(&boardMembersListLimit, "limit", 20, "items per page")
@@ -1362,6 +1187,6 @@ func init() {
 
 	boardMembersCmd.AddCommand(boardMembersListCmd, boardMembersAddCmd, boardMembersUpdateCmd, boardMembersRemoveCmd)
 
-	boardCmd.AddCommand(boardsListCmd, boardsGetCmd, boardsCreateCmd, boardsUpdateCmd, boardsDeleteCmd, boardListsCmd, boardMembersCmd)
+	boardCmd.AddCommand(boardsListCmd, boardsGetCmd, boardsCreateCmd, boardsUpdateCmd, boardListsCmd, boardMembersCmd)
 	rootCmd.AddCommand(boardCmd)
 }

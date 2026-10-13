@@ -9,7 +9,10 @@ func TestLookupError_KnownWriteCodesCarryBrake(t *testing.T) {
 	// Every write-side code must carry a next step and the capability brake.
 	// Meaning is deliberately NOT required here — for codes with a descriptive
 	// server message it is left empty so the server message is the single source.
-	for _, code := range []string{"E9426", "E9445", "E9446", "VALIDATION_ERROR", "TASK_ALREADY_ASSIGNED"} {
+	for _, code := range []string{
+		"E9426", "E9445", "E9446", "VALIDATION_ERROR", "TASK_ALREADY_ASSIGNED",
+		"E0602", "E0601", "E9649", "E9680", "E9675", "E9674",
+	} {
 		info, ok := LookupError(code)
 		if !ok {
 			t.Errorf("%s should be in the catalog", code)
@@ -43,7 +46,7 @@ func TestLookupError_GenericCodesCarryMeaning(t *testing.T) {
 }
 
 func TestLookupError_NonWriteCodesNoBrake(t *testing.T) {
-	for _, code := range []string{"E9425", "E0102", "E0004", "E9103"} {
+	for _, code := range []string{"E9425", "E0102", "E0004", "E9103", "E9647", "WAREHOUSE_CODE_REQUIRED"} {
 		info, ok := LookupError(code)
 		if !ok {
 			t.Errorf("%s should be in the catalog", code)

@@ -189,18 +189,6 @@ type UpdateBoardListRequest struct {
 	BeforeListID *string `json:"before_list_id,omitempty"`
 }
 
-// DeleteBoardRequest is the body for DELETE /mission/boards/{id}.
-// The address names the board; the body carries the tenant only.
-type DeleteBoardRequest struct {
-	TenantCode string `json:"tenant_code"`
-}
-
-// DeleteBoardListRequest is the body for DELETE /mission/boards/{id}/lists/{listId}.
-// The address names the board and the list; the body carries the tenant only.
-type DeleteBoardListRequest struct {
-	TenantCode string `json:"tenant_code"`
-}
-
 // AddBoardMembersRequest is the body for POST /mission/boards/{id}/members.
 // UserIDs is the array the endpoint exists for: 1 to 50 members in one request.
 // Role applies to the whole request, because the API takes one role per batch.

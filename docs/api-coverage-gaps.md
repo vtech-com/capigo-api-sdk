@@ -4,7 +4,7 @@ Living backlog of Capigo Public API (`/api/v1`) endpoints/actions the CLI cannot
 yet wrap because the **server-side endpoint does not exist**, plus any endpoints
 that exist but the CLI hasn't surfaced. Add to the SDK as endpoints land.
 
-**Last assessed:** 2026-06-04, against the `capigo` monorepo **`develop`** branch.
+**Last assessed:** 2026-10-13, against the published spec and the production API. (The route-handler assessment below dates from 2026-06-04, against the `capigo` monorepo **`develop`** branch.)
 
 ## How this was determined
 
@@ -41,7 +41,7 @@ The CLI wraps every endpoint that currently exists, with one exception:
 | `GET /members/{id}` | `capigo members get <id>` | ✅ **landed on develop / pre-staged in SDK** — UUID-only; reconciles on `make update-spec` after prod deploy |
 | `GET /pcms/variants/{id}` | `capigo variants get <id>` | ✅ **landed on develop / pre-staged in SDK** — UUID-only; reconciles on `make update-spec` after prod deploy |
 
-Everything else under `/members`, `/mission/*`, `/pcms/*`, `/tenants` is wrapped.
+Everything else under `/members`, `/mission/*`, `/pcms/*`, `/tenants`, `/wms/*` is wrapped.
 
 **Board membership (2026-09-28):** the four `/mission/boards/{id}/members*` operations were the
 only endpoints present in the platform's spec and absent from this repo's copy — the spec copy
@@ -58,7 +58,7 @@ ones for a work-management agent are task update/delete and product get.
 
 | Priority | Missing action | Notes / status |
 |---|---|---|
-| High | `DELETE /mission/tasks/{id}` (task delete/cancel) | No way to delete/cancel a task via API. |
+| ~~High~~ | ~~`DELETE /mission/tasks/{id}` (task delete/cancel)~~ | Landed and wrapped as `tasks delete`. |
 | Medium | Members: invite, role change, remove | `list` and `get` (UUID) are exposed. Member management (invite/RBAC/positions) exists in product docs but not in public `/api/v1`. |
 | Low (likely intentional) | `DELETE` on brands/categories/product-types/units/products | No resource exposes delete. Probably deliberate for reference data. |
 
@@ -79,37 +79,42 @@ the `boards` help pages carry the caveat instead.
 | High | Archiving a list makes it unreachable | `GET /mission/boards/{id}` drops archived lists from `.lists` and from `meta.list_count`, and no endpoint lists them. Only a caller that kept the list id can unarchive. **Ask:** an `include_archived` query param, and `is_archived` in the list response. |
 | High | A private board 404s as "Board not found" | `is_public: false` makes the board unreadable and unwritable through `/api/v1`, and the visibility check precedes the update, so the flag cannot be turned back on. With no board delete endpoint, `--is-public=false` is a one-way door for any API caller — and the board cannot be cleaned up either: the web board list is filtered by board membership with no tenant-owner bypass (`findBoardsByUser`), so a board an API key made private is reachable only by that key's own user in the web app, or by a DBA. **Ask:** either let a board owner still read and update their own private board, or distinguish the 404 from a genuinely absent board. |
 
-## Deliberately unwrapped: the WMS module (31 operations, 2026-08-27)
+## The WMS module — wrapped (33 operations, 2026-10-13)
 
-Prod now publishes a whole warehouse-management surface that the CLI does not wrap. It is
-held in `unimplementedOps` in `cmd/openapi_path_coverage_test.go` with a written reason, not
-silently dropped:
+Held out from 2026-08-27 while its surface was still moving, the module is now wrapped whole under
+`capigo wms`: nothing the spec declares is left in `unimplementedOps`. The signal the earlier note
+waited for arrived — `internal-transfers` gained its `actions/{action}` route, so all four documents
+carry create / preview / validate / update / actions — and the design pass it asked for is the
+`wms` command tree, its help pages, and `skills/capigo-api/references/domains/wms.md`.
 
-This sync added 23 of them to the document — 4 reads and all 19 writes; the other 8 reads
-were already held out.
+**What is deliberately not there.** The lifecycle route accepts only `submit` and `cancel`
+(`internal-transfers`: `cancel` only). Every posting verb — receive, verify, reserve, pick, pack,
+export, move, approve, reject, ship — answers 404 on the wire by design, so the CLI has no command
+for them. This is an API boundary, not a CLI gap: do not add a generic `action <name>` passthrough to
+"cover" it.
 
-- **Reads (12):** `locations` and `warehouse-transfers` list/get (new in this sync), plus the
-four document families the guard already held out — `warehouses`, `inbound-receipts`,
-`outbound-shipments`, `internal-transfers` (list + get each).
-- **Writes (19):** create, `preview`, `validate` and update for `inbound-receipts`,
-`outbound-shipments`, `internal-transfers` and `warehouse-transfers`, plus the
-`actions/{action}` route on all of them except `internal-transfers`, which the spec does not
-declare one for.
+### API-level gaps — WMS answers that mislead (verified 2026-10-13, tenant `vtech-uat`)
 
-Two reasons it stays unwrapped:
+Measured against prod with the dry-run endpoints, which write nothing. The CLI passes each answer
+through and the help pages and skill carry the caveat; each one is an ask on the API.
 
-1. **The surface is not settled.** The module was read-only when first assessed; the write
-   path arrived wholesale. Wrapping a moving surface teaches the agent a shape that will
-   change under it.
-2. **The write path is a stateful workflow, not a set of single calls.** `preview` and
-   `validate` feed a create, and documents then move through `actions/{action}` — a route the
-   spec declares for three of the four document families but not for `internal-transfers`,
-   which is itself a sign the surface is still moving. A CLI that freezes those states as
-   commands is hard to withdraw later.
+| Priority | Gap | Why it matters |
+|---|---|---|
+| High | `validate` answers three different ways | Inbound receipts and internal transfers answer **200** with `{request_id, valid: false, errors[]}` and no `data` key. Outbound shipments answer the same refusal as a **404** `E9425`, and wrap their success as `{data: {valid}}`. Warehouse transfers answer `{kind, valid, checks[]}`. A caller cannot write one check for "is this body acceptable". **Ask:** one envelope — `{data: {valid, errors[]}}` — for all four. |
+| High | Warehouse-transfer `validate` and `preview` do not resolve a line's SKU | A body naming a SKU that does not exist answers `valid: true`; the preview echoes the line with `product_variant_id: null`. Only `create` refuses it. `valid: true` therefore does not mean "create will accept this". **Ask:** resolve variants in the dry run, as the other three documents do. |
+| Medium | A refused `preview` and a refused `validate` disagree | Inbound: `validate` says 200 `valid: false`, `preview` of the same body says 400 `VALIDATION_ERROR`. Workable, but the pair reads as one feature. |
+| Medium | `GET /wms/warehouse-transfers?warehouse_code=KHO-TN` answers 500 `E0501` | Reproducible on `vtech-uat`; every other warehouse and every other KHO-TN list answers 200. A server defect, reported here because the CLI surfaces it as exit 1 with nothing to act on. |
+| Low | A warehouse-transfer list row carries no `updated_at` | The value every write needs as `If-Match` is on the detail only, so a write always costs a `get` first. Inbound, outbound and internal-transfer rows carry it. |
 
-This is a deliberate deferral, not an oversight. When the module stabilises, it gets a
-**dedicated design pass** — command shapes, output columns, and bundled-skill docs — not a
-fold-in to a spec sync.
+## Board and list delete — withdrawn by the API (2026-10-13)
+
+`DELETE /mission/boards/{id}` and `DELETE /mission/boards/{id}/lists/{listId}` left the published
+spec, and the live routes no longer accept the method: an authenticated `OPTIONS` answers
+`Allow: GET, HEAD, OPTIONS, PATCH` for a board and `Allow: OPTIONS, PATCH` for a list, while the
+members route beside them still lists `DELETE`. The CLI had shipped `boards delete` and
+`boards lists delete` in v0.26.0; both are removed, since a command that can only fail teaches the
+agent a capability that is not there. The private-board row above already rests on it: no endpoint
+deletes a board.
 
 ## Addressing resources by human key (code), not UUID — API requirement
 

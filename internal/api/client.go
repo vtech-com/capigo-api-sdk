@@ -292,20 +292,6 @@ func (c *Client) UpdateBoardList(ctx context.Context, boardID, listID string, bo
 	return c.Do(ctx, "PATCH", "/mission/boards/"+boardID+"/lists/"+listID, body, tenant)
 }
 
-// DeleteBoard retires a board. A soft delete: the board leaves every read,
-// while its lists and their tasks stay live rows. The API answers with the id
-// it retired, not the row.
-func (c *Client) DeleteBoard(ctx context.Context, boardID string, body any, tenant *string) (*Response, error) {
-	return c.Do(ctx, "DELETE", "/mission/boards/"+boardID, body, tenant)
-}
-
-// DeleteBoardList retires a list from a board. This is not archiving: the list
-// leaves every read, while the tasks filed in it stay live and keep pointing at
-// it. The API answers with the id it retired, not the row.
-func (c *Client) DeleteBoardList(ctx context.Context, boardID, listID string, body any, tenant *string) (*Response, error) {
-	return c.Do(ctx, "DELETE", "/mission/boards/"+boardID+"/lists/"+listID, body, tenant)
-}
-
 // ListBoardMembers fetches a page of a board's members.
 func (c *Client) ListBoardMembers(ctx context.Context, boardID string, tenant *string, page, limit int) (*Response, error) {
 	params := buildParams(nil, page, limit)

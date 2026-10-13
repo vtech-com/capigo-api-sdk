@@ -142,6 +142,43 @@ var errorCatalog = map[string]ErrorInfo{
 	// claimed it, or you already did"), so Meaning stays empty; Next carries
 	// the read-back step and the brake — the claim capability exists, the
 	// task's state is what refused it, and retrying cannot change that. -----
+	// ----- WMS document codes. The server's message names the condition, so
+	// Meaning stays empty. Next carries the one thing the message cannot: which
+	// command to run. Each is a refusal by the document's state or by the
+	// caller's input, never a missing capability — hence the brake.
+	"E0602": {
+		Next:           "The document changed after you read it, and nothing was written. Read it again with the matching 'capigo wms <group> get <code> --warehouse <code>' and retry with the new .data.updated_at as --if-match. Do not reuse the old value.",
+		CapabilityNote: true,
+	},
+	"E0601": {
+		Next:           "This --idempotency-key already created something with a different body. To retry the earlier create, send its exact body again; for a new document, use a new key.",
+		CapabilityNote: true,
+	},
+	"E9649": {
+		Next:           "A line that expects stock has no unit_cost. Set one with 'capigo wms inbound update <code> --warehouse <code> --if-match <updated_at> --from-json -' (0 is a valid cost), then retry.",
+		CapabilityNote: true,
+	},
+	"E9680": {
+		Next:           "This document cannot be cancelled by this call: read it with 'capigo wms <group> get'. If .data.parent names a warehouse transfer, cancel that transfer instead; if .data.cancel_locked is true, only the member at .data.owner may cancel it. Retrying will not help.",
+		CapabilityNote: true,
+	},
+	"E9675": {
+		Next:           "From PLANNED on a shipment's lines cannot be replaced. Send the current lines unchanged except for a lowered qty_ordered, each lowered line with a qty_reduction_reason — or cancel the shipment and create a new one.",
+		CapabilityNote: true,
+	},
+	"E9674": {
+		Next:           "Add qty_reduction_reason to every line whose qty_ordered you lowered, and retry.",
+		CapabilityNote: true,
+	},
+	"E9647": {
+		Next:           "List the tenant's warehouses with 'capigo wms warehouses list --is-active true' and retry with codes from it. One bad code refuses the whole check.",
+		CapabilityNote: false,
+	},
+	"WAREHOUSE_CODE_REQUIRED": {
+		Next:           "Pass --warehouse <code>; 'capigo wms warehouses list' prints the codes.",
+		CapabilityNote: false,
+	},
+
 	"TASK_ALREADY_ASSIGNED": {
 		Next:           "Re-read the task to see who holds it: capigo tasks get <id|--code>. Retrying the same claim will not help — the refusal is identical whether another member claimed it first or you already hold it.",
 		CapabilityNote: true,

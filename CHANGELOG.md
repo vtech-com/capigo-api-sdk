@@ -9,6 +9,72 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **`capigo wms` wraps the whole WMS module (33 operations).** Held out since v0.25.0 while its
+  surface was still moving; it has settled, and prod now publishes a lifecycle route for every
+  document. Everything is addressed by **code**, not UUID, every command requires a tenant, and
+  everything but a warehouse itself also takes `--warehouse <code>` — a document's code is unique
+  within its warehouse, not within the tenant.
+  - `wms warehouses list|get` and `wms locations list|get` read the warehouses a key can see and the
+    locations inside one. `warehouses get` carries the locations as a tree; `locations list` is the
+    same set flat and searchable.
+  - `wms availability check --warehouse <code>... --line sku=<sku>,demand=<n>...` scores, 0 to 100, how
+    well each warehouse covers each line. It never returns on-hand stock. A row names its line only by
+    `line_no`, the position of the `--line`; `found: false` means the variant is unknown, not that
+    stock is 0.
+  - `wms inbound`, `wms outbound`, `wms internal-transfers` and `wms warehouse-transfers` each carry
+    `list`, `get`, `validate`, `preview`, `create`, `update`, `submit` and `cancel`. A document's body
+    is its lines, so the writes take `--from-json`. `list` filters with `--status` (repeatable or
+    comma-separated, checked against that document's statuses before any call), `-q` and `--sort`, and
+    serves at most 50 rows a page.
+  - **These commands plan; they do not post stock.** The API answers 404 to receive, verify, pick,
+    pack, export, move, approve and reject, so there is no command for them: they are done in the
+    Capigo app. `submit` and `cancel` are the only lifecycle actions, and each is its own command.
+  - `update`, `submit` and `cancel` take `--if-match <updated_at>`, the document's current
+    `updated_at` as `get` prints it. A stale one is exit 8 with `E0602` and writes nothing, and the
+    error's `next` says to read the document again. Where the API differs per document the flags do
+    too: `internal-transfers` has no `submit` and its `cancel` takes no `--if-match`; `outbound cancel`
+    takes no `--reason`; only `outbound get` reads `--cost-method fifo|average`.
+  - `create --idempotency-key <key>` makes a retry safe, and `meta.replayed` is `true` when the API
+    answered with the document an earlier call had already created — a fact only the status code
+    carries.
+- **A dry run's verdict is on stdout whatever shape the API gave it.** `validate` answers
+  `{ "valid": false, "errors": […] }` with no `data` key when it refuses a body, and a
+  warehouse-transfer `preview` puts `valid` and `checks` beside `data`. Printing only `data` would
+  have printed `null` over a refusal, so an answer that carries anything beside `data` and `meta` is
+  now printed whole at `.data`. `validate` exits 0 with `.data.valid` false: the check succeeded, the
+  body did not.
+- The error catalog gives a next step for the WMS refusals a caller can act on: `E0602`, `E0601`,
+  `E9649`, `E9680`, `E9675`, `E9674`, `E9647` and `WAREHOUSE_CODE_REQUIRED`.
+- `make verify-api` now checks the `wms` list and get pages against a live warehouse, and the bundled
+  skill gained `references/domains/wms.md`.
+
+### Removed
+
+- **`boards delete` and `boards lists delete` are gone: the API withdrew both operations.** Prod no
+  longer declares `DELETE /mission/boards/{id}` or `DELETE /mission/boards/{id}/lists/{listId}`, and
+  both routes now answer `OPTIONS` without `DELETE` in `Allow` (checked 2026-10-13; `boards members
+  remove`, the control, still lists it). The commands shipped in v0.26.0 and would now fail on every
+  call, so they are removed rather than left to mislead. Running either answers with a pointer to
+  what remains: `boards lists update --is-archived`, which archives a list and the tasks in it. No
+  endpoint deletes a board or a list.
+
+### Fixed
+
+- **A guessed subcommand is named as the problem even when it comes with flags.** `capigo boards
+  delete <id> --tenant acme` answered `unknown flag: --tenant`, because cobra parsed the group's flags
+  before it looked at the command. A group now lets an unknown flag through, so the answer is
+  `unknown command "delete" for "capigo boards"` with its redirect.
+
+### Changed
+
+- **`api/openapi.json` re-synced from production.** It gains `POST /wms/availability-checks` and
+  `POST /wms/internal-transfers/{code}/actions/{action}`, loses the two board deletes, and picks up
+  schema changes across the WMS, task, member and board operations.
+- `unimplementedOps` in the path-coverage guard is empty: every operation the spec declares has a
+  command.
+
 ## [0.27.0] — 2026-10-08
 
 ### Added
