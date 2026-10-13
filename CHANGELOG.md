@@ -39,6 +39,15 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   - `create --idempotency-key <key>` makes a retry safe, and `meta.replayed` is `true` when the API
     answered with the document an earlier call had already created — a fact only the status code
     carries.
+- **`tasks promote` turns a subtask into a task of its own.** `capigo tasks promote (<id> | --code
+  <code>) [--list <uuid>] [--tenant <code>]` sends `POST /mission/tasks/{id}/actions/promote`, or its
+  `code/{code}` sibling. It is the same row — code, status, assignee, comments, files and history stay
+  — and `--list` places it in a board list, making its owner and assignee members of that board.
+  An archived or deleted subtask is exit 8 (`SUBTASK_NOT_PROMOTABLE`); a list that is not live is exit
+  5 (`DESTINATION_UNAVAILABLE`); both carry a next step.
+  - A task that is already top-level answers 200 unchanged and **ignores `--list`**. Nothing in the
+    API's answer says so, so the CLI adds `meta.list_applied: false` when the list it sent is not the
+    list the task is in.
 - **A dry run's verdict is on stdout whatever shape the API gave it.** `validate` answers
   `{ "valid": false, "errors": […] }` with no `data` key when it refuses a body, and a
   warehouse-transfer `preview` puts `valid` and `checks` beside `data`. Printing only `data` would
@@ -75,8 +84,9 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- **`api/openapi.json` re-synced from production.** It gains `POST /wms/availability-checks` and
-  `POST /wms/internal-transfers/{code}/actions/{action}`, loses the two board deletes, and picks up
+- **`api/openapi.json` re-synced from production.** It gains `POST /wms/availability-checks`,
+  `POST /wms/internal-transfers/{code}/actions/{action}` and the two `tasks … actions/promote`
+  operations, loses the two board deletes, and picks up
   schema changes across the WMS, task, member and board operations.
 - `unimplementedOps` in the path-coverage guard is empty: every operation the spec declares has a
   command.

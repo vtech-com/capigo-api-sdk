@@ -12,6 +12,7 @@ func TestLookupError_KnownWriteCodesCarryBrake(t *testing.T) {
 	for _, code := range []string{
 		"E9426", "E9445", "E9446", "VALIDATION_ERROR", "TASK_ALREADY_ASSIGNED",
 		"E0602", "E0601", "E9649", "E9680", "E9675", "E9674",
+		"SUBTASK_NOT_PROMOTABLE", "DESTINATION_UNAVAILABLE",
 	} {
 		info, ok := LookupError(code)
 		if !ok {

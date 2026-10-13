@@ -249,6 +249,14 @@ func buildWriteCommandMapping() []writeCommandEntry {
 			method:    "post",
 			hasFlag:   func(n string) bool { return tasksTransferOwnershipCmd.Flags().Lookup(n) != nil },
 		},
+		// tasks promote: one optional field, board_list_id→--list (the alias
+		// tasks create uses), and no --from-json to hide a new one behind.
+		{
+			humanName: "tasks promote",
+			path:      "/mission/tasks/{id}/actions/promote",
+			method:    "post",
+			hasFlag:   func(n string) bool { return tasksPromoteCmd.Flags().Lookup(n) != nil },
+		},
 		// boards members add: no --from-json, so every body field needs a flag —
 		// tenant_code→--tenant, user_ids→--user-id (repeatable), role→--role.
 		{

@@ -2929,7 +2929,7 @@ func init() {
 	// tasksAttachmentsCmd is defined in task_attachments.go, whose init() runs
 	// first — it is registered here so it lands after the verbs, not above them.
 	tasksSubtasksCmd.AddCommand(tasksSubtasksListCmd, tasksSubtasksCreateCmd, tasksSubtasksMoveCmd, tasksSubtasksDeleteCmd)
-	taskCmd.AddCommand(tasksListCmd, tasksGetCmd, tasksCreateCmd, tasksUpdateCmd, tasksAssignAgentCmd, tasksMoveCmd, tasksTransferOwnershipCmd, tasksClaimCmd, tasksArchiveCmd, tasksUnarchiveCmd, tasksDeleteCmd, tasksCommentsCmd, tasksHistoryCmd, tasksSubtasksCmd, tasksAttachmentsCmd)
+	taskCmd.AddCommand(tasksListCmd, tasksGetCmd, tasksCreateCmd, tasksUpdateCmd, tasksAssignAgentCmd, tasksMoveCmd, tasksTransferOwnershipCmd, tasksClaimCmd, tasksPromoteCmd, tasksArchiveCmd, tasksUnarchiveCmd, tasksDeleteCmd, tasksCommentsCmd, tasksHistoryCmd, tasksSubtasksCmd, tasksAttachmentsCmd)
 	rootCmd.AddCommand(taskCmd)
 }
 

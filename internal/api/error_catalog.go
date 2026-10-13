@@ -189,6 +189,14 @@ var errorCatalog = map[string]ErrorInfo{
 		CapabilityNote: false,
 	},
 
+	"SUBTASK_NOT_PROMOTABLE": {
+		Next:           "The subtask is archived or deleted, so it cannot be promoted as it is. If it is archived, restore it first with 'capigo tasks unarchive <id|--code>' and retry. Retrying unchanged will not help.",
+		CapabilityNote: true,
+	},
+	"DESTINATION_UNAVAILABLE": {
+		Next:           "The list named by --list is not a live list of a live board in this tenant. Read the board with 'capigo boards get <board-id> --tenant <code>' and use an id from its .data.lists[], or drop --list to promote the task to no board.",
+		CapabilityNote: true,
+	},
 	"TASK_ALREADY_ASSIGNED": {
 		Next:           "Re-read the task to see who holds it: capigo tasks get <id|--code>. Retrying the same claim will not help — the refusal is identical whether another member claimed it first or you already hold it.",
 		CapabilityNote: true,

@@ -223,6 +223,7 @@ HELP_SAMPLES = [
     ("/pcms/products/{id}", ["products", "update"]),
     ("/mission/tasks/{id}", ["tasks", "create"]),
     ("/mission/tasks/{id}", ["tasks", "update"]),
+    ("/mission/tasks/{id}", ["tasks", "promote"]),
     ("/pcms/products/{id}", ["products", "variants"]),
     # Its response is a parent task and its children, both full tasks. The page
     # says so by deferring to `tasks get`, which the check follows.

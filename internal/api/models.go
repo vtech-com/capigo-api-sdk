@@ -1,6 +1,9 @@
 package api
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"strings"
+)
 
 // RawEnvelope keeps the API's `data` exactly as it arrived.
 //
@@ -20,6 +23,20 @@ import "encoding/json"
 type RawEnvelope struct {
 	Data json.RawMessage `json:"data"`
 	Meta json.RawMessage `json:"meta"`
+}
+
+// TaskIsInList reports whether a task response places the task in the given
+// board list. It reads one field and decides nothing about what is printed:
+// the promote action ignores its list for a task that was already top-level,
+// and only this comparison can tell.
+func TaskIsInList(task json.RawMessage, listID string) bool {
+	var placed struct {
+		BoardListID *string `json:"board_list_id"`
+	}
+	if err := json.Unmarshal(task, &placed); err != nil || placed.BoardListID == nil {
+		return false
+	}
+	return strings.EqualFold(*placed.BoardListID, listID)
 }
 
 // CommentAuthor is the resolved author of a task comment / activity entry.

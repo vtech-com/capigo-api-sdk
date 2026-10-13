@@ -230,6 +230,9 @@ capigo tasks transfer-ownership <id|--code> Hand a task to another member (--own
                                      member of the tenant; only the current owner may call it)
 capigo tasks claim <id|--code>        Take an unassigned task yourself (--code requires --tenant;
                                       any active member may claim; a task already assigned is a 409)
+capigo tasks promote <id|--code>      Turn a subtask into a task of its own (--list <uuid> places it;
+                                      --code requires --tenant; a task already top-level is a no-op
+                                      that ignores --list, flagged as meta.list_applied: false)
 capigo tasks archive <id|--code>      Retire a task (--code requires --tenant; owner, assignee or
                                       tenant owner only; subtasks go with it; restore with tasks unarchive)
 capigo tasks unarchive <id|--code>    Restore an archived task (--code requires --tenant; owner,
