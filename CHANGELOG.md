@@ -45,6 +45,12 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   have printed `null` over a refusal, so an answer that carries anything beside `data` and `meta` is
   now printed whole at `.data`. `validate` exits 0 with `.data.valid` false: the check succeeded, the
   body did not.
+- **`wms … update` reports a 412 for a write that succeeded, and says so.** Checked against prod on
+  2026-10-13: for all four documents the platform applies the PATCH and then replaces its response
+  with a plain-text `412 PRECONDITION_FAILED`. The CLI cannot tell that apart from a refusal, so the
+  command exits 1 — but the error now carries a `meaning` and a `next` that say the change is
+  normally already written, not to retry, and to confirm with `get`. `submit` and `cancel` are not
+  affected. This is the platform's defect and is recorded in `docs/api-coverage-gaps.md`.
 - The error catalog gives a next step for the WMS refusals a caller can act on: `E0602`, `E0601`,
   `E9649`, `E9680`, `E9675`, `E9674`, `E9647` and `WAREHOUSE_CODE_REQUIRED`.
 - `make verify-api` now checks the `wms` list and get pages against a live warehouse, and the bundled

@@ -1108,6 +1108,12 @@ OUTPUT
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "server_time": "2026-10-12T09:02:11Z" } }
 
+  Exit 1 with code "Precondition Failed" does not mean the update was
+  refused. Checked against the API on 2026-10-13: the platform applies the
+  change and then answers 412 in place of the document, on all four
+  documents. Do not retry. Read the document with the get command: if its
+  updated_at has moved and your change is there, the update succeeded.
+
   Exit 8 when --if-match is stale (E0602), or when the document is past the
   point where it can be edited. Exit 5 for a body the API refuses, including
   one that names status. Exit 4 when the warehouse holds no such document.`,

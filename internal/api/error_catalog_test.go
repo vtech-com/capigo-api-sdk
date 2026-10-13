@@ -96,6 +96,22 @@ func TestLookupError_AuthRetryGuidanceDistinguishesTransient(t *testing.T) {
 	}
 }
 
+// A wms update is answered 412 after it has been written. An agent told only
+// "Precondition Failed" retries with the token it already spent and reads the
+// E0602 that follows as proof nothing was saved.
+func TestLookupError_PreconditionFailedSaysTheWriteMayHaveLanded(t *testing.T) {
+	info, ok := LookupError("Precondition Failed")
+	if !ok {
+		t.Fatal("a 412 must be in the catalog")
+	}
+	if !strings.Contains(info.Meaning, "already written") {
+		t.Errorf("Meaning must say the change may already be written, got %q", info.Meaning)
+	}
+	if !strings.Contains(info.Next, "Do not retry") || !strings.Contains(info.Next, "get") {
+		t.Errorf("Next must stop the retry and send the caller to get, got %q", info.Next)
+	}
+}
+
 func TestLookupError_Unknown(t *testing.T) {
 	if _, ok := LookupError("E0000_NOT_REAL"); ok {
 		t.Error("unknown code should not be found")

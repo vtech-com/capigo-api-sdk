@@ -65,6 +65,11 @@ cause wrong reports are:
   none.
 - Exit 8 with code `E0602` means someone changed the document after your read. Nothing was written.
   Read the document again, look at what changed, and only then retry with the new value. Do not loop.
+- **`update` can report a failure for a write that succeeded.** The platform currently applies the
+  change and then answers 412: the command exits 1 with code `Precondition Failed`. Do not retry and
+  do not tell the user the update failed. Run `get`: if `updated_at` has moved and the change is
+  there, it succeeded — report it as done. A retry with the value you already sent only earns an
+  `E0602`, which then looks like proof that nothing was saved. `submit` and `cancel` are not affected.
 - `update` is a merge patch: a field left out is untouched, and `null` clears `external_ref` or
   `notes`. Whether `lines` replaces the list or merges into it depends on the document and its status
   — read the `update` page before sending lines to anything that is no longer a `DRAFT`.

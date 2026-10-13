@@ -174,6 +174,16 @@ var errorCatalog = map[string]ErrorInfo{
 		Next:           "List the tenant's warehouses with 'capigo wms warehouses list --is-active true' and retry with codes from it. One bad code refuses the whole check.",
 		CapabilityNote: false,
 	},
+	// Not an API code: the platform's edge answers a WMS update this way, in
+	// plain text, so the code is the HTTP status text. Checked against prod on
+	// 2026-10-13 for all four documents: the PATCH is applied, and then its
+	// response is replaced by a 412. The message says "An error occurred" and
+	// nothing else, so Meaning has to carry what happened.
+	"Precondition Failed": {
+		Meaning:        "The platform answered 412 to a request that carried If-Match. On a wms update this does NOT mean the update was refused: the change is normally already written, and only the response was lost.",
+		Next:           "Do not retry, and do not reuse the --if-match you sent. Read the document with the matching 'capigo wms <group> get <code> --warehouse <code>': if .data.updated_at has moved and your change is there, the update succeeded. Only if the document is unchanged, retry once with the updated_at you just read.",
+		CapabilityNote: true,
+	},
 	"WAREHOUSE_CODE_REQUIRED": {
 		Next:           "Pass --warehouse <code>; 'capigo wms warehouses list' prints the codes.",
 		CapabilityNote: false,
