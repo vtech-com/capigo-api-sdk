@@ -237,7 +237,7 @@ OUTPUT
   The warehouses are at .data[]; read meta.total for the full count:
 
       { "data": [
-          { "id": "79a08e42-9817-4965-8ac5-97a41fd9d787", "code": "WH-HN",
+          { "id": "932bb586-3180-481f-b506-e90a9c3ebbb0", "code": "WH-HN",
             "name": "Kho Ha Noi", "type": "user",
             "address": { "city": "Ha Noi", "state_code": "01",
                          "postal_code": "100000", "country_code": "VN",
@@ -301,7 +301,7 @@ OUTPUT
   is the number of locations in the whole tree:
 
       { "data": {
-          "id": "79a08e42-9817-4965-8ac5-97a41fd9d787", "code": "WH-HN",
+          "id": "932bb586-3180-481f-b506-e90a9c3ebbb0", "code": "WH-HN",
           "name": "Kho Ha Noi", "type": "user",
           "address": { "city": "Ha Noi", "state_code": "01",
                        "postal_code": "100000", "country_code": "VN",
@@ -312,14 +312,14 @@ OUTPUT
           "updated_at": "2026-09-18T07:43:06.269333+00:00",
           "location_count": 2,
           "location_hierarchy": [
-            { "id": "683d3724-268e-4680-bfd9-e9da268eb944", "code": "ZONE-A",
+            { "id": "b4ade2a2-e940-4047-b56f-64d4e10bed17", "code": "ZONE-A",
               "name": "Zone A", "category": "ZONE", "type": "USER",
               "is_active": true, "parent_id": null,
               "children": [
-                { "id": "6a5a9f94-de5d-4273-8e35-01ff867a4c5a", "code": "A-1-1",
+                { "id": "18d3a5b3-793f-43f1-b493-04e153f2dcda", "code": "A-1-1",
                   "name": "Bin A-1-1", "category": "BIN", "type": "USER",
                   "is_active": true,
-                  "parent_id": "683d3724-268e-4680-bfd9-e9da268eb944",
+                  "parent_id": "b4ade2a2-e940-4047-b56f-64d4e10bed17",
                   "children": [] } ] } ] },
         "meta": { "tenant": "acme", "tenant_source": "flag" } }
 
@@ -409,10 +409,10 @@ OUTPUT
   The locations are at .data[]; read meta.total for the full count:
 
       { "data": [
-          { "id": "6a5a9f94-de5d-4273-8e35-01ff867a4c5a", "code": "A-1-1",
+          { "id": "18d3a5b3-793f-43f1-b493-04e153f2dcda", "code": "A-1-1",
             "name": "Bin A-1-1", "category": "BIN", "type": "USER",
             "is_active": true,
-            "parent_id": "683d3724-268e-4680-bfd9-e9da268eb944",
+            "parent_id": "b4ade2a2-e940-4047-b56f-64d4e10bed17",
             "created_at": "2026-10-12T13:16:02.872286+00:00" } ],
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "page": 1, "limit": 20, "total": 14, "has_more": false } }
@@ -468,12 +468,12 @@ OUTPUT
   children[] holds only the locations directly beneath this one:
 
       { "data": {
-          "id": "6a5a9f94-de5d-4273-8e35-01ff867a4c5a", "code": "A-1-1",
+          "id": "18d3a5b3-793f-43f1-b493-04e153f2dcda", "code": "A-1-1",
           "name": "Bin A-1-1", "category": "BIN", "type": "USER",
           "is_active": true,
-          "parent_id": "683d3724-268e-4680-bfd9-e9da268eb944",
+          "parent_id": "b4ade2a2-e940-4047-b56f-64d4e10bed17",
           "capacity_units": null, "extra_data": null,
-          "parent": { "id": "683d3724-268e-4680-bfd9-e9da268eb944",
+          "parent": { "id": "b4ade2a2-e940-4047-b56f-64d4e10bed17",
                       "code": "ZONE-A", "name": "Zone A", "category": "ZONE",
                       "type": "USER" },
           "children": [],
@@ -562,7 +562,7 @@ FLAGS
 
           { "warehouses": ["WH-HN", "WH-HCM"],
             "lines": [ { "sku": "SKU-A1", "demand": 5 },
-                       { "variant_id": "8fc55e09-8c25-4c60-90a5-87b310c33b4a",
+                       { "variant_id": "b6121ce2-9e47-4a76-9f75-41ee6a3bd629",
                          "demand": 2 } ] }
 
 OUTPUT
@@ -940,7 +940,7 @@ OUTPUT
   Read .data.code: it is how every later command names this document, and
   .data.updated_at is the --if-match its first write will need.
 
-      { "data": { "id": "99b4ebd7-8413-4b1e-af61-4d87592419cc",
+      { "data": { "id": "b89c4dae-d3dd-43b4-8dab-abd99825e870",
                   "code": "{code}", "status": "DRAFT", … },
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "server_time": "2026-10-12T08:40:05Z" } }
@@ -1102,7 +1102,7 @@ OUTPUT
   wms {use} get.
   Its updated_at has moved: use the new one for the next write.
 
-      { "data": { "id": "99b4ebd7-8413-4b1e-af61-4d87592419cc",
+      { "data": { "id": "b89c4dae-d3dd-43b4-8dab-abd99825e870",
                   "code": "{code}", "status": "DRAFT",
                   "updated_at": "2026-10-12T09:02:11.118204+00:00", … },
         "meta": { "tenant": "acme", "tenant_source": "flag",
@@ -1214,7 +1214,7 @@ OUTPUT
   wms {use} get.
   Read .data.status: it is the answer to whether the action took.
 
-      { "data": { "id": "99b4ebd7-8413-4b1e-af61-4d87592419cc",
+      { "data": { "id": "b89c4dae-d3dd-43b4-8dab-abd99825e870",
                   "code": "{code}", "status": "{after}", … },
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "server_time": "2026-10-12T09:02:11Z" } }

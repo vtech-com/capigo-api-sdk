@@ -8,13 +8,13 @@ import "github.com/vtech-com/capigo-api-sdk/internal/api"
 // The samples are real answers with the names changed. A page that shows a
 // schema name instead teaches a reader nothing about a field it left out.
 
-const wmsVariantSample = `{ "id": "8fc55e09-8c25-4c60-90a5-87b310c33b4a",
+const wmsVariantSample = `{ "id": "b6121ce2-9e47-4a76-9f75-41ee6a3bd629",
                 "sku": "SKU-A1", "barcode": "8930000000011",
                 "variant_name": "Charger 20W - White",
-                "product_id": "ea06b33b-d312-4e98-93ba-746e5b36d006",
+                "product_id": "964d6637-d751-4e90-bcac-a74de1d16e51",
                 "product_name": "Charger 20W" }`
 
-const wmsWarehouseSample = `{ "id": "79a08e42-9817-4965-8ac5-97a41fd9d787",
+const wmsWarehouseSample = `{ "id": "932bb586-3180-481f-b506-e90a9c3ebbb0",
                          "code": "WH-HN", "name": "Kho Ha Noi" }`
 
 const wmsLineVariantNote = `      Each line names its variant by sku or by product_variant_id.`
@@ -42,7 +42,7 @@ are true: a null cost there means "not shown", never "free".`,
 
 	search: "Search on code and external reference.",
 	sortBy: "created_at or updated_at",
-	listRow: `          { "id": "99b4ebd7-8413-4b1e-af61-4d87592419cc",
+	listRow: `          { "id": "b89c4dae-d3dd-43b4-8dab-abd99825e870",
             "code": "{code}", "status": "DRAFT", "rel_type": null,
             "external_ref": "PO-2291", "notes": null, "line_count": 2,
             "total_qty_expected": 50, "total_qty_received": 0,
@@ -56,7 +56,7 @@ are true: a null cost there means "not shown", never "free".`,
   not see costs. That null is not a zero.
 `,
 	getSample: `      { "data": {
-          "id": "99b4ebd7-8413-4b1e-af61-4d87592419cc", "code": "{code}",
+          "id": "b89c4dae-d3dd-43b4-8dab-abd99825e870", "code": "{code}",
           "status": "DRAFT", "rel_type": null, "external_ref": "PO-2291",
           "notes": null, "line_count": 1, "total_qty_expected": 40,
           "total_qty_received": 0, "total_value": 200000,
@@ -67,7 +67,7 @@ are true: a null cost there means "not shown", never "free".`,
           "owner": { "id": "4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb" },
           "cancel_locked": false, "parent": null,
           "lines": [
-            { "id": "a9f42fda-a81c-46a6-a9ab-b174491650da",
+            { "id": "b82cabe2-38a2-4a8d-84ca-9f1512db340e",
               "product_variant": ` + wmsVariantSample + `,
               "qty_expected": 40, "qty_received": 0, "unit_cost": 5000,
               "unit_cost_denied": false, "variance_notes": null,
@@ -88,7 +88,7 @@ are true: a null cost there means "not shown", never "free".`,
 	body: `          { "external_ref": "PO-2291", "notes": "Dock 3",
             "lines": [
               { "sku": "SKU-A1", "qty_expected": 40, "unit_cost": 5000 },
-              { "product_variant_id": "8fc55e09-8c25-4c60-90a5-87b310c33b4a",
+              { "product_variant_id": "b6121ce2-9e47-4a76-9f75-41ee6a3bd629",
                 "qty_expected": 10 } ] }`,
 	bodyNote: `      lines is required and must not be empty; qty_expected is required on
       each.
@@ -110,7 +110,7 @@ are true: a null cost there means "not shown", never "free".`,
       { "data": { "status": "DRAFT", "line_count": 1,
                   "total_qty_expected": 40,
                   "lines": [
-                    { "product_variant_id": "8fc55e09-8c25-4c60-90a5-87b310c33b4a",
+                    { "product_variant_id": "b6121ce2-9e47-4a76-9f75-41ee6a3bd629",
                       "qty_expected": 40, "unit_cost": 5000 } ] },
         "meta": { "tenant": "acme", "tenant_source": "flag" } }
 
@@ -119,14 +119,14 @@ are true: a null cost there means "not shown", never "free".`,
 	validateOut: `  The verdict is at .data.valid. Read it: the command exits 0 for a body that
   is not valid, because the check itself succeeded.
 
-      { "data": { "request_id": "ffb4a49e-7380-4834-be34-ce07da43fbe9",
+      { "data": { "request_id": "8e5469a4-d2e3-4cb9-92fa-c4f4ba09a177",
                   "valid": true,
                   "data": { "line_count": 1, "total_qty_expected": 40 } },
         "meta": { "tenant": "acme", "tenant_source": "flag" } }
 
   When valid is false, .data.errors[] says why and there are no totals:
 
-      { "data": { "request_id": "bb86c99d-e33f-4dd2-bb0d-cb2a35b0a7c4",
+      { "data": { "request_id": "999a51fd-3ffb-4a12-bd31-b5cc1abf9c16",
                   "valid": false,
                   "errors": [ { "code": "VARIANT_NOT_FOUND",
                                 "message": "A line references a product variant that does not exist in this tenant" } ] },
@@ -168,7 +168,7 @@ total_value as null — read the shipment with get after it posts for its cost.`
 
 	search: "Search on code and external reference.",
 	sortBy: "created_at or updated_at",
-	listRow: `          { "id": "577331f9-5708-46b9-a15a-f2c0f4815389",
+	listRow: `          { "id": "7d4a0a68-73aa-4599-b36f-cc1421013820",
             "code": "{code}", "status": "PLANNED", "rel_type": null,
             "external_ref": "SO-1042", "notes": null, "line_count": 1,
             "total_qty_ordered": 1000, "total_qty_shipped": 0,
@@ -180,7 +180,7 @@ total_value as null — read the shipment with get after it posts for its cost.`
   A row carries no cost. total_value is on wms outbound get.
 `,
 	getSample: `      { "data": {
-          "id": "577331f9-5708-46b9-a15a-f2c0f4815389", "code": "{code}",
+          "id": "7d4a0a68-73aa-4599-b36f-cc1421013820", "code": "{code}",
           "status": "PLANNED", "rel_type": null, "external_ref": "SO-1042",
           "notes": null, "line_count": 1, "total_qty_ordered": 1000,
           "total_qty_shipped": 0, "exported_at": null,
@@ -191,7 +191,7 @@ total_value as null — read the shipment with get after it posts for its cost.`
           "owner": { "id": "4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb" },
           "cancel_locked": false, "parent": null,
           "lines": [
-            { "id": "4c9bd008-e8ab-422e-823f-dca037b2268b",
+            { "id": "23a38e9f-0bf3-4213-a731-722eba487210",
               "product_variant": ` + wmsVariantSample + `,
               "qty_ordered": 1000, "qty_shipped": 0, "unit_cost": null,
               "unit_cost_denied": false } ],
@@ -216,7 +216,7 @@ total_value as null — read the shipment with get after it posts for its cost.`
 	body: `          { "external_ref": "SO-1042", "notes": "Fragile",
             "lines": [
               { "sku": "SKU-A1", "qty_ordered": 12 },
-              { "product_variant_id": "8fc55e09-8c25-4c60-90a5-87b310c33b4a",
+              { "product_variant_id": "b6121ce2-9e47-4a76-9f75-41ee6a3bd629",
                 "qty_ordered": 3 } ] }`,
 	bodyNote: `      lines is required and must not be empty.
 ` + wmsLineVariantNote + `
@@ -232,7 +232,7 @@ total_value as null — read the shipment with get after it posts for its cost.`
   it resolved to.
 
       { "data": { "lines": [
-                    { "product_variant_id": "8fc55e09-8c25-4c60-90a5-87b310c33b4a",
+                    { "product_variant_id": "b6121ce2-9e47-4a76-9f75-41ee6a3bd629",
                       "qty_ordered": 12 } ] },
         "meta": { "tenant": "acme", "tenant_source": "flag" } }
 
@@ -276,7 +276,7 @@ approval step. cancel ends a DRAFT or a MOVING transfer.`,
 
 	search: "Search on code.",
 	sortBy: "created_at, updated_at or code",
-	listRow: `          { "id": "1df3ff38-5ecb-4b9c-a6e1-14026bfc30fc",
+	listRow: `          { "id": "2e2a4cad-396a-4e7c-ad59-1316ac37ecdf",
             "code": "{code}", "status": "MOVED", "line_count": 2,
             "total_qty": 1000,
             "created_at": "2026-10-05T02:21:25.097861+00:00",
@@ -284,18 +284,18 @@ approval step. cancel ends a DRAFT or a MOVING transfer.`,
             "warehouse": ` + wmsWarehouseSample + ` }`,
 	listNote: "",
 	getSample: `      { "data": {
-          "id": "1df3ff38-5ecb-4b9c-a6e1-14026bfc30fc", "code": "{code}",
+          "id": "2e2a4cad-396a-4e7c-ad59-1316ac37ecdf", "code": "{code}",
           "status": "MOVED", "line_count": 1, "total_qty": 500,
           "created_at": "2026-10-05T02:21:25.097861+00:00",
           "updated_at": "2026-10-05T02:21:25.097861+00:00",
           "warehouse": ` + wmsWarehouseSample + `,
           "lines": [
-            { "id": "12d7cacb-5185-424f-86fa-fd9ce1b90d91",
+            { "id": "bee98bde-9bca-4a9e-a360-8ad495f45ef4",
               "product_variant": ` + wmsVariantSample + `,
               "qty": 500, "planned_qty": 500,
-              "from_location": { "id": "99763417-c01f-4025-88b0-7892c4417fa4",
+              "from_location": { "id": "c18bfe41-6ad5-48d8-a59b-25945353dcec",
                                  "code": "RECEIVING", "name": "Receiving" },
-              "to_location": { "id": "136d2372-3ab0-414d-94e5-97291848bce2",
+              "to_location": { "id": "b7238b1b-ba1f-410a-96e7-8e5bac386dfa",
                                "code": "A-1-1", "name": "Bin A-1-1" } } ],
           "status_history": [
             { "status": "DRAFT",
@@ -323,7 +323,7 @@ approval step. cancel ends a DRAFT or a MOVING transfer.`,
 
       { "data": { "status": "DRAFT", "line_count": 1, "total_qty": 20,
                   "lines": [
-                    { "product_variant_id": "8fc55e09-8c25-4c60-90a5-87b310c33b4a",
+                    { "product_variant_id": "b6121ce2-9e47-4a76-9f75-41ee6a3bd629",
                       "sku": "SKU-A1", "qty": 20,
                       "from_location_code": "RECEIVING",
                       "to_location_code": "A-1-1" } ] },
@@ -334,7 +334,7 @@ approval step. cancel ends a DRAFT or a MOVING transfer.`,
 	validateOut: `  The verdict is at .data.valid. Read it: the command exits 0 for a body that
   is not valid, because the check itself succeeded.
 
-      { "data": { "request_id": "ff72f263-5db6-4b74-bd23-f45fa883aba7",
+      { "data": { "request_id": "975e2b39-edc5-47de-8d37-65617854c084",
                   "valid": true,
                   "data": { "line_count": 1, "total_qty": 20 } },
         "meta": { "tenant": "acme", "tenant_source": "flag" } }
@@ -342,7 +342,7 @@ approval step. cancel ends a DRAFT or a MOVING transfer.`,
   When valid is false, .data.errors[] says why, and lineIndex is the 0-based
   position of the line at fault:
 
-      { "data": { "request_id": "48e1f4ad-2a6c-48c8-a27a-291824004ea1",
+      { "data": { "request_id": "6e63ea0d-79a8-4315-b990-edac8f989745",
                   "valid": false,
                   "errors": [ { "code": "LOCATION_OUTSIDE_WAREHOUSE",
                                 "message": "Line references a location that does not exist in the acting warehouse.",
@@ -383,10 +383,10 @@ A transfer is listed from both of its warehouses.`,
 
 	search: "Search on code.",
 	sortBy: "created_at or code",
-	listRow: `          { "id": "1f4af3f3-c13f-40f2-933d-cc19b7d83c03",
+	listRow: `          { "id": "6542244f-e452-4b9d-badc-4dbc7541cfb8",
             "code": "{code}", "status": "APPROVED",
             "source_warehouse": ` + wmsWarehouseSample + `,
-            "destination_warehouse": { "id": "4c56730f-1620-4548-bf4e-3ef9b0a6503f",
+            "destination_warehouse": { "id": "caf5017a-bb7c-46be-abc0-50103e7c3291",
                                        "code": "WH-HCM",
                                        "name": "Kho Ho Chi Minh" },
             "created_at": "2026-10-12T08:38:44.11316+00:00",
@@ -399,12 +399,12 @@ A transfer is listed from both of its warehouses.`,
   get for the value its writes need.
 `,
 	getSample: `      { "data": {
-          "id": "1f4af3f3-c13f-40f2-933d-cc19b7d83c03", "code": "{code}",
+          "id": "6542244f-e452-4b9d-badc-4dbc7541cfb8", "code": "{code}",
           "status": "APPROVED", "direction": "PUSH",
-          "transfer_ref": "6746552c-444a-438e-84b6-3d990379385d",
+          "transfer_ref": "25efe848-d6d6-424f-82a6-a3344e52ff14",
           "external_ref": null, "notes": null,
           "source_warehouse": ` + wmsWarehouseSample + `,
-          "destination_warehouse": { "id": "4c56730f-1620-4548-bf4e-3ef9b0a6503f",
+          "destination_warehouse": { "id": "caf5017a-bb7c-46be-abc0-50103e7c3291",
                                      "code": "WH-HCM",
                                      "name": "Kho Ho Chi Minh" },
           "created_at": "2026-10-12T08:38:44.11316+00:00",
@@ -417,13 +417,13 @@ A transfer is listed from both of its warehouses.`,
           "hours_in_transit": null, "is_abnormal": null,
           "abnormal_resolved": null,
           "generated_outbound_shipment": {
-            "id": "03d27442-e825-45c2-869a-c1563cdc8b64",
+            "id": "3c41667a-d190-49d3-ab30-e2feb00ab72f",
             "code": "OB-WHHN-37882" },
           "generated_inbound_receipt": {
-            "id": "99b4ebd7-8413-4b1e-af61-4d87592419cc",
+            "id": "b89c4dae-d3dd-43b4-8dab-abd99825e870",
             "code": "IB-WHHCM-52429" },
           "lines": [
-            { "id": "1dba8e39-b350-4c9e-911f-0e81364431bf",
+            { "id": "c0fe3db3-a4da-498e-9a29-508e1a3bd141",
               "product_variant": ` + wmsVariantSample + `,
               "qty_requested": 10, "qty_exported": null,
               "qty_received": null, "is_unplanned": false } ],
