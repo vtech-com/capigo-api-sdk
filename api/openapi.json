@@ -6836,6 +6836,90 @@
         }
       }
     },
+    "/mission/tasks/{id}/actions/promote": {
+      "post": {
+        "summary": "Promote Subtask to Task",
+        "description": "Turn a subtask into a top-level task on the same row: it keeps its code, status, assignee, due date, followers, comments, files and history, and leaves its parent. The caller must be the subtask's **owner**, its **assignee**, or a **tenant owner of its tenant** — the rule the screen applies, enforced by the same database function. A caller who may not promote gets the same 404 a missing task gets, as the other task actions answer. `board_list_id` names a live list of any live board of the tenant; the board is read from the list, and the task is placed at the end of it. The task's owner and assignee become members of that board. `board_list_id: null`, `{}` or an empty body promote it to no board. An archived or deleted subtask answers `409 SUBTASK_NOT_PROMOTABLE`. A list that is deleted, archived, on a deleted board or not in this tenant answers `400 DESTINATION_UNAVAILABLE`. A task that is already top-level answers 200 unchanged and records nothing, so a retry needs no `Idempotency-Key`: the call ignores `board_list_id` and returns the task as it stands, so compare its `board_list_id` with the one sent. On success one `task:subtask:promoted` event is recorded.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Task UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "board_list_id": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uuid",
+                    "description": "Destination list; its board is read from it. Null or absent promotes the subtask to no board."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The task after the promotion, in the shape `GET /mission/tasks/{id}` returns",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (a malformed `board_list_id`, an unknown field, a body that is not JSON), or DESTINATION_UNAVAILABLE: the list is not a live list of a live board of this tenant"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "404": {
+            "description": "Task not found, in another tenant, or not promotable by this caller"
+          },
+          "409": {
+            "description": "SUBTASK_NOT_PROMOTABLE: the subtask is archived or deleted"
+          }
+        }
+      }
+    },
     "/mission/tasks/{id}/actions/claim": {
       "post": {
         "summary": "Claim Task (assign it to the caller)",
@@ -16615,6 +16699,89 @@
           },
           "404": {
             "description": "Task not found, not movable by this caller, or the destination list is not readable for them"
+          }
+        }
+      }
+    },
+    "/mission/tasks/code/{code}/actions/promote": {
+      "post": {
+        "summary": "Promote Subtask to Task (by Code)",
+        "description": "Turn a subtask into a top-level task on the same row: it keeps its code, status, assignee, due date, followers, comments, files and history, and leaves its parent. The caller must be the subtask's **owner**, its **assignee**, or a **tenant owner of its tenant** — the rule the screen applies, enforced by the same database function. A caller who may not promote gets the same 404 a missing task gets, as the other task actions answer. `board_list_id` names a live list of any live board of the tenant; the board is read from the list, and the task is placed at the end of it. The task's owner and assignee become members of that board. `board_list_id: null`, `{}` or an empty body promote it to no board. An archived or deleted subtask answers `409 SUBTASK_NOT_PROMOTABLE`. A list that is deleted, archived, on a deleted board or not in this tenant answers `400 DESTINATION_UNAVAILABLE`. A task that is already top-level answers 200 unchanged and records nothing, so a retry needs no `Idempotency-Key`: the call ignores `board_list_id` and returns the task as it stands, so compare its `board_list_id` with the one sent. On success one `task:subtask:promoted` event is recorded. A `code/{code}` sibling of this operation: the task is resolved by its natural code instead of its UUID, and every other rule is identical.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task code (e.g. ACME-42)"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "board_list_id": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uuid",
+                    "description": "Destination list; its board is read from it. Null or absent promotes the subtask to no board."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The task after the promotion, in the shape `GET /mission/tasks/{id}` returns",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (a malformed `board_list_id`, an unknown field, a body that is not JSON), X-Tenant-Code missing (`TENANT_CODE_REQUIRED`: a code lookup needs the tenant), or DESTINATION_UNAVAILABLE: the list is not a live list of a live board of this tenant"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "404": {
+            "description": "Task not found, in another tenant, or not promotable by this caller"
+          },
+          "409": {
+            "description": "SUBTASK_NOT_PROMOTABLE: the subtask is archived or deleted"
           }
         }
       }
