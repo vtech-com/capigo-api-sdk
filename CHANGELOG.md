@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.0] — 2026-10-13
+
 ### Added
 
 - **`capigo wms` wraps the whole WMS module (33 operations).** Held out since v0.25.0 while its
