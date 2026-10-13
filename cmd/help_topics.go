@@ -41,6 +41,9 @@ WHICH COMMANDS REQUIRE A TENANT
   Always      products, variants, brands, categories, product-types, units
               — every verb. With no tenant resolved the command exits 5.
   Always      tasks create, tasks subtasks create
+  Always      wms — every verb. All but wms warehouses and wms availability
+              check also require --warehouse <code>, the warehouse a record
+              lives in.
   Optional    tasks list/get, boards list/get, members list/get.
               Omitting --tenant reads across every tenant the key can reach.
               meta then names no tenant, because there was no single one to

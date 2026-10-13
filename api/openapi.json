@@ -28,6 +28,46 @@
       }
     },
     "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "example": "INVALID_QUERY_PARAMS"
+              },
+              "message": {
+                "type": "string",
+                "example": "Invalid query parameters"
+              }
+            }
+          }
+        }
+      },
+      "MetaPagination": {
+        "type": "object",
+        "description": "Pagination envelope for list endpoints. A `page` past the last one is not an error: the response is 200 with an empty `data`, the real `total` and `has_more: false`.",
+        "properties": {
+          "page": {
+            "type": "integer",
+            "example": 1
+          },
+          "limit": {
+            "type": "integer",
+            "example": 20
+          },
+          "total": {
+            "type": "integer",
+            "example": 100
+          },
+          "has_more": {
+            "type": "boolean",
+            "example": true
+          }
+        }
+      },
       "InviteMemberResponse": {
         "type": "object",
         "required": [
@@ -49,7 +89,7 @@
               },
               "status": {
                 "type": "string",
-                "description": "Current status of the invitation, e.g. `pending`."
+                "description": "Current status of the invitation: `pending`, or `cancelled` on a replay after a cancel."
               },
               "expires_at": {
                 "type": "string",
@@ -64,226 +104,6 @@
                 "description": "Accept-link secret. Present only in the `201` that created the invitation."
               }
             }
-          }
-        }
-      },
-      "Error": {
-        "type": "object",
-        "properties": {
-          "error": {
-            "type": "object",
-            "properties": {
-              "code": {
-                "type": "string",
-                "example": "INVALID_QUERY_PARAMS"
-              },
-              "message": {
-                "type": "string",
-                "example": "Invalid query parameters"
-              }
-            }
-          }
-        }
-      },
-      "MetaPagination": {
-        "type": "object",
-        "properties": {
-          "page": {
-            "type": "integer",
-            "example": 1
-          },
-          "limit": {
-            "type": "integer",
-            "example": 20
-          },
-          "total": {
-            "type": "integer",
-            "example": 100
-          },
-          "has_more": {
-            "type": "boolean",
-            "example": true
-          }
-        }
-      },
-      "AddBoardMemberRequest": {
-        "type": "object",
-        "required": [
-          "tenant_code",
-          "user_ids"
-        ],
-        "properties": {
-          "tenant_code": {
-            "type": "string",
-            "description": "The tenant/workspace code where the board lives."
-          },
-          "user_ids": {
-            "type": "array",
-            "minItems": 1,
-            "maxItems": 50,
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "description": "Auth user ids of the tenant members to add — the id `GET /mission/boards/{id}/members` reports and the per-member routes address. 1 to 50 in one request. A member the board already holds is skipped, never an error."
-          },
-          "role": {
-            "type": "string",
-            "enum": [
-              "owner",
-              "member"
-            ],
-            "default": "member",
-            "description": "Board role for the whole request. Defaults to `member`."
-          }
-        }
-      },
-      "PublicBoardMemberResponse": {
-        "type": "object",
-        "properties": {
-          "user_id": {
-            "type": "string",
-            "format": "uuid",
-            "example": "123e4567-e89b-12d3-a456-426614174000"
-          },
-          "email": {
-            "type": "string",
-            "format": "email",
-            "example": "john@example.com"
-          },
-          "display_name": {
-            "type": "string",
-            "example": "John Doe"
-          },
-          "role": {
-            "type": "string",
-            "enum": [
-              "owner",
-              "member"
-            ],
-            "example": "member"
-          },
-          "avatar_url": {
-            "type": "string",
-            "nullable": true,
-            "example": "https://example.com/avatar.jpg"
-          }
-        }
-      },
-      "PublicProductMedia": {
-        "type": "object",
-        "description": "One media item of a product, as the media endpoints answer. `url` is a signed, time-limited link valid until `expires_at`; no storage path is ever returned. `position` is the 1-based place among the product's live items.",
-        "required": [
-          "id",
-          "product_id",
-          "type",
-          "filename",
-          "file_size",
-          "width",
-          "height",
-          "content_version",
-          "position",
-          "is_default",
-          "alt_text",
-          "variant_ids",
-          "url",
-          "expires_at",
-          "created_at",
-          "updated_at"
-        ],
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "product_id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "type": {
-            "type": "string",
-            "enum": [
-              "image",
-              "video"
-            ]
-          },
-          "filename": {
-            "type": "string",
-            "description": "Trimmed and lower-cased, the form the duplicate check compares."
-          },
-          "file_size": {
-            "type": "integer",
-            "description": "Bytes."
-          },
-          "width": {
-            "type": "integer",
-            "nullable": true,
-            "description": "Null for a video."
-          },
-          "height": {
-            "type": "integer",
-            "nullable": true,
-            "description": "Null for a video."
-          },
-          "content_version": {
-            "type": "integer",
-            "description": "Starts at 1 and rises each time the content is replaced."
-          },
-          "position": {
-            "type": "integer",
-            "minimum": 1
-          },
-          "is_default": {
-            "type": "boolean"
-          },
-          "alt_text": {
-            "type": "string",
-            "nullable": true
-          },
-          "variant_ids": {
-            "type": "array",
-            "items": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "description": "Live variants this item is linked to."
-          },
-          "url": {
-            "type": "string",
-            "description": "Signed link, valid until `expires_at`."
-          },
-          "expires_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time"
-          }
-        }
-      },
-      "UpdateBoardMemberRequest": {
-        "type": "object",
-        "required": [
-          "tenant_code",
-          "role"
-        ],
-        "properties": {
-          "tenant_code": {
-            "type": "string",
-            "description": "The tenant/workspace code where the board lives."
-          },
-          "role": {
-            "type": "string",
-            "enum": [
-              "owner",
-              "member"
-            ],
-            "description": "The new board role."
           }
         }
       },
@@ -650,6 +470,12 @@
             "format": "email",
             "example": "john@example.com"
           },
+          "member_code": {
+            "type": "string",
+            "nullable": true,
+            "description": "Employee code, unique within the tenant; null when none is set",
+            "example": "NV001"
+          },
           "role": {
             "type": "string",
             "enum": [
@@ -745,6 +571,38 @@
           }
         ]
       },
+      "PublicBoardMemberResponse": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "john@example.com"
+          },
+          "display_name": {
+            "type": "string",
+            "example": "John Doe"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "member"
+            ],
+            "example": "member"
+          },
+          "avatar_url": {
+            "type": "string",
+            "nullable": true,
+            "example": "https://example.com/avatar.jpg"
+          }
+        }
+      },
       "PublicTaskResponse": {
         "type": "object",
         "properties": {
@@ -771,7 +629,6 @@
               "To-Do",
               "Doing",
               "Done",
-              "Closed",
               "Cancelled"
             ],
             "example": "To-Do"
@@ -861,6 +718,25 @@
           "has_subtasks": {
             "type": "boolean",
             "description": "True if this task has one or more non-archived subtasks. Fetch them via GET /v1/mission/tasks?parent_task_id={thisTaskId}."
+          },
+          "subtask_progress": {
+            "type": "object",
+            "nullable": true,
+            "description": "Subtask progress, so a client does not have to list the subtasks to compute 7/10. Null for a subtask (a subtask has no children), and null when the count could not be resolved — a failed count is never reported as a number. Otherwise done / total over active (non-archived) subtasks, done 0 / total 0 for a top-level task with none. List endpoints resolve them in one batched call per tenant, never one query per task.",
+            "properties": {
+              "done": {
+                "type": "integer",
+                "description": "How many active subtasks are done."
+              },
+              "total": {
+                "type": "integer",
+                "description": "How many active subtasks the task has."
+              }
+            },
+            "required": [
+              "done",
+              "total"
+            ]
           },
           "attachments": {
             "type": "array",
@@ -1223,6 +1099,102 @@
           }
         }
       },
+      "PublicProductMedia": {
+        "type": "object",
+        "description": "One media item of a product, as the media endpoints answer. `url` is a signed, time-limited link valid until `expires_at`; no storage path is ever returned. `position` is the 1-based place among the product's live items.",
+        "required": [
+          "id",
+          "product_id",
+          "type",
+          "filename",
+          "file_size",
+          "width",
+          "height",
+          "content_version",
+          "position",
+          "is_default",
+          "alt_text",
+          "variant_ids",
+          "url",
+          "expires_at",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "product_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "image",
+              "video"
+            ]
+          },
+          "filename": {
+            "type": "string",
+            "description": "Trimmed and lower-cased, the form the duplicate check compares."
+          },
+          "file_size": {
+            "type": "integer",
+            "description": "Bytes."
+          },
+          "width": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Null for a video."
+          },
+          "height": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Null for a video."
+          },
+          "content_version": {
+            "type": "integer",
+            "description": "Starts at 1 and rises each time the content is replaced."
+          },
+          "position": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "is_default": {
+            "type": "boolean"
+          },
+          "alt_text": {
+            "type": "string",
+            "nullable": true
+          },
+          "variant_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Live variants this item is linked to."
+          },
+          "url": {
+            "type": "string",
+            "description": "Signed link, valid until `expires_at`."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "PublicProductResponse": {
         "type": "object",
         "properties": {
@@ -1566,6 +1538,59 @@
           }
         }
       },
+      "AddBoardMemberRequest": {
+        "type": "object",
+        "required": [
+          "tenant_code",
+          "user_ids"
+        ],
+        "properties": {
+          "tenant_code": {
+            "type": "string",
+            "description": "The tenant/workspace code where the board lives."
+          },
+          "user_ids": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Auth user ids of the tenant members to add — the id `GET /mission/boards/{id}/members` reports and the per-member routes address. 1 to 50 in one request. A uuid names one member whatever case it is written in, and the answer reports the lowercase form. A member the board already holds is skipped, never an error."
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "member"
+            ],
+            "default": "member",
+            "description": "Board role for the whole request. Defaults to `member`."
+          }
+        }
+      },
+      "UpdateBoardMemberRequest": {
+        "type": "object",
+        "required": [
+          "tenant_code",
+          "role"
+        ],
+        "properties": {
+          "tenant_code": {
+            "type": "string",
+            "description": "The tenant/workspace code where the board lives."
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "owner",
+              "member"
+            ],
+            "description": "The new board role."
+          }
+        }
+      },
       "CreateTaskRequest": {
         "type": "object",
         "required": [
@@ -1638,7 +1663,6 @@
               "To-Do",
               "Doing",
               "Done",
-              "Closed",
               "Cancelled"
             ],
             "nullable": true
@@ -1714,7 +1738,6 @@
               "To-Do",
               "Doing",
               "Done",
-              "Closed",
               "Cancelled"
             ],
             "nullable": true
@@ -1752,32 +1775,32 @@
           }
         }
       },
-    "PublicTaskAttachment": {
-      "type": "object",
-      "description": "Flat metadata for one task attachment. No download URL — fetch one via GET /mission/tasks/{id}/attachments/{attachmentId}/download. This is the same shape a task read returns in its `attachments` array, and the body of a successful upload.",
-      "required": [
-        "id",
-        "file_name",
-        "mime_type",
-        "size_bytes"
-      ],
-      "properties": {
-        "id": {
-          "type": "string",
-          "format": "uuid",
-          "description": "Attachment id. Keep it: it is what the download and remove endpoints address."
-        },
-        "file_name": {
-          "type": "string"
-        },
-        "mime_type": {
-          "type": "string"
-        },
-        "size_bytes": {
-          "type": "integer"
+      "PublicTaskAttachment": {
+        "type": "object",
+        "description": "Flat metadata for one task attachment. No download URL — fetch one via GET /mission/tasks/{id}/attachments/{attachmentId}/download. This is the same shape a task read returns in its `attachments` array, and the body of a successful upload.",
+        "required": [
+          "id",
+          "file_name",
+          "mime_type",
+          "size_bytes"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Attachment id. Keep it: it is what the download and remove endpoints address."
+          },
+          "file_name": {
+            "type": "string"
+          },
+          "mime_type": {
+            "type": "string"
+          },
+          "size_bytes": {
+            "type": "integer"
+          }
         }
-      }
-    },
+      },
       "PublicWmsWarehouseReference": {
         "type": "object",
         "required": [
@@ -1802,6 +1825,7 @@
       },
       "PublicWmsProductVariantReference": {
         "type": "object",
+        "description": "A line's product variant. `id` is always the line's own variant id. When the variant was deleted or is not visible, `sku`, `barcode`, `variant_name`, `product_id` and `product_name` are null.",
         "required": [
           "id"
         ],
@@ -2067,12 +2091,132 @@
           }
         }
       },
+      "WmsAvailabilityCheckLineInput": {
+        "type": "object",
+        "description": "Exactly one of variant_id, sku or barcode is required.",
+        "required": [
+          "demand"
+        ],
+        "oneOf": [
+          {
+            "required": [
+              "variant_id"
+            ]
+          },
+          {
+            "required": [
+              "sku"
+            ]
+          },
+          {
+            "required": [
+              "barcode"
+            ]
+          }
+        ],
+        "properties": {
+          "variant_id": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "barcode": {
+            "type": "string"
+          },
+          "demand": {
+            "type": "number",
+            "exclusiveMinimum": true,
+            "minimum": 0,
+            "description": "Quantity requested, in the variant's base unit. Must be greater than 0."
+          }
+        }
+      },
+      "WmsAvailabilityCheckRequest": {
+        "type": "object",
+        "required": [
+          "warehouses",
+          "lines"
+        ],
+        "properties": {
+          "warehouses": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "type": "string"
+            },
+            "description": "Warehouse codes to check. Every code must resolve to an active warehouse of the tenant."
+          },
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/WmsAvailabilityCheckLineInput"
+            }
+          }
+        }
+      },
+      "PublicWmsAvailabilityWarehouseResult": {
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "score",
+          "promisable_qty"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "score": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "promisable_qty": {
+            "type": "number",
+            "nullable": true,
+            "description": "min(on-hand, cap); null when the warehouse covers the demand."
+          }
+        }
+      },
+      "PublicWmsAvailabilityCheckLine": {
+        "type": "object",
+        "required": [
+          "line_no",
+          "found",
+          "warehouses"
+        ],
+        "properties": {
+          "line_no": {
+            "type": "integer",
+            "description": "1-based position of the line in the request."
+          },
+          "found": {
+            "type": "boolean"
+          },
+          "warehouses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicWmsAvailabilityWarehouseResult"
+            },
+            "description": "Empty when found is false."
+          }
+        }
+      },
       "PublicWmsInboundReceiptLine": {
         "type": "object",
         "required": [
           "id",
+          "product_variant",
           "qty_expected",
-          "qty_received"
+          "qty_received",
+          "unit_cost_denied"
         ],
         "properties": {
           "id": {
@@ -2080,14 +2224,7 @@
             "format": "uuid"
           },
           "product_variant": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/PublicWmsProductVariantReference"
-              },
-              {
-                "type": "null"
-              }
-            ]
+            "$ref": "#/components/schemas/PublicWmsProductVariantReference"
           },
           "qty_expected": {
             "type": "number"
@@ -2097,7 +2234,12 @@
           },
           "unit_cost": {
             "type": "number",
-            "nullable": true
+            "nullable": true,
+            "description": "null when no cost was recorded, or when unit_cost_denied is true (scope.financial_view required)."
+          },
+          "unit_cost_denied": {
+            "type": "boolean",
+            "description": "true when unit_cost is null because the caller lacks scope.financial_view, never because the receipt has no recorded cost."
           },
           "variance_notes": {
             "type": "string",
@@ -2119,6 +2261,7 @@
           "total_qty_expected",
           "total_qty_received",
           "total_value",
+          "total_value_denied",
           "created_at",
           "updated_at",
           "warehouse"
@@ -2134,11 +2277,11 @@
           },
           "status": {
             "type": "string",
+            "description": "Receipt status. `VERIFIED` is the terminal, posted state: the receipt is posted to the stock ledger. A cancelled receipt ends in `CANCELLED`.",
             "enum": [
               "DRAFT",
-              "PENDING",
-              "PARTIALLY_RECEIVED",
-              "RECEIVED",
+              "PLANNED",
+              "RECEIVING",
               "VERIFIED",
               "CANCELLED"
             ]
@@ -2165,7 +2308,13 @@
             "type": "number"
           },
           "total_value": {
-            "type": "number"
+            "type": "number",
+            "nullable": true,
+            "description": "null when total_value_denied is true (scope.financial_view required), or when the value could not be determined. Never 0 for a denied caller."
+          },
+          "total_value_denied": {
+            "type": "boolean",
+            "description": "true when total_value is null because the caller lacks scope.financial_view."
           },
           "verified_at": {
             "type": "string",
@@ -2185,6 +2334,49 @@
           }
         }
       },
+      "PublicWmsWriteEchoUnavailable": {
+        "type": "object",
+        "description": "Stand-in for a committed write whose document could not be read back. The write succeeded, so the status stays 200/201: do not retry it, GET the path in `retrieve` for the full document. It is never returned for a cost denial — a masked cost is reported by total_value_denied / unit_cost_denied on the document itself.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "code": {
+            "type": "string"
+          },
+          "echo": {
+            "type": "string",
+            "enum": [
+              "unavailable"
+            ]
+          },
+          "retrieve": {
+            "type": "object",
+            "properties": {
+              "method": {
+                "type": "string",
+                "enum": [
+                  "GET"
+                ]
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "method",
+              "path"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "code",
+          "echo",
+          "retrieve"
+        ]
+      },
       "PublicWmsInboundReceiptDetailResponse": {
         "type": "object",
         "required": [
@@ -2195,11 +2387,14 @@
           "total_qty_expected",
           "total_qty_received",
           "total_value",
+          "total_value_denied",
           "created_at",
           "updated_at",
           "warehouse",
           "lines",
-          "status_history"
+          "status_history",
+          "owner",
+          "cancel_locked"
         ],
         "properties": {
           "id": {
@@ -2210,7 +2405,8 @@
             "type": "string"
           },
           "status": {
-            "type": "string"
+            "type": "string",
+            "description": "Receipt status. `VERIFIED` is the terminal, posted state: the receipt is posted to the stock ledger. A cancelled receipt ends in `CANCELLED`."
           },
           "rel_type": {
             "type": "string",
@@ -2234,7 +2430,13 @@
             "type": "number"
           },
           "total_value": {
-            "type": "number"
+            "type": "number",
+            "nullable": true,
+            "description": "null when total_value_denied is true (scope.financial_view required), or when the value could not be determined. Never 0 for a denied caller."
+          },
+          "total_value_denied": {
+            "type": "boolean",
+            "description": "true when total_value is null because the caller lacks scope.financial_view."
           },
           "verified_at": {
             "type": "string",
@@ -2251,6 +2453,49 @@
           },
           "warehouse": {
             "$ref": "#/components/schemas/PublicWmsWarehouseReference"
+          },
+          "owner": {
+            "type": "object",
+            "nullable": true,
+            "description": "The member that created the document, or null when none is recorded. Always present.",
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          "cancel_locked": {
+            "type": "boolean",
+            "description": "True when only the owner can cancel the document. Set once at create; never changes."
+          },
+          "parent": {
+            "type": "object",
+            "nullable": true,
+            "description": "The warehouse transfer this document belongs to, or null for a free-standing document. A document with a parent cancels only through that transfer.",
+            "required": [
+              "type",
+              "id",
+              "code"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "warehouse_transfer"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "code": {
+                "type": "string"
+              }
+            }
           },
           "lines": {
             "type": "array",
@@ -2270,9 +2515,11 @@
         "type": "object",
         "required": [
           "id",
+          "product_variant",
           "qty_ordered",
-          "qty_picked",
-          "qty_shipped"
+          "qty_shipped",
+          "unit_cost",
+          "unit_cost_denied"
         ],
         "properties": {
           "id": {
@@ -2280,23 +2527,27 @@
             "format": "uuid"
           },
           "product_variant": {
-            "oneOf": [
+            "allOf": [
               {
                 "$ref": "#/components/schemas/PublicWmsProductVariantReference"
-              },
-              {
-                "type": "null"
               }
-            ]
+            ],
+            "description": "The line's variant. `id` is always the line's variant id. In write echoes (create, update, actions) the other fields are always null. On GET they are null only when the variant was deleted or is not visible."
           },
           "qty_ordered": {
             "type": "number"
           },
-          "qty_picked": {
-            "type": "number"
-          },
           "qty_shipped": {
             "type": "number"
+          },
+          "unit_cost": {
+            "type": "number",
+            "nullable": true,
+            "description": "Cost of goods shipped per unit for this line, gated on `scope.financial_view` at the shipment's warehouse. Measured by `cost_method` (FIFO by default) from the stock-ledger entries recorded for this line when the shipment posted. null when unit_cost_denied is true, when the shipment has not posted, when the line shipped nothing, or for shipments posted before the release that added these fields (their ledger entries name no line). Write endpoints (create, update, actions) always return null here, with unit_cost_denied false: they never return a posted shipment."
+          },
+          "unit_cost_denied": {
+            "type": "boolean",
+            "description": "true when unit_cost is null because the caller lacks scope.financial_view, never because the shipment has no recorded cost."
           }
         }
       },
@@ -2327,10 +2578,8 @@
             "enum": [
               "DRAFT",
               "PLANNED",
-              "PICKING",
-              "PACKED",
+              "AWAITING_EXPORT",
               "EXPORTED",
-              "DONE",
               "CANCELLED"
             ]
           },
@@ -2382,11 +2631,15 @@
           "line_count",
           "total_qty_ordered",
           "total_qty_shipped",
+          "total_value",
+          "total_value_denied",
           "created_at",
           "updated_at",
           "warehouse",
           "lines",
-          "status_history"
+          "status_history",
+          "owner",
+          "cancel_locked"
         ],
         "properties": {
           "id": {
@@ -2420,6 +2673,15 @@
           "total_qty_shipped": {
             "type": "number"
           },
+          "total_value": {
+            "type": "number",
+            "nullable": true,
+            "description": "Cost of goods shipped for the whole shipment: the sum of the line values (shipped quantity x cost, each rounded to 6 decimal places), gated on `scope.financial_view` at the shipment's warehouse and measured by `cost_method`. A posted line that shipped nothing has unit_cost null but counts as 0 here. null when total_value_denied is true, or when a line's value is unknown (not posted, or posted before the release that added these fields). Never 0 for a denied caller. Write endpoints (create, update, actions) always return null here, with total_value_denied false."
+          },
+          "total_value_denied": {
+            "type": "boolean",
+            "description": "true when total_value is null because the caller lacks scope.financial_view."
+          },
           "exported_at": {
             "type": "string",
             "format": "date-time",
@@ -2435,6 +2697,49 @@
           },
           "warehouse": {
             "$ref": "#/components/schemas/PublicWmsWarehouseReference"
+          },
+          "owner": {
+            "type": "object",
+            "nullable": true,
+            "description": "The member that created the document, or null when none is recorded. Always present.",
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
+          "cancel_locked": {
+            "type": "boolean",
+            "description": "True when only the owner can cancel the document. Set once at create; never changes."
+          },
+          "parent": {
+            "type": "object",
+            "nullable": true,
+            "description": "The warehouse transfer this document belongs to, or null for a free-standing document. A document with a parent cancels only through that transfer.",
+            "required": [
+              "type",
+              "id",
+              "code"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "warehouse_transfer"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "code": {
+                "type": "string"
+              }
+            }
           },
           "lines": {
             "type": "array",
@@ -2456,6 +2761,7 @@
           "id",
           "product_variant",
           "qty",
+          "planned_qty",
           "from_location",
           "to_location"
         ],
@@ -2468,7 +2774,14 @@
             "$ref": "#/components/schemas/PublicWmsProductVariantReference"
           },
           "qty": {
-            "type": "number"
+            "type": "number",
+            "nullable": true,
+            "description": "The quantity that actually moved. null while the transfer is a DRAFT: a draft line holds only a plan, in `planned_qty`, and has no actual yet. It is set from that plan at the DRAFT -> MOVING lock."
+          },
+          "planned_qty": {
+            "type": "number",
+            "nullable": true,
+            "description": "The plan the line was given, and the only quantity a DRAFT line holds: the quantity that moved is empty until the transfer starts, when it takes this value. Frozen from then on, so the plan can be compared with what actually moved. null when no plan was recorded."
           },
           "from_location": {
             "$ref": "#/components/schemas/PublicWmsLocationReference"
@@ -2503,8 +2816,8 @@
             "type": "string",
             "enum": [
               "DRAFT",
-              "IN_PROGRESS",
-              "COMPLETED",
+              "MOVING",
+              "MOVED",
               "CANCELLED"
             ]
           },
@@ -2550,7 +2863,13 @@
             "type": "string"
           },
           "status": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "MOVING",
+              "MOVED",
+              "CANCELLED"
+            ]
           },
           "line_count": {
             "type": "integer"
@@ -2647,7 +2966,6 @@
               "To-Do",
               "Doing",
               "Done",
-              "Closed",
               "Cancelled"
             ]
           }
@@ -2729,18 +3047,22 @@
             "$ref": "#/components/schemas/PublicWmsProductVariantReference"
           },
           "qty_requested": {
-            "type": "number"
+            "type": "number",
+            "description": "Quantity the transfer requested. 0 on an unplanned line. Unchanged when the shipment's ordered quantity is later reduced."
           },
           "qty_exported": {
             "type": "number",
-            "nullable": true
+            "nullable": true,
+            "description": "Quantity the source shipped, summed over the shipment's lines for this variant (0 when it has none). null until the shipment is EXPORTED, and on a cancelled transfer; never a false 0."
           },
           "qty_received": {
             "type": "number",
-            "nullable": true
+            "nullable": true,
+            "description": "Quantity the destination received, summed over every receipt line of this variant, split lines included (0 when it has none). null until the receipt is VERIFIED, and on a cancelled transfer."
           },
           "is_unplanned": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "true for a variant on the verified receipt that the transfer never requested. Such a line appears only once the receipt is VERIFIED, with qty_requested 0 and qty_exported 0."
           }
         }
       },
@@ -2817,114 +3139,173 @@
       },
       "PublicWmsWarehouseTransferDetailResponse": {
         "type": "object",
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/PublicWmsWarehouseTransferResponse"
+        "description": "GET /wms/warehouse-transfers/{code} and the create/PATCH/action responses. Deliberately its own schema rather than extending PublicWmsWarehouseTransferResponse (the list item): the detail response replaces the list item's flat destination_receipt_code with the structured generated_inbound_receipt/generated_outbound_shipment references below, so it does not carry destination_receipt_code.",
+        "required": [
+          "id",
+          "code",
+          "status",
+          "direction",
+          "source_warehouse",
+          "destination_warehouse",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
           },
-          {
+          "code": {
+            "type": "string",
+            "example": "WT-SRC-00001"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "PENDING_APPROVAL",
+              "APPROVED",
+              "IN_TRANSIT",
+              "COMPLETED",
+              "REJECTED",
+              "CANCELLED"
+            ]
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "PUSH",
+              "PULL"
+            ]
+          },
+          "transfer_ref": {
+            "type": "string"
+          },
+          "external_ref": {
+            "type": "string",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "source_warehouse": {
+            "$ref": "#/components/schemas/PublicWmsWarehouseReference"
+          },
+          "destination_warehouse": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PublicWmsWarehouseReference"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "submitted_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "approved_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "completed_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "rejected_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "rejection_reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "cancelled_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "cancellation_reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "exported_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "hours_in_transit": {
+            "type": "number",
+            "nullable": true
+          },
+          "is_abnormal": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "abnormal_resolved": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "generated_outbound_shipment": {
             "type": "object",
+            "nullable": true,
             "properties": {
-              "direction": {
+              "id": {
                 "type": "string",
-                "enum": [
-                  "PUSH",
-                  "PULL"
-                ]
+                "format": "uuid"
               },
-              "transfer_ref": {
+              "code": {
                 "type": "string"
-              },
-              "external_ref": {
-                "type": "string",
-                "nullable": true
-              },
-              "notes": {
-                "type": "string",
-                "nullable": true
-              },
-              "submitted_at": {
-                "type": "string",
-                "format": "date-time",
-                "nullable": true
-              },
-              "approved_at": {
-                "type": "string",
-                "format": "date-time",
-                "nullable": true
-              },
-              "completed_at": {
-                "type": "string",
-                "format": "date-time",
-                "nullable": true
-              },
-              "rejected_at": {
-                "type": "string",
-                "format": "date-time",
-                "nullable": true
-              },
-              "rejection_reason": {
-                "type": "string",
-                "nullable": true
-              },
-              "cancelled_at": {
-                "type": "string",
-                "format": "date-time",
-                "nullable": true
-              },
-              "cancellation_reason": {
-                "type": "string",
-                "nullable": true
-              },
-              "updated_at": {
-                "type": "string",
-                "format": "date-time",
-                "nullable": true
-              },
-              "generated_outbound_shipment": {
-                "type": "object",
-                "nullable": true,
-                "properties": {
-                  "id": {
-                    "type": "string",
-                    "format": "uuid"
-                  },
-                  "code": {
-                    "type": "string"
-                  }
-                }
-              },
-              "generated_inbound_receipt": {
-                "type": "object",
-                "nullable": true,
-                "properties": {
-                  "id": {
-                    "type": "string",
-                    "format": "uuid"
-                  },
-                  "code": {
-                    "type": "string"
-                  }
-                }
-              },
-              "lines": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/PublicWmsWarehouseTransferLine"
-                }
-              },
-              "timeline": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/PublicWmsWarehouseTransferTimelineEntry"
-                }
               }
             }
+          },
+          "generated_inbound_receipt": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "code": {
+                "type": "string"
+              }
+            }
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicWmsWarehouseTransferLine"
+            }
+          },
+          "timeline": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicWmsWarehouseTransferTimelineEntry"
+            }
           }
-        ]
+        }
       },
       "WmsInboundReceiptLineInput": {
         "type": "object",
         "description": "Inbound receipt line. Supply `product_variant_id` or `sku` (one is required; both must resolve to the same variant).",
+        "required": [
+          "qty_expected"
+        ],
         "properties": {
           "product_variant_id": {
             "type": "string",
@@ -2950,6 +3331,43 @@
           }
         }
       },
+      "WmsInboundReceiptLinePatchInput": {
+        "type": "object",
+        "description": "Inbound receipt line on PATCH. Supply `product_variant_id` or `sku` (one is required; both must resolve to the same variant). `id` is honored only while the receipt is RECEIVING, and must name a line of this receipt of the same variant; a repeated `id` is rejected (400 DUPLICATE_LINE_ID) and a non-UUID `id` is rejected (400 INVALID_LINE_ID).",
+        "required": [
+          "qty_expected"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Existing line id (from the receipt detail). Omit to append a new line.",
+            "nullable": true
+          },
+          "product_variant_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Canonical variant UUID.",
+            "nullable": true
+          },
+          "sku": {
+            "type": "string",
+            "description": "Tenant-scoped SKU alias resolved via PCMS.",
+            "nullable": true
+          },
+          "qty_expected": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Expected quantity."
+          },
+          "unit_cost": {
+            "type": "number",
+            "minimum": 0,
+            "description": "Unit cost. null clears it.",
+            "nullable": true
+          }
+        }
+      },
       "WmsOutboundShipmentLineInput": {
         "type": "object",
         "description": "Outbound shipment line. Supply `product_variant_id` or `sku` (one is required; both must resolve to the same variant).",
@@ -2969,6 +3387,11 @@
             "type": "number",
             "minimum": 0,
             "description": "Ordered quantity."
+          },
+          "qty_reduction_reason": {
+            "type": "string",
+            "description": "Why the ordered quantity is lowered. Required when a PATCH on a PLANNED shipment lowers a line's `qty_ordered`; ignored otherwise.",
+            "nullable": true
           }
         }
       },
@@ -3061,6 +3484,11 @@
             "description": "Opaque caller reference id.",
             "nullable": true
           },
+          "cancel_locked": {
+            "type": "boolean",
+            "description": "Lock the cancel to the member that creates the document (the API key's member): only that member can cancel it, through its integration. Immutable after create; default false.",
+            "nullable": false
+          },
           "lines": {
             "type": "array",
             "minItems": 1,
@@ -3107,6 +3535,11 @@
             "description": "Opaque caller reference id.",
             "nullable": true
           },
+          "cancel_locked": {
+            "type": "boolean",
+            "description": "Lock the cancel to the member that creates the document (the API key's member): only that member can cancel it, through its integration. Immutable after create; default false.",
+            "nullable": false
+          },
           "lines": {
             "type": "array",
             "minItems": 1,
@@ -3118,20 +3551,34 @@
       },
       "CreateWarehouseTransferRequest": {
         "type": "object",
-        "description": "Create a PUSH warehouse-to-warehouse transfer request (v1 is PUSH-only; `direction` is rejected). Header + lines are persisted atomically.",
+        "description": "Create a warehouse-to-warehouse transfer request, PUSH (default) or PULL. The acting warehouse (?warehouse_code= / X-Warehouse-Code) is always the initiator: the source on a PUSH, the destination on a PULL. On PUSH, `destination_warehouse_code` is required and names the counterparty. On PULL, `source_warehouse_code` is required and names the counterparty instead; a supplied `destination_warehouse_code` must equal the acting warehouse. Header + lines are persisted atomically.",
         "required": [
-          "destination_warehouse_code",
           "lines"
         ],
         "properties": {
+          "direction": {
+            "type": "string",
+            "enum": [
+              "PUSH",
+              "PULL"
+            ],
+            "default": "PUSH",
+            "description": "Transfer direction. Omitted means PUSH."
+          },
           "warehouse_code": {
             "type": "string",
-            "description": "Acting (source) warehouse (alternative to ?warehouse_code= / X-Warehouse-Code; must match the resolved acting warehouse if supplied).",
+            "description": "Acting (initiating) warehouse (alternative to ?warehouse_code= / X-Warehouse-Code; must match the resolved acting warehouse if supplied).",
             "nullable": true
           },
           "destination_warehouse_code": {
             "type": "string",
-            "description": "Destination warehouse code in the same tenant (must differ from the source)."
+            "description": "Required on PUSH: the destination warehouse code in the same tenant (must differ from the acting warehouse). On PULL, optional and must equal the acting warehouse if supplied.",
+            "nullable": true
+          },
+          "source_warehouse_code": {
+            "type": "string",
+            "description": "Required on PULL: the source warehouse code in the same tenant to request stock from (must differ from the acting warehouse). Not used on PUSH.",
+            "nullable": true
           },
           "external_ref": {
             "type": "string",
@@ -3215,7 +3662,7 @@
       },
       "UpdateInboundReceiptRequest": {
         "type": "object",
-        "description": "JSON Merge Patch (RFC 7386) update of an editable inbound receipt (DRAFT/PLANNED/RECEIVING). Omitted fields are unchanged; a present `lines` array replaces the full line list. Fields outside the editable whitelist are rejected (400).",
+        "description": "JSON Merge Patch (RFC 7386) update of an editable inbound receipt (DRAFT/PLANNED/RECEIVING). Omitted fields are unchanged. A present `lines` array replaces the full line list while the receipt is DRAFT or PLANNED. While it is RECEIVING, `lines` is merged by line `id`: a line with `id` updates that line's `qty_expected` and `unit_cost` in place and keeps its counted quantity and evidence (a changed `qty_expected` clears the line's recorded variance); a line without `id` is appended; an omitted line is removed only if nothing has been counted on it, otherwise the request is rejected with 409 `E9639`. Fields outside the editable whitelist are rejected (400).",
         "properties": {
           "external_ref": {
             "type": "string",
@@ -3231,7 +3678,7 @@
             "type": "array",
             "minItems": 1,
             "items": {
-              "$ref": "#/components/schemas/WmsInboundReceiptLineInput"
+              "$ref": "#/components/schemas/WmsInboundReceiptLinePatchInput"
             }
           }
         }
@@ -3496,7 +3943,10 @@
             "properties": {
               "direction": {
                 "type": "string",
-                "const": "PUSH"
+                "enum": [
+                  "PUSH",
+                  "PULL"
+                ]
               },
               "source_warehouse_code": {
                 "type": "string"
@@ -3646,533 +4096,6 @@
           }
         }
       }
-    },
-    "PublicWmsWarehouseReference": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "code": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        }
-      }
-    },
-    "PublicWmsProductVariantReference": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "sku": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "barcode": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "variant_name": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "product_id": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "product_name": {
-          "type": [
-            "string",
-            "null"
-          ]
-        }
-      }
-    },
-    "PublicWmsLocationReference": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "code": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        }
-      }
-    },
-    "PublicWmsStatusHistoryEntry": {
-      "type": "object",
-      "properties": {
-        "status": {
-          "type": "string"
-        },
-        "created_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "created_by_name": {
-          "type": "string"
-        }
-      }
-    },
-    "PublicWmsInboundReceiptLine": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "product_variant": {
-          "$ref": "#/components/schemas/PublicWmsProductVariantReference"
-        },
-        "qty_expected": {
-          "type": "number"
-        },
-        "qty_received": {
-          "type": "number"
-        },
-        "unit_cost": {
-          "type": [
-            "number",
-            "null"
-          ]
-        },
-        "variance_notes": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "variance_type": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "enum": [
-            "over",
-            "short",
-            "damaged",
-            "wrong_item",
-            null
-          ]
-        }
-      }
-    },
-    "PublicWmsInboundReceiptResponse": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "code": {
-          "type": "string"
-        },
-        "status": {
-          "type": "string",
-          "enum": [
-            "DRAFT",
-            "PLANNED",
-            "RECEIVING",
-            "VERIFIED",
-            "DONE",
-            "CANCELLED"
-          ]
-        },
-        "rel_type": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "external_ref": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "notes": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "line_count": {
-          "type": "integer"
-        },
-        "total_qty_expected": {
-          "type": "number"
-        },
-        "total_qty_received": {
-          "type": "number"
-        },
-        "total_value": {
-          "type": "number"
-        },
-        "verified_at": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "format": "date-time"
-        },
-        "created_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "updated_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "warehouse": {
-          "$ref": "#/components/schemas/PublicWmsWarehouseReference"
-        }
-      }
-    },
-    "PublicWmsInboundReceiptDetailResponse": {
-      "allOf": [
-        {
-          "$ref": "#/components/schemas/PublicWmsInboundReceiptResponse"
-        },
-        {
-          "type": "object",
-          "properties": {
-            "lines": {
-              "type": "array",
-              "items": {
-                "$ref": "#/components/schemas/PublicWmsInboundReceiptLine"
-              }
-            },
-            "status_history": {
-              "type": "array",
-              "items": {
-                "$ref": "#/components/schemas/PublicWmsStatusHistoryEntry"
-              }
-            }
-          }
-        }
-      ]
-    },
-    "PublicWmsInternalTransferLine": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "product_variant": {
-          "$ref": "#/components/schemas/PublicWmsProductVariantReference"
-        },
-        "qty": {
-          "type": "number"
-        },
-        "from_location": {
-          "$ref": "#/components/schemas/PublicWmsLocationReference"
-        },
-        "to_location": {
-          "$ref": "#/components/schemas/PublicWmsLocationReference"
-        }
-      }
-    },
-    "PublicWmsInternalTransferResponse": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "code": {
-          "type": "string"
-        },
-        "status": {
-          "type": "string",
-          "enum": [
-            "DRAFT",
-            "MOVED",
-            "DONE"
-          ]
-        },
-        "line_count": {
-          "type": "integer"
-        },
-        "total_qty": {
-          "type": "number"
-        },
-        "created_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "updated_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "warehouse": {
-          "$ref": "#/components/schemas/PublicWmsWarehouseReference"
-        }
-      }
-    },
-    "PublicWmsInternalTransferDetailResponse": {
-      "allOf": [
-        {
-          "$ref": "#/components/schemas/PublicWmsInternalTransferResponse"
-        },
-        {
-          "type": "object",
-          "properties": {
-            "lines": {
-              "type": "array",
-              "items": {
-                "$ref": "#/components/schemas/PublicWmsInternalTransferLine"
-              }
-            },
-            "status_history": {
-              "type": "array",
-              "items": {
-                "$ref": "#/components/schemas/PublicWmsStatusHistoryEntry"
-              }
-            }
-          }
-        }
-      ]
-    },
-    "PublicWmsOutboundShipmentLine": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "product_variant": {
-          "anyOf": [
-            {
-              "$ref": "#/components/schemas/PublicWmsProductVariantReference"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "qty_ordered": {
-          "type": "number"
-        },
-        "qty_picked": {
-          "type": "number"
-        },
-        "qty_shipped": {
-          "type": "number"
-        }
-      }
-    },
-    "PublicWmsOutboundShipmentResponse": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "code": {
-          "type": "string"
-        },
-        "status": {
-          "type": "string",
-          "enum": [
-            "DRAFT",
-            "PLANNED",
-            "PICKING",
-            "PACKED",
-            "EXPORTED",
-            "DONE",
-            "CANCELLED"
-          ]
-        },
-        "rel_type": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "external_ref": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "notes": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "line_count": {
-          "type": "integer"
-        },
-        "total_qty_ordered": {
-          "type": "number"
-        },
-        "total_qty_shipped": {
-          "type": "number"
-        },
-        "exported_at": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "format": "date-time"
-        },
-        "created_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "updated_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "warehouse": {
-          "$ref": "#/components/schemas/PublicWmsWarehouseReference"
-        }
-      }
-    },
-    "PublicWmsOutboundShipmentDetailResponse": {
-      "allOf": [
-        {
-          "$ref": "#/components/schemas/PublicWmsOutboundShipmentResponse"
-        },
-        {
-          "type": "object",
-          "properties": {
-            "lines": {
-              "type": "array",
-              "items": {
-                "$ref": "#/components/schemas/PublicWmsOutboundShipmentLine"
-              }
-            },
-            "status_history": {
-              "type": "array",
-              "items": {
-                "$ref": "#/components/schemas/PublicWmsStatusHistoryEntry"
-              }
-            }
-          }
-        }
-      ]
-    },
-    "PublicWmsLocationNode": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "code": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "category": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "type": {
-          "type": "string"
-        },
-        "is_active": {
-          "type": "boolean"
-        },
-        "parent_id": {
-          "type": [
-            "string",
-            "null"
-          ]
-        },
-        "children": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/PublicWmsLocationNode"
-          }
-        }
-      }
-    },
-    "PublicWmsWarehouseResponse": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "code": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "type": {
-          "type": "string"
-        },
-        "address": {
-          "type": [
-            "object",
-            "null"
-          ]
-        },
-        "currency": {
-          "type": "string"
-        },
-        "location_strategy": {
-          "type": "string"
-        },
-        "is_active": {
-          "type": "boolean"
-        },
-        "settings": {
-          "type": [
-            "object",
-            "null"
-          ]
-        },
-        "extra_data": {
-          "type": [
-            "object",
-            "null"
-          ]
-        },
-        "created_at": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "updated_at": {
-          "type": "string",
-          "format": "date-time"
-        }
-      }
-    },
-    "PublicWmsWarehouseDetailResponse": {
-      "allOf": [
-        {
-          "$ref": "#/components/schemas/PublicWmsWarehouseResponse"
-        },
-        {
-          "type": "object",
-          "properties": {
-            "location_count": {
-              "type": "integer"
-            },
-            "location_hierarchy": {
-              "type": "array",
-              "items": {
-                "$ref": "#/components/schemas/PublicWmsLocationNode"
-              }
-            }
-          }
-        }
-      ]
     }
   },
   "security": [
@@ -4216,6 +4139,72 @@
           },
           "401": {
             "description": "Unauthorized — missing or invalid API key"
+          }
+        }
+      }
+    },
+    "/members": {
+      "get": {
+        "summary": "List Members",
+        "tags": [
+          "Members"
+        ],
+        "description": "Retrieve a list of members in the tenant(s).",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "description": "Code of the tenant to scope the request to. If omitted, returns members from all accessible tenants.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Search query for display name, email or member code",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicMemberResponse"
+                      }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/MetaPagination"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -4470,92 +4459,6 @@
           },
           "409": {
             "description": "The invitee is already a member (E2302), already has a live pending invitation (E2301), or the Idempotency-Key was already used with a different body (E0601)"
-          }
-        }
-      }
-    },
-    "/members/invitations/{id}/actions/cancel": {
-      "post": {
-        "summary": "Cancel Invitation",
-        "tags": [
-          "Members"
-        ],
-        "description": "Cancel a pending invitation of the tenant named by `X-Tenant-Code`; its link no longer accepts. Only an **active tenant owner** may call it. The body must be empty: a field is refused with `400`. Only a `pending` invitation can be cancelled, even one past its `expires_at`; an invitation that was accepted, refused or already cancelled answers `409` (`E2308`) and nothing changes. Another tenant's invitation answers exactly like an unknown id. Cancelling keeps the invitation's `Idempotency-Key` bound to it: replaying the creating call afterwards answers `200` with status `cancelled` and no `token`, so a new invitation needs a new key. Find the id with `GET /members/invitations`. A cancel retried after a lost answer gets `409` (`E2308`); a client that already saw the invitation `cancelled` should treat that `409` as done. The answer carries no contact data.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "description": "Invitation id (UUID).",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "X-Tenant-Code",
-            "in": "header",
-            "required": false,
-            "description": "Code of the tenant that owns the invitation. Required unless the API key is pinned to one tenant.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "The invitation is cancelled.",
-            "headers": {
-              "X-Server-Time": {
-                "schema": {
-                  "type": "string",
-                  "format": "date-time"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "data"
-                  ],
-                  "properties": {
-                    "data": {
-                      "type": "object",
-                      "required": [
-                        "id",
-                        "status"
-                      ],
-                      "properties": {
-                        "id": {
-                          "type": "string",
-                          "format": "uuid"
-                        },
-                        "status": {
-                          "type": "string",
-                          "enum": [
-                            "cancelled"
-                          ]
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "The id is not a UUID, the body is not valid JSON or has a field, or no tenant could be resolved (`TENANT_CODE_REQUIRED`)"
-          },
-          "403": {
-            "description": "The caller is not an active owner of the tenant (`FORBIDDEN`), or the key cannot reach the tenant"
-          },
-          "404": {
-            "description": "No such invitation in the tenant. Another tenant's invitation answers exactly like an unknown id."
-          },
-          "409": {
-            "description": "The invitation is no longer pending: accepted, refused or already cancelled (`E2308`)"
           }
         }
       }
@@ -4916,68 +4819,88 @@
         }
       }
     },
-    "/members": {
-      "get": {
-        "summary": "List Members",
+    "/members/invitations/{id}/actions/cancel": {
+      "post": {
+        "summary": "Cancel Invitation",
         "tags": [
           "Members"
         ],
-        "description": "Retrieve a list of members in the tenant(s).",
+        "description": "Cancel a pending invitation of the tenant named by `X-Tenant-Code`; its link no longer accepts. Only an **active tenant owner** may call it. The body must be empty: a field is refused with `400`. Only a `pending` invitation can be cancelled, even one past its `expires_at`; an invitation that was accepted, refused or already cancelled answers `409` (`E2308`) and nothing changes. Another tenant's invitation answers exactly like an unknown id. Cancelling keeps the invitation's `Idempotency-Key` bound to it: replaying the creating call afterwards answers `200` with status `cancelled` and no `token`, so a new invitation needs a new key. Find the id with `GET /members/invitations`. A cancel retried after a lost answer gets `409` (`E2308`); a client that already saw the invitation `cancelled` should treat that `409` as done. The answer carries no contact data.",
         "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Invitation id (UUID).",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
           {
             "name": "X-Tenant-Code",
             "in": "header",
-            "description": "Code of the tenant to scope the request to. If omitted, returns members from all accessible tenants.",
+            "required": false,
+            "description": "Code of the tenant that owns the invitation. Required unless the API key is pinned to one tenant.",
             "schema": {
               "type": "string"
-            }
-          },
-          {
-            "name": "q",
-            "in": "query",
-            "description": "Search query for display name or email",
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "default": 1
-            }
-          },
-          {
-            "name": "limit",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "default": 20
             }
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "The invitation is cancelled.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
+                  "required": [
+                    "data"
+                  ],
                   "properties": {
                     "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/PublicMemberResponse"
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "status"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "cancelled"
+                          ]
+                        }
                       }
-                    },
-                    "meta": {
-                      "$ref": "#/components/schemas/MetaPagination"
                     }
                   }
                 }
               }
             }
+          },
+          "400": {
+            "description": "The id is not a UUID, the body is not valid JSON or has a field, or no tenant could be resolved (`TENANT_CODE_REQUIRED`)"
+          },
+          "403": {
+            "description": "The caller is not an active owner of the tenant (`FORBIDDEN`), or the key cannot reach the tenant"
+          },
+          "404": {
+            "description": "No such invitation in the tenant. Another tenant's invitation answers exactly like an unknown id."
+          },
+          "409": {
+            "description": "The invitation is no longer pending: accepted, refused or already cancelled (`E2308`)"
           }
         }
       }
@@ -5495,78 +5418,6 @@
             "description": "Board not found"
           }
         }
-      },
-      "delete": {
-        "summary": "Delete Board",
-        "tags": [
-          "Boards"
-        ],
-        "description": "Retire a board. A soft delete: the board leaves every read for good, and the work inside it is left alone — its lists and their tasks stay live rows. A list is addressed inside its board, so once the board is gone the list endpoints answer 404 for those lists, while the tasks stay reachable through the task endpoints, which consult no board. Nothing brings a deleted board back: the update body has no un-delete and there is no restore endpoint. Requires board-edit permission (board owner or tenant owner), and the write emits `board:deleted` naming the caller. The answer names the board by id rather than returning the row every read now answers 404 for; a repeat is a 404 as well, so no `Idempotency-Key` is accepted for it.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "tenant_code"
-                ],
-                "properties": {
-                  "tenant_code": {
-                    "type": "string",
-                    "description": "The tenant/workspace code where the board lives."
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Board retired. `data.id` names the board that was deleted, which every read answers 404 for from here on.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string",
-                          "format": "uuid"
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/schemas/Error"
-          },
-          "401": {
-            "$ref": "#/components/schemas/Error"
-          },
-          "403": {
-            "$ref": "#/components/schemas/Error"
-          },
-          "404": {
-            "description": "Board not found, not public, or already retired"
-          }
-        }
       }
     },
     "/mission/boards/{id}/lists": {
@@ -5631,7 +5482,7 @@
         "tags": [
           "Boards"
         ],
-        "description": "Apply a partial update to a list under an existing public board (`name`, `limit`, `is_archived`), or move it to a position relative to another list on the same board (`after_list_id` or `before_list_id`). The two are never asked for at once: at least one field is required for an update, and a reorder names exactly one anchor and no field. A reorder answers the list with the `position` the server computed between the anchor's neighbours; a list that is already where it is asked to go is a successful no-op.",
+        "description": "Apply a partial update to a list under an existing public board (`name`, `limit`, `is_archived`), or move it to a position relative to another list on the same board (`after_list_id` or `before_list_id`). The two are never asked for at once: at least one field is required for an update, and a reorder names exactly one anchor and no field. A reorder answers the list with the `position` the server computed between the anchor's neighbours; a list already where it is asked to go is a success whose order is unchanged, and its position may still be recomputed between the same neighbours.",
         "parameters": [
           {
             "name": "id",
@@ -5686,84 +5537,6 @@
           },
           "404": {
             "description": "Board or list not found — or, on a reorder, the anchor is unknown, archived, or on another board"
-          }
-        }
-      },
-      "delete": {
-        "summary": "Delete List from Board",
-        "tags": [
-          "Boards"
-        ],
-        "description": "Retire a list from a public board — a soft delete, and a different write from archiving it. The list leaves every read for good, and the work inside it is left alone: the tasks filed in the list stay active and keep pointing at it, where `PATCH` with `is_archived` hides the list and archives its active tasks. Nothing brings a deleted list back. The answer names the list by id rather than returning the row every read now answers 404 for; a repeat is a 404 as well, so no `Idempotency-Key` is accepted for it.",
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          },
-          {
-            "name": "listId",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "tenant_code"
-                ],
-                "properties": {
-                  "tenant_code": {
-                    "type": "string",
-                    "description": "The tenant/workspace code where the board lives."
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "List retired. `data.id` names the list that was deleted, which every read answers 404 for from here on.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "id": {
-                          "type": "string",
-                          "format": "uuid"
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "$ref": "#/components/schemas/Error"
-          },
-          "403": {
-            "$ref": "#/components/schemas/Error"
-          },
-          "404": {
-            "description": "Board not found or not public, or the list is unknown, another board's, or already retired"
           }
         }
       }
@@ -6084,7 +5857,7 @@
           {
             "name": "q",
             "in": "query",
-            "description": "Search by task text, case-insensitive and escaped (a literal `%` or `_` stays literal). Matches `title`, `description` and `code` on the default, board and archived lists. On `scope=mine` it matches `title` and `code` only: the personal read queries `mission.v_tasks`, which has no description column, so a term there cannot reach one.",
+            "description": "Search by task text, case-insensitive, and escaped on every list: a literal `%` or `_` in the term stays literal. On the default and archived lists it matches `title`, `description` and `code`. On `scope=mine` it matches `title` and `code` — the personal read queries `mission.v_tasks`, which has no description column. On the board list (`unassigned`/date filters) it matches `title` only: `mission.search_board_tasks` takes one text parameter and reads its board rows by title, with no code or description search.",
             "schema": {
               "type": "string"
             }
@@ -6314,13 +6087,13 @@
         "tags": [
           "Tasks"
         ],
-        "description": "Create a new task. A body that names `board_list_id` creates the card through the board's own card-creation path: it requires membership of that board (or a tenant owner), seeds the board owners as followers, and accepts an optional placement (`after_task_id`, or `position: \"top\"`) — omit both to append. A body with no list keeps the plain create. An optional `Idempotency-Key` header makes a retry safe: the first application returns 201, a replay of the same key with an identical canonical body returns 200 with the existing task, and the same key with a different body returns 409 (E0601).",
+        "description": "Create a new task. A body that names `board_list_id` creates the card through the board's own card-creation path: it requires membership of that board (or a tenant owner), seeds the board owners as followers, and accepts an optional placement (`after_task_id`, or `position: \"top\"`) — omit both to append. A body with no list keeps the plain create. An optional `Idempotency-Key` header makes a retry safe: the first application returns 201, a replay of the same key with an identical canonical body returns 200 with the existing task, and the same key with a different body returns 409 (E0601). A replay answers 200 only when the row records that its placement ran: a keyed request that stopped between the write and the move answers 409 `PLACEMENT_INCOMPLETE`, naming the card in `data.id` and calling the operation unproven rather than failed — read it with `GET /v1/mission/tasks/{id}` before moving it, since it may have been placed and moved on since.",
         "parameters": [
           {
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "description": "Optional idempotency key, scoped to the tenant. First application returns 201; a replay of the same key with an identical canonical body returns 200 with the existing task; the same key with a different body — or with a task archived since — returns 409 (E0601).",
+            "description": "Optional idempotency key, scoped to the tenant. First application returns 201; a replay of the same key with an identical canonical body returns 200 with the existing task (a replay whose row records no completed placement answers 409 `PLACEMENT_INCOMPLETE` naming the card); the same key with a different body — or with a task archived since — returns 409 (E0601).",
             "schema": {
               "type": "string"
             }
@@ -6411,7 +6184,7 @@
             }
           },
           "409": {
-            "description": "The Idempotency-Key was already used with a different request body (E0601), or the task was created and the requested position could not be applied (PLACEMENT_FAILED — the answer names the created task in `data.id`)",
+            "description": "The Idempotency-Key was already used with a different request body (E0601); or the task was created and the requested position could not be applied (PLACEMENT_FAILED); or a replay of this key found no record that its placement ran (PLACEMENT_INCOMPLETE). The last two name the created task in `data.id`",
             "content": {
               "application/json": {
                 "schema": {
@@ -6565,7 +6338,6 @@
                       "To-Do",
                       "Doing",
                       "Done",
-                      "Closed",
                       "Cancelled"
                     ]
                   },
@@ -6603,7 +6375,6 @@
                     "nullable": true,
                     "description": "Set to null to clear the due date. Must be today or in the future."
                   },
-
                   "follower_ids": {
                     "type": "array",
                     "items": {
@@ -6659,8 +6430,7 @@
             "description": "Task not found"
           }
         }
-      }
-,
+      },
       "delete": {
         "summary": "Delete Task",
         "description": "Retire a task: soft-delete it, exactly as the archive action does. A **top-level task** is retired together with its active subtasks, which the database's family cascade retires in the same write; a subtask named here is retired alone, and its dedicated address is `DELETE /mission/tasks/{id}/subtasks/{subtaskId}`. The caller must be the task's **owner**, its **assignee**, or a **tenant owner of the task's tenant**; board membership does not qualify. The body carries no fields: the task is named by its address and the delete records no reason. The answer names the task by id rather than returning the task, because every task read answers `404` once the delete has run — a repeat answers `404` too, which is also why no `Idempotency-Key` is accepted: a replay is a read-side fact, not a duplicate write.",
@@ -6737,7 +6507,7 @@
     "/mission/tasks/{id}/actions/transfer-ownership": {
       "post": {
         "summary": "Transfer Task Ownership",
-        "description": "Hand a task to another active member of its tenant. Two actors may call this: the task's **current owner**, or a **tenant owner of the task's own tenant** (ADR-061) — the change runs through `public.mission_transfer_task_ownership`, whose trigger accepts exactly those two, so a tenant owner of some other tenant gets the same 403. `owner_id` must be an active member of the task's tenant, and the task must be live: an archived task answers 404 like every other task endpoint. The write changes `owner_id` alone — assignee, followers, board placement and status stay as they are — and writes the `task:ownership:transferred` event in the same transaction, carrying `actor_authority` (`owner` or `tenant_owner`) and naming the former owner as a recipient. Naming the current owner is a successful no-op, so no `Idempotency-Key` is needed or accepted.",
+        "description": "Hand a task to another active member of its tenant. Two actors may call this: the task's **current owner**, or a **tenant owner of the task's own tenant** (ADR-097) — the change runs through `public.mission_transfer_task_ownership`, whose trigger accepts exactly those two, so a tenant owner of some other tenant gets the same 403. `owner_id` must be an active member of the task's tenant, and the task must be live: an archived task answers 404 like every other task endpoint. The write changes `owner_id` alone — assignee, followers, board placement and status stay as they are — and writes the `task:ownership:transferred` event in the same transaction, carrying `actor_authority` (`owner` or `tenant_owner`) and naming the former owner as a recipient. Naming the current owner is a successful no-op, so no `Idempotency-Key` is needed or accepted.",
         "tags": [
           "Tasks"
         ],
@@ -6958,6 +6728,194 @@
           },
           "409": {
             "description": "TASK_NOT_RESTORABLE: another call restored the task first, or the database refused the change — re-read the task"
+          }
+        }
+      }
+    },
+    "/mission/tasks/{id}/actions/move": {
+      "post": {
+        "summary": "Move Task",
+        "description": "Place a top-level task in a board list: at the top of it, or behind a task already there. The caller must be the task's **owner**, its **assignee**, a **tenant owner of the task's tenant**, or an **active member of the task's board** — the task-edit rule, which the service checks before it writes, so a caller who may read the task but not move it gets the same 404 a missing task gets. A move that changes the board also needs membership of the destination board, which the row policy checks. Exactly one placement per request: `after_task_id` (a task in the target list) or `position` = `\"top\"`. A subtask answers 400 — it has no board placement — and an archived task, or a target list that is archived, deleted or in another tenant, answers 404. An `after_task_id` that was archived between the read and the call places the task at the top instead of failing: the fallback the board's own drag relies on. An `after_task_id` naming the task being moved is 400 before anything is read: a card cannot be placed behind itself. The position is computed by one atomic, row-locking RPC, so no `Idempotency-Key` is needed or accepted — a retry lands the card in the same place.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Task UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "board_list_id"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "board_list_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Destination board list."
+                  },
+                  "after_task_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Place the task immediately after this task, which must be in the destination list."
+                  },
+                  "position": {
+                    "type": "string",
+                    "enum": [
+                      "top"
+                    ],
+                    "description": "Place the task first in the destination list."
+                  }
+                },
+                "oneOf": [
+                  {
+                    "required": [
+                      "after_task_id"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "position"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The task after the move",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error: both placements or neither, `position` other than `top`, a malformed list or task id, an unknown field, or SUBTASK_BOARD_FORBIDDEN for a subtask"
+          },
+          "404": {
+            "description": "Task not found, not movable by this caller, or the destination list is not readable for them"
+          }
+        }
+      }
+    },
+    "/mission/tasks/{id}/actions/promote": {
+      "post": {
+        "summary": "Promote Subtask to Task",
+        "description": "Turn a subtask into a top-level task on the same row: it keeps its code, status, assignee, due date, followers, comments, files and history, and leaves its parent. The caller must be the subtask's **owner**, its **assignee**, or a **tenant owner of its tenant** — the rule the screen applies, enforced by the same database function. A caller who may not promote gets the same 404 a missing task gets, as the other task actions answer. `board_list_id` names a live list of any live board of the tenant; the board is read from the list, and the task is placed at the end of it. The task's owner and assignee become members of that board. `board_list_id: null`, `{}` or an empty body promote it to no board. An archived or deleted subtask answers `409 SUBTASK_NOT_PROMOTABLE`. A list that is deleted, archived, on a deleted board or not in this tenant answers `400 DESTINATION_UNAVAILABLE`. A task that is already top-level answers 200 unchanged and records nothing, so a retry needs no `Idempotency-Key`: the call ignores `board_list_id` and returns the task as it stands, so compare its `board_list_id` with the one sent. On success one `task:subtask:promoted` event is recorded.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Task UUID"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "board_list_id": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uuid",
+                    "description": "Destination list; its board is read from it. Null or absent promotes the subtask to no board."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The task after the promotion, in the shape `GET /mission/tasks/{id}` returns",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (a malformed `board_list_id`, an unknown field, a body that is not JSON), or DESTINATION_UNAVAILABLE: the list is not a live list of a live board of this tenant"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "404": {
+            "description": "Task not found, in another tenant, or not promotable by this caller"
+          },
+          "409": {
+            "description": "SUBTASK_NOT_PROMOTABLE: the subtask is archived or deleted"
           }
         }
       }
@@ -7414,7 +7372,7 @@
                     "summary": "The attachment is not on this task any more",
                     "value": {
                       "error": {
-                        "code": "NOT_FOUND",
+                        "code": "E0307",
                         "message": "Attachment not found"
                       }
                     }
@@ -7563,7 +7521,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "description": "Optional idempotency key, scoped to the tenant, the task's thread and the caller. Read on a `multipart/form-data` body: the first application returns 201, a replay of the same key with the same comment returns 200 with the comment already written, and the same key with a different comment returns 409 (E0601). A JSON body does not carry a key.",
+            "description": "Optional idempotency key, scoped to the tenant, the task's thread and the caller. Read on a `multipart/form-data` body: the first application returns 201, a replay of the same key with the same comment returns 200 with the comment already written, and the same key with a different comment returns 409 (E0601). Two requests carrying the same key at the same time are decided by the unique index on the message, and the one that loses answers with the winner's result — 200 with its comment, or 409 when the key landed as a different comment — deleting nothing the winner may hold; when the read that decides cannot complete, the loser is answered as the failure it hit rather than guessed at. A JSON body does not carry a key.",
             "schema": {
               "type": "string"
             }
@@ -10851,7 +10809,7 @@
         "tags": [
           "PCMS"
         ],
-        "description": "Change a product's options and regenerate its variants in one database transaction: the save the PCMS editor runs. `strategy` is required and says what happens to the product's current `matrix` variants: **`replace_all`** orphans them (kept as history, no longer sellable) and generates the new matrix; **`keep_as_manual`** turns them `manual` and generates the new matrix; **`add_new`** only adds the combinations the new options introduce, and refuses (`400` `E9444`) any change that removes or renames a value. A product has at most two options; each needs a name and at least two distinct values (padding and repeats are normalized as the editor does); `replace_all` with no options is `400` `E9444`. A product that has only its default variant keeps it: `replace_all` orphans it and `keep_as_manual` turns it `manual`, and no price is copied to the generated variants, so set prices afterwards with `PUT /pcms/products/{id}/variants`. `overrides` set a SKU, barcode, weight or dimensions on a generated variant, matched by its name (for example `Red / S`); an override naming no generated variant is ignored, and an unknown field is `400`. A barcode that a deleted variant held is allowed and returned in `meta.code_warnings` (ADR-054). `overrides` apply only when the save writes: on a repeat that finds nothing to change they are ignored, and `meta` reports zero changes. A clashing live SKU or barcode is `400` (`E9445`, `E9464`) and the whole save is rolled back. **A repeat is safe:** when the options equal the product's current options and, for `replace_all` and `keep_as_manual`, the live matrix variants are exactly the combinations the save would generate, nothing is written and `meta` reports zero changes. That also covers a complete matrix with unchanged options. A missing, extra or inactive matrix variant makes the same request a real save. `add_new` with equal options never regenerates a combination whose variant was deleted; use `replace_all`, or create the variant with `PUT /pcms/products/{id}/variants`. Two identical requests sent at once: one applies and the other is refused `409` (`E9446`). `X-Tenant-Code` is required; a product of another tenant is `404`.",
+        "description": "Change a product's options and regenerate its variants in one database transaction: the save the PCMS editor runs. `strategy` is required and says what happens to the product's current `matrix` variants: **`replace_all`** orphans them (kept as history, no longer sellable) and generates the new matrix; **`keep_as_manual`** turns them `manual` and generates the new matrix; **`add_new`** only adds the combinations the new options introduce, and refuses (`400` `E9444`) any change that removes or renames a value. A product has at most two options; each needs a name and at least two distinct values (padding and repeats are normalized as the editor does); `replace_all` with no options is `400` `E9444`. A product that has only its default variant keeps it: `replace_all` orphans it and `keep_as_manual` turns it `manual`, and no price is copied to the generated variants, so set prices afterwards with `PUT /pcms/products/{id}/variants`. `overrides` set a SKU, barcode, weight or dimensions on a generated variant, matched by its name (for example `Red / S`); an override naming no generated variant is ignored, and an unknown field is `400`. A barcode that a deleted variant held is allowed and returned in `meta.code_warnings` (ADR-054). `overrides` apply only when the save writes: on a repeat that finds nothing to change they are ignored, and `meta` reports zero changes. A clashing live SKU or barcode is `400` (`E9445`, `E9464`) and the whole save is rolled back. **A repeat is safe:** when the options equal the product's current options and, for `replace_all` and `keep_as_manual`, the live matrix variants are exactly the combinations the save would generate, nothing is written and `meta` reports zero changes. That also covers a complete matrix with unchanged options. A missing, extra or inactive matrix variant makes the same request a real save. `add_new` with equal options never regenerates a combination whose variant was deleted; use `replace_all`, or create the variant with `PUT /pcms/products/{id}/variants`. Two identical requests sent at once: one applies and the other is refused `409` (`E0602`) when it read the product's variants before the first finished, or answers as a repeat when it read them after. `X-Tenant-Code` is required; a product of another tenant is `404`.",
         "parameters": [
           {
             "name": "id",
@@ -11038,7 +10996,7 @@
             "description": "Product not found in the tenant"
           },
           "409": {
-            "description": "The same option combination was created by another request at the same time (`E9446`)"
+            "description": "Another request changed the product's variants at the same time (`E0602`), or created the same option combination (`E9446`)"
           }
         }
       }
@@ -11874,194 +11832,6 @@
         }
       }
     },
-    "/pcms/variants/lookup": {
-      "post": {
-        "summary": "Look Up Variants by SKU and Barcode (batch)",
-        "tags": [
-          "PCMS"
-        ],
-        "description": "Look up many variants at once, for an import or a POS sync. Send up to **100 codes in total** (`skus` and `barcodes` together, counted after trimming and removing repeats; each code at most 200 characters). A missing or null array counts as empty; a blank entry is dropped. Codes are trimmed and then matched **exactly, case included**. Answers the variants found, in the `GET /pcms/variants/{id}` shape, and the codes that matched nothing under `not_found`; a variant matched by both a SKU and a barcode appears once. Orphaned and deleted variants are never returned, and an `inactive` variant is returned with `status: \"inactive\"`. Items carry the product's `currency` and `media: []` (use the variant read for images). **Freshness:** this reads the catalog search index, which refreshes about once a minute, so a variant created or deleted in the last minute may be missing or still listed; `GET /pcms/variants/resolve` reads the live tables. This is a read: it takes no `Idempotency-Key`, and sending it again writes nothing.",
-        "parameters": [
-          {
-            "name": "X-Tenant-Code",
-            "in": "header",
-            "required": true,
-            "description": "Tenant to look in. Required: a SKU, barcode or manufacturer code is unique per tenant, not globally.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "skus": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "maxLength": 200
-                    },
-                    "description": "SKUs to look up."
-                  },
-                  "barcodes": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "maxLength": 200
-                    },
-                    "description": "Barcodes to look up."
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The variants found and the codes that matched nothing",
-            "headers": {
-              "X-Server-Time": {
-                "schema": {
-                  "type": "string",
-                  "format": "date-time"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "variants": {
-                          "type": "array",
-                          "items": {
-                            "$ref": "#/components/schemas/PublicProductVariantResponse"
-                          }
-                        },
-                        "not_found": {
-                          "type": "object",
-                          "properties": {
-                            "skus": {
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
-                            },
-                            "barcodes": {
-                              "type": "array",
-                              "items": {
-                                "type": "string"
-                              }
-                            }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "The body is not JSON (`INVALID_JSON_BODY`), is not an object, holds no code, holds more than 100 codes, has a code over 200 characters or a non-string code (`VALIDATION_ERROR`), or `X-Tenant-Code` is missing"
-          },
-          "403": {
-            "description": "The key's user is not an active member of the tenant"
-          },
-          "500": {
-            "description": "The lookup failed; no partial answer is returned"
-          }
-        }
-      }
-    },
-    "/pcms/variants/resolve": {
-      "get": {
-        "summary": "Resolve a Code to One Variant",
-        "tags": [
-          "PCMS"
-        ],
-        "description": "Turn one code of any kind into one variant, the way the PCMS scan screen does. The code is trimmed and tried in this order, stopping at the first live variant: SKU, the SKU inside a QR link, barcode, manufacturer code. For each kind an exact match is tried first, then a case-insensitive one, so an exact-case row wins. `matched_by` is `sku`, `qr_url`, `barcode` or `manufacturer_code`. The answer is in the `GET /pcms/variants/{id}` shape and reads the live tables. **Encoding:** pass `code` percent-encoded; a QR link's own `?` and `&` and a `+` in a code (`%2B`) are otherwise cut or read as a space. `404` means no live, non-orphaned variant matched: an unknown code, an orphaned variant (even when a live variant would match the same code by barcode or manufacturer code), or a retired SKU, which answers with code `E9483` and names the old SKU in the message so an out-of-date label can be told from an unknown code. Under a database failure inside a lookup step the resolver reads the step as a miss, so a `404` is not proof the code is unknown; a failure the resolver itself reports is `500`. An `inactive` variant resolves with `status: \"inactive\"`.",
-        "parameters": [
-          {
-            "name": "code",
-            "in": "query",
-            "required": true,
-            "description": "The code to resolve, once, at most 2048 characters. Percent-encode it.",
-            "schema": {
-              "type": "string",
-              "maxLength": 2048
-            }
-          },
-          {
-            "name": "X-Tenant-Code",
-            "in": "header",
-            "required": true,
-            "description": "Tenant to look in. Required: a SKU, barcode or manufacturer code is unique per tenant, not globally.",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "The variant and which identifier matched",
-            "headers": {
-              "X-Server-Time": {
-                "schema": {
-                  "type": "string",
-                  "format": "date-time"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "object",
-                      "properties": {
-                        "variant": {
-                          "$ref": "#/components/schemas/PublicProductVariantResponse"
-                        },
-                        "matched_by": {
-                          "type": "string",
-                          "enum": [
-                            "sku",
-                            "qr_url",
-                            "barcode",
-                            "manufacturer_code"
-                          ]
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "`code` is missing, blank, repeated or over 2048 characters (`VALIDATION_ERROR`), or `X-Tenant-Code` is missing"
-          },
-          "403": {
-            "description": "The key's user is not an active member of the tenant"
-          },
-          "404": {
-            "description": "No live, non-orphaned variant matched; `E9483` marks a retired SKU"
-          },
-          "500": {
-            "description": "The resolver reported an error"
-          }
-        }
-      }
-    },
     "/pcms/variants/{id}": {
       "get": {
         "summary": "Get Variant Detail",
@@ -12188,9 +11958,10 @@
           {
             "name": "q",
             "in": "query",
-            "description": "Search query for code or external reference",
+            "description": "Search query for code or external reference (max 200 characters after trimming)",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 200
             }
           },
           {
@@ -12199,11 +11970,11 @@
             "description": "Filter by exact status",
             "schema": {
               "type": "string",
+              "description": "Receipt status to filter on. `VERIFIED` is the terminal, posted state — the receipt is posted to the stock ledger.",
               "enum": [
                 "DRAFT",
-                "PENDING",
-                "PARTIALLY_RECEIVED",
-                "RECEIVED",
+                "PLANNED",
+                "RECEIVING",
                 "VERIFIED",
                 "CANCELLED"
               ]
@@ -12212,7 +11983,7 @@
           {
             "name": "filters[status][$in]",
             "in": "query",
-            "description": "Filter by multiple statuses (comma-separated)",
+            "description": "Filter by multiple statuses (comma-separated), each one of `DRAFT`, `PLANNED`, `RECEIVING`, `VERIFIED`, `CANCELLED`. `VERIFIED` is the terminal, posted state.",
             "schema": {
               "type": "string"
             }
@@ -12287,6 +12058,9 @@
           },
           "404": {
             "description": "Warehouse not found"
+          },
+          "500": {
+            "description": "Internal server error"
           }
         }
       },
@@ -12344,7 +12118,14 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/PublicWmsInboundReceiptDetailResponse"
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/PublicWmsInboundReceiptDetailResponse"
+                        },
+                        {
+                          "$ref": "#/components/schemas/PublicWmsWriteEchoUnavailable"
+                        }
+                      ]
                     }
                   },
                   "required": [
@@ -12371,7 +12152,14 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/PublicWmsInboundReceiptDetailResponse"
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/PublicWmsInboundReceiptDetailResponse"
+                        },
+                        {
+                          "$ref": "#/components/schemas/PublicWmsWriteEchoUnavailable"
+                        }
+                      ]
                     }
                   },
                   "required": [
@@ -12490,12 +12278,15 @@
           },
           "404": {
             "description": "Warehouse or receipt not found"
+          },
+          "500": {
+            "description": "Internal server error"
           }
         }
       },
       "patch": {
         "summary": "Update Inbound Receipt",
-        "description": "JSON Merge Patch (RFC 7386) update of an editable inbound receipt. Requires an `If-Match` header carrying the current `updated_at` (concurrency token). Only editable header fields and an optional full `lines` replacement are accepted; `status` and other internal fields are rejected (400). Authorization gate: `scope.inbound`.",
+        "description": "JSON Merge Patch (RFC 7386) update of an editable inbound receipt. Requires an `If-Match` header carrying the current `updated_at` (concurrency token). Only editable header fields and an optional `lines` list are accepted (a full replacement while DRAFT/PLANNED, a merge by line `id` while RECEIVING; see UpdateInboundReceiptRequest); `status` and other internal fields are rejected (400). Authorization gate: `scope.inbound`; once the receipt is PLANNED or RECEIVING the caller also needs `scope.financial_view` (403 otherwise). From PLANNED onwards every planned line (`qty_expected` above 0) the request writes needs a `unit_cost`; 0 is valid, a missing one is refused with 422 `E9649`. A DRAFT may still be saved without cost. A line that names by `product_variant_id` a variant the receipt already holds is kept even if that variant was deleted, on at most as many lines as the receipt holds it on; any other deleted or unknown variant is refused.",
         "tags": [
           "WMS"
         ],
@@ -12556,7 +12347,14 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/PublicWmsInboundReceiptDetailResponse"
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/PublicWmsInboundReceiptDetailResponse"
+                        },
+                        {
+                          "$ref": "#/components/schemas/PublicWmsWriteEchoUnavailable"
+                        }
+                      ]
                     }
                   },
                   "required": [
@@ -12576,7 +12374,7 @@
             }
           },
           "400": {
-            "description": "Missing warehouse context, invalid JSON body, or validation error"
+            "description": "Missing warehouse context, invalid JSON body, or validation error (including DUPLICATE_LINE_ID, and LINE_VARIANT_MISMATCH when a line `id` names a line of a different variant)"
           },
           "401": {
             "description": "Missing or invalid API key"
@@ -12585,10 +12383,13 @@
             "description": "Tenant access denied or insufficient warehouse permissions"
           },
           "404": {
-            "description": "Warehouse, document, or variant not found"
+            "description": "Warehouse, document, or variant not found, or a line `id` that does not belong to the receipt"
           },
           "409": {
-            "description": "Stale-version conflict (E0602) or the document is not in an editable status."
+            "description": "Stale-version conflict (E0602), the document is not in an editable status (E9522), or a RECEIVING update omitted a line that already has a counted quantity (E9639)."
+          },
+          "422": {
+            "description": "A planned line the request writes has no unit cost (E9649). Cost 0 is valid; only a missing cost is refused."
           },
           "500": {
             "description": "Internal server error"
@@ -12633,9 +12434,10 @@
           {
             "name": "q",
             "in": "query",
-            "description": "Search query for transfer code",
+            "description": "Search query for transfer code (max 200 characters after trimming)",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 200
             }
           },
           {
@@ -12646,8 +12448,8 @@
               "type": "string",
               "enum": [
                 "DRAFT",
-                "IN_PROGRESS",
-                "COMPLETED",
+                "MOVING",
+                "MOVED",
                 "CANCELLED"
               ]
             }
@@ -12730,6 +12532,9 @@
           },
           "404": {
             "description": "Warehouse not found"
+          },
+          "500": {
+            "description": "Internal server error"
           }
         }
       },
@@ -12846,7 +12651,7 @@
             "description": "Warehouse, document, or variant not found"
           },
           "409": {
-            "description": "Idempotency-key conflict (E0601) — same key, different canonical body."
+            "description": "Idempotency-key conflict (E0601) — same key, different canonical body — or the request changes stock at an edge location outside a plan (E9656)."
           },
           "500": {
             "description": "Internal server error"
@@ -12933,12 +12738,15 @@
           },
           "404": {
             "description": "Warehouse or transfer not found"
+          },
+          "500": {
+            "description": "Internal server error"
           }
         }
       },
       "patch": {
         "summary": "Update Internal Transfer",
-        "description": "JSON Merge Patch (RFC 7386) update of an editable internal transfer. Requires an `If-Match` header carrying the current `updated_at` (concurrency token). Only editable header fields and an optional full `lines` replacement are accepted; `status` and other internal fields are rejected (400). Authorization gate: `scope.transfer`.",
+        "description": "JSON Merge Patch (RFC 7386) update of an editable internal transfer. Requires an `If-Match` header carrying the current `updated_at` (concurrency token). Only editable header fields and an optional full `lines` replacement are accepted; `status` and other internal fields are rejected (400). Authorization gate: `scope.transfer`. A line that names by `product_variant_id` a variant the transfer already holds is kept even if that variant was deleted, on at most as many lines as the transfer holds it on; any other deleted or unknown variant is refused.",
         "tags": [
           "WMS"
         ],
@@ -13031,7 +12839,111 @@
             "description": "Warehouse, document, or variant not found"
           },
           "409": {
-            "description": "Stale-version conflict (E0602) or the document is not in an editable status."
+            "description": "Stale-version conflict (E0602), the transfer is not in an editable status (E9559), or the request changes stock at an edge location outside a plan (E9656)."
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/wms/internal-transfers/{code}/actions/{action}": {
+      "post": {
+        "summary": "Internal Transfer Lifecycle Action",
+        "description": "Apply a lifecycle action to an internal transfer: `cancel` (body `{\"reason\": string, min 10 chars}`) — DRAFT|MOVING → CANCELLED, under the same rules as the GUI. There is no `submit` action for this document type (no approval workflow; the only other transition, posting to MOVED, is not exposed on the wire) and every other action name returns 404. No `If-Match` header is used — cancel has no optimistic-concurrency input. Authorization gate: `scope.transfer`.",
+        "tags": [
+          "WMS"
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "required": false,
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "description": "Document code.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "action",
+            "in": "path",
+            "required": true,
+            "description": "Lifecycle action: `cancel` only. Every other name — including the posting verb — returns 404.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WmsCancelActionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Action applied. Returns the resulting document.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsInternalTransferDetailResponse"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing warehouse context, invalid JSON body, unknown body field, or a reason under 10 characters (E9645)."
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied or insufficient warehouse permissions"
+          },
+          "404": {
+            "description": "Warehouse, document, or action not found"
+          },
+          "409": {
+            "description": "The document is not in a cancellable status (E9559)."
           },
           "500": {
             "description": "Internal server error"
@@ -13076,10 +12988,10 @@
           {
             "name": "q",
             "in": "query",
-            "description": "Search query for code or external reference (max 100 chars)",
+            "description": "Search query for code or external reference (max 200 characters after trimming)",
             "schema": {
               "type": "string",
-              "maxLength": 100
+              "maxLength": 200
             }
           },
           {
@@ -13091,10 +13003,8 @@
               "enum": [
                 "DRAFT",
                 "PLANNED",
-                "PICKING",
-                "PACKED",
+                "AWAITING_EXPORT",
                 "EXPORTED",
-                "DONE",
                 "CANCELLED"
               ]
             }
@@ -13177,12 +13087,15 @@
           },
           "404": {
             "description": "Warehouse not found"
+          },
+          "500": {
+            "description": "Internal server error"
           }
         }
       },
       "post": {
         "summary": "Create Outbound Shipment",
-        "description": "Create a outbound shipment draft for the acting warehouse. Tenant context is proxy-injected (x-api-tenant-code); warehouse scope is client-supplied via ?warehouse_code= or X-Warehouse-Code. Authorization gate: `scope.outbound`. Create is atomic (header + lines in one transaction).",
+        "description": "Create a outbound shipment draft for the acting warehouse. Tenant context is proxy-injected (x-api-tenant-code); warehouse scope is client-supplied via ?warehouse_code= or X-Warehouse-Code. Authorization gate: `scope.outbound`. Create is atomic (header + lines in one transaction). The echoed document carries `unit_cost` and `total_value` as null with `unit_cost_denied` / `total_value_denied` false: a write never returns a posted shipment, so it has no cost yet. GET the shipment after it posts for its cost.",
         "tags": [
           "WMS"
         ],
@@ -13307,7 +13220,7 @@
         "tags": [
           "WMS"
         ],
-        "description": "Returns a single outbound shipment with its lines and status history. Requires warehouse_code via query parameter or X-Warehouse-Code header.",
+        "description": "Returns a single outbound shipment with its lines and status history. Requires warehouse_code via query parameter or X-Warehouse-Code header. Authorization gate: `scope.view`. The cost of goods shipped (`unit_cost` per line, `total_value` for the shipment) is returned only to a caller holding `scope.financial_view` on the shipment's warehouse; any other caller gets both as null with `unit_cost_denied` / `total_value_denied` true, and the request still answers 200. An API key acts as its member, so grant the scope to that member. Costs are known once the shipment has posted; a shipment not yet posted, or posted before the release that added these fields, answers null.",
         "parameters": [
           {
             "name": "code",
@@ -13342,6 +13255,20 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "cost_method",
+            "in": "query",
+            "required": false,
+            "description": "How `unit_cost` and `total_value` are measured. `fifo` (default): the cost of the stock layers each line consumed, first in, first out. `average`: the product's weighted-average cost in the warehouse when the shipment posted. Any other value is a 400 `INVALID_QUERY_PARAMS`.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "fifo",
+                "average"
+              ],
+              "default": "fifo"
+            }
           }
         ],
         "responses": {
@@ -13370,7 +13297,7 @@
             }
           },
           "400": {
-            "description": "Missing X-Tenant-Code, missing warehouse_code, or invalid query parameters"
+            "description": "Missing X-Tenant-Code, missing warehouse_code, or invalid query parameters (`INVALID_QUERY_PARAMS`, including a `cost_method` other than `fifo` or `average`)"
           },
           "401": {
             "description": "Missing or invalid API key"
@@ -13380,12 +13307,15 @@
           },
           "404": {
             "description": "Warehouse or shipment not found"
+          },
+          "500": {
+            "description": "Internal server error, including a failed cost read for a caller holding `scope.financial_view`"
           }
         }
       },
       "patch": {
         "summary": "Update Outbound Shipment",
-        "description": "JSON Merge Patch (RFC 7386) update of an editable outbound shipment. Requires an `If-Match` header carrying the current `updated_at` (concurrency token). Only editable header fields and an optional full `lines` replacement are accepted; `status` and other internal fields are rejected (400). Authorization gate: `scope.outbound`.",
+        "description": "JSON Merge Patch (RFC 7386) update of an editable outbound shipment. Requires an `If-Match` header carrying the current `updated_at` (concurrency token). Only editable header fields and an optional full `lines` replacement are accepted; `status` and other internal fields are rejected (400). On a DRAFT shipment `lines` replaces the whole list. From PLANNED on, a full replacement is refused (409 `E9675`), and so is a change of `external_ref` on a shipment an order system requested; the only accepted `lines` is the current set with one or more `qty_ordered` lowered, each lowered line carrying a `qty_reduction_reason` (missing reason: 400 `E9674`). Authorization gate: `scope.outbound`. The echoed document carries `unit_cost` and `total_value` as null with `unit_cost_denied` / `total_value_denied` false: a write never returns a posted shipment, so it has no cost yet. GET the shipment after it posts for its cost. A line that names by `product_variant_id` a variant the shipment already holds is kept even if that variant was deleted, on at most as many lines as the shipment holds it on; any other deleted or unknown variant is refused.",
         "tags": [
           "WMS"
         ],
@@ -13466,7 +13396,7 @@
             }
           },
           "400": {
-            "description": "Missing warehouse context, invalid JSON body, or validation error"
+            "description": "Missing warehouse context, invalid JSON body, validation error, or a reduction without a reason (`E9674`)"
           },
           "401": {
             "description": "Missing or invalid API key"
@@ -13478,7 +13408,7 @@
             "description": "Warehouse, document, or variant not found"
           },
           "409": {
-            "description": "Stale-version conflict (E0602) or the document is not in an editable status."
+            "description": "Stale-version conflict (E0602), the document is not in an editable status (E9558), or its lines can no longer be replaced (`E9675`: a full replacement from PLANNED on, any line change from AWAITING_EXPORT on, or an `external_ref` change on a shipment an order system requested)."
           },
           "500": {
             "description": "Internal server error"
@@ -13492,7 +13422,7 @@
         "tags": [
           "WMS"
         ],
-        "description": "Returns paginated list of warehouses the authenticated user has access to within the tenant. Owners and wms-admins see all warehouses; other members see only warehouses where they hold view or admin scope.",
+        "description": "Returns paginated list of warehouses the authenticated user has access to within the tenant. Owners and wms_admins see all warehouses; other members see only warehouses where they hold any warehouse scope.",
         "parameters": [
           {
             "name": "X-Tenant-Code",
@@ -13506,7 +13436,7 @@
           {
             "name": "q",
             "in": "query",
-            "description": "Search query for code or name (max 200 chars)",
+            "description": "Search query for code or name (max 200 characters after trimming)",
             "schema": {
               "type": "string",
               "maxLength": 200
@@ -13658,6 +13588,136 @@
           },
           "404": {
             "description": "Warehouse not found"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/wms/availability-checks": {
+      "post": {
+        "summary": "Check Availability",
+        "tags": [
+          "WMS"
+        ],
+        "description": "OH-ATP (ADR-088): a per-(line, warehouse) supply signal for a caller who cannot see stock, e.g. Seli quoting an order. Each line is named by exactly one of variant_id, sku or barcode plus a demand; the answer covers exactly the named warehouses and never carries on-hand, only a 0-100 score and, when short, a promisable quantity. Read-only.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to scope the request to. Required.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WmsAvailabilityCheckRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicWmsAvailabilityCheckLine"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Possible codes: VALIDATION_ERROR (body fails schema — response carries `error.details`, an array of `{path, message}` per offending field), INVALID_JSON_BODY (unparsable body), TENANT_CODE_REQUIRED (missing X-Tenant-Code header), E9647 (a warehouse code is unknown, inactive, or belongs to another tenant), E9648 (a line has an invalid identifier or demand).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "error": {
+                          "type": "object",
+                          "properties": {
+                            "details": {
+                              "type": "array",
+                              "description": "Present only for VALIDATION_ERROR.",
+                              "items": {
+                                "type": "object",
+                                "properties": {
+                                  "path": {
+                                    "type": "array",
+                                    "items": {
+                                      "oneOf": [
+                                        {
+                                          "type": "string"
+                                        },
+                                        {
+                                          "type": "integer"
+                                        }
+                                      ]
+                                    }
+                                  },
+                                  "message": {
+                                    "type": "string"
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "E0102 — access to this tenant's availability check is denied.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error"
           }
         }
       }
@@ -13699,9 +13759,10 @@
           {
             "name": "q",
             "in": "query",
-            "description": "Search query for transfer code",
+            "description": "Search query for transfer code (max 200 characters after trimming)",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 200
             }
           },
           {
@@ -13799,12 +13860,15 @@
           },
           "404": {
             "description": "Warehouse not found"
+          },
+          "500": {
+            "description": "Internal server error"
           }
         }
       },
       "post": {
         "summary": "Create Warehouse Transfer",
-        "description": "Create a warehouse transfer draft for the acting warehouse. Tenant context is proxy-injected (x-api-tenant-code); warehouse scope is client-supplied via ?warehouse_code= or X-Warehouse-Code. Authorization gate: `scope.warehouse_transfer`. Create is atomic (header + lines in one transaction).",
+        "description": "Create a warehouse transfer draft, PUSH (default) or PULL, for the acting warehouse. The acting warehouse is always the initiator: the source on a PUSH, the destination on a PULL — see `direction`, `destination_warehouse_code` and `source_warehouse_code` on the request schema for the per-direction rule. A PULL requester never learns the source warehouse's stock (no on-hand/availability field is returned for either direction). Tenant context is proxy-injected (x-api-tenant-code); warehouse scope is client-supplied via ?warehouse_code= or X-Warehouse-Code. Authorization gate: `scope.warehouse_transfer` at the acting (initiating) warehouse. Create is atomic (header + lines in one transaction).",
         "tags": [
           "WMS"
         ],
@@ -14002,6 +14066,9 @@
           },
           "404": {
             "description": "Warehouse or transfer not found"
+          },
+          "500": {
+            "description": "Internal server error"
           }
         }
       },
@@ -14261,7 +14328,7 @@
     "/wms/inbound-receipts/{code}/actions/{action}": {
       "post": {
         "summary": "Inbound Receipt Lifecycle Action",
-        "description": "Apply a non-posting lifecycle action to a inbound receipt: `submit` (no body) or `cancel` (body `{\"reason\": string, min 10 chars}`). Other actions — including inventory-posting/execution verbs — return 404. Requires an `If-Match` concurrency token. Authorization gate: `scope.inbound`.",
+        "description": "Apply a non-posting lifecycle action to a inbound receipt: `submit` (no body) or `cancel` (body `{\"reason\": string, min 10 chars}`). Other actions — including inventory-posting/execution verbs — return 404. Requires an `If-Match` concurrency token. Authorization gate: `scope.inbound`; `submit` also needs `scope.financial_view` (403 otherwise) and is refused with 422 `E9649` while any planned line (`qty_expected` above 0) has no unit cost. Cost 0 is valid.",
         "tags": [
           "WMS"
         ],
@@ -14339,7 +14406,14 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/PublicWmsInboundReceiptDetailResponse"
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/PublicWmsInboundReceiptDetailResponse"
+                        },
+                        {
+                          "$ref": "#/components/schemas/PublicWmsWriteEchoUnavailable"
+                        }
+                      ]
                     }
                   },
                   "required": [
@@ -14371,7 +14445,10 @@
             "description": "Warehouse, document, or variant not found"
           },
           "409": {
-            "description": "Stale-version conflict (E0602) or invalid transition for the current status."
+            "description": "Stale-version conflict (E0602), invalid transition for the current status (E9522), or a `cancel` refused by ownership (E9680): a receipt that belongs to a warehouse transfer cancels only through the transfer, and a receipt locked to its owner (`cancel_locked`) only by its owner."
+          },
+          "422": {
+            "description": "`submit` refused: a planned line has no unit cost (E9649). Cost 0 is valid; only a missing cost is refused."
           },
           "500": {
             "description": "Internal server error"
@@ -14532,7 +14609,7 @@
     "/wms/outbound-shipments/{code}/actions/{action}": {
       "post": {
         "summary": "Outbound Shipment Lifecycle Action",
-        "description": "Apply a non-posting lifecycle action to a outbound shipment: `submit` (no body) or `cancel` (body `{\"reason\": string, min 10 chars}`). Other actions — including inventory-posting/execution verbs — return 404. Requires an `If-Match` concurrency token. Authorization gate: `scope.outbound`.",
+        "description": "Apply a non-posting lifecycle action to a outbound shipment: `submit` (no body) or `cancel` (no body) — allowed from DRAFT, PLANNED and AWAITING_EXPORT; cancelling from AWAITING_EXPORT opens a put-back plan that returns the packed goods from OUTBOUND to storage; an EXPORTED shipment is refused with 409 `E9671`. Other actions — including inventory-posting/execution verbs — return 404. Requires an `If-Match` concurrency token. Authorization gate: `scope.outbound`. The echoed document carries `unit_cost` and `total_value` as null with `unit_cost_denied` / `total_value_denied` false: a write never returns a posted shipment, so it has no cost yet. GET the shipment after it posts for its cost.",
         "tags": [
           "WMS"
         ],
@@ -14642,7 +14719,7 @@
             "description": "Warehouse, document, or variant not found"
           },
           "409": {
-            "description": "Stale-version conflict (E0602) or invalid transition for the current status."
+            "description": "Stale-version conflict (E0602), invalid transition for the current status (E9558), cancel of an exported shipment (E9671), cancel refused by ownership (E9680: a shipment that belongs to a warehouse transfer cancels only through the transfer, and a shipment locked to its owner (`cancel_locked`) only by its owner), or submit of a shipment with no lines (E9677)."
           },
           "500": {
             "description": "Internal server error"
@@ -14913,7 +14990,7 @@
             "description": "Warehouse, document, or variant not found"
           },
           "409": {
-            "description": "Stale-version conflict (E0602) or invalid transition for the current status."
+            "description": "Stale-version conflict (E0602) or an invalid transition for the current status (E9579)."
           },
           "500": {
             "description": "Internal server error"
@@ -15101,9 +15178,10 @@
             "name": "q",
             "in": "query",
             "required": false,
-            "description": "Search query for location code or name",
+            "description": "Search query for location code or name (max 200 characters after trimming)",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 200
             }
           },
           {
@@ -15394,7 +15472,6 @@
                       "To-Do",
                       "Doing",
                       "Done",
-                      "Closed",
                       "Cancelled"
                     ]
                   },
@@ -15487,8 +15564,7 @@
             "description": "Task not found"
           }
         }
-      }
-,
+      },
       "delete": {
         "summary": "Delete Task (by Code)",
         "description": "Same contract as `DELETE /mission/tasks/{id}`, with the task addressed by its natural code instead of its UUID. The code is resolved inside the tenant first, so an unknown or foreign code answers `404` before anything else runs.",
@@ -15693,7 +15769,7 @@
             "name": "Idempotency-Key",
             "in": "header",
             "required": false,
-            "description": "Optional idempotency key, scoped to the tenant, the task's thread and the caller. Read on a `multipart/form-data` body: the first application returns 201, a replay of the same key with the same comment returns 200 with the comment already written, and the same key with a different comment returns 409 (E0601). A JSON body does not carry a key.",
+            "description": "Optional idempotency key, scoped to the tenant, the task's thread and the caller. Read on a `multipart/form-data` body: the first application returns 201, a replay of the same key with the same comment returns 200 with the comment already written, and the same key with a different comment returns 409 (E0601). Two requests carrying the same key at the same time are decided by the unique index on the message, and the one that loses answers with the winner's result — 200 with its comment, or 409 when the key landed as a different comment — deleting nothing the winner may hold; when the read that decides cannot complete, the loser is answered as the failure it hit rather than guessed at. A JSON body does not carry a key.",
             "schema": {
               "type": "string"
             }
@@ -16524,6 +16600,192 @@
         }
       }
     },
+    "/mission/tasks/code/{code}/actions/move": {
+      "post": {
+        "summary": "Move Task (by Code)",
+        "description": "Place a top-level task in a board list: at the top of it, or behind a task already there. The caller must be the task's **owner**, its **assignee**, a **tenant owner of the task's tenant**, or an **active member of the task's board** — the task-edit rule, which the service checks before it writes, so a caller who may read the task but not move it gets the same 404 a missing task gets. A move that changes the board also needs membership of the destination board, which the row policy checks. Exactly one placement per request: `after_task_id` (a task in the target list) or `position` = `\"top\"`. A subtask answers 400 — it has no board placement — and an archived task, or a target list that is archived, deleted or in another tenant, answers 404. An `after_task_id` that was archived between the read and the call places the task at the top instead of failing: the fallback the board's own drag relies on. An `after_task_id` naming the task being moved is 400 before anything is read: a card cannot be placed behind itself. The position is computed by one atomic, row-locking RPC, so no `Idempotency-Key` is needed or accepted — a retry lands the card in the same place.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task code (e.g. ACME-42)"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "board_list_id"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "board_list_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Destination board list."
+                  },
+                  "after_task_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "description": "Place the task immediately after this task, which must be in the destination list."
+                  },
+                  "position": {
+                    "type": "string",
+                    "enum": [
+                      "top"
+                    ],
+                    "description": "Place the task first in the destination list."
+                  }
+                },
+                "oneOf": [
+                  {
+                    "required": [
+                      "after_task_id"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "position"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The task after the move",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error: both placements or neither, `position` other than `top`, a malformed list or task id, an unknown field, or SUBTASK_BOARD_FORBIDDEN for a subtask"
+          },
+          "404": {
+            "description": "Task not found, not movable by this caller, or the destination list is not readable for them"
+          }
+        }
+      }
+    },
+    "/mission/tasks/code/{code}/actions/promote": {
+      "post": {
+        "summary": "Promote Subtask to Task (by Code)",
+        "description": "Turn a subtask into a top-level task on the same row: it keeps its code, status, assignee, due date, followers, comments, files and history, and leaves its parent. The caller must be the subtask's **owner**, its **assignee**, or a **tenant owner of its tenant** — the rule the screen applies, enforced by the same database function. A caller who may not promote gets the same 404 a missing task gets, as the other task actions answer. `board_list_id` names a live list of any live board of the tenant; the board is read from the list, and the task is placed at the end of it. The task's owner and assignee become members of that board. `board_list_id: null`, `{}` or an empty body promote it to no board. An archived or deleted subtask answers `409 SUBTASK_NOT_PROMOTABLE`. A list that is deleted, archived, on a deleted board or not in this tenant answers `400 DESTINATION_UNAVAILABLE`. A task that is already top-level answers 200 unchanged and records nothing, so a retry needs no `Idempotency-Key`: the call ignores `board_list_id` and returns the task as it stands, so compare its `board_list_id` with the one sent. On success one `task:subtask:promoted` event is recorded. A `code/{code}` sibling of this operation: the task is resolved by its natural code instead of its UUID, and every other rule is identical.",
+        "tags": [
+          "Tasks"
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Task code (e.g. ACME-42)"
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "board_list_id": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uuid",
+                    "description": "Destination list; its board is read from it. Null or absent promotes the subtask to no board."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The task after the promotion, in the shape `GET /mission/tasks/{id}` returns",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicTaskResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error (a malformed `board_list_id`, an unknown field, a body that is not JSON), X-Tenant-Code missing (`TENANT_CODE_REQUIRED`: a code lookup needs the tenant), or DESTINATION_UNAVAILABLE: the list is not a live list of a live board of this tenant"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "404": {
+            "description": "Task not found, in another tenant, or not promotable by this caller"
+          },
+          "409": {
+            "description": "SUBTASK_NOT_PROMOTABLE: the subtask is archived or deleted"
+          }
+        }
+      }
+    },
     "/mission/tasks/code/{code}/actions/claim": {
       "post": {
         "summary": "Claim Task (by Code)",
@@ -16967,6 +17229,194 @@
         }
       }
     },
+    "/pcms/variants/lookup": {
+      "post": {
+        "summary": "Look Up Variants by SKU and Barcode (batch)",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Look up many variants at once, for an import or a POS sync. Send up to **100 codes in total** (`skus` and `barcodes` together, counted after trimming and removing repeats; each code at most 200 characters). A missing or null array counts as empty; a blank entry is dropped. Codes are trimmed and then matched **exactly, case included**. Answers the variants found, in the `GET /pcms/variants/{id}` shape, and the codes that matched nothing under `not_found`; a variant matched by both a SKU and a barcode appears once. Orphaned and deleted variants are never returned, and an `inactive` variant is returned with `status: \"inactive\"`. Items carry the product's `currency` and `media: []` (use the variant read for images). **Freshness:** this reads the catalog search index, which refreshes about once a minute, so a variant created or deleted in the last minute may be missing or still listed; `GET /pcms/variants/resolve` reads the live tables. This is a read: it takes no `Idempotency-Key`, and sending it again writes nothing.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to look in. Required: a SKU, barcode or manufacturer code is unique per tenant, not globally.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "skus": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 200
+                    },
+                    "description": "SKUs to look up."
+                  },
+                  "barcodes": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "maxLength": 200
+                    },
+                    "description": "Barcodes to look up."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The variants found and the codes that matched nothing",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "variants": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/PublicProductVariantResponse"
+                          }
+                        },
+                        "not_found": {
+                          "type": "object",
+                          "properties": {
+                            "skus": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            },
+                            "barcodes": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not JSON (`INVALID_JSON_BODY`), is not an object, holds no code, holds more than 100 codes, has a code over 200 characters or a non-string code (`VALIDATION_ERROR`), or `X-Tenant-Code` is missing"
+          },
+          "403": {
+            "description": "The key's user is not an active member of the tenant"
+          },
+          "500": {
+            "description": "The lookup failed; no partial answer is returned"
+          }
+        }
+      }
+    },
+    "/pcms/variants/resolve": {
+      "get": {
+        "summary": "Resolve a Code to One Variant",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Turn one code of any kind into one variant, the way the PCMS scan screen does. The code is trimmed and tried in this order, stopping at the first live variant: SKU, the SKU inside a QR link, barcode, manufacturer code. For each kind an exact match is tried first, then a case-insensitive one, so an exact-case row wins. `matched_by` is `sku`, `qr_url`, `barcode` or `manufacturer_code`. The answer is in the `GET /pcms/variants/{id}` shape and reads the live tables. **Encoding:** pass `code` percent-encoded; a QR link's own `?` and `&` and a `+` in a code (`%2B`) are otherwise cut or read as a space. `404` means no live, non-orphaned variant matched: an unknown code, an orphaned variant (even when a live variant would match the same code by barcode or manufacturer code), or a retired SKU, which answers with code `E9483` and names the old SKU in the message so an out-of-date label can be told from an unknown code. Under a database failure inside a lookup step the resolver reads the step as a miss, so a `404` is not proof the code is unknown; a failure the resolver itself reports is `500`. An `inactive` variant resolves with `status: \"inactive\"`.",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": true,
+            "description": "The code to resolve, once, at most 2048 characters. Percent-encode it.",
+            "schema": {
+              "type": "string",
+              "maxLength": 2048
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to look in. Required: a SKU, barcode or manufacturer code is unique per tenant, not globally.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The variant and which identifier matched",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "variant": {
+                          "$ref": "#/components/schemas/PublicProductVariantResponse"
+                        },
+                        "matched_by": {
+                          "type": "string",
+                          "enum": [
+                            "sku",
+                            "qr_url",
+                            "barcode",
+                            "manufacturer_code"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "`code` is missing, blank, repeated or over 2048 characters (`VALIDATION_ERROR`), or `X-Tenant-Code` is missing"
+          },
+          "403": {
+            "description": "The key's user is not an active member of the tenant"
+          },
+          "404": {
+            "description": "No live, non-orphaned variant matched; `E9483` marks a retired SKU"
+          },
+          "500": {
+            "description": "The resolver reported an error"
+          }
+        }
+      }
+    },
     "/pcms/variants/sku/{sku}": {
       "get": {
         "summary": "Get Variant Detail (by SKU)",
@@ -17094,213 +17544,6 @@
                 }
               }
             }
-          }
-        }
-      }
-    },
-    "/mission/tasks/{id}/actions/move": {
-      "post": {
-        "summary": "Move Task",
-        "description": "Place a top-level task in a board list: at the top of it, or behind a task already there. The caller must be the task's **owner**, its **assignee**, or a **tenant owner of the task's tenant** — board membership does not qualify, and the rule is the database's own update policy, so a caller who may read the task but not move it gets the same 404 a missing task gets. Exactly one placement per request: `after_task_id` (a task in the target list) or `position` = `\"top\"`. A subtask answers 400 — it has no board placement — and an archived task, or a target list that is archived, deleted or in another tenant, answers 404. An `after_task_id` that was archived between the read and the call places the task at the top instead of failing: the fallback the board's own drag relies on. An `after_task_id` naming the task being moved is 400 before anything is read: a card cannot be placed behind itself. The position is computed by one atomic, row-locking RPC, so no `Idempotency-Key` is needed or accepted — a retry lands the card in the same place.",
-        "tags": [
-          "Tasks"
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "description": "Task UUID"
-          },
-          {
-            "name": "X-Tenant-Code",
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "board_list_id"
-                ],
-                "additionalProperties": false,
-                "properties": {
-                  "board_list_id": {
-                    "type": "string",
-                    "format": "uuid",
-                    "description": "Destination board list."
-                  },
-                  "after_task_id": {
-                    "type": "string",
-                    "format": "uuid",
-                    "description": "Place the task immediately after this task, which must be in the destination list."
-                  },
-                  "position": {
-                    "type": "string",
-                    "enum": [
-                      "top"
-                    ],
-                    "description": "Place the task first in the destination list."
-                  }
-                },
-                "oneOf": [
-                  {
-                    "required": [
-                      "after_task_id"
-                    ]
-                  },
-                  {
-                    "required": [
-                      "position"
-                    ]
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The task after the move",
-            "headers": {
-              "X-Server-Time": {
-                "schema": {
-                  "type": "string",
-                  "format": "date-time"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/PublicTaskResponse"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error: both placements or neither, `position` other than `top`, a malformed list or task id, an unknown field, or SUBTASK_BOARD_FORBIDDEN for a subtask"
-          },
-          "404": {
-            "description": "Task not found, not movable by this caller, or the destination list is not readable for them"
-          }
-        }
-      }
-    },
-    "/mission/tasks/code/{code}/actions/move": {
-      "post": {
-        "summary": "Move Task (by Code)",
-        "description": "Place a top-level task in a board list: at the top of it, or behind a task already there. The caller must be the task's **owner**, its **assignee**, or a **tenant owner of the task's tenant** — board membership does not qualify, and the rule is the database's own update policy, so a caller who may read the task but not move it gets the same 404 a missing task gets. Exactly one placement per request: `after_task_id` (a task in the target list) or `position` = `\"top\"`. A subtask answers 400 — it has no board placement — and an archived task, or a target list that is archived, deleted or in another tenant, answers 404. An `after_task_id` that was archived between the read and the call places the task at the top instead of failing: the fallback the board's own drag relies on. An `after_task_id` naming the task being moved is 400 before anything is read: a card cannot be placed behind itself. The position is computed by one atomic, row-locking RPC, so no `Idempotency-Key` is needed or accepted — a retry lands the card in the same place.",
-        "tags": [
-          "Tasks"
-        ],
-        "parameters": [
-          {
-            "name": "code",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Task code (e.g. ACME-42)"
-          },
-          {
-            "name": "X-Tenant-Code",
-            "in": "header",
-            "schema": {
-              "type": "string"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "board_list_id"
-                ],
-                "additionalProperties": false,
-                "properties": {
-                  "board_list_id": {
-                    "type": "string",
-                    "format": "uuid",
-                    "description": "Destination board list."
-                  },
-                  "after_task_id": {
-                    "type": "string",
-                    "format": "uuid",
-                    "description": "Place the task immediately after this task, which must be in the destination list."
-                  },
-                  "position": {
-                    "type": "string",
-                    "enum": [
-                      "top"
-                    ],
-                    "description": "Place the task first in the destination list."
-                  }
-                },
-                "oneOf": [
-                  {
-                    "required": [
-                      "after_task_id"
-                    ]
-                  },
-                  {
-                    "required": [
-                      "position"
-                    ]
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "The task after the move",
-            "headers": {
-              "X-Server-Time": {
-                "schema": {
-                  "type": "string",
-                  "format": "date-time"
-                }
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "$ref": "#/components/schemas/PublicTaskResponse"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation error: both placements or neither, `position` other than `top`, a malformed list or task id, an unknown field, or SUBTASK_BOARD_FORBIDDEN for a subtask"
-          },
-          "404": {
-            "description": "Task not found, not movable by this caller, or the destination list is not readable for them"
           }
         }
       }

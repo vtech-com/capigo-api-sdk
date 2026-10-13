@@ -153,6 +153,22 @@ follower.
   of assuming it landed.
 - Naming the agent the task already has is a successful no-op, so retrying the same call is safe.
 
+## Promoting a subtask
+
+- `tasks promote (<id> | --code)` turns a subtask into a top-level task. Address the **subtask
+  itself**, not its parent. It is the same row: code, status, assignee, comments, files and history
+  all stay, so never describe it as creating a new task or copying one.
+- `--list <uuid>` places the promoted task in a board list; without it the task lands on no board.
+  Placing it also makes the task's owner and assignee members of that board — say so when the board
+  matters to the user.
+- **A task that is already top-level is answered with exit 0 and nothing changed**, and it ignores
+  `--list`. When that happens `meta.list_applied` is `false`. Do not report "promoted" or "moved to
+  the list" on exit 0 alone: read `.data.parent` (null means top-level) and, if you named a list,
+  check `meta.list_applied` is absent. To place an already top-level task, use `tasks move`.
+- Exit 4 covers both "no such task" and "you may not promote it" (owner, assignee, or tenant owner
+  only). Do not conclude the task does not exist. An archived or deleted subtask is exit 8,
+  `SUBTASK_NOT_PROMOTABLE`.
+
 ## Claiming a task
 
 - `tasks claim (<id> | --code)` takes an unassigned task for yourself. The call sends no body and

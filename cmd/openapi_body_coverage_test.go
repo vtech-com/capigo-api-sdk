@@ -45,6 +45,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 // bodyFieldToFlagName converts an OpenAPI requestBody field name to the
@@ -148,7 +150,7 @@ type writeCommandEntry struct {
 // buildWriteCommandMapping constructs the mapping at test time so that the
 // cobra commands are fully initialised (init() has run).
 func buildWriteCommandMapping() []writeCommandEntry {
-	return []writeCommandEntry{
+	entries := []writeCommandEntry{
 		{
 			humanName: "members update",
 			path:      "/members/{id}",
@@ -247,6 +249,14 @@ func buildWriteCommandMapping() []writeCommandEntry {
 			method:    "post",
 			hasFlag:   func(n string) bool { return tasksTransferOwnershipCmd.Flags().Lookup(n) != nil },
 		},
+		// tasks promote: one optional field, board_list_id→--list (the alias
+		// tasks create uses), and no --from-json to hide a new one behind.
+		{
+			humanName: "tasks promote",
+			path:      "/mission/tasks/{id}/actions/promote",
+			method:    "post",
+			hasFlag:   func(n string) bool { return tasksPromoteCmd.Flags().Lookup(n) != nil },
+		},
 		// boards members add: no --from-json, so every body field needs a flag —
 		// tenant_code→--tenant, user_ids→--user-id (repeatable), role→--role.
 		{
@@ -263,21 +273,9 @@ func buildWriteCommandMapping() []writeCommandEntry {
 			method:    "patch",
 			hasFlag:   func(n string) bool { return boardMembersUpdateCmd.Flags().Lookup(n) != nil },
 		},
-		// The DELETE commands carry a body too, and until now the guard had no
-		// DELETE case at all — so a body field could be added to one of them with
-		// nothing failing. Each registers --tenant for tenant_code.
-		{
-			humanName: "boards delete",
-			path:      "/mission/boards/{id}",
-			method:    "delete",
-			hasFlag:   func(n string) bool { return boardsDeleteCmd.Flags().Lookup(n) != nil },
-		},
-		{
-			humanName: "boards lists delete",
-			path:      "/mission/boards/{id}/lists/{listId}",
-			method:    "delete",
-			hasFlag:   func(n string) bool { return boardListsDeleteCmd.Flags().Lookup(n) != nil },
-		},
+		// A DELETE can carry a body too, and without a DELETE case here a body
+		// field could be added to one with nothing failing. This one registers
+		// --tenant for tenant_code.
 		{
 			humanName: "boards members remove",
 			path:      "/mission/boards/{id}/members/{userId}",
@@ -381,7 +379,59 @@ func buildWriteCommandMapping() []writeCommandEntry {
 			method:    "put",
 			hasFlag:   func(n string) bool { return productsVariantsCmd.Flags().Lookup(n) != nil },
 		},
+		// wms availability check: --from-json covers the body; --warehouse and
+		// --line build the same two arrays.
+		{
+			humanName: "wms availability check",
+			path:      "/wms/availability-checks",
+			method:    "post",
+			hasFlag:   func(n string) bool { return wmsAvailabilityCheckCmd.Flags().Lookup(n) != nil },
+		},
 	}
+	entries = append(entries, wmsWriteCommandMapping()...)
+	return entries
+}
+
+// wmsWriteCommandMapping lists the writes of the four WMS documents. Create,
+// preview, validate and update take their body from --from-json, a document
+// being its lines. Submit and cancel do not: submit sends no body, and cancel's
+// one field, reason, must have its flag wherever the API reads it.
+func wmsWriteCommandMapping() []writeCommandEntry {
+	var entries []writeCommandEntry
+	for _, doc := range []struct {
+		use, resource string
+		cmds          wmsDocumentCommands
+	}{
+		{"inbound", "inbound-receipts", wmsInbound},
+		{"outbound", "outbound-shipments", wmsOutbound},
+		{"internal-transfers", "internal-transfers", wmsInternalTransfers},
+		{"warehouse-transfers", "warehouse-transfers", wmsWarehouseTransfers},
+	} {
+		base := "/wms/" + doc.resource
+		for _, w := range []struct {
+			verb, path, method string
+			cmd                *cobra.Command
+		}{
+			{"create", base, "post", doc.cmds.create},
+			{"preview", base + "/preview", "post", doc.cmds.preview},
+			{"validate", base + "/validate", "post", doc.cmds.validate},
+			{"update", base + "/{code}", "patch", doc.cmds.update},
+			{"submit", base + "/{code}/actions/{action}", "post", doc.cmds.submit},
+			{"cancel", base + "/{code}/actions/{action}", "post", doc.cmds.cancel},
+		} {
+			if w.cmd == nil {
+				continue // an internal transfer has no submit
+			}
+			cmd := w.cmd
+			entries = append(entries, writeCommandEntry{
+				humanName: "wms " + doc.use + " " + w.verb,
+				path:      w.path,
+				method:    w.method,
+				hasFlag:   func(n string) bool { return cmd.Flags().Lookup(n) != nil },
+			})
+		}
+	}
+	return entries
 }
 
 // openAPIBodySpec is a minimal subset of the OpenAPI 3.0 schema for body coverage.

@@ -1,6 +1,9 @@
 package api
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"strings"
+)
 
 // RawEnvelope keeps the API's `data` exactly as it arrived.
 //
@@ -20,6 +23,20 @@ import "encoding/json"
 type RawEnvelope struct {
 	Data json.RawMessage `json:"data"`
 	Meta json.RawMessage `json:"meta"`
+}
+
+// TaskIsInList reports whether a task response places the task in the given
+// board list. It reads one field and decides nothing about what is printed:
+// the promote action ignores its list for a task that was already top-level,
+// and only this comparison can tell.
+func TaskIsInList(task json.RawMessage, listID string) bool {
+	var placed struct {
+		BoardListID *string `json:"board_list_id"`
+	}
+	if err := json.Unmarshal(task, &placed); err != nil || placed.BoardListID == nil {
+		return false
+	}
+	return strings.EqualFold(*placed.BoardListID, listID)
 }
 
 // CommentAuthor is the resolved author of a task comment / activity entry.
@@ -187,18 +204,6 @@ type UpdateBoardListRequest struct {
 	IsArchived   *bool   `json:"is_archived,omitempty"`
 	AfterListID  *string `json:"after_list_id,omitempty"`
 	BeforeListID *string `json:"before_list_id,omitempty"`
-}
-
-// DeleteBoardRequest is the body for DELETE /mission/boards/{id}.
-// The address names the board; the body carries the tenant only.
-type DeleteBoardRequest struct {
-	TenantCode string `json:"tenant_code"`
-}
-
-// DeleteBoardListRequest is the body for DELETE /mission/boards/{id}/lists/{listId}.
-// The address names the board and the list; the body carries the tenant only.
-type DeleteBoardListRequest struct {
-	TenantCode string `json:"tenant_code"`
 }
 
 // AddBoardMembersRequest is the body for POST /mission/boards/{id}/members.

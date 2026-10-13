@@ -41,6 +41,14 @@ var aliasMap = map[string]string{
 	// GET /mission/tasks uses "filters" (deepObject) for status filter;
 	// the CLI exposes it as --status (a flat, user-friendly flag).
 	"filters": "status",
+	// The WMS lists spell each filter out as its own parameter. An exact match
+	// and a set are one --status flag: one value sends $eq, several send $in.
+	"filters[status][$eq]":    "status",
+	"filters[status][$in]":    "status",
+	"filters[is_active][$eq]": "is-active",
+	// warehouse_code is the acting warehouse on every warehouse-scoped WMS call.
+	// The CLI names it --warehouse, as --tenant names tenant_code.
+	"warehouse_code": "warehouse",
 }
 
 // intentionallyUnexposed lists params that the CLI deliberately does not expose
@@ -60,6 +68,10 @@ var commandPathMapping = []struct {
 	name string
 	cmd  interface{ HasFlags() bool } // cobra.Command satisfies this
 	path string
+	// flags, when set, is the command's own flag lookup. The WMS commands are
+	// built from a description rather than declared one by one, so they carry
+	// theirs instead of being named in the switch below.
+	flags func(name string) bool
 }{
 	{name: "boardsListCmd", cmd: boardsListCmd, path: "/mission/boards"},
 	{name: "membersListCmd", cmd: membersListCmd, path: "/members"},
@@ -80,6 +92,20 @@ var commandPathMapping = []struct {
 	{name: "productTypesListCmd", cmd: productTypesListCmd, path: "/pcms/product-types"},
 	{name: "unitsListCmd", cmd: unitsListCmd, path: "/pcms/units"},
 	{name: "variantsListCmd", cmd: variantsListCmd, path: "/pcms/variants"},
+	// WMS reads: every list, and every get — a get carries warehouse_code too,
+	// and an outbound shipment's carries cost_method.
+	{name: "wmsWarehousesListCmd", cmd: wmsWarehousesListCmd, path: "/wms/warehouses", flags: func(n string) bool { return wmsWarehousesListCmd.Flags().Lookup(n) != nil }},
+	{name: "wmsWarehousesGetCmd", cmd: wmsWarehousesGetCmd, path: "/wms/warehouses/{code}", flags: func(n string) bool { return wmsWarehousesGetCmd.Flags().Lookup(n) != nil }},
+	{name: "wmsLocationsListCmd", cmd: wmsLocationsListCmd, path: "/wms/locations", flags: func(n string) bool { return wmsLocationsListCmd.Flags().Lookup(n) != nil }},
+	{name: "wmsLocationsGetCmd", cmd: wmsLocationsGetCmd, path: "/wms/locations/{code}", flags: func(n string) bool { return wmsLocationsGetCmd.Flags().Lookup(n) != nil }},
+	{name: "wmsInbound.list", cmd: wmsInbound.list, path: "/wms/inbound-receipts", flags: func(n string) bool { return wmsInbound.list.Flags().Lookup(n) != nil }},
+	{name: "wmsInbound.get", cmd: wmsInbound.get, path: "/wms/inbound-receipts/{code}", flags: func(n string) bool { return wmsInbound.get.Flags().Lookup(n) != nil }},
+	{name: "wmsOutbound.list", cmd: wmsOutbound.list, path: "/wms/outbound-shipments", flags: func(n string) bool { return wmsOutbound.list.Flags().Lookup(n) != nil }},
+	{name: "wmsOutbound.get", cmd: wmsOutbound.get, path: "/wms/outbound-shipments/{code}", flags: func(n string) bool { return wmsOutbound.get.Flags().Lookup(n) != nil }},
+	{name: "wmsInternalTransfers.list", cmd: wmsInternalTransfers.list, path: "/wms/internal-transfers", flags: func(n string) bool { return wmsInternalTransfers.list.Flags().Lookup(n) != nil }},
+	{name: "wmsInternalTransfers.get", cmd: wmsInternalTransfers.get, path: "/wms/internal-transfers/{code}", flags: func(n string) bool { return wmsInternalTransfers.get.Flags().Lookup(n) != nil }},
+	{name: "wmsWarehouseTransfers.list", cmd: wmsWarehouseTransfers.list, path: "/wms/warehouse-transfers", flags: func(n string) bool { return wmsWarehouseTransfers.list.Flags().Lookup(n) != nil }},
+	{name: "wmsWarehouseTransfers.get", cmd: wmsWarehouseTransfers.get, path: "/wms/warehouse-transfers/{code}", flags: func(n string) bool { return wmsWarehouseTransfers.get.Flags().Lookup(n) != nil }},
 }
 
 // openAPISpec is a minimal subset of the OpenAPI 3.0 schema needed for this test.
@@ -128,7 +154,7 @@ func TestOpenAPICoverage(t *testing.T) {
 			// We need to access cobra flags; use the concrete *cobra.Command type.
 			// The interface trick above just helps ensure the variable is a command;
 			// cast back to *cobra.Command via the actual vars.
-			var flagLookup func(name string) bool
+			flagLookup := entry.flags
 			switch entry.name {
 			case "boardsListCmd":
 				flagLookup = func(n string) bool { return boardsListCmd.Flags().Lookup(n) != nil }
@@ -153,7 +179,9 @@ func TestOpenAPICoverage(t *testing.T) {
 			case "variantsListCmd":
 				flagLookup = func(n string) bool { return variantsListCmd.Flags().Lookup(n) != nil }
 			default:
-				t.Fatalf("unknown command name %q in test mapping", entry.name)
+				if flagLookup == nil {
+					t.Fatalf("unknown command name %q in test mapping", entry.name)
+				}
 			}
 
 			for _, param := range pathItem.Get.Parameters {

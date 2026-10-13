@@ -223,10 +223,24 @@ HELP_SAMPLES = [
     ("/pcms/products/{id}", ["products", "update"]),
     ("/mission/tasks/{id}", ["tasks", "create"]),
     ("/mission/tasks/{id}", ["tasks", "update"]),
+    ("/mission/tasks/{id}", ["tasks", "promote"]),
     ("/pcms/products/{id}", ["products", "variants"]),
     # Its response is a parent task and its children, both full tasks. The page
     # says so by deferring to `tasks get`, which the check follows.
     ("/mission/tasks/{id}", ["tasks", "subtasks", "create"]),
+]
+
+# WMS pages. Every record but a warehouse lives inside one warehouse, so these
+# cannot be reached from the tenant alone: the check picks the first warehouse
+# the key can see and reads each resource there. `{code}` is the first row's own
+# code. Each entry is (collection path, command), and the get page beside every
+# list is checked against that collection's first record.
+WMS_SAMPLES = [
+    ("/wms/locations", ["wms", "locations"]),
+    ("/wms/inbound-receipts", ["wms", "inbound"]),
+    ("/wms/outbound-shipments", ["wms", "outbound"]),
+    ("/wms/internal-transfers", ["wms", "internal-transfers"]),
+    ("/wms/warehouse-transfers", ["wms", "warehouse-transfers"]),
 ]
 
 # Sub-resources that need a parent which actually has rows, not merely a parent.
@@ -414,6 +428,59 @@ def check_help_samples(c, cli, ids):
     return failures
 
 
+def check_wms_samples(c, cli):
+    """Does each wms list and get page name every field the API returns?
+
+    Run from the warehouse outwards. The generic sweep above skips every
+    warehouse-scoped path, because it cannot invent a `warehouse_code`; this one
+    asks the API for a warehouse first and so can.
+    """
+    import subprocess
+    from urllib.parse import quote
+
+    print("\nWMS help samples vs the API's own fields:")
+
+    def page_omits(cmd, rec):
+        page = subprocess.run([cli] + cmd + ["--help"], capture_output=True, text=True).stdout
+        return sorted(f for f in rec if f'"{f}"' not in page)
+
+    def report(cmd, rec):
+        label = " ".join(cmd)
+        if not rec:
+            print(f"  {label:<34} skipped: no record to compare against")
+            return 0
+        missing = page_omits(cmd, rec)
+        if missing:
+            print(f"  {label:<34} SAMPLE OMITS " + ",".join(missing))
+            return 1
+        print(f"  {label:<34} names all {len(rec)} fields")
+        return 0
+
+    status, body = c.get("/wms/warehouses")
+    warehouse = first_record(body)
+    if status != 200 or not warehouse:
+        print(f"  wms                                skipped: no warehouse visible (status {status})")
+        return 0
+    failures = report(["wms", "warehouses", "list"], warehouse)
+    code = warehouse["code"]
+    _, detail = c.get(f"/wms/warehouses/{quote(code, safe='')}")
+    failures += report(["wms", "warehouses", "get"], first_record(detail))
+
+    scope = f"?warehouse_code={quote(code, safe='')}"
+    for path, cmd in WMS_SAMPLES:
+        status, body = c.get(path + scope)
+        row = first_record(body)
+        if status != 200:
+            print(f"  {' '.join(cmd + ['list']):<34} skipped: endpoint answered {status}")
+            continue
+        failures += report(cmd + ["list"], row)
+        if not row:
+            continue
+        _, detail = c.get(f"{path}/{quote(row['code'], safe='')}{scope}")
+        failures += report(cmd + ["get"], first_record(detail))
+    return failures
+
+
 def main():
     args = parse_args()
     spec = json.load(open(args.spec))
@@ -461,6 +528,7 @@ def main():
         env = dict(os.environ, CAPIGO_API_URL=args.base_url, CAPIGO_API_KEY=args.key)
         failures += check_local_samples(args.cli, env, args.key)
         failures += check_downloads(c, args.cli, env)
+        failures += check_wms_samples(c, args.cli)
 
     if args.cli:
         import subprocess

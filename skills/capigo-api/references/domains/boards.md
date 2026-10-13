@@ -43,40 +43,15 @@ its lists. Leaf help remains authoritative for the available board and task comm
 - Board writes are not a way to change task placement. Moving a task between lists is a task
   update, per **Task placement** above.
 
-## Deleting a board
+## There is no delete
 
-- `boards delete` retires the board and the address of everything under it, but it **deletes no work**.
-  The board's lists and the tasks in them stay live rows: the lists become unreachable, because a list
-  is addressed inside its board, while the tasks stay readable through `tasks get` and `tasks list`.
-  Never describe this call as clearing the board.
-- Retiring the work is **archiving**, not deleting: `boards lists update --is-archived` archives a list
-  and the tasks in it. When the user says "clean up" or "close" a board, ask which they mean before
-  choosing — the two calls are not interchangeable.
-- Nothing brings a deleted board back. There is no un-delete in the CLI or the API, so confirm the
-  board with the user before running it, and never delete a board as a step towards something else.
-- A repeat is exit 4, and so is a private board: the visibility check runs before the write, so a board
-  the API cannot read is a board it cannot delete. A script must not treat that 4 as a transient
-  failure.
-- Confirm by reading: after the call, `boards list` no longer shows the board and `boards get` answers
-  404. The write also records a `board:deleted` event, which integrators may be watching.
-
-## Deleting a list
-
-- `boards lists delete` is the destructive one, and it is **not** the archive. Archiving (`boards lists
-  update --is-archived`) hides the list and archives the tasks in it; deleting retires the list and
-  leaves the tasks exactly where they are — active, still filed under a list no read reports. The
-  difference decides which one the user meant: archiving is the reversible-feeling way to clear a
-  column, deleting is not reversible at all.
-- Nothing brings a deleted list back. There is no un-delete in the CLI or the API, so confirm the list
-  with the user before running it, and never delete a list as a step towards something else.
-- A task in a deleted list is not orphaned by any write here and not archived either: it keeps its
-  `board_list_id`, which now names a row no read returns. If the user's intent was to retire the work,
-  archive the list first (which archives the tasks) rather than deleting it.
-- A repeat is exit 4, and so is a list that belongs to another board — the address names both the board
-  and the list, and a mismatch is answered as a missing list. A script must not treat that 4 as a
-  transient failure: the list is gone, and asking again will not change it.
-- The write needs board ownership or tenant ownership (exit 3 otherwise). Confirm it by reading: after
-  the call, `boards get` no longer lists it and `meta.list_count` has dropped.
+- Neither a board nor a list can be deleted through the CLI: the API withdrew both operations, and
+  `boards delete` / `boards lists delete` no longer exist. An older build that still has them gets a
+  refusal from the server. Do not look for another way to remove a board.
+- Retiring the work is **archiving**: `boards lists update --is-archived` archives a list and the tasks
+  in it. When the user says "delete", "clean up", or "close" a board or a list, say that archiving is
+  what is available and what it does, then ask before running it — it hides the list from every read
+  (see **Archiving a list removes it from every read** above), so keep the list id.
 
 ## Reordering lists
 

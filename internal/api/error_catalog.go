@@ -142,6 +142,61 @@ var errorCatalog = map[string]ErrorInfo{
 	// claimed it, or you already did"), so Meaning stays empty; Next carries
 	// the read-back step and the brake — the claim capability exists, the
 	// task's state is what refused it, and retrying cannot change that. -----
+	// ----- WMS document codes. The server's message names the condition, so
+	// Meaning stays empty. Next carries the one thing the message cannot: which
+	// command to run. Each is a refusal by the document's state or by the
+	// caller's input, never a missing capability — hence the brake.
+	"E0602": {
+		Next:           "The document changed after you read it, and nothing was written. Read it again with the matching 'capigo wms <group> get <code> --warehouse <code>' and retry with the new .data.updated_at as --if-match. Do not reuse the old value.",
+		CapabilityNote: true,
+	},
+	"E0601": {
+		Next:           "This --idempotency-key already created something with a different body. To retry the earlier create, send its exact body again; for a new document, use a new key.",
+		CapabilityNote: true,
+	},
+	"E9649": {
+		Next:           "A line that expects stock has no unit_cost. Set one with 'capigo wms inbound update <code> --warehouse <code> --if-match <updated_at> --from-json -' (0 is a valid cost), then retry.",
+		CapabilityNote: true,
+	},
+	"E9680": {
+		Next:           "This document cannot be cancelled by this call: read it with 'capigo wms <group> get'. If .data.parent names a warehouse transfer, cancel that transfer instead; if .data.cancel_locked is true, only the member at .data.owner may cancel it. Retrying will not help.",
+		CapabilityNote: true,
+	},
+	"E9675": {
+		Next:           "From PLANNED on a shipment's lines cannot be replaced. Send the current lines unchanged except for a lowered qty_ordered, each lowered line with a qty_reduction_reason — or cancel the shipment and create a new one.",
+		CapabilityNote: true,
+	},
+	"E9674": {
+		Next:           "Add qty_reduction_reason to every line whose qty_ordered you lowered, and retry.",
+		CapabilityNote: true,
+	},
+	"E9647": {
+		Next:           "List the tenant's warehouses with 'capigo wms warehouses list --is-active true' and retry with codes from it. One bad code refuses the whole check.",
+		CapabilityNote: false,
+	},
+	// Not an API code: the platform's edge answers a WMS update this way, in
+	// plain text, so the code is the HTTP status text. Checked against prod on
+	// 2026-10-13 for all four documents: the PATCH is applied, and then its
+	// response is replaced by a 412. The message says "An error occurred" and
+	// nothing else, so Meaning has to carry what happened.
+	"Precondition Failed": {
+		Meaning:        "The platform answered 412 to a request that carried If-Match. On a wms update this does NOT mean the update was refused: the change is normally already written, and only the response was lost.",
+		Next:           "Do not retry, and do not reuse the --if-match you sent. Read the document with the matching 'capigo wms <group> get <code> --warehouse <code>': if .data.updated_at has moved and your change is there, the update succeeded. Only if the document is unchanged, retry once with the updated_at you just read.",
+		CapabilityNote: true,
+	},
+	"WAREHOUSE_CODE_REQUIRED": {
+		Next:           "Pass --warehouse <code>; 'capigo wms warehouses list' prints the codes.",
+		CapabilityNote: false,
+	},
+
+	"SUBTASK_NOT_PROMOTABLE": {
+		Next:           "The subtask is archived or deleted, so it cannot be promoted as it is. If it is archived, restore it first with 'capigo tasks unarchive <id|--code>' and retry. Retrying unchanged will not help.",
+		CapabilityNote: true,
+	},
+	"DESTINATION_UNAVAILABLE": {
+		Next:           "The list named by --list is not a live list of a live board in this tenant. Read the board with 'capigo boards get <board-id> --tenant <code>' and use an id from its .data.lists[], or drop --list to promote the task to no board.",
+		CapabilityNote: true,
+	},
 	"TASK_ALREADY_ASSIGNED": {
 		Next:           "Re-read the task to see who holds it: capigo tasks get <id|--code>. Retrying the same claim will not help — the refusal is identical whether another member claimed it first or you already hold it.",
 		CapabilityNote: true,

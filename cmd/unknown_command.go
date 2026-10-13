@@ -38,6 +38,11 @@ func enableUnknownSubcommandErrors(c *cobra.Command) {
 	if !c.HasSubCommands() || c.Runnable() {
 		return
 	}
+	// A caller who guesses a subcommand usually guesses its flags too. Cobra
+	// parses a group's flags before it reaches RunE, so `boards delete <id>
+	// --tenant acme` was answered "unknown flag: --tenant" — true, and about the
+	// wrong thing. Let the unknown flag through so the command is what is named.
+	c.FParseErrWhitelist.UnknownFlags = true
 	c.RunE = func(cmd *cobra.Command, args []string) error {
 		if len(args) == 0 {
 			return cmd.Help()
@@ -112,6 +117,30 @@ var unknownCommandRegistry = []unknownCommandRedirect{
 		next: "Products have no delete command. To take a product out of circulation, archive it: " +
 			"'capigo products update <id> --from-json -' with {\"status\":\"ARCHIVED\"}.",
 		targetPath: "products update",
+	},
+	{
+		group: "boards",
+		subs:  []string{"delete", "remove", "destroy"},
+		next: "Boards have no delete command: the API withdrew the operation. To retire the work on a board, " +
+			"archive each of its lists with 'capigo boards lists update <board-id> <list-id> --tenant <code> " +
+			"--is-archived', which archives the tasks in that list.",
+		targetPath: "boards lists update",
+	},
+	{
+		group: "boards lists",
+		subs:  []string{"delete", "remove", "destroy"},
+		next: "Board lists have no delete command: the API withdrew the operation. To clear a list, archive it " +
+			"with 'capigo boards lists update <board-id> <list-id> --tenant <code> --is-archived', which " +
+			"archives the tasks in it.",
+		targetPath: "boards lists update",
+	},
+	{
+		group: "wms internal-transfers",
+		subs:  []string{"submit", "approve", "move"},
+		next: "An internal transfer has no submit: it has no approval step, and it is moved in the Capigo " +
+			"app, not by a command. " +
+			"To end one, use 'capigo wms internal-transfers cancel <code> --warehouse <code> --reason <text>'.",
+		targetPath: "wms internal-transfers cancel",
 	},
 }
 
