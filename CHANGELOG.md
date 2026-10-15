@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.29.0] — 2026-10-15
+
 ### Added
 
 - **Tasks carry labels (#115).** Every task in any output now has `labels: [{ "name", "color" }]`
