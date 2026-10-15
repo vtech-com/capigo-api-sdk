@@ -72,6 +72,10 @@ var bodyFieldAliasMap = map[string]string{
 	// --remove-follower-id (verb first) so add and remove stay distinguishable
 	// at a glance: --follower-id <uuid> --remove-follower-id <uuid>.
 	"follower_remove_ids": "remove-follower-id",
+	// label_names / label_remove_names mirror the follower pair: repeatable
+	// singular flags, --label to add and --remove-label to remove.
+	"label_names":        "label",
+	"label_remove_names": "remove-label",
 	// tenant_code is required by the API body but the CLI exposes it as --tenant
 	// (consistent with all other tenant-scoped commands).
 	"tenant_code": "tenant",

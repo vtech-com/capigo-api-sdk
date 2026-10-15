@@ -199,7 +199,8 @@ capigo tenants list      List tenants you can access
 capigo tasks list                    List tasks (--query/-q, --status, --priority, --assignee-id,
                                       --owner-id, --board-id, --board-list-id, --due-after/--due-before,
                                       --created-after/--created-before, --updated-after/--updated-before,
-                                      --parent-task-id, --sort <column:direction>, --include-archived,
+                                      --parent-task-id, --label <name> (repeatable; tasks with every
+                                      label), --sort <column:direction>, --include-archived,
                                       --page, --limit)
                                       Three modes of its own, mutually exclusive: --scope mine (your own
                                       tasks — the API's AND-only filters cannot ask for owner OR assignee),
@@ -207,7 +208,8 @@ capigo tasks list                    List tasks (--query/-q, --status, --priorit
                                       no assignee, or in a date window), and --archived (the archived
                                       tasks you own or are assigned to, which is not --include-archived).
                                       The first two read one tenant at a time, so pass --tenant when the
-                                      key can reach several.
+                                      key can reach several. --label cannot combine with --unassigned
+                                      or --date-field.
 capigo tasks get <id|--code>           Get task by ID or code (--code requires --tenant; --include-archived
                                        reads an archived task, which 404s without it)
 capigo tasks comments <id|--code>      List a task's comment + activity timeline (--type comment|activity,
@@ -221,7 +223,8 @@ capigo tasks attachments remove <task-id|--code> <attachment-id>    Remove a fil
 capigo tasks attachments download <task-id|--code> <attachment-id>          Download a task-level attachment
 capigo tasks comments attachments download <task-id|--code> <attachment-id> Download a comment/activity attachment
 capigo tasks update <id>              Partial update a task (PATCH; --tenant optional; at least one field required;
-                                     --follower-id adds, --remove-follower-id removes; --due-date sets or clears it)
+                                     --follower-id adds, --remove-follower-id removes; --due-date sets or clears it;
+                                     --label adds, --remove-label removes, both repeatable)
 capigo tasks assign-agent <id|--code> Move an agent-owned task to another agent (--agent-key required;
                                      --code requires --tenant)
 capigo tasks move <id|--code>       Move a task into a board list (--board-list-id required; --top or
@@ -240,7 +243,7 @@ capigo tasks unarchive <id|--code>    Restore an archived task (--code requires 
 capigo tasks delete <id|--code>       Delete a task (--code requires --tenant; owner, assignee or tenant
                                       owner only; a subtask is deleted alone, a parent takes its
                                       subtasks with it; soft delete, so the GUI's archive can restore it)
-capigo tasks create                   Create a new task (--title + --tenant required; --follower-id repeatable;
+capigo tasks create                   Create a new task (--title + --tenant required; --follower-id and --label repeatable;
                                      --board + --list to file it on a board, with --top or
                                      --after-task-id <uuid> to choose where; --idempotency-key makes a
                                      retry replay instead of duplicating; --subtasks-json to create
@@ -256,7 +259,7 @@ capigo tasks subtasks delete <id|--code> <subtask-id>  Delete one subtask (soft 
                                        assignee or tenant owner only)
 
 capigo boards list       List boards (supports --query/-q, --page, --limit)
-capigo boards get <id>   Get board by ID (includes its `lists` array)
+capigo boards get <id|--code>   Get board by ID or code (includes its `lists` array; --code requires --tenant)
 capigo boards create     Create a board (--name + --tenant required, or --from-json)
 capigo boards update <id>        Partial update a board (PATCH; --tenant required; at least one field required)
 capigo boards lists create <board-id>        Create a list in a board (--name + --tenant required)
@@ -267,6 +270,9 @@ capigo boards members add <board-id>         Add 1-50 members in one call (--use
                                        a member the board already has is skipped, not refused)
 capigo boards members update <board-id> <user-id>  Change a member's board role (--role required)
 capigo boards members remove <board-id> <user-id>  Remove a member from a board (prints nothing)
+
+capigo labels list       List the tenant's task labels, by name, with color (--tenant when the key reaches
+                         several; labels are created by naming them on a task: --label)
 
 capigo members list      List workspace members (supports --query/-q, --page, --limit)
 capigo members get <id>  Get a member by ID
@@ -353,7 +359,7 @@ Run `capigo <group> <command> --help` for the complete, authoritative flag list 
 
 `--tenant <code>` appears as a local flag on commands that require or accept a tenant scope (e.g. `capigo products list --tenant acme`). It is not a global flag. The active config profile is always read from `~/.capigo/config.json` and cannot be overridden at runtime.
 
-Every PCMS command (`products`, `variants`, `brands`, `categories`, `product-types`, `units`) **requires** a tenant on every verb. `tasks list`/`get`, `boards list`/`get`, `boards members list`, and `members list`/`get` accept an *optional* `--tenant` — omit it to read across every tenant the API key can reach (`meta.tenant` is then absent — there is no single tenant to name). A key bound to one workspace narrows that read to that workspace, and naming any other one with `--tenant` fails with exit `3`; see [Working across several workspaces](#working-across-several-workspaces). `tasks create` and `tasks subtasks create` always require a tenant; `tasks subtasks list` requires a tenant only when addressed by `--code`. Board writes — `boards create`, `boards update`, `boards lists create`, `boards lists update`, and `boards members add`/`update`/`remove` — always require a tenant: they write into one workspace. Every `wms` command requires a tenant too, and every one but `wms warehouses` and `wms availability check` also takes `--warehouse <code>`: a WMS record is addressed by its code inside one warehouse.
+Every PCMS command (`products`, `variants`, `brands`, `categories`, `product-types`, `units`) **requires** a tenant on every verb. `tasks list`/`get`, `boards list`/`get` (`boards get --code` needs one), `boards members list`, and `members list`/`get` accept an *optional* `--tenant` — omit it to read across every tenant the API key can reach (`meta.tenant` is then absent — there is no single tenant to name). A key bound to one workspace narrows that read to that workspace, and naming any other one with `--tenant` fails with exit `3`; see [Working across several workspaces](#working-across-several-workspaces). `labels list` needs a tenant when the key reaches several. `tasks create` and `tasks subtasks create` always require a tenant; `tasks subtasks list` requires a tenant only when addressed by `--code`. Board writes — `boards create`, `boards update`, `boards lists create`, `boards lists update`, and `boards members add`/`update`/`remove` — always require a tenant: they write into one workspace. Every `wms` command requires a tenant too, and every one but `wms warehouses` and `wms availability check` also takes `--warehouse <code>`: a WMS record is addressed by its code inside one warehouse.
 
 ## Products
 

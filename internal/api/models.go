@@ -101,9 +101,11 @@ type CreateTaskRequest struct {
 	// Position places the new card first in BoardListID. Only "top" is accepted.
 	Position    *string  `json:"position,omitempty"`
 	FollowerIDs []string `json:"follower_ids,omitempty"`
-	Priority    *string  `json:"priority,omitempty"`
-	Status      *string  `json:"status,omitempty"`
-	DueDate     *string  `json:"due_date,omitempty"`
+	// LabelNames are the new task's labels; a name no label has yet creates one.
+	LabelNames []string `json:"label_names,omitempty"`
+	Priority   *string  `json:"priority,omitempty"`
+	Status     *string  `json:"status,omitempty"`
+	DueDate    *string  `json:"due_date,omitempty"`
 }
 
 // SubtaskItem is one entry in a batch subtask create (max 25 per request).

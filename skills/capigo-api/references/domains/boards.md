@@ -1,7 +1,7 @@
 # Board domain relationships
 
-Read this only when creating or moving a task on a board, or when creating or changing a board or
-its lists. Leaf help remains authoritative for the available board and task commands.
+Read this only when reading a board by code, creating or moving a task on a board, or when creating
+or changing a board or its lists. Leaf help remains authoritative for the available board and task commands.
 
 ## Task placement
 
@@ -13,6 +13,14 @@ its lists. Leaf help remains authoritative for the available board and task comm
    the workflow belongs to that tenant.
 4. Do not infer a status from a list name or translate a team's workflow into a status transition.
    Send an initial status only when the user explicitly requests it and leaf help supports it.
+
+## Reading a board by code
+
+- A board has a server-set, immutable `code` (e.g. `ACMEC-457`). Boards and tasks share one
+  numbering, so a code names exactly one board or task in the tenant.
+- `boards get --code <code>` needs a tenant (`--tenant` or the default), like `tasks get --code`.
+  Give the id or `--code`, never both (exit 5).
+- An unknown code, or a task's code, exits 4. Read a task with `tasks get --code`, not this.
 
 ## Board and list writes
 
