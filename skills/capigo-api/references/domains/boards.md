@@ -1,7 +1,7 @@
 # Board domain relationships
 
-Read this only when creating or moving a task on a board, or when creating or changing a board or
-its lists. Leaf help remains authoritative for the available board and task commands.
+Read this only when reading a board by code, creating or moving a task on a board, or when creating
+or changing a board or its lists. Leaf help remains authoritative for the available board and task commands.
 
 ## Task placement
 

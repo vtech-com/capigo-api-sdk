@@ -150,7 +150,10 @@ written silently as a new label for the whole tenant. There is no label create o
    when none.
 6. **Filter is AND.** `tasks list --label a --label b` keeps tasks carrying every listed label. For
    "a or b", run one list per label and merge by `id`. An unknown name answers an empty page, not
-   an error: before telling the user "no tasks have that label", check `labels list`. `--label`
+   an error: read `meta.unknown_labels` on an empty page, which names the requested labels the
+   tenant lacks. When it is absent and no tenant was given, the check could not run: confirm with
+   `labels list` before telling the user "no tasks have that label". One name per `--label`; a
+   name containing a comma exits 5. `--label`
    works with the default list, `--include-archived`, `--archived` and `--scope mine`; with
    `--unassigned` or a `--date-field` window it exits 5 before any request.
 7. **Refusals write nothing.** A name list over 20 names is `VALIDATION_ERROR`; a name outside

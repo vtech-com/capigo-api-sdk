@@ -160,13 +160,23 @@ func boardPath(id, code string) string {
 // A code is unique within a tenant only, so --code demands a tenant here
 // rather than leaving a 400 that arrives for some keys and not others.
 func boardAddressError(id, code string, tenant *string) string {
+	if msg := boardShapeError(id, code); msg != "" {
+		return msg
+	}
+	if code != "" && tenant == nil {
+		return "--code needs a tenant: a board code is unique within a tenant, not across them; pass --tenant <code> or set a default"
+	}
+	return ""
+}
+
+// boardShapeError is the part of boardAddressError that needs no config, so
+// it can refuse before a client is built.
+func boardShapeError(id, code string) string {
 	switch {
 	case id != "" && code != "":
 		return "give a board id or --code, not both"
 	case id == "" && code == "":
 		return "a board address is required: an id, or --code <code>"
-	case code != "" && tenant == nil:
-		return "--code needs a tenant: a board code is unique within a tenant, not across them; pass --tenant <code> or set a default"
 	}
 	return ""
 }
@@ -196,8 +206,8 @@ FLAGS
         capigo boards get --code ACMEC-457 --tenant acme
 
   --tenant <code>
-      Tenant to scope the lookup to. Optional; omit it to search every
-      tenant this key can reach.
+      Tenant to scope the lookup to. Optional with an id — the id alone finds
+      the board regardless of tenant. Required with --code.
 
         capigo boards get 7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10 --tenant acme
 
@@ -223,17 +233,20 @@ OUTPUT
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
 
+		id := ""
+		if len(args) > 0 {
+			id = args[0]
+		}
+		if msg := boardShapeError(id, boardGetCode); msg != "" {
+			failValidation("%s", msg)
+		}
+
 		client, cfg, err := buildClient()
 		if err != nil {
 			return handleErr(err)
 		}
 
 		tenant := resolveTenant(boardGetTenant, activeProfileOrEmpty(cfg))
-
-		id := ""
-		if len(args) > 0 {
-			id = args[0]
-		}
 		if msg := boardAddressError(id, boardGetCode, tenant); msg != "" {
 			failValidation("%s", msg)
 		}

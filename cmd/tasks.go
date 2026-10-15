@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -230,9 +231,11 @@ FLAGS
         capigo tasks list --tenant acme --include-archived
 
   --label <name>
-      Only tasks carrying every label given. Repeatable; matching is
-      case-insensitive. A name that is no label of the tenant gives an empty
-      page, not an error. Works on the default list, --archived and
+      Only tasks carrying every label given. Repeatable, once per name: a
+      name containing "," exits 5. Matching is case-insensitive. A name that
+      is no label of the tenant gives an empty page, not an error; on an
+      empty page the CLI checks the names and lists the unknown ones in
+      meta.unknown_labels. Works on the default list, --archived and
       --scope mine. Refused with exit 5 alongside --unassigned or
       --date-field/--date-from/--date-to.
 
@@ -275,6 +278,11 @@ OUTPUT
           "page": 1, "limit": 20, "total": 42, "has_more": true
         }
       }
+
+  meta.unknown_labels appears only when --label was given, the page is empty
+  and a name is no label of the tenant: ["urgnt"] means a typo, not "no task
+  carries it". It is absent when the check could not run (for example a
+  multi-tenant key with no --tenant); confirm with labels list.
 
   Read meta.total rather than counting .data[]: a page never holds more than
   --limit, so a full count needs meta, not arithmetic.
@@ -349,8 +357,47 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		return output.Write(os.Stdout, rawList(envelope.Data), listMeta(tenant, taskListTenant, envelope.Meta))
+		meta := listMeta(tenant, taskListTenant, envelope.Meta)
+		if len(listFilters.labels) > 0 && string(bytes.TrimSpace(envelope.Data)) == "[]" {
+			if unknown := unknownLabels(ctx, client, tenant, listFilters.labels); len(unknown) > 0 {
+				if meta.Extra == nil {
+					meta.Extra = map[string]any{}
+				}
+				meta.Extra["unknown_labels"] = unknown
+			}
+		}
+
+		return output.Write(os.Stdout, rawList(envelope.Data), meta)
 	},
+}
+
+// unknownLabels returns the requested names that are no label of the tenant.
+// An empty page is otherwise identical for a typo and for a label nobody
+// carries. Any failure of the check returns nil: it never fails the list.
+func unknownLabels(ctx context.Context, client *api.Client, tenant *string, want []string) []string {
+	resp, err := client.Do(ctx, "GET", "/mission/labels", nil, tenant)
+	if err != nil {
+		return nil
+	}
+	var env struct {
+		Data []struct {
+			Name string `json:"name"`
+		} `json:"data"`
+	}
+	if json.Unmarshal(resp.Body, &env) != nil {
+		return nil
+	}
+	have := map[string]bool{}
+	for _, l := range env.Data {
+		have[strings.ToLower(l.Name)] = true
+	}
+	var unknown []string
+	for _, n := range want {
+		if !have[strings.ToLower(n)] {
+			unknown = append(unknown, n)
+		}
+	}
+	return unknown
 }
 
 var (
@@ -381,7 +428,9 @@ FLAGS
       Address the task by its code — the key a person quotes, like ACMEC-68.
       A code is unique within a tenant, not across them, so --code needs a
       tenant: pass --tenant, or set a default. Give an id or --code, never
-      both; a bare argument is never guessed at.
+      both; a bare argument is never guessed at. Boards share the code
+      numbering, so a code that answers 404 may be a board's: try
+      boards get --code.
 
         capigo tasks get --code ACMEC-68 --tenant acme
 
@@ -1136,9 +1185,9 @@ FLAGS
 
   --label <name>
       Add a label. Repeatable. Additive and idempotent; a name no label has
-      yet creates the label. Each list takes at most 20 names; more exits 5. A name is 1 to 30
-      letters, digits, spaces, hyphens or underscores; anything else is
-      refused (exit 5, E9117) and nothing is written.
+      yet creates the label. Each list takes at most 20 names; more exits 5.
+      A name is 1 to 30 letters, digits, spaces, hyphens or underscores;
+      anything else is refused (exit 5, E9117) and nothing is written.
 
         capigo tasks update <uuid> --label urgent --label "Q3 plan"
 
@@ -3183,6 +3232,13 @@ func taskListValidationError(format string, args ...any) *api.APIError {
 // answer with a different list than the flags read as asking for. Catching them
 // here costs no round trip and names the flag rather than the query parameter.
 func validateTaskListFlags(f taskListFilters) *api.APIError {
+	for _, l := range f.labels {
+		if strings.Contains(l, ",") {
+			return taskListValidationError(
+				"--label %q contains a comma, which joins names on the wire; repeat --label once per name", l)
+		}
+	}
+
 	switch f.scope {
 	case "", "all", "mine":
 	default:

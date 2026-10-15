@@ -1,12 +1,17 @@
 package cmd
 
 import (
+	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/spf13/viper"
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
 	"github.com/vtech-com/capigo-api-sdk/internal/config"
 )
@@ -87,5 +92,87 @@ func TestTasksListRefusesLabelInBoardMode(t *testing.T) {
 	}
 	if e := validateTaskListFlags(taskListFilters{labels: []string{"a"}, scope: "mine"}); e != nil {
 		t.Errorf("--label with scope mine must be accepted: %v", e)
+	}
+}
+
+// listWithLabels runs tasks list against a server that answers the task page
+// and /mission/labels separately, and returns the printed JSON plus the paths hit.
+func listWithLabels(t *testing.T, tasksReply string, labelsStatus int, labelsReply string, labels []string) (string, []string) {
+	t.Helper()
+	withConfig(t, "")
+	withDefaultProfile(t)
+	var paths []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.Path)
+		w.Header().Set("Content-Type", "application/json")
+		if r.URL.Path == "/mission/labels" {
+			w.WriteHeader(labelsStatus)
+			_, _ = w.Write([]byte(labelsReply))
+			return
+		}
+		_, _ = w.Write([]byte(tasksReply))
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("CAPIGO_API_KEY", "csk_test_key")
+	t.Setenv("CAPIGO_API_URL", srv.URL)
+	viper.Reset()
+	_ = viper.BindEnv("api_key", "CAPIGO_API_KEY")
+	_ = viper.BindEnv("api_url", "CAPIGO_API_URL")
+	t.Cleanup(viper.Reset)
+
+	taskListTenant, taskListLabels = "acme", labels
+	t.Cleanup(func() { taskListTenant, taskListLabels = "", nil })
+
+	orig := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+	_ = tasksListCmd.RunE(tasksListCmd, nil)
+	_ = w.Close()
+	os.Stdout = orig
+	out, _ := io.ReadAll(r)
+	return string(out), paths
+}
+
+func TestTasksListEmptyPageFlagsUnknownLabels(t *testing.T) {
+	out, paths := listWithLabels(t, `{"data":[],"meta":{"page":1,"limit":20,"total":0,"has_more":false}}`,
+		200, `{"data":[{"name":"Urgent","color":"rose"}]}`, []string{"urgnt", "urgent"})
+	var got struct {
+		Meta struct {
+			Unknown []string `json:"unknown_labels"`
+		} `json:"meta"`
+	}
+	if err := json.Unmarshal([]byte(out), &got); err != nil || !reflect.DeepEqual(got.Meta.Unknown, []string{"urgnt"}) {
+		t.Errorf("want unknown_labels [urgnt], got %s", out)
+	}
+	if len(paths) != 2 || paths[1] != "/mission/labels" {
+		t.Errorf("paths = %v", paths)
+	}
+}
+
+func TestTasksListEmptyPageKnownLabelsAddsNoKey(t *testing.T) {
+	out, _ := listWithLabels(t, `{"data":[]}`, 200, `{"data":[{"name":"Urgent","color":"rose"}]}`, []string{"urgent"})
+	if strings.Contains(out, "unknown_labels") {
+		t.Errorf("known label flagged: %s", out)
+	}
+}
+
+func TestTasksListLabelCheckFailureKeepsList(t *testing.T) {
+	out, _ := listWithLabels(t, `{"data":[]}`, 400, `{"error":{"code":"INVALID_TENANT_SCOPE","message":"x"}}`, []string{"urgnt"})
+	if !strings.Contains(out, `"data"`) || strings.Contains(out, "unknown_labels") || strings.Contains(out, "error") {
+		t.Errorf("list must print unchanged, got %s", out)
+	}
+}
+
+func TestTasksListNonEmptyPageMakesNoLabelsCall(t *testing.T) {
+	_, paths := listWithLabels(t, `{"data":[{"id":"t1"}]}`, 200, `{"data":[]}`, []string{"urgent"})
+	if len(paths) != 1 {
+		t.Errorf("paths = %v", paths)
+	}
+}
+
+func TestTasksListRefusesCommaInLabel(t *testing.T) {
+	e := validateTaskListFlags(taskListFilters{labels: []string{"urgent,bug"}})
+	if e == nil || api.ExitCodeFor(e) != 5 || !strings.Contains(e.Message, "--label") {
+		t.Errorf("got %v, want exit 5 naming --label", e)
 	}
 }

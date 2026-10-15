@@ -48,3 +48,14 @@ func TestBoardPath(t *testing.T) {
 		t.Errorf("id path = %q", got)
 	}
 }
+
+func TestBoardShapeErrorNeedsNoConfig(t *testing.T) {
+	for _, c := range []struct {
+		id, code string
+		wantErr  bool
+	}{{"b1", "", false}, {"", "X", false}, {"b1", "X", true}, {"", "", true}} {
+		if got := boardShapeError(c.id, c.code) != ""; got != c.wantErr {
+			t.Errorf("id=%q code=%q: error=%v, want %v", c.id, c.code, got, c.wantErr)
+		}
+	}
+}
