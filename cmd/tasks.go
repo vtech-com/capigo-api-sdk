@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -61,6 +62,7 @@ var (
 	taskListPage          int
 	taskListLimit         int
 	taskListArchive       bool
+	taskListLabels        []string
 )
 
 var tasksListCmd = &cobra.Command{
@@ -191,7 +193,7 @@ FLAGS
       same rows come back (board tasks the key can see, never archived), and
       the same restrictions apply: --priority, --assignee-id, --owner-id,
       --board-list-id, the --due-*/--created-*/--updated-* pairs,
-      --parent-task-id and --include-archived are all refused with exit 5, and
+      --parent-task-id, --label and --include-archived are all refused with exit 5, and
       --sort is limited to created_at, updated_at, due_date and status.
 
   --archived
@@ -228,6 +230,17 @@ FLAGS
 
         capigo tasks list --tenant acme --include-archived
 
+  --label <name>
+      Only tasks carrying every label given. Repeatable, once per name: a
+      name containing "," exits 5. Matching is case-insensitive. A name that
+      is no label of the tenant gives an empty page, not an error; on an
+      empty page the CLI checks the names and lists the unknown ones in
+      meta.unknown_labels. Works on the default list, --archived and
+      --scope mine. Refused with exit 5 alongside --unassigned or
+      --date-field/--date-from/--date-to.
+
+        capigo tasks list --tenant acme --label urgent --label "Q3 plan"
+
   --page <n>
       Page to fetch. Pages start at 1. The default, 0, sends no page
       parameter and lets the server choose.
@@ -253,6 +266,7 @@ OUTPUT
             "responsible_type": "human", "assigned_agent_key": null,
             "due_date": "...", "parent": null, "has_subtasks": false,
             "attachments": [...],
+            "labels": [ { "name": "urgent", "color": "rose" } ],
             "followers": [ { "id": "...", "display_name": "Minh",
                              "member_code": "NV001" } ],
             "meta_data": { "url": "https://acme.capigo.app/mission/tasks/TASK-104" },
@@ -264,6 +278,11 @@ OUTPUT
           "page": 1, "limit": 20, "total": 42, "has_more": true
         }
       }
+
+  meta.unknown_labels appears only when --label was given, the page is empty
+  and a name is no label of the tenant: ["urgnt"] means a typo, not "no task
+  carries it". It is absent when the check could not run (for example a
+  multi-tenant key with no --tenant); confirm with labels list.
 
   Read meta.total rather than counting .data[]: a page never holds more than
   --limit, so a full count needs meta, not arithmetic.
@@ -304,6 +323,7 @@ OUTPUT
 			page:          taskListPage,
 			limit:         taskListLimit,
 			archive:       taskListArchive,
+			labels:        taskListLabels,
 		}
 
 		// Validate flag combinations before anything else: a refusal here must
@@ -337,8 +357,47 @@ OUTPUT
 			return handleErr(fmt.Errorf("decode response: %w", err))
 		}
 
-		return output.Write(os.Stdout, rawList(envelope.Data), listMeta(tenant, taskListTenant, envelope.Meta))
+		meta := listMeta(tenant, taskListTenant, envelope.Meta)
+		if len(listFilters.labels) > 0 && string(bytes.TrimSpace(envelope.Data)) == "[]" {
+			if unknown := unknownLabels(ctx, client, tenant, listFilters.labels); len(unknown) > 0 {
+				if meta.Extra == nil {
+					meta.Extra = map[string]any{}
+				}
+				meta.Extra["unknown_labels"] = unknown
+			}
+		}
+
+		return output.Write(os.Stdout, rawList(envelope.Data), meta)
 	},
+}
+
+// unknownLabels returns the requested names that are no label of the tenant.
+// An empty page is otherwise identical for a typo and for a label nobody
+// carries. Any failure of the check returns nil: it never fails the list.
+func unknownLabels(ctx context.Context, client *api.Client, tenant *string, want []string) []string {
+	resp, err := client.Do(ctx, "GET", "/mission/labels", nil, tenant)
+	if err != nil {
+		return nil
+	}
+	var env struct {
+		Data []struct {
+			Name string `json:"name"`
+		} `json:"data"`
+	}
+	if json.Unmarshal(resp.Body, &env) != nil {
+		return nil
+	}
+	have := map[string]bool{}
+	for _, l := range env.Data {
+		have[strings.ToLower(l.Name)] = true
+	}
+	var unknown []string
+	for _, n := range want {
+		if !have[strings.ToLower(n)] {
+			unknown = append(unknown, n)
+		}
+	}
+	return unknown
 }
 
 var (
@@ -369,7 +428,9 @@ FLAGS
       Address the task by its code — the key a person quotes, like ACMEC-68.
       A code is unique within a tenant, not across them, so --code needs a
       tenant: pass --tenant, or set a default. Give an id or --code, never
-      both; a bare argument is never guessed at.
+      both; a bare argument is never guessed at. Boards share the code
+      numbering, so a code that answers 404 may be a board's: try
+      boards get --code.
 
         capigo tasks get --code ACMEC-68 --tenant acme
 
@@ -399,6 +460,7 @@ OUTPUT
           "responsible_type": "human", "assigned_agent_key": null,
           "due_date": "...", "parent": null, "has_subtasks": false,
           "attachments": [...],
+          "labels": [ { "name": "urgent", "color": "rose" } ],
           "followers": [ { "id": "...", "display_name": "Minh",
                            "member_code": "NV001" } ],
           "meta_data": { "url": "https://acme.capigo.app/mission/tasks/TASK-104" },
@@ -1046,6 +1108,8 @@ var (
 	taskUpdateList              string
 	taskUpdateFollowerIDs       []string
 	taskUpdateRemoveFollowerIDs []string
+	taskUpdateLabels            []string
+	taskUpdateRemoveLabels      []string
 	taskUpdateDueDate           string
 )
 
@@ -1066,6 +1130,7 @@ USAGE
                            [--assignee <uuid>] [--board <uuid> --list <uuid>]
                            [--due-date <ts>] [--follower-id <uuid>]...
                            [--remove-follower-id <uuid>]...
+                           [--label <name>]... [--remove-label <name>]...
 
 FLAGS
   <id>
@@ -1118,6 +1183,21 @@ FLAGS
 
         capigo tasks update <uuid> --remove-follower-id <uuid>
 
+  --label <name>
+      Add a label. Repeatable. Additive and idempotent; a name no label has
+      yet creates the label. Each list takes at most 20 names; more exits 5.
+      A name is 1 to 30 letters, digits, spaces, hyphens or underscores;
+      anything else is refused (exit 5, E9117) and nothing is written.
+
+        capigo tasks update <uuid> --label urgent --label "Q3 plan"
+
+  --remove-label <name>
+      Remove a label. Repeatable. A label the task lacks is a no-op. Adds
+      apply before removes, so a name in both --label and --remove-label ends
+      removed. Same limits as --label.
+
+        capigo tasks update <uuid> --remove-label urgent
+
   --due-date <ts>
       New due date, RFC3339. An empty string clears it (sends null). Must be
       today or in the future.
@@ -1132,7 +1212,7 @@ OUTPUT
       {
         "data": { "id": "...", "code": "TASK-104", "title": "...",
                   "responsible_type": "human", "assigned_agent_key": null,
-                  "followers": [...], "meta_data": {...}, ... },
+                  "labels": [...], "followers": [...], "meta_data": {...}, ... },
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "server_time": "2026-07-09T04:12:33Z" }
       }
@@ -1200,6 +1280,12 @@ OUTPUT
 		}
 		if len(taskUpdateRemoveFollowerIDs) > 0 {
 			body["follower_remove_ids"] = taskUpdateRemoveFollowerIDs
+		}
+		if len(taskUpdateLabels) > 0 {
+			body["label_names"] = taskUpdateLabels
+		}
+		if len(taskUpdateRemoveLabels) > 0 {
+			body["label_remove_names"] = taskUpdateRemoveLabels
 		}
 		if cmd.Flags().Changed("due-date") {
 			body["due_date"] = nullableID(taskUpdateDueDate)
@@ -1951,6 +2037,7 @@ var (
 	taskCreateBoard          string
 	taskCreateList           string
 	taskCreateFollowerIDs    []string
+	taskCreateLabels         []string
 	taskCreateAfterTaskID    string
 	taskCreateTop            bool
 	taskCreateIdempotencyKey string
@@ -2026,7 +2113,7 @@ OUTPUT
                         "title": "Fix login bug" },
             "has_subtasks": false, "attachments": [],
             "responsible_type": "human", "assigned_agent_key": null,
-            "followers": [...], "meta_data": {...},
+            "labels": [...], "followers": [...], "meta_data": {...},
             "created_at": "...", "updated_at": "..." }
         ],
         "meta": { "tenant": "acme", "tenant_source": "flag",
@@ -2111,7 +2198,8 @@ USAGE
                        [--due-date <ts>] [--assignee <uuid>]
                        [--board <uuid> --list <uuid>]
                        [--top | --after-task-id <uuid>]
-                       [--follower-id <uuid>]... [--idempotency-key <key>]
+                       [--follower-id <uuid>]... [--label <name>]...
+                       [--idempotency-key <key>]
                        [--subtasks-json <path|->]
 
 FLAGS
@@ -2166,6 +2254,16 @@ FLAGS
   --follower-id <uuid>
       Follower user id. Repeatable.
 
+  --label <name>
+      Label for the new task. Repeatable. A name no label has yet creates the
+      label. Each list takes at most 20 names; more exits 5. A name is 1 to 30
+      letters, digits, spaces, hyphens or underscores; anything else is
+      refused (exit 5, E9117) and nothing is written. Not supported with
+      --subtasks-json, whose endpoint takes no labels: exits 5.
+
+        capigo tasks create --tenant acme --title "Fix login bug" \
+            --label urgent --label "Q3 plan"
+
   --idempotency-key <key>
       Make this create safe to retry. Use the same key and the same body when
       a call fails mid-flight: the API replays the task it already created
@@ -2202,7 +2300,7 @@ OUTPUT
       {
         "data": { "id": "...", "code": "TASK-104", "title": "...",
                   "responsible_type": "human", "assigned_agent_key": null,
-                  "followers": [...], "meta_data": {...}, ... },
+                  "labels": [...], "followers": [...], "meta_data": {...}, ... },
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "server_time": "2026-07-09T04:12:33Z" }
       }
@@ -2238,6 +2336,10 @@ OUTPUT
 		// must exit 5 whether or not credentials are configured.
 		if taskCreateIdempotencyKey != "" && taskCreateSubtasksJSON != "" {
 			failValidation("--idempotency-key is not supported with --subtasks-json: POST /mission/tasks/with-subtasks has no idempotency contract")
+		}
+
+		if len(taskCreateLabels) > 0 && taskCreateSubtasksJSON != "" {
+			failValidation("--label is not supported with --subtasks-json: POST /mission/tasks/with-subtasks takes no labels; create the task, then tasks update --label")
 		}
 
 		client, cfg, err := buildClient()
@@ -2338,6 +2440,9 @@ OUTPUT
 		}
 		if len(taskCreateFollowerIDs) > 0 {
 			body.FollowerIDs = taskCreateFollowerIDs
+		}
+		if len(taskCreateLabels) > 0 {
+			body.LabelNames = taskCreateLabels
 		}
 		if afterTaskID != "" {
 			body.AfterTaskID = &afterTaskID
@@ -2456,7 +2561,7 @@ OUTPUT
                            "meta_data": {...}, ... },
           "subtasks": [ { "id": "...", "code": "TASK-105", "title": "Design",
                           "responsible_type": "human", "assigned_agent_key": null,
-                          "followers": [...], "meta_data": {...}, ... } ]
+                          "labels": [...], "followers": [...], "meta_data": {...}, ... } ]
         },
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "server_time": "2026-07-09T04:12:33Z" }
@@ -2812,6 +2917,7 @@ func init() {
 	tasksListCmd.Flags().IntVar(&taskListPage, "page", 0, "page number")
 	tasksListCmd.Flags().IntVar(&taskListLimit, "limit", 0, "items per page")
 	tasksListCmd.Flags().BoolVar(&taskListArchive, "include-archived", false, "also list archived tasks")
+	tasksListCmd.Flags().StringArrayVar(&taskListLabels, "label", nil, "only tasks carrying every label (repeatable: --label urgent --label q3); case-insensitive")
 
 	// tasks get flags
 	tasksGetCmd.Flags().StringVar(&taskGetTenant, "tenant", "", "scope to this tenant code")
@@ -2851,6 +2957,8 @@ func init() {
 	tasksUpdateCmd.Flags().StringVar(&taskUpdateBoard, "board", "", `board UUID; sent together with --list (pass --board "" --list "" to remove from board)`)
 	tasksUpdateCmd.Flags().StringVar(&taskUpdateList, "list", "", "board list UUID; sent together with --board")
 	tasksUpdateCmd.Flags().StringArrayVar(&taskUpdateFollowerIDs, "follower-id", nil, "follower user UUID to add (repeatable: --follower-id <uuid>); additive and idempotent")
+	tasksUpdateCmd.Flags().StringArrayVar(&taskUpdateLabels, "label", nil, "label name to add (repeatable: --label urgent --label q3); a new name creates the label")
+	tasksUpdateCmd.Flags().StringArrayVar(&taskUpdateRemoveLabels, "remove-label", nil, "label name to remove (repeatable); a label the task lacks is a no-op")
 	tasksUpdateCmd.Flags().StringArrayVar(&taskUpdateRemoveFollowerIDs, "remove-follower-id", nil, "follower user UUID to remove (repeatable: --remove-follower-id <uuid>); a user who does not follow the task is a no-op")
 	tasksUpdateCmd.Flags().StringVar(&taskUpdateDueDate, "due-date", "", "due date (RFC3339; empty string clears it)")
 
@@ -2893,6 +3001,7 @@ func init() {
 	tasksCreateCmd.Flags().StringVar(&taskCreateList, "list", "", "board list ID")
 	tasksCreateCmd.Flags().StringVar(&taskCreateAfterTaskID, "after-task-id", "", "place the new card directly behind this task in --list (needs --list; exclusive with --top)")
 	tasksCreateCmd.Flags().BoolVar(&taskCreateTop, "top", false, "place the new card first in --list (needs --list; exclusive with --after-task-id)")
+	tasksCreateCmd.Flags().StringArrayVar(&taskCreateLabels, "label", nil, "label name (repeatable: --label urgent --label q3); a new name creates the label")
 	tasksCreateCmd.Flags().StringArrayVar(&taskCreateFollowerIDs, "follower-id", nil, "follower user ID (repeatable: --follower-id <uuid> --follower-id <uuid>)")
 	tasksCreateCmd.Flags().StringVar(&taskCreateIdempotencyKey, "idempotency-key", "", "make the create safe to retry: the same key replays the task it created; a different body under the same key exits 1 with E0601 (not supported with --subtasks-json)")
 	tasksCreateCmd.Flags().StringVar(&taskCreateSubtasksJSON, "subtasks-json", "", "path to a JSON array of subtask items (use - for stdin); creates the task and its subtasks atomically via POST /mission/tasks/with-subtasks")
@@ -3003,6 +3112,8 @@ type taskListFilters struct {
 	// the server's own default — archived tasks left out — is what an unflagged
 	// call gets.
 	archive bool
+	// labels maps to filters[labels][$all]: a task must carry every name.
+	labels []string
 }
 
 // tasksListPath builds the request path + query string for `tasks list`.
@@ -3072,6 +3183,9 @@ func tasksListPath(f taskListFilters) string {
 	if f.sort != "" {
 		params.Set("sort", f.sort)
 	}
+	if len(f.labels) > 0 {
+		params.Set("filters[labels][$all]", strings.Join(f.labels, ","))
+	}
 	if f.archive {
 		params.Set("include_archived", "true")
 	}
@@ -3118,6 +3232,13 @@ func taskListValidationError(format string, args ...any) *api.APIError {
 // answer with a different list than the flags read as asking for. Catching them
 // here costs no round trip and names the flag rather than the query parameter.
 func validateTaskListFlags(f taskListFilters) *api.APIError {
+	for _, l := range f.labels {
+		if strings.Contains(l, ",") {
+			return taskListValidationError(
+				"--label %q contains a comma, which joins names on the wire; repeat --label once per name", l)
+		}
+	}
+
 	switch f.scope {
 	case "", "all", "mine":
 	default:
@@ -3193,6 +3314,8 @@ func (f taskListFilters) boardModeBlockingFlag() string {
 		return "--parent-task-id"
 	case f.archive:
 		return "--include-archived"
+	case len(f.labels) > 0:
+		return "--label"
 	}
 	return ""
 }
