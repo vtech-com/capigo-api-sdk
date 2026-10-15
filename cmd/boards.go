@@ -77,6 +77,7 @@ OUTPUT
       {
         "data": [
           { "id": "7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10",
+            "code": "ACMEC-457",
             "name": "Product Roadmap", "description": "Q1 2026 roadmap",
             "is_public": true, "created_at": "2026-01-05T09:00:00Z" }
         ],
@@ -143,12 +144,37 @@ OUTPUT
 
 var (
 	boardGetTenant string
+	boardGetCode   string
 )
 
+// boardPath builds the base path for a board addressed by id or by code. Both
+// are typed values, so both are escaped.
+func boardPath(id, code string) string {
+	if code != "" {
+		return "/mission/boards/code/" + url.PathEscape(code)
+	}
+	return "/mission/boards/" + url.PathEscape(id)
+}
+
+// boardAddressError names what is wrong with a board address, or returns "".
+// A code is unique within a tenant only, so --code demands a tenant here
+// rather than leaving a 400 that arrives for some keys and not others.
+func boardAddressError(id, code string, tenant *string) string {
+	switch {
+	case id != "" && code != "":
+		return "give a board id or --code, not both"
+	case id == "" && code == "":
+		return "a board address is required: an id, or --code <code>"
+	case code != "" && tenant == nil:
+		return "--code needs a tenant: a board code is unique within a tenant, not across them; pass --tenant <code> or set a default"
+	}
+	return ""
+}
+
 var boardsGetCmd = &cobra.Command{
-	Use:   "get <id>",
-	Short: "Get a board by id",
-	Long: `Get one board by id, with its lists.
+	Use:   "get [<id>]",
+	Short: "Get a board by id or code",
+	Long: `Get one board by id or by code, with its lists.
 
 PURPOSE
   Read a single board and the lists it contains. A board list id is what
@@ -156,10 +182,18 @@ PURPOSE
 
 USAGE
   capigo boards get <id> [--tenant <code>]
+  capigo boards get --code <code> --tenant <code>
 
 FLAGS
   <id>
-      Board UUID. Positional, required.
+      Board UUID. Positional. Give it or --code, not both.
+
+  --code <code>
+      Board code, such as ACMEC-457, in any letter case. Needs a tenant: a
+      code is unique within a tenant only. An unknown code, or the code of a
+      task, is exit 4.
+
+        capigo boards get --code ACMEC-457 --tenant acme
 
   --tenant <code>
       Tenant to scope the lookup to. Optional; omit it to search every
@@ -172,6 +206,7 @@ OUTPUT
 
       {
         "data": { "id": "7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10",
+                  "code": "ACMEC-457",
                   "name": "Product Roadmap", "description": "Q1 2026 roadmap",
                   "is_public": true, "created_at": "2026-01-05T09:00:00Z",
                   "lists": [ { "id": "9ab2c744-...", "name": "Backlog",
@@ -184,7 +219,7 @@ OUTPUT
   Exit 4 when no such board is reachable. "Board not found" also covers a
   board that exists but has is_public false: the API serves public boards
   only, and does not distinguish the two cases. See boards create --is-public.`,
-	Args: cobra.ExactArgs(1),
+	Args: cobra.MaximumNArgs(1),
 	RunE: func(_ *cobra.Command, args []string) error {
 		ctx := context.Background()
 
@@ -193,14 +228,17 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
+		tenant := resolveTenant(boardGetTenant, activeProfileOrEmpty(cfg))
+
+		id := ""
+		if len(args) > 0 {
+			id = args[0]
+		}
+		if msg := boardAddressError(id, boardGetCode, tenant); msg != "" {
+			failValidation("%s", msg)
 		}
 
-		tenant := resolveTenant(boardGetTenant, profile)
-
-		resp, err := client.Do(ctx, "GET", "/mission/boards/"+args[0], nil, tenant)
+		resp, err := client.Do(ctx, "GET", boardPath(id, boardGetCode), nil, tenant)
 		if err != nil {
 			return handleErr(err)
 		}
@@ -272,6 +310,7 @@ OUTPUT
 
       {
         "data": { "id": "7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10",
+                  "code": "ACMEC-457",
                   "name": "Sprint 5", "description": null,
                   "is_public": true, "created_at": "2026-08-21T09:00:00Z",
                   "lists": [ { "id": "9ab2c744-...", "name": "Backlog",
@@ -392,6 +431,7 @@ OUTPUT
 
       {
         "data": { "id": "7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10",
+                  "code": "ACMEC-457",
                   "name": "Sprint 5", "description": null,
                   "is_public": true, "created_at": "2026-08-21T09:00:00Z",
                   "lists": [ { "id": "9ab2c744-...", "name": "Backlog",
@@ -1145,6 +1185,7 @@ func init() {
 	boardsListCmd.Flags().IntVar(&boardListLimit, "limit", 20, "items per page")
 
 	boardsGetCmd.Flags().StringVar(&boardGetTenant, "tenant", "", "scope to this tenant code")
+	boardsGetCmd.Flags().StringVar(&boardGetCode, "code", "", "board code, e.g. ACMEC-457 (needs a tenant)")
 
 	boardsCreateCmd.Flags().StringVar(&boardCreateTenant, "tenant", "", "tenant code (required)")
 	boardsCreateCmd.Flags().StringVar(&boardCreateName, "name", "", "board name (required unless --from-json is used)")

@@ -129,6 +129,29 @@ follower.
 - Adding someone else as a follower needs more permission than following yourself: the tenant owner,
   the task owner, or the assignee. A 403 here is final for that user, not a transient failure.
 
+## Labels
+
+- Every task carries `labels: [{ "name", "color" }]`, `[]` when none. `color` is one of sky, orange,
+  green, rose, teal, amber, violet, indigo, fuchsia, lime.
+- `tasks create --label <name>` and `tasks update --label <name> --remove-label <name>` take
+  repeatable names. A name no label has yet **creates** the label; there is no label create or
+  delete command.
+- Update is additive and idempotent: removing a label the task lacks is a no-op, and add applies
+  before remove, so a name in both ends removed. Read `.data.labels` to confirm.
+- Each name list holds at most 20 names (more is 400 `VALIDATION_ERROR`, exit 5). A name is 1-30
+  letters, digits, spaces, hyphens or underscores; anything else is 400 `E9117`, exit 5. Nothing is
+  written, and `create` makes no task.
+- `capigo labels list [--tenant <code>]` returns `{ "data": [{ "name", "color" }] }` ordered by name,
+  including labels no task carries. It has no pagination. A key reaching several tenants needs
+  `--tenant` (else 400 `INVALID_TENANT_SCOPE`, exit 5). Run it before a typed name to reuse an
+  existing label instead of creating a near-duplicate.
+- `tasks list --label <name>` (repeatable) is **AND**: tasks carrying every listed label, in any
+  letter case. Do not read it as "any of".
+- An unknown label name is an **empty page, not an error**. Before telling the user "no tasks have
+  that label", run `labels list` to confirm the label exists.
+- `--label` works with the default list, `--include-archived`, `--archived` and `--scope mine`. With
+  `--unassigned` or `--date-field/--date-from/--date-to` (board mode) it exits 5 before any request.
+
 ## Retrying a create
 
 - `tasks create --idempotency-key <key>` exists for exactly one job: retrying a create you are not

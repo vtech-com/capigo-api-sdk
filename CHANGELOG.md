@@ -9,6 +9,35 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Tasks carry labels (#115).** Every task in any output now has `labels: [{ "name", "color" }]`
+  (`[]` when none); `color` is one of sky, orange, green, rose, teal, amber, violet, indigo, fuchsia,
+  lime.
+  - `tasks create --label <name>` (repeatable) puts labels on the new task. A name no label has yet
+    creates the label.
+  - `tasks update --label <name> --remove-label <name>` (both repeatable) add and remove labels.
+    Both are idempotent; removing a label the task lacks is a no-op. Add applies before remove, so a
+    name in both ends removed.
+  - `tasks list --label <name>` (repeatable) keeps tasks carrying **every** listed label, in any
+    letter case. It works with the default list, `--include-archived`, `--archived` and
+    `--scope mine`, and exits 5 with `--unassigned` or `--date-field/--date-from/--date-to`. A name
+    that is no label of the tenant returns an empty page, not an error.
+  - `capigo labels list [--tenant <code>]` lists the tenant's labels by name, including labels no
+    task carries. No pagination. A key reaching several tenants needs `--tenant`. There is no
+    label create or delete command: name a label on a task to create it.
+  - Limits: at most 20 names per list (more is 400 `VALIDATION_ERROR`, exit 5); a name is 1-30
+    letters, digits, spaces, hyphens or underscores (else 400 `E9117`, exit 5). Nothing is written
+    on either error.
+- **Boards carry a `code` and `boards get --code <code>` reads by it.** The code (e.g. `ACMEC-457`)
+  is server-set and immutable. Boards and tasks share one numbering, so a code names exactly one
+  board or task in the tenant. `--code` needs a tenant (`--tenant` or the default); give the id or
+  `--code`, not both (exit 5). An unknown code, or a task's code, exits 4.
+
+### Changed
+
+- `api/openapi.json` synced from prod.
+
 ## [0.28.0] — 2026-10-13
 
 ### Added

@@ -8,10 +8,11 @@ description: >
   transfers, availability, tenants, authentication, configuration — even when the user never
   names the CLI or Capigo itself, and in whatever language they ask: "create a task and
   assign it to someone", "what's on the board this week", "read the comments on that task",
-  "list products", "look up this SKU or barcode", "how many brands do we have", "plan an
-  inbound receipt for this PO", "which warehouse can cover this order". Also the
-  reference for how the CLI itself works: detecting the install, logging in, picking a
-  tenant, exit codes, JSON output, and self-diagnosing a misbehaving command. If a request
+  "list products", "look up this SKU or barcode", "how many brands do we have", "tag this
+  task urgent", "tasks labelled X", "plan an inbound receipt for this PO", "which
+  warehouse can cover this order". Also the reference for how the CLI itself works:
+  detecting the install, logging in, picking a tenant, exit codes, JSON output, and
+  self-diagnosing a misbehaving command. If a request
   touches Capigo and you are unsure how to talk to it, reach for this skill first instead
   of guessing raw API calls.
 ---
@@ -191,10 +192,10 @@ domain reference after reading leaf help:
 
 - [`references/domains/products.md`](./references/domains/products.md) for products, variants, and
   product references;
-- [`references/domains/tasks.md`](./references/domains/tasks.md) for tasks, assignees, and
-  subtasks;
+- [`references/domains/tasks.md`](./references/domains/tasks.md) for tasks, assignees, subtasks,
+  and labels (`--label`, `capigo labels list`);
 - [`references/domains/boards.md`](./references/domains/boards.md) when placing a task on a board
-  or list;
+  or list, or reading a board by code;
 - [`references/domains/wms.md`](./references/domains/wms.md) for anything under `capigo wms`:
   warehouses, locations, availability, and the four stock documents.
 

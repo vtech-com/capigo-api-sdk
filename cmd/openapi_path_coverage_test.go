@@ -48,6 +48,8 @@ var implementedOps = map[string]string{
 
 	"GET /mission/boards":                       "boards list",
 	"GET /mission/boards/{id}":                  "boards get",
+	"GET /mission/boards/code/{code}":           "boards get --code",
+	"GET /mission/labels":                       "labels list",
 	"POST /mission/boards":                      "boards create",
 	"PATCH /mission/boards/{id}":                "boards update",
 	"POST /mission/boards/{id}/lists":           "boards lists create",
