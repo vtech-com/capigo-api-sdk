@@ -1,7 +1,7 @@
 # Task domain relationships
 
-Read this only when creating or changing tasks, assignees, followers, subtasks, or a task's
-attachments. Read `boards.md` as well when board placement is involved.
+Read this only when creating, changing or filtering tasks, assignees, followers, subtasks, labels,
+or a task's attachments. Read `boards.md` as well when board placement is involved.
 
 ## Create flow
 
@@ -131,26 +131,32 @@ follower.
 
 ## Labels
 
-- Every task carries `labels: [{ "name", "color" }]`, `[]` when none. `color` is one of sky, orange,
-  green, rose, teal, amber, violet, indigo, fuchsia, lime.
-- `tasks create --label <name>` and `tasks update --label <name> --remove-label <name>` take
-  repeatable names. A name no label has yet **creates** the label; there is no label create or
-  delete command.
-- Update is additive and idempotent: removing a label the task lacks is a no-op, and add applies
-  before remove, so a name in both ends removed. Read `.data.labels` to confirm.
-- Each name list holds at most 20 names (more is 400 `VALIDATION_ERROR`, exit 5). A name is 1-30
-  letters, digits, spaces, hyphens or underscores; anything else is 400 `E9117`, exit 5. Nothing is
-  written, and `create` makes no task.
-- `capigo labels list [--tenant <code>]` returns `{ "data": [{ "name", "color" }] }` ordered by name,
-  including labels no task carries. It has no pagination. A key reaching several tenants needs
-  `--tenant` (else 400 `INVALID_TENANT_SCOPE`, exit 5). Run it before a typed name to reuse an
-  existing label instead of creating a near-duplicate.
-- `tasks list --label <name>` (repeatable) is **AND**: tasks carrying every listed label, in any
-  letter case. Do not read it as "any of".
-- An unknown label name is an **empty page, not an error**. Before telling the user "no tasks have
-  that label", run `labels list` to confirm the label exists.
-- `--label` works with the default list, `--include-archived`, `--archived` and `--scope mine`. With
-  `--unassigned` or `--date-field/--date-from/--date-to` (board mode) it exits 5 before any request.
+"Tag", "label", "nhãn" and "gắn thẻ" all mean task labels. Labels are the tenant's shared
+vocabulary, and the API **creates** a label for any name it has not seen: a typo or a variant is
+written silently as a new label for the whole tenant. There is no label create or delete command.
+
+1. **Reuse before you create.** Before putting a name on a task, read `capigo labels list` (no
+   pagination; a key reaching several tenants needs `--tenant`, else `INVALID_TENANT_SCOPE`, exit 5).
+   A name that matches an existing label in any letter case is that label: send the existing
+   spelling. A name close to an existing one (`gấp` vs `khẩn`, `bug` vs `bugs`) is ambiguous: ask.
+2. **Ask before coining a label.** When no existing label fits, confirm with the user that a new
+   label should be created, naming it exactly, before sending it.
+3. **Label only on request.** Do not add labels the user did not ask for, not even to "organise"
+   a task you created.
+4. **Change, never replace.** `tasks update --label` adds and `--remove-label` removes; each is
+   idempotent, and add applies before remove, so a name in both ends removed. To swap one label
+   for another, send both flags in one update. Untouched labels stay.
+5. **Verify** with `.data.labels` in the create or update answer: `[{ "name", "color" }]`, `[]`
+   when none.
+6. **Filter is AND.** `tasks list --label a --label b` keeps tasks carrying every listed label. For
+   "a or b", run one list per label and merge by `id`. An unknown name answers an empty page, not
+   an error: before telling the user "no tasks have that label", check `labels list`. `--label`
+   works with the default list, `--include-archived`, `--archived` and `--scope mine`; with
+   `--unassigned` or a `--date-field` window it exits 5 before any request.
+7. **Refusals write nothing.** A name list over 20 names is `VALIDATION_ERROR`; a name outside
+   1–30 letters, digits, spaces, hyphens or underscores is `E9117`. Both exit 5, and a refused
+   create makes no task. Do not rewrite the name yourself: tell the user which name was refused and
+   why.
 
 ## Retrying a create
 
