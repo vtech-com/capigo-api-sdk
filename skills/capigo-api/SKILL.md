@@ -7,7 +7,7 @@ description: >
   types, units, warehouses, stock locations, inbound receipts, outbound shipments, stock
   transfers, availability, tenants, authentication, configuration — even when the user never
   names the CLI or Capigo itself, and in whatever language they ask: "create a task and
-  assign it to someone", "what's on the board this week", "read the comments on that task",
+  assign it to someone", "what's on the board this week", "read or post comments on that task",
   "list products", "look up this SKU or barcode", "how many brands do we have", "tag this
   task urgent", "tasks labelled X", "plan an inbound receipt for this PO", "which
   warehouse can cover this order". Also the reference for how the CLI itself works:
@@ -193,15 +193,15 @@ domain reference after reading leaf help:
 - [`references/domains/products.md`](./references/domains/products.md) for products, variants, and
   product references;
 - [`references/domains/tasks.md`](./references/domains/tasks.md) for tasks, assignees, subtasks,
-  and labels (`--label`, `capigo labels list`);
+  comments and mentions, and labels (`--label`, `capigo labels list`);
 - [`references/domains/boards.md`](./references/domains/boards.md) when placing a task on a board
   or list, or reading a board by code;
 - [`references/domains/wms.md`](./references/domains/wms.md) for anything under `capigo wms`:
   warehouses, locations, availability, and the four stock documents.
 
 For product creation, read `products.md` after `capigo products create --help`. For task or subtask
-creation, read `tasks.md` after the relevant leaf help; read `boards.md` as well only for board
-placement. For any `capigo wms` write, and for reporting a WMS read to the user, read `wms.md`: its
+creation, or for posting a comment, read `tasks.md` after the relevant leaf help; read `boards.md`
+as well only for board placement. For any `capigo wms` write, and for reporting a WMS read to the user, read `wms.md`: its
 verdicts, null costs, and statuses are easy to report wrongly. Do not load a domain reference for
 unrelated listing or search work.
 

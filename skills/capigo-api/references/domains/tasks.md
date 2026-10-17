@@ -100,6 +100,9 @@ follower.
 - Comment files are sent with `--file` (see Attachments above); `--attachments-json` is only for an
   existing attachment id from another channel (the web app). Otherwise post `--content` alone.
 - Addressing works the same as everywhere else in this domain: an id, or `--code` plus `--tenant`.
+- To mention someone, write `@[Display Name](user:<member id>)` inside `--content`, taking the id
+  from `members list` (or `boards members list` for a board task). This is the markup the web app
+  inserts; a plain name is not a mention.
 
 ## Subtasks
 
