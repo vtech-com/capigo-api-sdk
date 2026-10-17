@@ -9,6 +9,14 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.29.1] — 2026-10-17
+
+### Added
+
+- **The bundled skill covers posting a comment and mentioning someone.** `skills/capigo-api` now
+  routes comment posts to `references/domains/tasks.md`, which gives the mention syntax
+  `@[Display Name](user:<member id>)`.
+
 ## [0.29.0] — 2026-10-15
 
 ### Added
