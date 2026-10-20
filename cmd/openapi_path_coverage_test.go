@@ -124,6 +124,14 @@ var implementedOps = map[string]string{
 	"GET /pcms/variants/{id}":                    "variants get <id>",
 	"GET /pcms/variants/sku/{sku}":               "variants get --sku <sku> — the same record, addressed by its natural key",
 
+	"GET /pcms/property-definitions":                    "property-definitions list",
+	"POST /pcms/property-definitions":                   "property-definitions create",
+	"GET /pcms/property-definitions/{id}":               "property-definitions get",
+	"PATCH /pcms/property-definitions/{id}":             "property-definitions update",
+	"PUT /pcms/property-definitions/{id}":               "property-definitions replace",
+	"DELETE /pcms/property-definitions/{id}":            "property-definitions delete",
+	"POST /pcms/property-definitions/{id}/actions/move": "property-definitions move",
+
 	"GET /pcms/brands":         "brands list",
 	"POST /pcms/brands":        "brands create",
 	"GET /pcms/brands/{id}":    "brands get",
