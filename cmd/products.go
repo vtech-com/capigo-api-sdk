@@ -424,6 +424,8 @@ OUTPUT
           "created_at": "...", "updated_at": "...",
           "brand": {...}, "category": {...}, "product_type": {...},
           "unit": {...}, "options": [...], "variants": [...],
+          "properties": {"origin": {"label": "Xuất xứ", "value": "VN",
+                         "position": 1, "definition_id": "..."}},
           "media": [], "notes": []
         },
         "meta": { "tenant": "acme", "tenant_source": "flag" }
@@ -584,6 +586,19 @@ FLAGS
                "option1": "Red", "option2": "M", "price": 279000}
             ] }
 
+      Properties (named attributes): "properties" is a map key -> {label,
+      value, position}. A key that matches a tenant property definition (see
+      property-definitions) follows it and takes its label; any other key is
+      ad hoc and needs a label (1-50 chars). value is 1-1000 chars, position
+      an integer unique within the map (key order means nothing). Keys match
+      ^[a-z0-9][a-z0-9_]{0,49}$, at most 100.
+
+          { "name": "T-Shirt",
+            "properties": {
+              "origin": {"value": "VN", "position": 1},
+              "care":   {"label": "Care", "value": "Cold wash", "position": 2}
+            } }
+
         echo '{"name":"Pin 13 Pro Max","aliases":["AP-BA-13PM"],
                "tags":["pin"]}' \
           | capigo products create --tenant acme --from-json -
@@ -594,7 +609,7 @@ OUTPUT
       {
         "data": { "id": "8f2a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
                   "name": "Blue T-Shirt", "status": "DRAFT",
-                  "media": [], "notes": [], ... },
+                  "properties": {}, "media": [], "notes": [], ... },
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "server_time": "2026-07-09T04:12:33Z" }
       }
@@ -770,6 +785,25 @@ FLAGS
       EXCLUSIVE with the individual field flags: passing both exits 5.
       (products create differs — there, --from-json silently wins.)
 
+      properties REPLACES THE WHOLE SET: omit it to keep the stored
+      properties, send {} to clear them, send a map to overwrite all of them.
+      A property you leave out of the map is removed. Label rule: a key
+      matching a tenant definition takes the definition's label (a sent label
+      is ignored); any other key is ad hoc and needs "label" (1-50).
+      definition_id is ignored. value is 1-1000 chars; position is a unique
+      integer. To change one property: read .data.properties with
+      products get, edit that entry, send the whole map back. Entries as
+      read can be sent verbatim.
+
+          { "properties": {
+              "origin": {"value": "TH", "position": 1},
+              "care":   {"label": "Care", "value": "Cold wash", "position": 2}
+            } }
+
+      A refusal writes nothing: E9499 malformed map, E9497 over 100 keys,
+      E9494 bad key, E9495 bad label, E9496 bad value, E9498 bad or repeated
+      position.
+
         echo '{"status":"ACTIVE","tags":["summer"]}' \
           | capigo products update 8f2a1c07-... --tenant acme --from-json -
 
@@ -779,7 +813,7 @@ OUTPUT
       {
         "data": { "id": "8f2a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
                   "status": "ACTIVE", "tags": ["summer"],
-                  "media": [], "notes": [], ... },
+                  "properties": {}, "media": [], "notes": [], ... },
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "server_time": "2026-07-09T04:12:33Z" }
       }
