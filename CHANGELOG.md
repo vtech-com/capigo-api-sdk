@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.30.0] — 2026-10-20
+
 ### Added
 
 - **`property-definitions` commands (#123).** `list`, `get`, `create`, `update`, `replace`, `delete`
