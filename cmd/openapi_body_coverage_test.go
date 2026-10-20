@@ -113,6 +113,8 @@ var bodyFieldAliasMap = map[string]string{
 	// /pcms/products/{id}/media: variant_ids is a repeatable singular flag; is_default is the boolean --default.
 	"variant_ids": "variant-id",
 	"is_default":  "default",
+	// POST /pcms/property-definitions/{id}/actions/move: null means the top, exposed as --top; an id is --after-id.
+	"after_id": "after-id",
 }
 
 // intentionallyUnexposedBodyFields lists body fields that the CLI deliberately
@@ -289,6 +291,30 @@ func buildWriteCommandMapping() []writeCommandEntry {
 		// PCMS resource commands: all register --from-json, so per-field assertion is
 		// skipped. Listed here so NEW spec fields still surface as a test failure when
 		// --from-json is absent (i.e. if a command forgets --from-json).
+		{
+			humanName: "property-definitions create",
+			path:      "/pcms/property-definitions",
+			method:    "post",
+			hasFlag:   func(n string) bool { return propertyDefinitionsCreateCmd.Flags().Lookup(n) != nil },
+		},
+		{
+			humanName: "property-definitions update",
+			path:      "/pcms/property-definitions/{id}",
+			method:    "patch",
+			hasFlag:   func(n string) bool { return propertyDefinitionsUpdateCmd.Flags().Lookup(n) != nil },
+		},
+		{
+			humanName: "property-definitions replace",
+			path:      "/pcms/property-definitions/{id}",
+			method:    "put",
+			hasFlag:   func(n string) bool { return propertyDefinitionsReplaceCmd.Flags().Lookup(n) != nil },
+		},
+		{
+			humanName: "property-definitions move",
+			path:      "/pcms/property-definitions/{id}/actions/move",
+			method:    "post",
+			hasFlag:   func(n string) bool { return propertyDefinitionsMoveCmd.Flags().Lookup(n) != nil },
+		},
 		{
 			humanName: "brands create",
 			path:      "/pcms/brands",

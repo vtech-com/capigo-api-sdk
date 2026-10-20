@@ -38,7 +38,8 @@ RESOLUTION ORDER
   $ capigo config unset-default-tenant
 
 WHICH COMMANDS REQUIRE A TENANT
-  Always      products, variants, brands, categories, product-types, units
+  Always      products, variants, brands, categories, product-types, units,
+              property-definitions
               — every verb. With no tenant resolved the command exits 5.
   Always      tasks create, tasks subtasks create
   Always      wms — every verb. All but wms warehouses and wms availability

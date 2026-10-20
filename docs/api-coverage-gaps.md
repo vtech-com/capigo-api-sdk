@@ -107,6 +107,22 @@ through and the help pages and skill carry the caveat; each one is an ask on the
 | Medium | `GET /wms/warehouse-transfers` answers 500 `E0501` for one warehouse | Reproducible on `vtech-uat` for its largest warehouse (the code is with the API team); every other warehouse, and every other list of that same warehouse, answers 200. A server defect, reported here because the CLI surfaces it as exit 1 with nothing to act on. |
 | Low | A warehouse-transfer list row carries no `updated_at` | The value every write needs as `If-Match` is on the detail only, so a write always costs a `get` first. Inbound, outbound and internal-transfer rows carry it. |
 
+## Deferred from the product-properties spec refresh (2026-10-20)
+
+Not in the product-properties PR (#123); the owner decided to take them later. Product
+`properties` and `/pcms/property-definitions*` are covered.
+
+- **Outbound shipment `waybill`** on create and PATCH and in reads, with refusals `E9683`,
+  `E9684`, `E9685` (schemas `WmsOutboundShipmentWaybillInput`, `PublicWmsOutboundShipmentWaybill`).
+  Not wrapped.
+- **Keys that reach several workspaces.** `/health` and `/tenants` need no `X-Tenant-Code` for such
+  a key; the proxy answers 403 `AUTH_TENANT_MISMATCH`. CLI tenant handling and exit mapping not
+  reviewed.
+- **WMS locations return `is_private`.** Already printed by raw passthrough; help OUTPUT samples
+  may lack it.
+- **Inbound line `unit_cost`** is now documented as in the warehouse currency and feeding
+  weighted-average cost on VERIFIED. Doc-only; help text not updated.
+
 ## Board and list delete — withdrawn by the API (2026-10-13)
 
 `DELETE /mission/boards/{id}` and `DELETE /mission/boards/{id}/lists/{listId}` left the published

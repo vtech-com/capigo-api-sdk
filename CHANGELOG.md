@@ -9,6 +9,20 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.30.0] — 2026-10-20
+
+### Added
+
+- **`property-definitions` commands (#123).** `list`, `get`, `create`, `update`, `replace`, `delete`
+  and `move` manage a tenant's property definitions. Relabel reaches every product carrying the
+  definition; delete keeps the property on every product as ad hoc and burns the key.
+- **Product `properties` documented in help.** `products get/create/update` describe the
+  `properties` map. On update, sending it replaces the whole set; omitting it keeps the set; `{}`
+  clears it.
+- **Skill: product properties guide.** `skills/capigo-api` now tells the agent to reuse a
+  definition's key before writing an ad-hoc one, to read-modify-write the whole `properties` map,
+  and that relabelling or deleting a definition reaches every product carrying it.
+
 ## [0.29.1] — 2026-10-17
 
 ### Added

@@ -419,3 +419,23 @@ type ReplaceUnitRequest struct {
 	Name         string `json:"name"`
 	Abbreviation string `json:"abbreviation"`
 }
+
+// CreatePropertyDefinitionRequest is the body for POST /pcms/property-definitions.
+type CreatePropertyDefinitionRequest struct {
+	Label string `json:"label"`
+	Key   string `json:"key,omitempty"`
+}
+
+// SetPropertyDefinitionLabelRequest is the body for PATCH and PUT
+// /pcms/property-definitions/{id}. Key, when sent, must equal the current key.
+type SetPropertyDefinitionLabelRequest struct {
+	Label string `json:"label"`
+	Key   string `json:"key,omitempty"`
+}
+
+// MovePropertyDefinitionRequest is the body for
+// POST /pcms/property-definitions/{id}/actions/move. AfterID nil sends null
+// (move to the top); the field is required, so it has no omitempty.
+type MovePropertyDefinitionRequest struct {
+	AfterID *string `json:"after_id"`
+}
