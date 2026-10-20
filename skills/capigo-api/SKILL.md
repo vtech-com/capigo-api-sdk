@@ -1,20 +1,20 @@
 ---
 name: capigo-api
 description: >
-  Drive the Capigo platform through the installed `capigo` CLI — the entry point for any
-  Capigo work an agent does for a tenant. Use this whenever a request maps to Capigo data
-  or capabilities — tasks, boards, members, products, variants, brands, categories, product
-  types, units, warehouses, stock locations, inbound receipts, outbound shipments, stock
-  transfers, availability, tenants, authentication, configuration — even when the user never
-  names the CLI or Capigo itself, and in whatever language they ask: "create a task and
-  assign it to someone", "what's on the board this week", "read or post comments on that task",
-  "list products", "look up this SKU or barcode", "how many brands do we have", "tag this
-  task urgent", "tasks labelled X", "plan an inbound receipt for this PO", "which
-  warehouse can cover this order". Also the reference for how the CLI itself works:
-  detecting the install, logging in, picking a tenant, exit codes, JSON output, and
-  self-diagnosing a misbehaving command. If a request
-  touches Capigo and you are unsure how to talk to it, reach for this skill first instead
-  of guessing raw API calls.
+  Drive the Capigo platform through the installed `capigo` CLI — the entry point for any Capigo
+  work an agent does for a tenant. Use this whenever a request maps to Capigo data or
+  capabilities — tasks, boards, members, products, variants, brands, categories, product types,
+  product properties and property definitions, units, warehouses, stock locations, inbound
+  receipts, outbound shipments, stock transfers, availability, tenants, authentication,
+  configuration — even when the user never names the CLI or Capigo itself, and in whatever
+  language they ask: "create a task and assign it to someone", "what's on the board this week",
+  "read or post comments on that task", "list products", "look up this SKU or barcode", "set
+  this product's origin or voltage", "how many brands do we have", "tag this task urgent",
+  "tasks labelled X", "plan an inbound receipt for this PO", "which warehouse can cover this
+  order". Also the reference for how the CLI itself works: detecting the install, logging in,
+  picking a tenant, exit codes, JSON output, and self-diagnosing a misbehaving command. If a
+  request touches Capigo and you are unsure how to talk to it, reach for this skill first
+  instead of guessing raw API calls.
 ---
 
 # Capigo CLI operator
@@ -190,8 +190,8 @@ Most operations need no bundled domain guide: leaf help is sufficient.
 For an operation that creates, traverses, or changes a relationship, load only the relevant
 domain reference after reading leaf help:
 
-- [`references/domains/products.md`](./references/domains/products.md) for products, variants, and
-  product references;
+- [`references/domains/products.md`](./references/domains/products.md) for products, variants,
+  product references, and product properties (`capigo property-definitions`);
 - [`references/domains/tasks.md`](./references/domains/tasks.md) for tasks, assignees, subtasks,
   comments and mentions, and labels (`--label`, `capigo labels list`);
 - [`references/domains/boards.md`](./references/domains/boards.md) when placing a task on a board
@@ -199,7 +199,8 @@ domain reference after reading leaf help:
 - [`references/domains/wms.md`](./references/domains/wms.md) for anything under `capigo wms`:
   warehouses, locations, availability, and the four stock documents.
 
-For product creation, read `products.md` after `capigo products create --help`. For task or subtask
+For product creation, and for any write to `properties` or a property definition, read
+`products.md` after the leaf help. For task or subtask
 creation, or for posting a comment, read `tasks.md` after the relevant leaf help; read `boards.md`
 as well only for board placement. For any `capigo wms` write, and for reporting a WMS read to the user, read `wms.md`: its
 verdicts, null costs, and statuses are easy to report wrongly. Do not load a domain reference for
