@@ -292,6 +292,13 @@ capigo products variants Upsert product variants
 capigo products options <id> --tenant <code> --strategy <s> --option <N=v1,v2>  Save a product's options and regenerate its variants
 capigo products media add|update|delete <product-id> --tenant <code> ...     Add, change or delete a product's images and videos
 
+capigo property-definitions list|get <id>                            List or read the tenant's property definitions
+capigo property-definitions create --label <text> [--key <key>]      Create a definition; the key is never reused or changed
+capigo property-definitions update|replace <id> --label <text>       Relabel (PATCH / PUT); reaches every product carrying it
+capigo property-definitions delete <id>                              Delete; products keep the property as ad hoc
+capigo property-definitions move <id> (--after-id <uuid> | --top)   Reorder definitions
+# Products carry `properties` (key -> {label, value, position, definition_id}); set via --from-json. Sending `properties` replaces the whole set; omit it to keep, `{}` clears.
+
 capigo brands list           List reference brands (supports --query)
 capigo brands get <id>       Get a brand by ID
 capigo brands create         Create a brand (--name required)

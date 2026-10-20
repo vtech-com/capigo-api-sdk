@@ -1,8 +1,8 @@
 # Product domain relationships
 
-Read this only when creating or changing products, variants, options, or product references. Leaf
-help is authoritative for command flags; this document defines the product model the agent must
-preserve.
+Read this only when creating or changing products, variants, options, properties, or product
+references. Leaf help is authoritative for command flags; this document defines the product model
+the agent must preserve.
 
 ## Create flow
 
@@ -33,6 +33,45 @@ preserve.
   not guaranteed unique. These rules do not define the tenant's code or duplicate-product policy.
 - A variant carries `status`: `active` or `inactive` — the SKU's lifecycle state. It is distinct
   from the product's own lifecycle state and is not a soft delete; it defaults to `active`.
+
+## Properties
+
+`properties` holds a product's named attributes — origin, voltage, material — as a map from key
+to `{label, value, position, definition_id}`. `{}` means none. Read `capigo products create --help`
+and `capigo property-definitions --help` before writing either.
+
+**Two kinds of key.** A key that matches one of the tenant's property definitions follows that
+definition: it takes the definition's label, and `definition_id` names it. Any other key is ad hoc
+to this one product and must carry its own `label`. Definitions exist so the same attribute keeps
+one key across the catalog, which is what makes it comparable and filterable. So before adding a
+property, run `capigo property-definitions list` and reuse the key of a definition that means the
+same thing, even when the user words it differently — an ad-hoc `xuat_xu` beside a defined
+`origin` splits one attribute in two. When nothing fits, write it ad hoc with a label. Do not
+create a definition unless the user asks for a shared property: a definition is a tenant-wide
+catalog-admin change, not a step of editing one product.
+
+**Sending `properties` replaces the whole set.** On update, an omitted `properties` keeps what is
+stored, `{}` clears it, and any other map becomes the complete set — a key you leave out is
+deleted. To add or change one property:
+
+1. `capigo products get <id>` and take `.data.properties`.
+2. Add or edit the one entry; leave every other entry as read.
+3. Send the whole map with `capigo products update <id> --from-json`.
+
+Sending entries back exactly as read is safe: the label of a defined key and any `definition_id`
+are ignored on write. `position` is an integer, unique within the map, and alone sets the display
+order — the map's key order means nothing; give a new entry the highest position plus one.
+`value` is always a string, 1–1000 characters: send `"220"`, not `220`.
+
+After the write, compare `.data.properties` with what the user asked for and report the full
+resulting set, not only the key you touched. A refused map writes nothing; read the error, fix the
+named entry, resend.
+
+**Definition changes reach every product.** Relabelling a definition relabels it on every product
+that carries it. Deleting one never fails for being in use: each such product keeps the property,
+now ad hoc, and the key is spent — keys never change and are never reused, deleted ones included.
+Tell the user that reach before relabelling or deleting, and do not delete-and-recreate to "rename"
+a key; it cannot work.
 
 ## Images
 

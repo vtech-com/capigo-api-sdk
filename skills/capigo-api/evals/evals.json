@@ -51,6 +51,31 @@
         "If self-assignment is discussed, describes resolving identity via a tenant-scoped `capigo members list` lookup on an exact work email, accepting only a single unambiguous match.",
         "Does not send or guess a UUID, empty string, or cross-tenant member as the assignee without the user's confirmation."
       ]
+    },
+    {
+      "id": 5,
+      "prompt": "Trong tenant `acme`, sản phẩm 3f6b2c1e-9a0d-4c55-8e21-7d4a0b9e1c22 đang có properties `origin` (definition, \"Xuất xứ\" = \"Việt Nam\", position 1) và `bao_hanh` (ad hoc, \"Bảo hành\" = \"12 tháng\", position 2). Thêm điện áp 220V cho nó. Chuẩn bị nhưng đừng chạy lệnh.",
+      "expected_output": "The agent checks the tenant's property definitions before choosing a key (reusing a matching definition such as `voltage` instead of inventing an ad-hoc `dien_ap`), and prepares a `capigo products update --from-json` body carrying the whole map — origin, bao_hanh and the new entry — with the new entry at position 3 and value \"220V\" as a string, then says to verify `.data.properties`.",
+      "files": [],
+      "assertions": [
+        "Checks `capigo property-definitions list` before choosing the key, and plans to reuse a matching definition's key rather than inventing an ad-hoc key such as `dien_ap`.",
+        "The prepared body's `properties` map contains origin, bao_hanh and the new voltage entry.",
+        "Gives the new entry a position unique in the map (3) and a string value.",
+        "States that sending `properties` replaces the whole set, so omitting existing keys would delete them.",
+        "Says to verify `.data.properties` (and `meta.tenant`) after the write, and does not execute the command."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "In tenant `acme`, the property definition with key `chat_lieu` should really be called `material`. Rename it for me.",
+      "expected_output": "The agent explains that a definition's key can never change or be reused, offers to relabel it instead (which reaches every product carrying it), and does not delete-and-recreate it to change the key.",
+      "files": [],
+      "assertions": [
+        "States that a property definition's key cannot be changed.",
+        "Does not propose deleting the definition and creating a new one with key `material` as a rename.",
+        "Offers `capigo property-definitions update` to change the label, noting that the new label reaches every product carrying the definition.",
+        "Asks the user to confirm before making a tenant-wide change rather than executing it unasked."
+      ]
     }
   ]
 }
