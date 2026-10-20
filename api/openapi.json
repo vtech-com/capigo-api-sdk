@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Capigo Public API",
-    "description": "Public API documentation for Capigo Developer Platform. Integrate your external tools with Capigo tasks, boards, and members. See `apps/platform/docs/api-v1-changelog.md` for version history.",
+    "description": "Public API documentation for Capigo Developer Platform. Integrate your external tools with Capigo tasks, boards, and members. See `apps/platform/docs/api-v1-changelog.md` for version history. A key is pinned to one workspace, lists several workspaces, or reaches every workspace of its owner. A pinned key needs no `X-Tenant-Code`. A key that lists several workspaces, or reaches all of them, names the workspace per call in `X-Tenant-Code`: the workspace must be one the key reaches and its owner still belongs to, or the call is `403` `AUTH_TENANT_MISMATCH`. A key that lists its workspaces must send the header on every route except `GET /health` and `GET /tenants`, or the call is `400` `AUTH_TENANT_REQUIRED`.",
     "version": "1.0.0",
     "contact": {
       "name": "Capigo Developer Support"
@@ -399,6 +399,26 @@
           "timestamp": {
             "type": "string",
             "format": "date-time"
+          }
+        }
+      },
+      "PublicPropertyDefinitionResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "key",
+          "label"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
           }
         }
       },
@@ -1230,6 +1250,68 @@
           }
         }
       },
+      "ProductPropertyEntry": {
+        "type": "object",
+        "required": [
+          "label",
+          "value",
+          "position",
+          "definition_id"
+        ],
+        "properties": {
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 50,
+            "example": "Origin"
+          },
+          "value": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000,
+            "example": "Vietnam"
+          },
+          "position": {
+            "type": "integer",
+            "description": "Place in the product's order. Unique within the product."
+          },
+          "definition_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "The live property definition this property follows, or `null` for an ad-hoc property."
+          }
+        }
+      },
+      "ProductPropertyInput": {
+        "type": "object",
+        "maxProperties": 100,
+        "description": "A map from property key (`^[a-z0-9][a-z0-9_]{0,49}$`) to its entry, at most 100 keys. A key that matches a live property definition of the tenant follows that definition and takes its label; any label sent for it is ignored. Any other key is ad hoc to this product and needs a `label` (1 to 50 characters). A sent `definition_id` is ignored. `value` is 1 to 1000 characters. `position` is an integer, unique within the map, and gives the entry its place in the product's order; the map's key order carries no meaning. Omit `properties` on update to keep the stored set; send `{}` to clear it. Omit it on create for none. A refusal writes nothing: a malformed map is `400` `E9499`, more than 100 keys `E9497`, a bad key `E9494`, a bad label `E9495`, a bad value `E9496`, a bad or repeated position `E9498`.",
+        "additionalProperties": {
+          "type": "object",
+          "required": [
+            "value",
+            "position"
+          ],
+          "properties": {
+            "label": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 50,
+              "description": "Required for a key that matches no live definition. Ignored for a key that does: the definition's label is stored."
+            },
+            "value": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000
+            },
+            "position": {
+              "type": "integer",
+              "description": "Unique within the map."
+            }
+          }
+        }
+      },
       "PublicProductResponse": {
         "type": "object",
         "properties": {
@@ -1405,6 +1487,13 @@
               "$ref": "#/components/schemas/PublicProductNote"
             },
             "description": "Internal staff notes on this product, for every tag. Read-only — no write operation accepts or mutates this field. `[]` when the product has no notes."
+          },
+          "properties": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ProductPropertyEntry"
+            },
+            "description": "The product's properties, keyed by property key. `{}` when it has none. Each entry carries its label, value, position (its place in the product's order; the map's key order carries no meaning) and `definition_id`: the property definition it follows, or `null` for an ad-hoc property of this product only. A relabel of a definition, or a delete (the entry becomes ad hoc, keeping its key, label and value), reaches every product carrying it and counts as a product change for `updated_since` and the `catalog:product:updated` event."
           }
         }
       },
@@ -2665,6 +2754,96 @@
           }
         }
       },
+      "PublicWmsOutboundShipmentWaybill": {
+        "type": "object",
+        "description": "The waybill a carrier collects the shipment under. Every field is optional. A cancelled shipment still returns the waybill it held.",
+        "required": [
+          "carrier_code",
+          "carrier_name",
+          "tracking_number",
+          "label_url"
+        ],
+        "properties": {
+          "carrier_code": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "GHN",
+              "GHTK",
+              "VIETTEL_POST",
+              "VNPOST",
+              "JT_EXPRESS",
+              "SPX",
+              "NINJA_VAN",
+              "BEST_EXPRESS",
+              "AHAMOVE",
+              "GRAB_EXPRESS",
+              "LALAMOVE",
+              "SELI_EXPRESS",
+              "OTHER",
+              null
+            ],
+            "description": "`OTHER` is any carrier not listed, named by `carrier_name`."
+          },
+          "carrier_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "tracking_number": {
+            "type": "string",
+            "nullable": true
+          },
+          "label_url": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "WmsOutboundShipmentWaybillInput": {
+        "type": "object",
+        "description": "A waybill to set. It replaces the whole waybill: an omitted field is cleared, and a key not listed here is ignored. At least one of `carrier_code`, `tracking_number` or `label_url` is required. Writable while the shipment is DRAFT, PLANNED or AWAITING_EXPORT. A refusal is 409: E9683 the shipment is EXPORTED or CANCELLED, E9684 the tracking number is on another shipment of the same carrier (no carrier counts as one carrier; letter case ignored; cancelled shipments excluded), E9685 the waybill is empty or a field is not valid.",
+        "properties": {
+          "carrier_code": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "GHN",
+              "GHTK",
+              "VIETTEL_POST",
+              "VNPOST",
+              "JT_EXPRESS",
+              "SPX",
+              "NINJA_VAN",
+              "BEST_EXPRESS",
+              "AHAMOVE",
+              "GRAB_EXPRESS",
+              "LALAMOVE",
+              "SELI_EXPRESS",
+              "OTHER",
+              null
+            ]
+          },
+          "carrier_name": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "tracking_number": {
+            "type": "string",
+            "nullable": true,
+            "minLength": 1,
+            "maxLength": 64,
+            "description": "Trimmed."
+          },
+          "label_url": {
+            "type": "string",
+            "nullable": true,
+            "pattern": "^https://\\S+$",
+            "description": "Absolute https URL."
+          }
+        }
+      },
       "PublicWmsOutboundShipmentDetailResponse": {
         "type": "object",
         "required": [
@@ -2682,7 +2861,8 @@
           "lines",
           "status_history",
           "owner",
-          "cancel_locked"
+          "cancel_locked",
+          "waybill"
         ],
         "properties": {
           "id": {
@@ -2758,6 +2938,15 @@
           "cancel_locked": {
             "type": "boolean",
             "description": "True when only the owner can cancel the document. Set once at create; never changes."
+          },
+          "waybill": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PublicWmsOutboundShipmentWaybill"
+              }
+            ],
+            "nullable": true,
+            "description": "The shipment's waybill, or null when it has none. Always present."
           },
           "parent": {
             "type": "object",
@@ -3369,7 +3558,7 @@
           "unit_cost": {
             "type": "number",
             "minimum": 0,
-            "description": "Unit cost (receipts only).",
+            "description": "Cost per unit of this line, in the warehouse's currency (the `currency` of GET /wms/warehouses/{code}); the receipt has no currency of its own and nothing is converted. Include any fees you allocate to the line. When the receipt is VERIFIED, the received quantity at this cost enters the variant's weighted-average cost in that warehouse, exactly as a cost entered in the WMS screen does. Posting happens once: no line's cost can be changed after VERIFIED. A planned line (`qty_expected` above 0) needs a cost from PLANNED onwards (0 is valid). An unplanned line (`qty_expected` 0, an extra product the warehouse counted) always enters stock at cost 0, whatever this field holds. To give such a product a cost, add it as a planned line with its cost before the warehouse counts it; once it has been counted as unplanned, PATCH that line by its `id` while the receipt is RECEIVING with `qty_expected` above 0 and a `unit_cost` (its count is kept, its recorded variance is cleared, so the warehouse confirms it again).",
             "nullable": true
           }
         }
@@ -3406,7 +3595,7 @@
           "unit_cost": {
             "type": "number",
             "minimum": 0,
-            "description": "Unit cost. null clears it.",
+            "description": "Cost per unit of this line, in the warehouse's currency (the `currency` of GET /wms/warehouses/{code}); the receipt has no currency of its own and nothing is converted. Include any fees you allocate to the line. When the receipt is VERIFIED, the received quantity at this cost enters the variant's weighted-average cost in that warehouse, exactly as a cost entered in the WMS screen does. Posting happens once: no line's cost can be changed after VERIFIED. A planned line (`qty_expected` above 0) needs a cost from PLANNED onwards (0 is valid). An unplanned line (`qty_expected` 0, an extra product the warehouse counted) always enters stock at cost 0, whatever this field holds. To give such a product a cost, add it as a planned line with its cost before the warehouse counts it; once it has been counted as unplanned, PATCH that line by its `id` while the receipt is RECEIVING with `qty_expected` above 0 and a `unit_cost` (its count is kept, its recorded variance is cleared, so the warehouse confirms it again). On a line named by `id` while RECEIVING, omitting `unit_cost` keeps the stored cost. Anywhere else (DRAFT or PLANNED, which replace the whole list, or a line appended without `id`) an omitted or null `unit_cost` leaves the line without cost: allowed on a DRAFT or an unplanned line, refused with 422 `E9649` on a planned line from PLANNED onwards.",
             "nullable": true
           }
         }
@@ -3583,6 +3772,15 @@
             "description": "Lock the cancel to the member that creates the document (the API key's member): only that member can cancel it, through its integration. Immutable after create; default false.",
             "nullable": false
           },
+          "waybill": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WmsOutboundShipmentWaybillInput"
+              }
+            ],
+            "nullable": true,
+            "description": "Set with the shipment. Checked before the shipment is created; a waybill refused after it (a tracking number in use) answers 409 and leaves the shipment created without it, to be set with PATCH. On an Idempotency-Key replay it is written only if the shipment still has no waybill, and refused the same way."
+          },
           "lines": {
             "type": "array",
             "minItems": 1,
@@ -3705,7 +3903,7 @@
       },
       "UpdateInboundReceiptRequest": {
         "type": "object",
-        "description": "JSON Merge Patch (RFC 7386) update of an editable inbound receipt (DRAFT/PLANNED/RECEIVING). Omitted fields are unchanged. A present `lines` array replaces the full line list while the receipt is DRAFT or PLANNED. While it is RECEIVING, `lines` is merged by line `id`: a line with `id` updates that line's `qty_expected` and `unit_cost` in place and keeps its counted quantity and evidence (a changed `qty_expected` clears the line's recorded variance); a line without `id` is appended; an omitted line is removed only if nothing has been counted on it, otherwise the request is rejected with 409 `E9639`. Fields outside the editable whitelist are rejected (400).",
+        "description": "JSON Merge Patch (RFC 7386) update of an editable inbound receipt (DRAFT/PLANNED/RECEIVING). Omitted fields are unchanged. A present `lines` array replaces the full line list while the receipt is DRAFT or PLANNED. While it is RECEIVING, `lines` is merged by line `id`: a line with `id` updates that line's `qty_expected` and `unit_cost` in place and keeps its counted quantity and evidence (a changed `qty_expected` clears the line's recorded variance); a line without `id` is appended; an omitted line is removed only if nothing has been counted on it, otherwise the request is rejected with 409 `E9639`. Fields outside the editable whitelist are rejected (400). Lines, `unit_cost` included, can be written on any receipt in DRAFT, PLANNED or RECEIVING, also one the warehouse created in the WMS screen: there is no check on who created it. A VERIFIED or CANCELLED receipt, and a warehouse-transfer receipt in any status, is refused with 409 `E9522`.",
         "properties": {
           "external_ref": {
             "type": "string",
@@ -3728,7 +3926,7 @@
       },
       "UpdateOutboundShipmentRequest": {
         "type": "object",
-        "description": "JSON Merge Patch (RFC 7386) update of an editable outbound shipment (DRAFT/PLANNED). Omitted fields are unchanged; a present `lines` array replaces the full line list. Fields outside the editable whitelist are rejected (400).",
+        "description": "JSON Merge Patch (RFC 7386) update of an editable outbound shipment (DRAFT/PLANNED; `waybill` alone also AWAITING_EXPORT). Omitted fields are unchanged; a present `lines` array replaces the full line list. Fields outside the editable whitelist are rejected (400).",
         "properties": {
           "external_ref": {
             "type": "string",
@@ -3746,6 +3944,15 @@
             "items": {
               "$ref": "#/components/schemas/WmsOutboundShipmentLineInput"
             }
+          },
+          "waybill": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WmsOutboundShipmentWaybillInput"
+              }
+            ],
+            "nullable": true,
+            "description": "Omitted leaves the waybill unchanged; null clears it; an object replaces it whole. Writable through AWAITING_EXPORT, so a waybill-only PATCH is accepted where a header or line change is not. With a header or line change, the waybill is written after it under the same If-Match."
           }
         }
       },
@@ -4053,6 +4260,9 @@
           "is_active": {
             "type": "boolean"
           },
+          "is_private": {
+            "type": "boolean"
+          },
           "parent_id": {
             "type": "string",
             "format": "uuid",
@@ -4082,6 +4292,9 @@
           },
           "type": {
             "type": "string"
+          },
+          "is_private": {
+            "type": "boolean"
           }
         }
       },
@@ -4105,6 +4318,9 @@
             "type": "string"
           },
           "is_active": {
+            "type": "boolean"
+          },
+          "is_private": {
             "type": "boolean"
           },
           "parent_id": {
@@ -4153,7 +4369,7 @@
         "tags": [
           "Health"
         ],
-        "description": "Returns API health status after proxy authentication. Used to verify API keys and connectivity.",
+        "description": "Returns API health status after proxy authentication. Used to verify API keys and connectivity. A key that lists its workspaces needs no `X-Tenant-Code` here.",
         "security": [
           {
             "bearerAuth": []
@@ -8910,7 +9126,7 @@
             "description": "Missing or invalid API key (`E0004` when the token cannot be used)"
           },
           "403": {
-            "description": "The key's member is not in the tenant (`E2002`), or lacks the owner or catalog admin right (`E0102`)"
+            "description": "The key's member is not in the tenant (`E2002`; `AUTH_TENANT_MISMATCH` from the proxy for a key that reaches several workspaces), or lacks the owner or catalog admin right (`E0102`)"
           },
           "404": {
             "description": "Brand not found: unknown, malformed id, already deleted, or another tenant's. Error code `E9401`"
@@ -9421,7 +9637,7 @@
             "description": "Missing or invalid API key (`E0004` when the token cannot be used)"
           },
           "403": {
-            "description": "The key's member is not in the tenant (`E2002`), or lacks the owner or catalog admin right (`E0102`)"
+            "description": "The key's member is not in the tenant (`E2002`; `AUTH_TENANT_MISMATCH` from the proxy for a key that reaches several workspaces), or lacks the owner or catalog admin right (`E0102`)"
           },
           "404": {
             "description": "Category not found: unknown, malformed id, already deleted, or another tenant's. Error code `E9405`"
@@ -9911,7 +10127,7 @@
             "description": "Missing or invalid API key (`E0004` when the token cannot be used)"
           },
           "403": {
-            "description": "The key's member is not in the tenant (`E2002`), or lacks the owner or catalog admin right (`E0102`)"
+            "description": "The key's member is not in the tenant (`E2002`; `AUTH_TENANT_MISMATCH` from the proxy for a key that reaches several workspaces), or lacks the owner or catalog admin right (`E0102`)"
           },
           "404": {
             "description": "Product type not found: unknown, malformed id, already deleted, or another tenant's. Error code `E9409`"
@@ -10151,6 +10367,9 @@
                   "unit_id"
                 ],
                 "properties": {
+                  "properties": {
+                    "$ref": "#/components/schemas/ProductPropertyInput"
+                  },
                   "name": {
                     "type": "string",
                     "maxLength": 500
@@ -10451,6 +10670,9 @@
                 "minProperties": 1,
                 "description": "At least one field must be provided.",
                 "properties": {
+                  "properties": {
+                    "$ref": "#/components/schemas/ProductPropertyInput"
+                  },
                   "name": {
                     "type": "string",
                     "maxLength": 500
@@ -11833,7 +12055,7 @@
             "description": "Missing or invalid API key (`E0004` when the token cannot be used)"
           },
           "403": {
-            "description": "The key's member is not in the tenant (`E2002`), or lacks the owner or catalog admin right (`E0102`)"
+            "description": "The key's member is not in the tenant (`E2002`; `AUTH_TENANT_MISMATCH` from the proxy for a key that reaches several workspaces), or lacks the owner or catalog admin right (`E0102`)"
           },
           "404": {
             "description": "Unit not found: unknown, malformed id, already deleted, or another tenant's. Error code `E9413`"
@@ -11843,6 +12065,582 @@
           },
           "500": {
             "description": "The use check or the delete itself failed; nothing was deleted"
+          }
+        }
+      }
+    },
+    "/pcms/property-definitions": {
+      "get": {
+        "summary": "List Property Definitions",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "The tenant's live property definitions in display order. Every member of the tenant may read. Deleted definitions are not listed. The list is not paged.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to scope the request to. Required.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Property definitions in display order",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicPropertyDefinitionResponse"
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing X-Tenant-Code"
+          },
+          "401": {
+            "description": "Missing or invalid API key (`E0004` when the token cannot be used)"
+          },
+          "403": {
+            "description": "The key's member is not in the tenant (`E2002`; `AUTH_TENANT_MISMATCH` from the proxy for a key that reaches several workspaces)"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create Property Definition",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Add a property name to the tenant's shared list. The definition goes last. Send `key` to choose the key, or leave it out and the server generates one from `label` (accents removed, lowercase, other characters become `_`, `_2`, `_3` appended when taken, the base shortened so the key stays within 50 characters). A key is never reused in a tenant, deleted definitions included, and never changes. A product that already carries the key as an ad-hoc property links to the new definition and takes its label. Only the tenant owner or a member with the catalog admin permission may write.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to scope the request to. Required.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "label"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "key": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9][a-z0-9_]{0,49}$",
+                    "description": "Lowercase letter or digit first, then lowercase letters, digits or underscores, 50 characters at most."
+                  },
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 50,
+                    "example": "Voltage"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Definition created",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicPropertyDefinitionResponse"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body: key off the format or no key can be generated from the label (`E9489`), label empty or over 50 characters (`E9491`)"
+          },
+          "401": {
+            "description": "Missing or invalid API key (`E0004` when the token cannot be used)"
+          },
+          "403": {
+            "description": "The key's member is not in the tenant (`E2002`; `AUTH_TENANT_MISMATCH` from the proxy for a key that reaches several workspaces), or lacks the owner or catalog admin right (`E0102`)"
+          },
+          "409": {
+            "description": "The key was used by a live or a deleted definition of the tenant (`E9490`)"
+          }
+        }
+      }
+    },
+    "/pcms/property-definitions/{id}": {
+      "get": {
+        "summary": "Get Property Definition",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Fetch one live definition, tenant-scoped. Every member may read.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Property definition UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to scope the request to. Required.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Definition detail",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicPropertyDefinitionResponse"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key (`E0004` when the token cannot be used)"
+          },
+          "403": {
+            "description": "The key's member is not in the tenant (`E2002`; `AUTH_TENANT_MISMATCH` from the proxy for a key that reaches several workspaces)"
+          },
+          "404": {
+            "description": "Definition not found: unknown, malformed id, deleted, or another tenant's (`E9488`)"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Relabel Property Definition",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Change the label. The key never changes: a `key` in the body must equal the current one. Duplicate labels are allowed. Every product that carries the definition takes the new label. A label that is unchanged changes no product.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Property definition UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to scope the request to. Required.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "label"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 50
+                  },
+                  "key": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9][a-z0-9_]{0,49}$",
+                    "description": "Optional. Must equal the definition's current key; a different key is refused."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Definition relabeled; the key is unchanged",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicPropertyDefinitionResponse"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body: label empty or over 50 characters (`E9491`), or a `key` that differs from the definition's own (`E9492`)"
+          },
+          "401": {
+            "description": "Missing or invalid API key (`E0004` when the token cannot be used)"
+          },
+          "403": {
+            "description": "The key's member is not in the tenant (`E2002`; `AUTH_TENANT_MISMATCH` from the proxy for a key that reaches several workspaces), or lacks the owner or catalog admin right (`E0102`)"
+          },
+          "404": {
+            "description": "Definition not found: unknown, malformed id, deleted, or another tenant's (`E9488`)"
+          }
+        }
+      },
+      "put": {
+        "summary": "Replace Property Definition",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Same effect as PATCH: sets the label. A `key` in the body must equal the current one; the key never changes. Every product that carries the definition takes the new label. A label that is unchanged changes no product.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Property definition UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to scope the request to. Required.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "label"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 50
+                  },
+                  "key": {
+                    "type": "string",
+                    "pattern": "^[a-z0-9][a-z0-9_]{0,49}$",
+                    "description": "Optional. Must equal the definition's current key; a different key is refused."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Definition relabeled; the key is unchanged",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicPropertyDefinitionResponse"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body: label empty or over 50 characters (`E9491`), or a `key` that differs from the definition's own (`E9492`)"
+          },
+          "401": {
+            "description": "Missing or invalid API key (`E0004` when the token cannot be used)"
+          },
+          "403": {
+            "description": "The key's member is not in the tenant (`E2002`; `AUTH_TENANT_MISMATCH` from the proxy for a key that reaches several workspaces), or lacks the owner or catalog admin right (`E0102`)"
+          },
+          "404": {
+            "description": "Definition not found: unknown, malformed id, deleted, or another tenant's (`E9488`)"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete Property Definition",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Soft-delete a definition. It leaves every read and its key stays used. A delete is never refused for being in use. Every product that carries the definition keeps the property with its key, label and value, now ad-hoc. A repeated delete answers `404`: the first one succeeded. The answer names the item by id. Any request body and any query parameter are ignored.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Property definition UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to scope the request to. Required.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The definition was deleted; `data.id` names it",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing X-Tenant-Code"
+          },
+          "401": {
+            "description": "Missing or invalid API key (`E0004` when the token cannot be used)"
+          },
+          "403": {
+            "description": "The key's member is not in the tenant (`E2002`; `AUTH_TENANT_MISMATCH` from the proxy for a key that reaches several workspaces), or lacks the owner or catalog admin right (`E0102`)"
+          },
+          "404": {
+            "description": "Definition not found: unknown, malformed id, deleted, or another tenant's (`E9488`)"
+          }
+        }
+      }
+    },
+    "/pcms/property-definitions/{id}/actions/move": {
+      "post": {
+        "summary": "Move Property Definition",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Place a definition at the top of the list (`after_id` null) or right behind another live definition. Only the moved definition changes place; the others keep their order. `after_id` naming the definition itself, a deleted definition or another tenant's is refused. The position is computed by one atomic RPC, so a retry lands the definition in the same place.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Property definition UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to scope the request to. Required.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "after_id"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "after_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true,
+                    "description": "The live definition to land behind, or null for the top."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The definition after the move",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicPropertyDefinitionResponse"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Malformed body, or `after_id` is the definition itself, not live or not in the tenant (`E9493`)"
+          },
+          "401": {
+            "description": "Missing or invalid API key (`E0004` when the token cannot be used)"
+          },
+          "403": {
+            "description": "The key's member is not in the tenant (`E2002`; `AUTH_TENANT_MISMATCH` from the proxy for a key that reaches several workspaces), or lacks the owner or catalog admin right (`E0102`)"
+          },
+          "404": {
+            "description": "Definition not found: unknown, malformed id, deleted, or another tenant's (`E9488`)"
           }
         }
       }
@@ -12092,7 +12890,7 @@
         "tags": [
           "Tenants"
         ],
-        "description": "Retrieve the list of all tenants/workspaces that the authenticated user actively participates in.",
+        "description": "Retrieve the list of all tenants/workspaces that the authenticated user actively participates in. A key that lists its workspaces gets only the workspaces on its list that its owner still belongs to, and needs no `X-Tenant-Code`.",
         "responses": {
           "200": {
             "description": "Successful response",
@@ -12263,7 +13061,7 @@
       },
       "post": {
         "summary": "Create Inbound Receipt",
-        "description": "Create a inbound receipt draft for the acting warehouse. Tenant context is proxy-injected (x-api-tenant-code); warehouse scope is client-supplied via ?warehouse_code= or X-Warehouse-Code. Authorization gate: `scope.inbound`. Create is atomic (header + lines in one transaction).",
+        "description": "Create an inbound receipt draft for the acting warehouse. Tenant context is proxy-injected (x-api-tenant-code); warehouse scope is client-supplied via ?warehouse_code= or X-Warehouse-Code. Authorization gate: `scope.inbound`. Create is atomic (header + lines in one transaction). Each line's `unit_cost` feeds the weighted-average cost when the receipt is VERIFIED (see WmsInboundReceiptLineInput). The API submits and cancels a receipt; receiving and verifying happen in the WMS screen.",
         "tags": [
           "WMS"
         ],
@@ -12583,7 +13381,7 @@
             "description": "Warehouse, document, or variant not found, or a line `id` that does not belong to the receipt"
           },
           "409": {
-            "description": "Stale-version conflict (E0602), the document is not in an editable status (E9522), or a RECEIVING update omitted a line that already has a counted quantity (E9639)."
+            "description": "Stale-version conflict (E0602), the document is not in an editable status or is a warehouse-transfer receipt (E9522), or a RECEIVING update omitted a line that already has a counted quantity (E9639)."
           },
           "422": {
             "description": "A planned line the request writes has no unit cost (E9649). Cost 0 is valid; only a missing cost is refused."
@@ -13403,7 +14201,7 @@
             "description": "Warehouse, document, or variant not found"
           },
           "409": {
-            "description": "Idempotency-key conflict (E0601) — same key, different canonical body."
+            "description": "Idempotency-key conflict (E0601) — same key, different canonical body — or the waybill is refused (E9683, E9684, E9685; see `WmsOutboundShipmentWaybillInput`)."
           },
           "500": {
             "description": "Internal server error"
@@ -13605,7 +14403,7 @@
             "description": "Warehouse, document, or variant not found"
           },
           "409": {
-            "description": "Stale-version conflict (E0602), the document is not in an editable status (E9558), or its lines can no longer be replaced (`E9675`: a full replacement from PLANNED on, any line change from AWAITING_EXPORT on, or an `external_ref` change on a shipment an order system requested)."
+            "description": "Stale-version conflict (E0602), the document is not in an editable status (E9558), its lines can no longer be replaced (`E9675`: a full replacement from PLANNED on, any line change from AWAITING_EXPORT on, or an `external_ref` change on a shipment an order system requested), or the waybill is refused (E9683, E9684, E9685; see `WmsOutboundShipmentWaybillInput`)."
           },
           "500": {
             "description": "Internal server error"
