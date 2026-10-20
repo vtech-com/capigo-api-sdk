@@ -53,7 +53,7 @@ formatting.
 
 ## API-level gaps — endpoints that do NOT exist yet
 
-"Needed" depends on the Tấm skill scope (defined elsewhere). The clearly-justified
+"Needed" depends on the agent skill scope (defined elsewhere). The clearly-justified
 ones for a work-management agent are task update/delete and product get.
 
 | Priority | Missing action | Notes / status |
@@ -135,7 +135,7 @@ deletes a board.
 
 ## Addressing resources by human key (code), not UUID — API requirement
 
-**Decision (2026-06-04):** users and Tấm hand off / reference work by a **human key**
+**Decision (2026-06-04):** users and agents hand off / reference work by a **human key**
 (e.g. task `TASK-123`, `tenant_code` `acme`), not by UUID. Single-resource operations
 (`get`, and future `update`/`delete`) should be addressable by that key.
 

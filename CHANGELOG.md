@@ -668,10 +668,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Removed
 
-- **`make skill-install-tam`, and the `TAM_HOST` / `TAM_SKILLS_DIR` variables with it.** The target
+- **The SSH skill-install target and its host variables.** The target
   pushed the bundled skill to a private host over SSH, so a public repo carried an internal SSH
-  alias and a path that only meant something inside VTech. It also installed into openclaw's
-  `plugin-skills` directory, which openclaw fills with symlinks from installed plugins — a copy
+  alias and a path that only meant something inside VTech. It also installed into the agent host's
+  `plugin-skills` directory, which the host fills with symlinks from installed plugins — a copy
   placed there by hand competes with the one the `skills` CLI manages in `.agents/skills/`, and
   nothing reports the conflict. Install with
   `npx skills add vtech-com/capigo-api-sdk --skill capigo-api`, which records source and version in
@@ -1382,7 +1382,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   the captured stdout stream — is silenced by `CAPIGO_NO_HINTS=1`, and is suppressed for an
   explicit `--output`, on a real terminal, and for command groups that ignore `-o json`
   (`version`, `config`). Skill (`cli_basics.md`) updated in lockstep. Design note:
-  `docs/tty-output-guard.md`. (Origin: Tấm redirected default table output into a `.json` file
+  `docs/tty-output-guard.md`. (Origin: an agent redirected default table output into a `.json` file
   and hit JSONDecodeError; the v0.14.1 skill rule addressed it by instruction, this adds a
   tool-level backstop.)
 
@@ -1400,7 +1400,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   same key every call, so retrying is futile) from the one genuinely **transient** case
   (`AUTH_INTERNAL_ERROR`, a 500 from the auth service, worth one retry). Phrasing directs the
   agent to **ask the user to re-authenticate**, never to source or echo a secret itself. The
-  `capigo-api` skill's Authentication note is updated in lockstep. (Origin: Tấm read
+  `capigo-api` skill's Authentication note is updated in lockstep. (Origin: an agent read
   `AUTH_INVALID_KEY` as "token expired temporarily, just retry" — wrong on both counts.)
 
 ### Changed
@@ -1419,7 +1419,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   put `>` or `|` after a command, you must also pass `-o json`*. Added the `Server time:`
   placement invariant (stdout in table mode, stderr under `-o json`) as the direct antidote to
   a fabricated "strip the first line" (`lines[1:]`) workaround, plus a short reading-vs-
-  processing decision guide in `references/cli_basics.md`. (Origin: Tấm redirected default
+  processing decision guide in `references/cli_basics.md`. (Origin: an agent redirected default
   *table* output into a `.json` file, hit `JSONDecodeError`, then invented a scene — a JSON
   body *with* a `Server time:` prefix, which cannot co-occur — and proposed stripping the
   first line, which would corrupt real `-o json` output.) No CLI behavior change.
@@ -1430,7 +1430,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **Self-diagnosing errors.** Every command failure now prints a diagnosis block on **stdout** (where an AI agent reads), not just a one-line `Error:` on stderr. The block resolves the error code to a meaning, a concrete next step, and the verbatim server response — so a caller no longer has to re-run with `--verbose` or recall the skill to understand what failed. JSON mode carries the same as `error.meaning` / `error.next` / `error.capability_note` / `error.raw`; quiet mode is unchanged. (Origin: Tấm hit `E9426` ("create product variant failed"), misread the opaque code as "the API does not support adding variants," and proposed a destructive recreate-and-archive workaround — when the operation is fully supported and the failure was about the request.)
+- **Self-diagnosing errors.** Every command failure now prints a diagnosis block on **stdout** (where an AI agent reads), not just a one-line `Error:` on stderr. The block resolves the error code to a meaning, a concrete next step, and the verbatim server response — so a caller no longer has to re-run with `--verbose` or recall the skill to understand what failed. JSON mode carries the same as `error.meaning` / `error.next` / `error.capability_note` / `error.raw`; quiet mode is unchanged. (Origin: an agent hit `E9426` ("create product variant failed"), misread the opaque code as "the API does not support adding variants," and proposed a destructive recreate-and-archive workaround — when the operation is fully supported and the failure was about the request.)
 - **Capability brake.** Server-side write failures (validation/conflict/business codes) print `Note: a failed write does NOT mean this operation is unsupported.` It is scoped to real server round-trips — never shown for client-side or cobra arg-validation errors.
 - **A hand-maintained error catalog** (`internal/api/error_catalog.go`) for the common PCMS codes, sourced from the backend `error-codes.ts`. Each entry supplies the next step and the capability brake; it adds an explanatory `Meaning` **only** for codes whose server message is a generic fallback (E9426/E9427), letting the server message remain the single source for the rest (no drift-prone second copy). To be replaced by an OpenAPI-published catalog once available.
 
@@ -1489,7 +1489,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 ### Changed
 
 - The bundled `capigo-api` skill is now scoped to **CLI mechanics only** — auth, tenant handling, exit codes, output modes, and the full command surface (`SKILL.md` + `references/cli_basics.md`). The organisation-specific catalogue policy it previously carried (Product Code / Barcode generation rules, brand decision trees, `coding_references` governance, and the manage_product / manage_brand / manage_product_type / sync_check workflows) moved to the internal `manage-capigo-product` skill in `vtech-com/agent-skills`, which layers on top of this skill. Rationale: the SDK skill is public and partner-facing; how a given organisation codes its catalogue is policy, not CLI usage.
-- Skill install is now solely via the [`skills`](https://github.com/vercel-labs/skills) CLI: `npx skills add vtech-com/capigo-api-sdk --skill capigo-api` pulls the skill straight from this repo into any supported agent (Claude Code, Cursor, Codex, OpenCode, …) with no extra infrastructure. Dropped the release-asset `curl`/`unzip` fallback and the release-workflow step that attached `capigo-api-skill.zip` to each release — the `skills` CLI reads the repo directly, so no published artifact is needed. `make skill-package` / `skill-install-tam` remain for the internal Tấm host and manual copies.
+- Skill install is now solely via the [`skills`](https://github.com/vercel-labs/skills) CLI: `npx skills add vtech-com/capigo-api-sdk --skill capigo-api` pulls the skill straight from this repo into any supported agent (Claude Code, Cursor, Codex, OpenCode, …) with no extra infrastructure. Dropped the release-asset `curl`/`unzip` fallback and the release-workflow step that attached `capigo-api-skill.zip` to each release — the `skills` CLI reads the repo directly, so no published artifact is needed. `make skill-package` remains for manual copies.
 
 ---
 
@@ -1497,8 +1497,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- Bundled agent skill `skills/capigo-api/` — a self-contained `SKILL.md` + `references/` guide that teaches an AI agent how to operate the `capigo` CLI (auth, tenant handling, exit codes, output modes, PCMS catalogue workflows incl. Product Code / Barcode generation). The skill ships alongside the CLI it documents so anyone with repo access — including partners using the public API with their own token — gets the intended operating instructions. New `make skill-package` target zips it to `dist/capigo-api-skill.zip` for distribution to skill-aware runtimes (e.g. openclaw). README **AI Agent Integration** section documents usage.
-- Skill install paths: `make skill-install-tam` packages and installs the skill onto the Tấm openclaw host over SSH (idempotent — clears the old copy first; `TAM_HOST`/`TAM_SKILLS_DIR` overridable). The release workflow now attaches `capigo-api-skill.zip` to each GitHub release (`gh release upload --clobber`), giving partners and Tấm a stable per-version download URL without cloning the repo.
+- Bundled agent skill `skills/capigo-api/` — a self-contained `SKILL.md` + `references/` guide that teaches an AI agent how to operate the `capigo` CLI (auth, tenant handling, exit codes, output modes, PCMS catalogue workflows incl. Product Code / Barcode generation). The skill ships alongside the CLI it documents so anyone with repo access — including partners using the public API with their own token — gets the intended operating instructions. New `make skill-package` target zips it to `dist/capigo-api-skill.zip` for distribution to skill-aware runtimes. README **AI Agent Integration** section documents usage.
+- Skill install paths: the release workflow now attaches `capigo-api-skill.zip` to each GitHub release (`gh release upload --clobber`), giving partners a stable per-version download URL without cloning the repo.
 
 ---
 

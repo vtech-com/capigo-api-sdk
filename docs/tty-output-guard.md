@@ -7,13 +7,13 @@ work and the v0.14.1 skill output-mode edits.
 > output is not a JSON-parseable resource (`version`, `config` — they print a scalar/fixed text
 > and ignore `-o json`) are **exempt**, so the nudge is never a false positive that would train
 > the agent to ignore it. `health` and `auth whoami/login` honour `-o json` and are not exempt.
-> The open question below (does openclaw surface command stderr to Tấm?) still governs whether
+> The open question below (does the agent host surface command stderr to the agent?) still governs whether
 > this guard is *sufficient* — it was decoupled from the build because a stderr-only advisory is
 > harmless in either case, so shipping it does not depend on the answer.
 
 ## Problem
 
-The CLI's primary consumer is an AI agent (Tấm) that reads **stdout**. A recurring failure
+The CLI's primary consumer is an AI agent that reads **stdout**. A recurring failure
 class: the agent runs a command that produces the default **table** output but redirects or
 pipes it into a machine parser —
 
@@ -72,19 +72,19 @@ is the conventional, non-destructive channel for this.
 
 ## Honest limitation (must validate before building)
 
-The doctrine's premise is that **Tấm reads stdout and frequently ignores its skill** — and, by
-extension, may ignore **stderr** too. If Tấm/openclaw does not surface stderr back into the
+The doctrine's premise is that **the agent reads stdout and frequently ignores its skill** — and, by
+extension, may ignore **stderr** too. If the agent host does not surface stderr back into the
 agent's context, this nudge is invisible to the agent and buys little. So before implementing:
 
-- **Open question:** does openclaw forward command stderr into Tấm's transcript/context? If
+- **Open question:** does the agent host forward command stderr into the agent's transcript/context? If
   not, this guard helps humans and CI but not the actual target consumer, and the
   higher-leverage fix stays at the skill/agent layer.
 - This guard is explicitly a **secondary** layer. It does not replace the skill rule ("if you
   write `>` or `|`, also write `-o json`"); it backstops it for the case the CLI can see.
 
-A stdout-side variant was considered (so Tấm definitely reads it) and rejected: it would break
-legitimate table-piping and pollute redirected files. If stderr proves invisible to Tấm, the
-correct next move is agent-layer (skill reinforcement / openclaw surfacing stderr), not moving
+A stdout-side variant was considered (so the agent definitely reads it) and rejected: it would break
+legitimate table-piping and pollute redirected files. If stderr proves invisible to the agent, the
+correct next move is agent-layer (skill reinforcement / the host surfacing stderr), not moving
 the warning onto stdout.
 
 ## Implementation sketch
@@ -102,5 +102,5 @@ the warning onto stdout.
 
 ## Decision needed
 
-Build only after the openclaw-stderr open question is answered. If stderr is not surfaced to
-Tấm, defer and keep the fix at the skill layer.
+Build only after the host-stderr open question is answered. If stderr is not surfaced to
+the agent, defer and keep the fix at the skill layer.
