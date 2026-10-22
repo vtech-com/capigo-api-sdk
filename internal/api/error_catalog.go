@@ -83,6 +83,24 @@ var errorCatalog = map[string]ErrorInfo{
 		Next:           "Re-check the payload; if it persists, surface the Response below to a human.",
 		CapabilityNote: true,
 	},
+	// ----- Catalog tag codes. The server message names the rule; Next names
+	// the command that does what the refused call tried. -----
+	"E9473": {
+		Next:           "A tag name is 1-30 letters, digits, spaces, - or _. Fix the name and retry; nothing was written.",
+		CapabilityNote: true,
+	},
+	"E9474": {
+		Next:           "Tags are never written as a whole list. Drop \"tags\" from the update and change them one at a time: 'capigo products tags add|remove <product-id> <name>' or 'capigo variants tags add|remove <variant-id> <name>'.",
+		CapabilityNote: true,
+	},
+	"E9455": {
+		Next:           "The variant only inherits this tag from its product. Remove it on the product: 'capigo products tags remove <product-id> <name>' (every variant then loses it).",
+		CapabilityNote: true,
+	},
+	"INVALID_TAGS": {
+		Next:           "Send at most 50 distinct names in one comma-separated --tags value.",
+		CapabilityNote: true,
+	},
 	"VALIDATION_ERROR": {
 		Next:           "Read the server message above, fix the offending field, and retry.",
 		CapabilityNote: true,

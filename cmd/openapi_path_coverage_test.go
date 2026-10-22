@@ -123,6 +123,11 @@ var implementedOps = map[string]string{
 	"GET /pcms/variants/resolve":                 "variants resolve",
 	"GET /pcms/variants/{id}":                    "variants get <id>",
 	"GET /pcms/variants/sku/{sku}":               "variants get --sku <sku> — the same record, addressed by its natural key",
+	"GET /pcms/tags":                             "tags list",
+	"POST /pcms/products/{id}/tags/{name}":       "products tags add",
+	"DELETE /pcms/products/{id}/tags/{name}":     "products tags remove",
+	"POST /pcms/variants/{id}/tags/{name}":       "variants tags add",
+	"DELETE /pcms/variants/{id}/tags/{name}":     "variants tags remove",
 
 	"GET /pcms/property-definitions":                    "property-definitions list",
 	"POST /pcms/property-definitions":                   "property-definitions create",

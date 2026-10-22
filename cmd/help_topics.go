@@ -260,10 +260,12 @@ THE API
   capability present in the specification and absent from this CLI is a gap in
   the CLI, not in the platform.
 
-ADDITIVE CHANGES
-  The API is additive: released capabilities are not removed or redefined. A
-  capability absent from this binary may exist in a newer release, and help
-  text from an older binary describes the older surface.
+CHANGES
+  Most v1 changes are additive, but not all. Catalog tags (CLI 0.31.0) broke
+  v1: a product or variant update carrying a tag list is now refused (E9474),
+  and tags read as { name, color } objects instead of strings. A binary older
+  than the API may therefore send a request the API now refuses. Upgrade the
+  CLI before trusting help text from an older binary.
 
 SEE ALSO
   capigo help exit-codes   what a non-zero exit means

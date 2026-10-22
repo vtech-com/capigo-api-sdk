@@ -287,7 +287,10 @@ capigo join-requests reject <id> --tenant <code>                     Reject a jo
 capigo products list     List products (supports --query, --updated-since, --ids, --all)
 capigo products get <id> Get a product by ID
 capigo products create   Create a product (--name required, or --from-json; --aliases/--tags repeatable)
-capigo products update   Update a product (partial; --aliases/--tags repeatable, or --from-json)
+capigo products update   Update a product (partial; --aliases repeatable, or --from-json; never tags)
+capigo products tags add|remove <product-id> <name>    Add or remove one catalog tag
+capigo variants tags add|remove <variant-id> <name>    Add or remove one of a variant's own tags
+capigo tags list                                       List the tenant's catalog tags (name, color)
 capigo products variants Upsert product variants
 capigo products options <id> --tenant <code> --strategy <s> --option <N=v1,v2>  Save a product's options and regenerate its variants
 capigo products media add|update|delete <product-id> --tenant <code> ...     Add, change or delete a product's images and videos
@@ -388,7 +391,12 @@ capigo products create --tenant acme --name "Blue T-Shirt" --sku "SKU-001" --pri
   --aliases "BT-001" --tags "summer" --tags "sale"
 
 # Partial update — this is products' one write verb for updates (there is no `products replace`)
-capigo products update <id> --tenant acme --tags "clearance"
+capigo products update <id> --tenant acme --status ACTIVE
+
+# Catalog tags change one at a time; no command sets the whole list
+capigo tags list --tenant acme
+capigo products tags add <id> "Clearance" --tenant acme
+capigo products list --tenant acme --tags "Clearance,Hè"   # carrying every listed tag
 ```
 
 | Flag | Description |
@@ -398,7 +406,7 @@ capigo products update <id> --tenant acme --tags "clearance"
 | `--ids` | Comma-separated product UUIDs (max 50); mutually exclusive with `--all` |
 | `--all` | Auto-paginate the full catalog |
 | `--aliases` | Alternative names / product codes (repeatable: `--aliases foo --aliases bar`) |
-| `--tags` | Free-form labels (repeatable: `--tags foo --tags bar`) |
+| `--tags` | On create: catalog tag names (repeatable: `--tags Hè --tags "Sale 50"`). On list: comma-separated names to filter by |
 | `--page` | Page number (default 1) |
 | `--limit` | Items per page (1–100, default 20) |
 
