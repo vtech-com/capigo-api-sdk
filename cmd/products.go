@@ -45,6 +45,7 @@ var (
 	productListCategoryIDs    string
 	productListProductTypeIDs string
 	productListUnitIDs        string
+	productListTags           string
 )
 
 var productsListCmd = &cobra.Command{
@@ -67,6 +68,7 @@ USAGE
                        [--updated-since <timestamp>]
                        [--brand-ids <uuid,...>] [--category-ids <uuid,...>]
                        [--product-type-ids <uuid,...>] [--unit-ids <uuid,...>]
+                       [--tags <name,...>]
                        [--page <n>] [--limit <n>]
 
 FLAGS
@@ -112,6 +114,16 @@ FLAGS
 
         capigo products list --tenant acme --brand-ids 7c1f2e88-...,9ab2c744-...
 
+  --tags <name,...>
+      Only products carrying every listed catalog tag, comma-separated, any
+      letter case, at most 50. A product matches when it carries them all
+      itself, or when one of its live variants does (own and inherited tags
+      together). A name that is no tag of the tenant matches nothing: exit 0,
+      empty .data. AND-composes with every other filter. List the tenant's
+      tags with tags list.
+
+        capigo products list --tenant acme --tags "Hè,Sale 50"
+
   --all
       Fetch every page. All pages are held in memory before anything prints, so
       page manually over a large catalogue. If a page fails mid-sweep, the rows
@@ -142,7 +154,7 @@ OUTPUT
             "status": "ACTIVE",
             "currency": "VND",
             "aliases": ["VVD013"],
-            "tags": ["hè"],
+            "tags": [ { "name": "Hè", "color": "sky" } ],
             "is_deleted": false,
             "brand": { "id": "...", "name": "Coolmate" },
             "category": { "id": "...", "name": "Áo" },
@@ -245,6 +257,9 @@ OUTPUT
 		if productListUnitIDs != "" {
 			params.Set("unit_ids", productListUnitIDs)
 		}
+		if productListTags != "" {
+			params.Set("tags", productListTags)
+		}
 		if productListPage > 0 {
 			params.Set("page", strconv.Itoa(productListPage))
 		}
@@ -321,6 +336,9 @@ func productsListAll(ctx context.Context, client *api.Client, tenant *string) er
 		}
 		if productListUnitIDs != "" {
 			params.Set("unit_ids", productListUnitIDs)
+		}
+		if productListTags != "" {
+			params.Set("tags", productListTags)
 		}
 		params.Set("page", strconv.Itoa(page))
 		if productListLimit > 0 {
@@ -420,7 +438,8 @@ OUTPUT
           "id": "7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10",
           "name": "Áo thun basic", "slug": "ao-thun-basic",
           "description": null, "status": "ACTIVE", "currency": "VND",
-          "aliases": ["VVD013"], "tags": ["hè"], "is_deleted": false,
+          "aliases": ["VVD013"], "is_deleted": false,
+          "tags": [ { "name": "Hè", "color": "sky" } ],
           "created_at": "...", "updated_at": "...",
           "brand": {...}, "category": {...}, "product_type": {...},
           "unit": {...}, "options": [...], "variants": [...],
@@ -430,6 +449,10 @@ OUTPUT
         },
         "meta": { "tenant": "acme", "tenant_source": "flag" }
       }
+
+  tags[] are the product's catalog tags, each a name and a colour. Change them
+  one at a time with products tags add|remove. Each item of variants[] carries
+  own_tags and inherited_tags, apart.
 
   options[] carries the product's option names in order — at most two. That
   order is what option1 and option2 refer to when writing variants with
@@ -556,8 +579,13 @@ FLAGS
       bar. Matched by the search in products list. Not enforced unique — the
       server accepts a duplicate alias without error.
 
-  --tags <text>
-      Free-form labels. Repeatable. Matched by the search in products list.
+  --tags <name>
+      Catalog tag the product carries from creation. Repeatable: --tags Hè
+      --tags "Sale 50". A name is 1-30 letters, digits, spaces, - or _. A name
+      matching an existing tag in another letter case is that tag; a new name
+      creates it. One invalid name refuses the whole create (E9473, exit 5)
+      and writes nothing. After creation, tags change only through
+      products tags add|remove.
 
   --from-json <path|->
       Send the whole request body as JSON, where - reads stdin. Individual
@@ -567,7 +595,9 @@ FLAGS
       Simple body:
 
           { "name": "Blue T-Shirt", "sku": "SKU-001", "price": 299000,
-            "status": "DRAFT", "aliases": ["BT-001"], "tags": ["summer"] }
+            "status": "DRAFT", "aliases": ["BT-001"], "tags": ["Summer"] }
+
+      A variant in "variants" may carry "tags" too: its own tag names.
 
       Body with options and variants. If options is present, variants is
       REQUIRED: the backend does not generate the cartesian matrix from
@@ -734,8 +764,12 @@ var productsUpdateCmd = &cobra.Command{
 
 PURPOSE
   Change a product's metadata: name, description, status, currency, brand,
-  category, product type, unit, aliases, tags. Archiving a product is a status
+  category, product type, unit, aliases. Archiving a product is a status
   change: --status ARCHIVED.
+
+  Tags are not written here. An update carrying "tags", whatever the list
+  holds, is refused (E9474, exit 5) and changes nothing. Use
+  products tags add|remove, one tag at a time.
 
   Variants are not product metadata. They are written with products variants.
 
@@ -745,7 +779,7 @@ USAGE
                          [--status <status>] [--currency <code>]
                          [--brand-id <uuid>] [--category-id <uuid>]
                          [--product-type-id <uuid>] [--unit-id <uuid>]
-                         [--aliases <text>]... [--tags <text>]...
+                         [--aliases <text>]...
   capigo products update <id> --tenant <code> --from-json <path|->
 
 FLAGS
@@ -774,9 +808,6 @@ FLAGS
         capigo products update 8f2a1c07-... --tenant acme \
           --aliases AP-BA-13PM --aliases PIN13PM
 
-  --tags <text>
-      Repeatable, and REPLACES the whole array rather than appending to it.
-
   At least one of the flags above is required in flag mode; sending none
   exits 5.
 
@@ -804,7 +835,7 @@ FLAGS
       E9494 bad key, E9495 bad label, E9496 bad value, E9498 bad or repeated
       position.
 
-        echo '{"status":"ACTIVE","tags":["summer"]}' \
+        echo '{"status":"ACTIVE","aliases":["BT-001"]}' \
           | capigo products update 8f2a1c07-... --tenant acme --from-json -
 
 OUTPUT
@@ -812,7 +843,7 @@ OUTPUT
 
       {
         "data": { "id": "8f2a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
-                  "status": "ACTIVE", "tags": ["summer"],
+                  "status": "ACTIVE", "aliases": ["BT-001"],
                   "properties": {}, "media": [], "notes": [], ... },
         "meta": { "tenant": "acme", "tenant_source": "flag",
                   "server_time": "2026-07-09T04:12:33Z" }
@@ -826,6 +857,10 @@ OUTPUT
 		ctx := context.Background()
 
 		productUpdateID := args[0]
+
+		if cmd.Flags().Changed("tags") {
+			failValidation("products update no longer writes tags: the API refuses a whole tag list (E9474). Use 'capigo products tags add|remove <product-id> <name>', one tag at a time")
+		}
 
 		client, cfg, err := buildClient()
 		if err != nil {
@@ -844,7 +879,7 @@ OUTPUT
 		if productUpdateFromJSON != "" {
 			// Check that no individual field flags were also set.
 			individualFlags := []string{"name", "description", "status", "currency",
-				"brand-id", "category-id", "product-type-id", "unit-id", "aliases", "tags"}
+				"brand-id", "category-id", "product-type-id", "unit-id", "aliases"}
 			for _, f := range individualFlags {
 				if cmd.Flags().Changed(f) {
 					failValidation("--from-json and --%s are mutually exclusive; use one or the other", f)
@@ -893,10 +928,6 @@ OUTPUT
 			}
 			if len(productUpdateAliases) > 0 {
 				req.Aliases = productUpdateAliases
-				fieldCount++
-			}
-			if len(productUpdateTags) > 0 {
-				req.Tags = productUpdateTags
 				fieldCount++
 			}
 
@@ -994,6 +1025,10 @@ FLAGS
         legacy_code        string
         status             string   active | inactive. SKU lifecycle state (defaults to active).
         extra_data         object   arbitrary key-value metadata
+        tags               string[] CREATE only: the new variant's own tag
+                                    names. On an UPDATE item it is refused
+                                    (E9474) and nothing in the call is
+                                    applied; use variants tags add|remove.
 
       That table is the whole accepted set. The API rejects a variant object
       carrying any other key — an option3, or a field you misspelled — and the
@@ -1127,6 +1162,7 @@ func init() {
 	productsListCmd.Flags().StringVar(&productListCategoryIDs, "category-ids", "", "comma-separated list of category UUIDs to filter by (max 50)")
 	productsListCmd.Flags().StringVar(&productListProductTypeIDs, "product-type-ids", "", "comma-separated list of product type UUIDs to filter by (max 50)")
 	productsListCmd.Flags().StringVar(&productListUnitIDs, "unit-ids", "", "comma-separated list of unit UUIDs to filter by (max 50)")
+	productsListCmd.Flags().StringVar(&productListTags, "tags", "", "comma-separated catalog tag names; only products carrying every one, themselves or through one variant (max 50)")
 
 	productsVariantsCmd.Flags().StringArrayVar(&productVariantsDelete, "delete-variant", nil, "variant UUID to retire; repeatable")
 
@@ -1144,7 +1180,7 @@ func init() {
 	productsCreateCmd.Flags().StringVar(&productCreateProductTypeID, "product-type-id", "", "product type UUID")
 	productsCreateCmd.Flags().StringVar(&productCreateUnitID, "unit-id", "", "unit UUID (required unless --from-json is used)")
 	productsCreateCmd.Flags().StringArrayVar(&productCreateAliases, "aliases", nil, "product aliases / alternative search names (repeatable: --aliases foo --aliases bar)")
-	productsCreateCmd.Flags().StringArrayVar(&productCreateTags, "tags", nil, "free-form product tags (repeatable: --tags foo --tags bar)")
+	productsCreateCmd.Flags().StringArrayVar(&productCreateTags, "tags", nil, "catalog tag name the product carries from creation (repeatable: --tags Hè --tags \"Sale 50\")")
 	productsCreateCmd.Flags().StringVar(&productCreateFromJSON, "from-json", "", "path to JSON file with full request body (use - for stdin)")
 
 	// products update flags
@@ -1158,7 +1194,9 @@ func init() {
 	productsUpdateCmd.Flags().StringVar(&productUpdateProductTypeID, "product-type-id", "", "new product type UUID")
 	productsUpdateCmd.Flags().StringVar(&productUpdateUnitID, "unit-id", "", "new unit UUID")
 	productsUpdateCmd.Flags().StringArrayVar(&productUpdateAliases, "aliases", nil, "product aliases (repeatable: --aliases foo --aliases bar)")
-	productsUpdateCmd.Flags().StringArrayVar(&productUpdateTags, "tags", nil, "free-form product tags (repeatable: --tags foo --tags bar)")
+	// Kept hidden so a caller still sending --tags learns where tags went.
+	productsUpdateCmd.Flags().StringArrayVar(&productUpdateTags, "tags", nil, "removed: use products tags add|remove")
+	_ = productsUpdateCmd.Flags().MarkHidden("tags")
 	productsUpdateCmd.Flags().StringVar(&productUpdateFromJSON, "from-json", "", "path to JSON file with update body (use - for stdin); mutually exclusive with individual field flags")
 
 	// products variants flags
@@ -1166,7 +1204,7 @@ func init() {
 	productsVariantsCmd.Flags().StringVar(&productVariantsProductID, "product-id", "", "product UUID (required)")
 	productsVariantsCmd.Flags().StringVar(&productVariantsFromJSON, "from-json", "", "path to JSON array file (use - for stdin) (required)")
 
-	productCmd.AddCommand(productsListCmd, productsGetCmd, productsCreateCmd, productsUpdateCmd, productsVariantsCmd, productsOptionsCmd, productsMediaCmd)
+	productCmd.AddCommand(productsListCmd, productsGetCmd, productsCreateCmd, productsUpdateCmd, productsVariantsCmd, productsOptionsCmd, productsMediaCmd, productsTagsCmd)
 	rootCmd.AddCommand(productCmd)
 }
 

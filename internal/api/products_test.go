@@ -507,8 +507,9 @@ func TestUpdateProductRequest_OmitsUnsetFields(t *testing.T) {
 	}
 }
 
-// TestProductRequests_TagsSerialization ensures tags reach the wire when set
-// (create + update) and are omitted when unset, matching the aliases behavior.
+// TestProductRequests_TagsSerialization ensures tags reach the wire on create
+// and are omitted when unset. An update carries no tags: the API refuses any
+// update holding a tag list (E9474), so the field is absent from the struct.
 func TestProductRequests_TagsSerialization(t *testing.T) {
 	create, err := json.Marshal(CreateProductRequest{Name: "P", Tags: []string{"organic", "premium"}})
 	if err != nil {
@@ -518,16 +519,10 @@ func TestProductRequests_TagsSerialization(t *testing.T) {
 		t.Errorf("create body missing tags: %s", create)
 	}
 
-	update, err := json.Marshal(UpdateProductRequest{Tags: []string{"sale"}})
-	if err != nil {
-		t.Fatalf("marshal update: %v", err)
-	}
-	var m map[string]any
-	if err := json.Unmarshal(update, &m); err != nil {
-		t.Fatalf("unmarshal update: %v", err)
-	}
-	if len(m) != 1 || m["tags"] == nil {
-		t.Errorf("update body should carry only tags, got %v", m)
+	name := "N"
+	update, _ := json.Marshal(UpdateProductRequest{Name: &name})
+	if strings.Contains(string(update), "tags") {
+		t.Errorf("update body must never carry tags: %s", update)
 	}
 
 	// Unset tags must not appear (omitempty).
