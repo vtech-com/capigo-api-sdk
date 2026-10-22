@@ -30,6 +30,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 - **`capigo help versioning` no longer claims v1 is purely additive.**
 - `api/openapi.json` refreshed from production for capigo Epic 34.
 
+### Security
+
+- **Built with Go 1.26.10**, which fixes `crypto/x509` vulnerability GO-2026-6809 reachable from
+  attachment downloads.
+
 ## [0.30.0] — 2026-10-20
 
 ### Added
