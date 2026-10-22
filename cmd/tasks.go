@@ -2285,6 +2285,9 @@ FLAGS
             "due_date": "2026-07-31", "priority": "Low|Normal|High|Urgent",
             "status": "Pending|To-Do|Doing|Done|Closed|Cancelled" }
 
+      "assignee" is accepted for "assignee_id". Any other key exits 5 before
+      anything is sent, rather than being dropped.
+
         capigo tasks create --tenant acme --title "Fix login bug" \
             --priority high
 
@@ -2363,9 +2366,9 @@ OUTPUT
 			if err != nil {
 				return handleErr(fmt.Errorf("read --subtasks-json: %w", err))
 			}
-			var subtasks []api.SubtaskItem
-			if err := json.Unmarshal(raw, &subtasks); err != nil {
-				return handleErr(fmt.Errorf("--subtasks-json must be a JSON array of subtask items: %w", err))
+			subtasks, err := decodeSubtaskItems("--subtasks-json", raw)
+			if err != nil {
+				failValidation("%v", err)
 			}
 
 			task := api.CreateTaskWithSubtasksTask{Title: taskCreateTitle}
@@ -2539,9 +2542,12 @@ FLAGS
   --from-json <path|->
       A JSON array of subtask items, at most 25, where - reads stdin. Only
       title is required on each item. Mutually exclusive with the single-item
-      flags above.
+      flags above. An item takes title, description, assignee (or
+      assignee_id, the same user id), due_date, priority and status. Any
+      other key exits 5 before anything is sent, rather than being dropped.
 
-        echo '[{"title":"Design"},{"title":"Build","priority":"High"}]' \
+        echo '[{"title":"Design"},
+               {"title":"Build","priority":"High","assignee":"<user id>"}]' \
           | capigo tasks subtasks create <parent-uuid> --tenant acme \
                 --from-json -
 
@@ -2598,8 +2604,9 @@ OUTPUT
 			if err != nil {
 				return handleErr(fmt.Errorf("read --from-json: %w", err))
 			}
-			if err := json.Unmarshal(raw, &subtasks); err != nil {
-				return handleErr(fmt.Errorf("--from-json must be a JSON array of subtask items: %w", err))
+			subtasks, err = decodeSubtaskItems("--from-json", raw)
+			if err != nil {
+				failValidation("%v", err)
 			}
 		} else {
 			if taskSubtasksTitle == "" {
@@ -3361,4 +3368,41 @@ func commentsPath(base, typeFlag, sortFlag string, page, limit int) string {
 		path += "?" + params.Encode()
 	}
 	return path
+}
+
+// subtaskItemKeys are the keys a subtask item may carry. "assignee", the flag's
+// name, is accepted for the API's "assignee_id": decoding straight into
+// api.SubtaskItem dropped it silently and left every subtask unassigned.
+var subtaskItemKeys = map[string]bool{
+	"title": true, "description": true, "assignee": true, "assignee_id": true,
+	"due_date": true, "priority": true, "status": true,
+}
+
+func decodeSubtaskItems(flag string, raw []byte) ([]api.SubtaskItem, error) {
+	var items []map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &items); err != nil {
+		return nil, fmt.Errorf("%s must be a JSON array of subtask items: %w", flag, err)
+	}
+	out := make([]api.SubtaskItem, 0, len(items))
+	for i, item := range items {
+		for k := range item {
+			if !subtaskItemKeys[k] {
+				return nil, fmt.Errorf("%s item %d: unknown key %q; an item takes title, description, assignee (or assignee_id), due_date, priority, status", flag, i, k)
+			}
+		}
+		if a, ok := item["assignee"]; ok {
+			if b, both := item["assignee_id"]; both && string(a) != string(b) {
+				return nil, fmt.Errorf("%s item %d: assignee and assignee_id differ; send one", flag, i)
+			}
+			item["assignee_id"] = a
+			delete(item, "assignee")
+		}
+		norm, _ := json.Marshal(item)
+		var st api.SubtaskItem
+		if err := json.Unmarshal(norm, &st); err != nil {
+			return nil, fmt.Errorf("%s item %d: %w", flag, i, err)
+		}
+		out = append(out, st)
+	}
+	return out, nil
 }

@@ -9,6 +9,13 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Subtask items keep their assignee (vtech-com/capigo#1348).** `tasks subtasks create --from-json`
+  and `tasks create --subtasks-json` dropped an item's `assignee` key silently, leaving every
+  subtask unassigned. Both now accept `assignee` as well as `assignee_id`, and refuse any other
+  unknown key (exit 5) instead of dropping it.
+
 ## [0.31.0] — 2026-10-22
 
 ### Added
