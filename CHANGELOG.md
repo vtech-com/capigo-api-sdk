@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.31.0] — 2026-10-22
+
 ### Added
 
 - **Catalog tag commands (#119).** `tags list` lists the tenant's catalog tags as `{ name, color }`.
