@@ -313,7 +313,6 @@ type UpdateProductRequest struct {
 	Status        *string  `json:"status,omitempty"`
 	Currency      *string  `json:"currency,omitempty"`
 	Aliases       []string `json:"aliases,omitempty"`
-	Tags          []string `json:"tags,omitempty"`
 }
 
 // UpsertVariantItem is one element of the PUT /pcms/products/{id}/variants array.

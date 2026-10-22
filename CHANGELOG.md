@@ -9,6 +9,32 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Catalog tag commands (#119).** `tags list` lists the tenant's catalog tags as `{ name, color }`.
+  `products tags add|remove <product-id> <name>` and `variants tags add|remove <variant-id> <name>`
+  change one tag at a time. `products list --tags` and `variants list --tags` return only rows
+  carrying every listed tag.
+- **Error guidance for tag refusals.** `E9473` (bad name), `E9474` (an update carrying a tag list),
+  `E9455` (removing an inherited tag from a variant) and `INVALID_TAGS` now carry a `next` step.
+- **Skill: catalog tags guide.** `skills/capigo-api` reuses an existing tag before coining one,
+  changes tags one at a time, and tells catalog tags apart from task labels.
+
+### Changed
+
+- **Breaking: `products update --tags` is gone.** The API now refuses any product or variant update
+  carrying `tags` (`E9474`), so the flag fails locally and names the replacement command.
+  `products create --tags` stays: it sets the starting tags.
+- **Tags read as objects.** Product `tags` are `[{ "name", "color" }]`; variants carry `own_tags`
+  and `inherited_tags`. Help output samples follow.
+- **`capigo help versioning` no longer claims v1 is purely additive.**
+- `api/openapi.json` refreshed from production for capigo Epic 34.
+
+### Security
+
+- **Built with Go 1.26.10**, which fixes `crypto/x509` vulnerability GO-2026-6809 reachable from
+  attachment downloads.
+
 ## [0.30.0] — 2026-10-20
 
 ### Added

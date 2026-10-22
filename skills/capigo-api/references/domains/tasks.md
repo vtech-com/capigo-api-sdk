@@ -134,7 +134,8 @@ follower.
 
 ## Labels
 
-"Tag", "label", "nhãn" and "gắn thẻ" all mean task labels. Labels are the tenant's shared
+On a task, "tag", "label", "nhãn" and "gắn thẻ" all mean task labels. On a product or variant
+they mean catalog tags, a separate set: see `products.md`. Labels are the tenant's shared
 vocabulary, and the API **creates** a label for any name it has not seen: a typo or a variant is
 written silently as a new label for the whole tenant. There is no label create or delete command.
 

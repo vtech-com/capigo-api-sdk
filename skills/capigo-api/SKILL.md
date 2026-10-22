@@ -9,7 +9,8 @@ description: >
   configuration — even when the user never names the CLI or Capigo itself, and in whatever
   language they ask: "create a task and assign it to someone", "what's on the board this week",
   "read or post comments on that task", "list products", "look up this SKU or barcode", "set
-  this product's origin or voltage", "how many brands do we have", "tag this task urgent",
+  this product's origin or voltage", "tag this product Hè", "products tagged Sale",
+  "how many brands do we have", "tag this task urgent",
   "tasks labelled X", "plan an inbound receipt for this PO", "which warehouse can cover this
   order". Also the reference for how the CLI itself works: detecting the install, logging in,
   picking a tenant, exit codes, JSON output, and self-diagnosing a misbehaving command. If a
@@ -191,7 +192,8 @@ For an operation that creates, traverses, or changes a relationship, load only t
 domain reference after reading leaf help:
 
 - [`references/domains/products.md`](./references/domains/products.md) for products, variants,
-  product references, and product properties (`capigo property-definitions`);
+  product references, product properties (`capigo property-definitions`), and catalog tags
+  (`products tags`, `variants tags`, `capigo tags list`);
 - [`references/domains/tasks.md`](./references/domains/tasks.md) for tasks, assignees, subtasks,
   comments and mentions, and labels (`--label`, `capigo labels list`);
 - [`references/domains/boards.md`](./references/domains/boards.md) when placing a task on a board
@@ -199,8 +201,8 @@ domain reference after reading leaf help:
 - [`references/domains/wms.md`](./references/domains/wms.md) for anything under `capigo wms`:
   warehouses, locations, availability, and the four stock documents.
 
-For product creation, and for any write to `properties` or a property definition, read
-`products.md` after the leaf help. For task or subtask
+For product creation, for any write to `properties` or a property definition, and for adding or
+removing a catalog tag, read `products.md` after the leaf help. For task or subtask
 creation, or for posting a comment, read `tasks.md` after the relevant leaf help; read `boards.md`
 as well only for board placement. For any `capigo wms` write, and for reporting a WMS read to the user, read `wms.md`: its
 verdicts, null costs, and statuses are easy to report wrongly. Do not load a domain reference for

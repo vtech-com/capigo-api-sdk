@@ -1,7 +1,7 @@
 # Product domain relationships
 
-Read this only when creating or changing products, variants, options, properties, or product
-references. Leaf help is authoritative for command flags; this document defines the product model
+Read this only when creating or changing products, variants, options, properties, catalog tags,
+or product references. Leaf help is authoritative for command flags; this document defines the product model
 the agent must preserve.
 
 ## Create flow
@@ -73,6 +73,38 @@ now ad hoc, and the key is spent — keys never change and are never reused, del
 Tell the user that reach before relabelling or deleting, and do not delete-and-recreate to "rename"
 a key; it cannot work.
 
+## Catalog tags
+
+A catalog tag is a name and a colour that products and variants carry. The tenant has one shared
+set: "Hè", "hè" and " hè " are the same tag, kept under the spelling it was first created with.
+Catalog tags are not task labels; `capigo labels` is the other set. On a product or a variant,
+"tag", "nhãn" and "gắn thẻ" mean a catalog tag.
+
+- **Reads.** A product's `tags` are `[{ "name", "color" }]`. A variant's `own_tags` are its own;
+  its `inherited_tags` are its product's, read now. A tag carried both ways is listed as inherited
+  only. `capigo tags list` lists the tenant's tags, including ones nothing carries any more.
+- **Change one at a time.** `capigo products tags add|remove <product-id> <name>` and
+  `capigo variants tags add|remove <variant-id> <name>`. No command sets the whole list, and the
+  API refuses any update carrying `tags` (`E9474`) — even `[]`, even through `--from-json`. Each
+  call is idempotent: adding a tag already carried, or removing one not carried, exits 0.
+- **Create carries names.** `products create --tags` (repeatable), and `tags` on a new item of
+  `products variants`, set the starting tags. An existing variant item carrying `tags` refuses the
+  whole call.
+- **Reuse before you create.** Any name the tenant has not seen creates a tag for the whole tenant,
+  with a colour the system picks. Read `capigo tags list` first; a name matching an existing tag in
+  any letter case is that tag. When nothing fits, confirm the exact new name with the user before
+  sending it. Tag only on request.
+- **Inherited tags belong to the product.** Removing from a variant a tag it only inherits is
+  refused (`E9455`). Remove it on the product instead, and tell the user every variant loses it.
+- **Name rule.** 1–30 letters, digits, spaces, `-` or `_`. Anything else is refused (`E9473`) and
+  nothing is written.
+- **Filter.** `products list --tags A,B` returns products carrying every listed tag, themselves or
+  through one live variant; `variants list --tags A,B` returns variants whose own and inherited
+  tags hold them all. A name that is no tag matches nothing (exit 0, empty `.data`), so an empty
+  answer may mean a misspelled tag: check `capigo tags list` before reporting "none".
+- After a change, report the tags in `.data` as returned, not the name you sent: the stored
+  spelling may differ.
+
 ## Images
 
 - Product and variant reads carry `media[]`: signed, time-limited URLs (`expiresAt`), not permanent
@@ -81,8 +113,7 @@ a key; it cannot work.
 
 ## Metadata and recovery
 
-- Aliases are alternate names or codes. Tags are product-level labels shared by all variants; they
-  are not variant attributes.
+- Aliases are alternate names or codes. Tags are covered under [Catalog tags](#catalog-tags).
 - Product reads carry `notes[]` — internal staff notes (`id`, `content`, `tag`, `author`,
   timestamps). Read-only: no write accepts or mutates them; `[]` means the product has no notes.
 - After a write, check `error`, `meta.tenant`, `.data.options`, and `.data.variants` rather than

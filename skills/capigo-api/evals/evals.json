@@ -76,6 +76,29 @@
         "Offers `capigo property-definitions update` to change the label, noting that the new label reaches every product carrying the definition.",
         "Asks the user to confirm before making a tenant-wide change rather than executing it unasked."
       ]
+    },
+    {
+      "id": 7,
+      "prompt": "In tenant `acme`, the user says: \"gắn thẻ hè cho sản phẩm 8f2a1c07-2b6e-4f83-a5d1-8c07e2f419bb\". Plan the CLI calls, but do not execute any write.",
+      "expected_output": "The agent treats the request as a catalog tag on a product (not a task label), reads `capigo tags list` to reuse an existing spelling such as \"Hè\", and plans one `capigo products tags add <id> <name> --tenant acme` call. It never sends a tag list through `products update`.",
+      "files": [],
+      "assertions": [
+        "Treats 'gắn thẻ' on a product as a catalog tag, not a task label.",
+        "Reads `capigo tags list` (or says to) before choosing the name, and reuses an existing tag whose name matches in any letter case.",
+        "Uses `capigo products tags add` with the product id and one name, and `--tenant acme`.",
+        "Does not use `products update --tags` or send a `tags` list in an update body."
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "A variant 6f1c9a3d-8b2e-4f01-9c77-1a3d5e7f9b21 in tenant `acme` shows tag \"Sale\" in `inherited_tags`. The user asks to remove \"Sale\" from that variant only. Explain what you would do; do not execute any write.",
+      "expected_output": "The agent explains that an inherited tag belongs to the product and cannot be removed from one variant (`E9455`). It offers to remove it on the product with `capigo products tags remove`, warning that every variant of the product then loses it, and asks before doing so.",
+      "files": [],
+      "assertions": [
+        "Says a tag the variant only inherits cannot be removed from the variant alone (E9455 or equivalent).",
+        "Offers removal on the product via `capigo products tags remove` and states every variant loses the tag.",
+        "Asks the user before removing it from the product rather than doing it unasked."
+      ]
     }
   ]
 }

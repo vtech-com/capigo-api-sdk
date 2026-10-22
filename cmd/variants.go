@@ -15,11 +15,12 @@ import (
 
 var variantsCmd = &cobra.Command{
 	Use:   "variants",
-	Short: "Query PCMS variants (read-only)",
+	Short: "Query PCMS variants and change their tags",
 	Long: `Product variants in the Capigo Product Catalog Management System (PCMS).
 
-This group is read-only. Variants are written through products variants,
-which upserts them onto their product; this group only reads them back.
+Variants are written through products variants, which upserts them onto
+their product; this group reads them back. The one write here is variants tags
+add|remove, which changes a variant's own catalog tags one at a time.
 Every command here requires a tenant, and every response names the tenant
 it resolved to, in meta.
 
@@ -36,6 +37,7 @@ var (
 	variantListBarcodePrefix string
 	variantListProductID     string
 	variantListStatus        string
+	variantListTags          string
 	variantListSort          string
 	variantListPage          int
 	variantListLimit         int
@@ -53,7 +55,8 @@ PURPOSE
 
 USAGE
   capigo variants list --tenant <code> [--product-id <id>] [--status <s>]
-                       [--barcode-prefix <p>] [--sort <order>]
+                       [--barcode-prefix <p>] [--tags <name,...>]
+                       [--sort <order>]
                        [--page <n>] [--limit <n>]
 
 FLAGS
@@ -75,6 +78,13 @@ FLAGS
       variants in the tenant.
 
         capigo variants list --tenant acme --barcode-prefix 634007
+
+  --tags <name,...>
+      Only variants whose own and inherited (product) tags together hold every
+      listed catalog tag, comma-separated, any letter case, at most 50. A name
+      that is no tag of the tenant matches nothing: exit 0, empty .data.
+
+        capigo variants list --tenant acme --tags "Hè,Size lẻ"
 
   --sort <order>
       barcode for ascending, -barcode for descending. Any other value exits
@@ -102,7 +112,8 @@ OUTPUT
             "sku": "AT-001-S", "name": "Áo thun / S",
             "product_id": "7c1f2e88-3a4b-4c5d-9e6f-1a2b3c4d5e6f",
             "manufacturer_code": null, "legacy_code": null,
-            "status": "active", "extra_data": null, "media": [] }
+            "status": "active", "extra_data": null, "media": [],
+            "own_tags": [], "inherited_tags": [ { "name": "Hè", "color": "sky" } ] }
         ],
         "meta": {
           "tenant": "acme",
@@ -140,7 +151,7 @@ OUTPUT
 		tenant := resolveTenant(variantListTenant, profile)
 		requireTenant(tenant, "variants commands")
 
-		resp, err := client.ListVariants(ctx, tenant, variantListBarcodePrefix, variantListSort, variantListProductID, variantListStatus, variantListPage, variantListLimit)
+		resp, err := client.ListVariants(ctx, tenant, variantListBarcodePrefix, variantListSort, variantListProductID, variantListStatus, variantListTags, variantListPage, variantListLimit)
 		if err != nil {
 			return handleErr(err)
 		}
@@ -212,9 +223,12 @@ OUTPUT
           "extra_data": { "seeded_from": "pcms" },
           "media": [],
           "variant_type": "manual",
+          "own_tags": [ { "name": "Size lẻ", "color": "lime" } ],
+          "inherited_tags": [ { "name": "Hè", "color": "sky" } ],
           "product": { "id": "7c1f2e88-0a3d-4f21-9b77-5c1e2a4d9f10",
                        "name": "Áo thun basic", "slug": "ao-thun-basic",
-                       "aliases": ["VVD013"], "tags": ["hè"] },
+                       "aliases": ["VVD013"],
+                       "tags": [ { "name": "Hè", "color": "sky" } ] },
           "created_at": "2026-06-01T08:00:00Z",
           "updated_at": "2026-06-01T08:00:00Z"
         },
@@ -226,6 +240,10 @@ OUTPUT
   legacy: a product now carries at most two option axes, so only a variant
   written before that cap can have a non-null option3, and no write accepts the
   field. dimensions, when present, is { "l": ..., "w": ..., "h": ... }.
+
+  own_tags are the variant's own catalog tags; inherited_tags are its
+  product's, read now. A tag carried both ways is listed as inherited only.
+  Change own tags with variants tags add|remove.
 
   product names the variant's parent — id, name, slug, aliases, tags — so a
   lookup by sku reaches the product without a second call. The rows of
@@ -292,6 +310,7 @@ func init() {
 	variantsListCmd.Flags().StringVar(&variantListTenant, "tenant", "", "tenant code (required)")
 	variantsListCmd.Flags().StringVar(&variantListProductID, "product-id", "", "only variants of this product (UUID)")
 	variantsListCmd.Flags().StringVar(&variantListStatus, "status", "", "only active or inactive variants")
+	variantsListCmd.Flags().StringVar(&variantListTags, "tags", "", "comma-separated catalog tag names; only variants carrying every one, own or inherited (max 50)")
 	variantsListCmd.Flags().StringVar(&variantListBarcodePrefix, "barcode-prefix", "", "filter variants whose barcode starts with this value")
 	variantsListCmd.Flags().StringVar(&variantListSort, "sort", "-barcode", `sort order: "barcode" (ascending) or "-barcode" (descending)`)
 	variantsListCmd.Flags().IntVar(&variantListPage, "page", 0, "page number")
@@ -300,6 +319,6 @@ func init() {
 	variantsGetCmd.Flags().StringVar(&variantGetTenant, "tenant", "", "tenant code (required)")
 	variantsGetCmd.Flags().StringVar(&variantGetSKU, "sku", "", "address the variant by sku instead of by id")
 
-	variantsCmd.AddCommand(variantsListCmd, variantsGetCmd)
+	variantsCmd.AddCommand(variantsListCmd, variantsGetCmd, variantsTagsCmd)
 	rootCmd.AddCommand(variantsCmd)
 }
