@@ -15,6 +15,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -65,7 +66,12 @@ func envkeyBinary(t *testing.T) string {
 			return
 		}
 		envkeyBuildDir = dir
-		envkeyBuiltBin = filepath.Join(dir, "capigo")
+		name := "capigo"
+		if runtime.GOOS == "windows" {
+			// exec finds a Windows program only by its extension.
+			name += ".exe"
+		}
+		envkeyBuiltBin = filepath.Join(dir, name)
 		build := exec.Command("go", "build", "-o", envkeyBuiltBin, ".")
 		build.Dir = ".."
 		if out, err := build.CombinedOutput(); err != nil {
@@ -206,11 +212,22 @@ func runCapigo(t *testing.T, env []string, args ...string) cliResult {
 	return cliResult{stdout: stdout.String(), stderr: stderr.String(), code: code}
 }
 
-// baseEnv is HOME plus the fake API's URL, followed by extra KEY=VALUE pairs.
+// baseEnv is the home directory plus the fake API's URL, followed by extra
+// KEY=VALUE pairs. An empty home sets no home variable at all.
 func baseEnv(home string, f *fakeAPI, extra ...string) []string {
 	env := []string{"CAPIGO_API_URL=" + f.srv.URL}
 	if home != "" {
-		env = append(env, "HOME="+home)
+		// os.UserHomeDir reads USERPROFILE on Windows and HOME elsewhere.
+		env = append(env, "HOME="+home, "USERPROFILE="+home)
+	}
+	if runtime.GOOS == "windows" {
+		// A Windows process cannot open a socket without SYSTEMROOT, and
+		// os.TempDir falls back to the Windows directory without TEMP/TMP.
+		for _, k := range []string{"SYSTEMROOT", "TEMP", "TMP"} {
+			if v, ok := os.LookupEnv(k); ok {
+				env = append(env, k+"="+v)
+			}
+		}
 	}
 	return append(env, extra...)
 }
@@ -677,7 +694,7 @@ func TestUnchangedWithoutEnvManagement(t *testing.T) {
 			if r.hasErrorField(t, "key_source") {
 				t.Error("key_source present with both variables absent")
 			}
-			got := strings.ReplaceAll(r.stdout, f.srv.URL, serverURLMarker)
+			got := normalizeNewlines(strings.ReplaceAll(r.stdout, f.srv.URL, serverURLMarker))
 
 			goldenPath := filepath.Join(envkeyGoldenDir, tc.golden)
 			if update {
@@ -692,7 +709,7 @@ func TestUnchangedWithoutEnvManagement(t *testing.T) {
 			if err != nil {
 				t.Fatalf("read golden: %v", err)
 			}
-			if got != string(want) {
+			if got != normalizeNewlines(string(want)) {
 				t.Errorf("stdout differs from the baseline golden %s\ngot:\n%s\nwant:\n%s", goldenPath, got, want)
 			}
 			if tc.after != nil {
@@ -700,4 +717,9 @@ func TestUnchangedWithoutEnvManagement(t *testing.T) {
 			}
 		})
 	}
+}
+
+// normalizeNewlines lets a golden checked out with CRLF compare equal to LF output.
+func normalizeNewlines(s string) string {
+	return strings.ReplaceAll(s, "\r\n", "\n")
 }
