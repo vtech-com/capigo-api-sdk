@@ -1,0 +1,13 @@
+{
+  "data": [
+    {
+      "tenant_code": "acme",
+      "name": "Acme"
+    },
+    {
+      "tenant_code": "demo",
+      "name": "Demo"
+    }
+  ],
+  "meta": {}
+}

@@ -8,7 +8,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
-	"github.com/vtech-com/capigo-api-sdk/internal/config"
 	"github.com/vtech-com/capigo-api-sdk/internal/output"
 )
 
@@ -98,10 +97,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(unitListTenant, profile)
 		requireTenant(tenant, "units commands")
@@ -175,10 +171,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(unitGetTenant, profile)
 		requireTenant(tenant, "units commands")
@@ -270,10 +263,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(unitCreateTenant, profile)
 		requireTenant(tenant, "units commands")
@@ -394,10 +384,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(unitUpdateTenant, profile)
 		requireTenant(tenant, "units commands")
@@ -520,10 +507,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(unitReplaceTenant, profile)
 		requireTenant(tenant, "units commands")

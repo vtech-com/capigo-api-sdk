@@ -10,6 +10,10 @@ import (
 // withTempConfig overrides ConfigPath to use a temp file for the duration of the test.
 func withTempConfig(t *testing.T) string {
 	t.Helper()
+	t.Setenv(NoConfigEnv, "")
+	if err := os.Unsetenv(NoConfigEnv); err != nil {
+		t.Fatal(err)
+	}
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.json")
 	orig := ConfigPath
@@ -247,6 +251,7 @@ func TestMergeKnownTenantsProfileNotFound(t *testing.T) {
 }
 
 func TestSaveCreatesDirIfMissing(t *testing.T) {
+	withTempConfig(t) // for its CAPIGO_NO_CONFIG reset; the path is overridden below
 	dir := t.TempDir()
 	path := filepath.Join(dir, "subdir", "config.json")
 	orig := ConfigPath

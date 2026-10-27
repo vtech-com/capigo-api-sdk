@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
 	"github.com/vtech-com/capigo-api-sdk/internal/config"
+	"github.com/vtech-com/capigo-api-sdk/internal/credentials"
 	"github.com/vtech-com/capigo-api-sdk/internal/output"
 )
 
@@ -19,7 +20,8 @@ var tenantsCmd = &cobra.Command{
 
 Codes discovered by tenants list are cached in known_tenants in
 ~/.capigo/config.json, for reference — nothing here validates a --tenant
-value against that cache.
+value against that cache. When the environment manages the key
+(CAPIGO_API_KEY present, or CAPIGO_NO_CONFIG=1), nothing is cached.
 
 USAGE
   capigo tenants <command> [<args>]`,
@@ -76,9 +78,12 @@ OUTPUT
 		}
 
 		// Merge discovered tenants back into config. Reading the codes is not the
-		// same as choosing what to print: the rows go out as they arrived.
-		if err := config.MergeKnownTenants(cfg, tenantCodesOf(envelope.Data)); err == nil {
-			_ = config.Save(cfg)
+		// same as choosing what to print: the rows go out as they arrived. Under a
+		// managed key the codes belong to that key, not to the stored profile.
+		if !credentials.Managed() {
+			if err := config.MergeKnownTenants(cfg, tenantCodesOf(envelope.Data)); err == nil {
+				_ = config.Save(cfg)
+			}
 		}
 
 		// No listMeta here: this endpoint neither paginates nor sends meta, and

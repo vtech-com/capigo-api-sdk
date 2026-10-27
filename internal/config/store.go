@@ -46,8 +46,12 @@ var defaultPathProvider pathProvider = func() (string, error) {
 var ConfigPath = defaultPathProvider
 
 // Load reads the config file. If the file does not exist, Load returns a
-// zero Config (version=0, nil Profiles) and no error.
+// zero Config (version=0, nil Profiles) and no error. Under NoConfig it returns
+// the same zero Config without resolving a path, so it needs no HOME.
 func Load() (*Config, error) {
+	if NoConfig() {
+		return &Config{}, nil
+	}
 	path, err := ConfigPath()
 	if err != nil {
 		return nil, err
@@ -69,8 +73,12 @@ func Load() (*Config, error) {
 }
 
 // Save writes cfg to the config file atomically and enforces 0600 permissions.
-// It creates the parent directory if needed.
+// It creates the parent directory if needed. Under NoConfig it writes nothing
+// and returns ErrDisabled.
 func Save(cfg *Config) error {
+	if NoConfig() {
+		return ErrDisabled
+	}
 	path, err := ConfigPath()
 	if err != nil {
 		return err

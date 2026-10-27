@@ -11,7 +11,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
-	"github.com/vtech-com/capigo-api-sdk/internal/config"
 	"github.com/vtech-com/capigo-api-sdk/internal/output"
 )
 
@@ -143,10 +142,7 @@ OUTPUT
 		if err != nil {
 			return handleErr(err)
 		}
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 		tenant := resolveTenant(taskAttachmentsDownloadTenant, profile)
 		requireOneTaskAddress(taskID, taskAttachmentsDownloadCode, tenant)
 		requireAttachmentID(attachmentID)
@@ -272,10 +268,7 @@ OUTPUT
 		if err != nil {
 			return handleErr(err)
 		}
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 		tenant := resolveTenant(taskAttachmentsRemoveTenant, profile)
 		requireOneTaskAddress(taskID, taskAttachmentsRemoveCode, tenant)
 		requireAttachmentID(attachmentID)
@@ -400,10 +393,7 @@ OUTPUT
 		if err != nil {
 			return handleErr(err)
 		}
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 		tenant := resolveTenant(taskAttachmentsUploadTenant, profile)
 		requireOneTaskAddress(taskID, taskAttachmentsUploadCode, tenant)
 		requireUploadPath(uploadPath)
@@ -530,10 +520,7 @@ OUTPUT
 		if err != nil {
 			return handleErr(err)
 		}
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 		tenant := resolveTenant(taskCommentsAttachmentsDownloadTenant, profile)
 		requireOneTaskAddress(taskID, taskCommentsAttachmentsDownloadCode, tenant)
 		requireAttachmentID(attachmentID)

@@ -256,6 +256,8 @@ SUBRESOURCE_SAMPLES = [
 # `auth login` and `auth logout` write ~/.capigo/config.json, so they run under a
 # throwaway HOME. A verification script that edited the operator's credentials to
 # check a help page would be a poor trade.
+# They also run without CAPIGO_API_KEY and CAPIGO_NO_CONFIG, either of which would
+# make login, logout and config get refuse.
 LOCAL_CHECKS = [["version"], ["health"]]
 ISOLATED_CHECKS = [["auth", "login", "--key", "{key}"], ["config", "get", "api_url"],
                    ["auth", "logout"]]
@@ -272,7 +274,12 @@ def check_local_samples(cli, env, key):
     for cmd in checks:
         run_env = env
         if cmd[0] == "auth" or cmd[:2] == ["config", "get"]:
-            run_env = dict(env, HOME=home)
+            # Without CAPIGO_API_KEY: while it is present the environment manages
+            # the key, and auth login refuses to store one. Without
+            # CAPIGO_NO_CONFIG: at 1 every auth and config command is refused.
+            run_env = {k: v for k, v in env.items()
+                       if k not in ("CAPIGO_API_KEY", "CAPIGO_NO_CONFIG")}
+            run_env["HOME"] = home
         run = subprocess.run([cli] + cmd, capture_output=True, text=True, env=run_env)
         try:
             doc = json.loads(run.stdout)

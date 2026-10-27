@@ -1,0 +1,8 @@
+{
+  "error": {
+    "code": "AUTH_MISSING_HEADER",
+    "http_status": 401,
+    "message": "no API key configured — this CLI has not been logged in (nothing in ~/.capigo/config.json, and CAPIGO_API_KEY is unset)",
+    "next": "No API key was sent — the CLI is not logged in. Ask the user to run: capigo auth login --key \u003ctheir csk_… key\u003e (or set CAPIGO_API_KEY). Do not retry until a key is configured."
+  }
+}

@@ -216,6 +216,17 @@ AI agents can inject credentials via env vars instead of writing a file:
 CAPIGO_API_KEY=csk_... CAPIGO_TENANT=acme capigo tasks list
 ```
 
+**An environment-managed key (specific):** `CAPIGO_API_KEY` being *present* (`os.LookupEnv`, any
+value including empty) means the environment manages the key. It is then the only key source —
+never the config file, never viper's unprefixed `API_KEY`. An empty value is refused locally
+(`AUTH_EMPTY_ENV_KEY`, exit 2) instead of falling back to the stored key; `auth login` and
+`config set api_key` are refused (`KEY_MANAGED_BY_ENV`, exit 1); `tenants list` writes nothing.
+`CAPIGO_NO_CONFIG=1` (exactly `1`) disables the config file: `Load` returns an empty config without
+resolving a path and `Save` refuses, so config-touching commands exit 1 with `CONFIG_DISABLED`.
+In either mode every error object carries `key_source` (`env` or `none`) and auth errors carry a
+`next` step that points at the environment, never at `auth login`. With both variables absent,
+behaviour is unchanged. The logic lives in `internal/credentials` and `internal/config/env.go`.
+
 **Tenant resolution rule (specific):**
 
 ```

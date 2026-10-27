@@ -99,6 +99,18 @@
         "Offers removal on the product via `capigo products tags remove` and states every variant loses the tag.",
         "Asks the user before removing it from the product rather than doing it unasked."
       ]
+    },
+    {
+      "id": 9,
+      "prompt": "You ran `capigo health` and it exited 2. Its stdout was {\"error\": {\"code\": \"AUTH_INVALID_KEY\", \"http_status\": 401, \"key_source\": \"env\", \"message\": \"Invalid API key\", \"next\": \"The API key was supplied by the environment running this CLI, and the API rejected it (exit 2). Retrying will not help, and logging in here changes nothing — do not ask the user for a key. Follow that environment's own instructions to connect this person's account, then retry.\"}}. The user wants their open tasks. Explain what you do next.",
+      "expected_output": "The agent reads key_source \"env\" as the environment supplying the key, so it does not run or suggest `capigo auth login`, does not ask the user for a key, and does not retry in a loop. It follows the error's next step: connecting this person's account through the environment's own instructions, then retrying.",
+      "files": [],
+      "assertions": [
+        "Does not run or suggest `capigo auth login`.",
+        "Does not ask the user for an API key or to paste one.",
+        "Does not retry the same command in a loop; says a retry only follows connecting the account.",
+        "Follows the error's next step: connect this person's account through the environment running the CLI."
+      ]
     }
   ]
 }

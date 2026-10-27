@@ -15,7 +15,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
-	"github.com/vtech-com/capigo-api-sdk/internal/config"
 	"github.com/vtech-com/capigo-api-sdk/internal/output"
 )
 
@@ -338,10 +337,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(taskListTenant, profile)
 
@@ -491,10 +487,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(taskGetTenant, profile)
 		requireOneTaskAddress(id, taskGetCode, tenant)
@@ -625,10 +618,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(taskCommentsTenant, profile)
 		requireOneTaskAddress(id, taskCommentsCode, tenant)
@@ -789,10 +779,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(taskHistoryTenant, profile)
 		requireOneTaskAddress(id, taskHistoryCode, tenant)
@@ -1018,10 +1005,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(taskCommentsCreateTenant, profile)
 		requireOneTaskAddress(id, taskCommentsCreateCode, tenant)
@@ -1235,10 +1219,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(taskUpdateTenant, profile)
 		requireOneTaskAddress(id, taskUpdateCode, tenant)
@@ -1388,10 +1369,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(taskAssignAgentTenant, profile)
 		requireOneTaskAddress(id, taskAssignAgentCode, tenant)
@@ -1512,10 +1490,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(taskMoveTenant, profile)
 		requireOneTaskAddress(id, taskMoveCode, tenant)
@@ -1621,10 +1596,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(taskTransferOwnershipTenant, profile)
 		requireOneTaskAddress(id, taskTransferOwnershipCode, tenant)
@@ -1715,10 +1687,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(taskClaimTenant, profile)
 		requireOneTaskAddress(id, taskClaimCode, tenant)
@@ -1809,10 +1778,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(taskArchiveTenant, profile)
 		requireOneTaskAddress(id, taskArchiveCode, tenant)
@@ -1902,10 +1868,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(taskUnarchiveTenant, profile)
 		requireOneTaskAddress(id, taskUnarchiveCode, tenant)
@@ -1999,10 +1962,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(taskDeleteTenant, profile)
 		requireOneTaskAddress(id, taskDeleteCode, tenant)
@@ -2142,10 +2102,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(taskSubtasksListTenant, profile)
 		requireOneTaskAddress(id, taskSubtasksListCode, tenant)
@@ -2350,10 +2307,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(taskCreateTenant, profile)
 		requireTenant(tenant, "tasks create")
@@ -2589,10 +2543,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(taskSubtasksTenant, profile)
 		requireTenant(tenant, "tasks subtasks create")
@@ -2756,10 +2707,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(taskSubtasksMoveTenant, profile)
 		requireOneTaskAddress(parentID, taskSubtasksMoveCode, tenant)
@@ -2872,10 +2820,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(taskSubtasksDeleteTenant, profile)
 		requireOneTaskAddress(parentID, taskSubtasksDeleteCode, tenant)
