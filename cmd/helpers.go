@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
 	"github.com/vtech-com/capigo-api-sdk/internal/config"
+	"github.com/vtech-com/capigo-api-sdk/internal/credentials"
 	"github.com/vtech-com/capigo-api-sdk/internal/output"
 )
 
@@ -59,8 +60,10 @@ func requireUsableMediaType(flagGiven bool, value, flagName string) string {
 }
 
 // buildClient loads config and constructs an api.Client using the active profile.
-// Env var CAPIGO_API_KEY overrides the profile key; CAPIGO_API_URL and --api-url
-// override the profile URL; the default base URL is https://platform.capigo.app/api/v1.
+// credentials.Resolve picks the key: CAPIGO_API_KEY overrides the profile key,
+// and when the environment manages the key it is the only source. CAPIGO_API_URL
+// and --api-url override the profile URL; the default base URL is
+// https://platform.capigo.app/api/v1.
 func buildClient() (*api.Client, *config.Config, error) {
 	cfg, err := config.Load()
 	if err != nil {
@@ -81,21 +84,9 @@ func buildClient() (*api.Client, *config.Config, error) {
 		profile = &config.Profile{}
 	}
 
-	apiKey := profile.APIKey
-	if k := viper.GetString("api_key"); k != "" {
-		apiKey = k
-	}
-	if apiKey == "" {
-		// Sending "Authorization: Bearer " with nothing after it costs a round
-		// trip to learn what is already known here, and comes back as
-		// AUTH_INVALID_FORMAT — "the header was malformed" — which points at the
-		// wrong repair. Diagnose it locally, as the condition it is.
-		return nil, nil, &api.APIError{
-			Code:           "AUTH_MISSING_HEADER",
-			Message:        "no API key configured — this CLI has not been logged in (nothing in ~/.capigo/config.json, and CAPIGO_API_KEY is unset)",
-			HTTPStatus:     401,
-			LocalDiagnosis: true,
-		}
+	apiKey, _, err := credentials.Resolve(profile.APIKey, viper.GetString("api_key"))
+	if err != nil {
+		return nil, nil, err
 	}
 
 	baseURL := profile.APIURL
@@ -127,6 +118,10 @@ func buildClient() (*api.Client, *config.Config, error) {
 // error with the catalog interpretation when the code is known. It does not exit.
 func renderCLIError(err error) {
 	detail := output.ErrorDetail{Code: "ERROR", Message: err.Error()}
+	managed := credentials.Managed()
+	if managed {
+		detail.KeySource = string(credentials.ManagedSource())
+	}
 	serverResponded := false
 	var apiErr *api.APIError
 	if errors.As(err, &apiErr) {
@@ -142,7 +137,7 @@ func renderCLIError(err error) {
 	// arg-validation errors never round-tripped, so the brake — "a failed write
 	// is not a missing capability" — would be misleading noise there.
 	if serverResponded || (apiErr != nil && apiErr.LocalDiagnosis) {
-		if info, ok := api.LookupError(detail.Code); ok {
+		if info, ok := api.LookupErrorFor(detail.Code, managed); ok {
 			detail.Meaning = info.Meaning
 			detail.Next = info.Next
 			detail.CapabilityNote = info.CapabilityNote
@@ -185,6 +180,10 @@ func handleErr(err error) error {
 // contradict.
 func failWithData(err error, data any, meta output.Meta) error {
 	detail := output.ErrorDetail{Code: "ERROR", Message: err.Error()}
+	managed := credentials.Managed()
+	if managed {
+		detail.KeySource = string(credentials.ManagedSource())
+	}
 	var apiErr *api.APIError
 	if errors.As(err, &apiErr) {
 		detail.Code = apiErr.Code
@@ -192,9 +191,24 @@ func failWithData(err error, data any, meta output.Meta) error {
 		detail.RequestID = apiErr.RequestID
 		detail.HTTPStatus = apiErr.HTTPStatus
 	}
+	// Outside managed mode this path prints no next step, and still does not.
+	// Inside it, an auth failure mid-sweep must not leave the caller guessing
+	// at a login that would change nothing.
+	if managed {
+		if info, ok := api.LookupErrorFor(detail.Code, true); ok && info.Next != "" {
+			detail.Next = info.Next
+		}
+	}
 	_ = output.WritePartial(os.Stdout, os.Stderr, data, meta, detail)
 	os.Exit(api.ExitCodeFor(err))
 	return nil
+}
+
+// failLocal renders an error the CLI diagnosed itself — a refusal, say — and
+// exits. The error carries LocalDiagnosis, so its catalog next step is shown.
+func failLocal(e *api.APIError) {
+	renderCLIError(e)
+	os.Exit(api.ExitCodeFor(e))
 }
 
 // fail renders a locally-detected error — a bad flag combination, an

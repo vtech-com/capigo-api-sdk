@@ -169,6 +169,9 @@ type ErrorDetail struct {
 	Next           string
 	CapabilityNote bool
 	RawBody        string
+	// KeySource says where the API key came from ("env", "none"). It is set
+	// only when the environment manages the key, and printed only when set.
+	KeySource string
 }
 
 // RenderError writes a failure as JSON on stdout and a one-line summary on
@@ -200,6 +203,7 @@ func errorObject(d ErrorDetail) map[string]any {
 	putIf("meaning", d.Meaning)
 	putIf("next", d.Next)
 	putIf("raw", d.RawBody)
+	putIf("key_source", d.KeySource)
 	if d.HTTPStatus > 0 {
 		e["http_status"] = d.HTTPStatus
 	}

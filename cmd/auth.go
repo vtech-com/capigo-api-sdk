@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
 	"github.com/vtech-com/capigo-api-sdk/internal/config"
+	"github.com/vtech-com/capigo-api-sdk/internal/credentials"
 	"github.com/vtech-com/capigo-api-sdk/internal/output"
 )
 
@@ -22,6 +23,11 @@ var authCmd = &cobra.Command{
 CAPIGO_API_KEY, if set, overrides the key stored here on every call.
 Otherwise the key comes from the active profile in ~/.capigo/config.json
 (file mode 600). None of these commands take --tenant.
+
+When CAPIGO_API_KEY is present at all — even empty — the environment manages
+the key: login refuses to store one, and an empty value is never replaced by
+the stored key. CAPIGO_NO_CONFIG=1 refuses login and logout alike. See
+capigo --help, KEY FROM THE ENVIRONMENT.
 
 USAGE
   capigo auth <command> [<args>]`,
@@ -61,7 +67,10 @@ OUTPUT
       }
 
   Exit 1 if --key does not start with csk_, or if ~/.capigo/config.json
-  cannot be read or written.`,
+  cannot be read or written.
+
+  Exit 1, writing nothing, with KEY_MANAGED_BY_ENV when CAPIGO_API_KEY is
+  set (even empty), or with CONFIG_DISABLED under CAPIGO_NO_CONFIG=1.`,
 	RunE: runLogin,
 }
 
@@ -88,7 +97,9 @@ OUTPUT
   status is "no_credentials" instead, when the profile had no stored key to
   begin with.
 
-  Exit 1 if ~/.capigo/config.json cannot be read or written.`,
+  Exit 1 if ~/.capigo/config.json cannot be read or written, or with
+  CONFIG_DISABLED under CAPIGO_NO_CONFIG=1. CAPIGO_API_KEY does not block
+  logout: it is how a stored key is removed once the environment supplies one.`,
 	RunE: runLogout,
 }
 
@@ -140,6 +151,9 @@ func init() {
 }
 
 func runLogin(_ *cobra.Command, _ []string) error {
+	if refusal := credentials.StoreKeyRefusal(); refusal != nil {
+		failLocal(refusal)
+	}
 	if !strings.HasPrefix(loginKey, "csk_") {
 		fail("INVALID_API_KEY", "invalid API key: must start with csk_", 0)
 	}
@@ -202,6 +216,11 @@ func runLogin(_ *cobra.Command, _ []string) error {
 }
 
 func runLogout(_ *cobra.Command, _ []string) error {
+	// Allowed under CAPIGO_API_KEY alone: it is how an operator removes a key
+	// planted before the environment took over.
+	if refusal := credentials.ConfigRefusal(); refusal != nil {
+		failLocal(refusal)
+	}
 	cfg, err := config.Load()
 	if err != nil {
 		return handleErr(fmt.Errorf("load config: %w", err))

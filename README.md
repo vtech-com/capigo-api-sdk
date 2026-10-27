@@ -642,6 +642,22 @@ AI agents can inject credentials via environment variables without writing a con
 CAPIGO_API_KEY=csk_... CAPIGO_TENANT=acme capigo tasks list
 ```
 
+The key is the exception to "override". When `CAPIGO_API_KEY` is **present** — with any value,
+even empty — the environment manages the key, and it is the only key source:
+
+- an empty value exits `2` with `AUTH_EMPTY_ENV_KEY`; the stored key is never used in its place;
+- `auth login` and `config set api_key` exit `1` with `KEY_MANAGED_BY_ENV` and write nothing;
+- `tenants list` stops caching `known_tenants` into the config file;
+- `API_KEY` (read by the config library without a prefix) no longer competes with it;
+- every error object carries `key_source` (`"env"`, or `"none"` when no key was supplied), and auth
+  errors' `next` step points at the environment rather than at `auth login`.
+
+`CAPIGO_NO_CONFIG=1` (exactly `1`) takes the config file out entirely: it is never read or
+written, `HOME` need not exist, and `auth login`, `auth logout` and every `config` command exit `1`
+with `CONFIG_DISABLED`. It also counts as a managed environment.
+
+With both variables absent, nothing above applies.
+
 ### Headless hosts (VPS, CI, agent runners)
 
 On a machine with no human at the keyboard, **do not use `capigo auth login`** — it exists to write
@@ -657,6 +673,17 @@ capigo health   # exit 0 = API reachable and key accepted
 Source the key from whatever your host already uses for secrets (a systemd unit's
 `EnvironmentFile=`, the CI secret store, your process manager's env block) rather than committing it
 to a shell profile. `capigo health` is the preflight that tells you the provisioning worked.
+
+A host that runs the CLI on behalf of several people, injecting each one's key, should keep
+`CAPIGO_API_KEY` present on every call — empty when that person has no key — and set
+`CAPIGO_NO_CONFIG=1`. Then no caller can store a key, and none can inherit one a previous caller
+left in `~/.capigo/config.json`: a caller with no key gets `AUTH_EMPTY_ENV_KEY`, not someone else's
+access.
+
+```bash
+export CAPIGO_NO_CONFIG=1
+CAPIGO_API_KEY="$PER_CALLER_KEY" capigo health
+```
 
 To point at a different environment (staging, local dev) without touching the config file:
 

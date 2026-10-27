@@ -10,9 +10,15 @@ package api
 //     is a generic fallback (E9426/E9427 — see product-write-errors.ts). For
 //     every other code the server message is descriptive enough, so Meaning is
 //     left empty to avoid maintaining a second, drift-prone copy of it.
+//
+// ManagedNext replaces Next when the environment running the CLI manages the
+// key (see internal/credentials). There the caller cannot log in or swap the
+// key, so a step that tells them to would send an agent asking a person for a
+// secret that changes nothing.
 type ErrorInfo struct {
 	Meaning        string
 	Next           string
+	ManagedNext    string
 	CapabilityNote bool
 }
 
@@ -24,6 +30,16 @@ type ErrorInfo struct {
 // so it cannot drift. Do NOT seed entries from the stale comments in errors.go.
 func LookupError(code string) (ErrorInfo, bool) {
 	info, ok := errorCatalog[code]
+	return info, ok
+}
+
+// LookupErrorFor is LookupError with Next chosen for the key's environment:
+// when managed is true and the entry has a ManagedNext, that text is the Next.
+func LookupErrorFor(code string, managed bool) (ErrorInfo, bool) {
+	info, ok := errorCatalog[code]
+	if ok && managed && info.ManagedNext != "" {
+		info.Next = info.ManagedNext
+	}
 	return info, ok
 }
 
@@ -115,6 +131,7 @@ var errorCatalog = map[string]ErrorInfo{
 	},
 	"E0004": {
 		Next:           "Not authenticated — ask the user to re-authenticate: capigo auth login --key <their csk_… key>.",
+		ManagedNext:    "Not authenticated (exit 2). The API key was supplied by the environment running this CLI, so logging in here changes nothing — do not ask the user for a key. Follow that environment's own instructions to connect this person's account, then retry.",
 		CapabilityNote: false,
 	},
 
@@ -130,22 +147,39 @@ var errorCatalog = map[string]ErrorInfo{
 	// key or a tenant mismatch is deterministic — the CLI sends a fixed key every
 	// call, so the same key will be rejected the same way; retrying changes nothing.
 	"AUTH_INVALID_KEY": {
-		Next: "The API key was rejected — this is auth (exit 2), not a rate limit, so retrying the same key will NOT help. Ask the user to re-authenticate: capigo auth login --key <their csk_… key>. If a freshly provided key still returns 401, the cause is server-side, not the key — surface it; do not loop.",
+		Next:        "The API key was rejected — this is auth (exit 2), not a rate limit, so retrying the same key will NOT help. Ask the user to re-authenticate: capigo auth login --key <their csk_… key>. If a freshly provided key still returns 401, the cause is server-side, not the key — surface it; do not loop.",
+		ManagedNext: "The API key was supplied by the environment running this CLI, and the API rejected it (exit 2). Retrying will not help, and logging in here changes nothing — do not ask the user for a key. Follow that environment's own instructions to connect this person's account, then retry.",
 	},
 	"AUTH_INVALID_KEY_PREFIX": {
-		Next: "The API key is malformed (it must look like csk_…). Ask the user for the complete key and re-run: capigo auth login --key <their csk_… key>. Retrying the same value will not help.",
+		Next:        "The API key is malformed (it must look like csk_…). Ask the user for the complete key and re-run: capigo auth login --key <their csk_… key>. Retrying the same value will not help.",
+		ManagedNext: "The environment running this CLI supplied a malformed API key (exit 2). Retrying and logging in here change nothing — do not ask the user for a key. Surface it to a human: the environment built the key wrongly.",
 	},
 	"AUTH_MISSING_HEADER": {
-		Next: "No API key was sent — the CLI is not logged in. Ask the user to run: capigo auth login --key <their csk_… key> (or set CAPIGO_API_KEY). Do not retry until a key is configured.",
+		Next:        "No API key was sent — the CLI is not logged in. Ask the user to run: capigo auth login --key <their csk_… key> (or set CAPIGO_API_KEY). Do not retry until a key is configured.",
+		ManagedNext: "The environment running this CLI supplied no API key, so nothing was sent (exit 2). Logging in here changes nothing — do not ask the user for a key. Follow that environment's own instructions to connect this person's account, then retry.",
 	},
 	"AUTH_INVALID_FORMAT": {
-		Next: "The Authorization header was malformed. Re-authenticate with a clean key: capigo auth login --key <their csk_… key>. Retrying the same value will not help.",
+		Next:        "The Authorization header was malformed. Re-authenticate with a clean key: capigo auth login --key <their csk_… key>. Retrying the same value will not help.",
+		ManagedNext: "The environment running this CLI supplied a malformed API key: it did not form a valid Authorization header (exit 2). Retrying and logging in here change nothing — do not ask the user for a key. Surface it to a human: the environment built the key wrongly.",
 	},
 	"AUTH_TENANT_MISMATCH": {
-		Next: "This API key is scoped to a different tenant (exit 3) — retrying or re-authenticating will not change that. Use a --tenant the key can access, or ask the user for a key scoped to this tenant.",
+		Next:        "This API key is scoped to a different tenant (exit 3) — retrying or re-authenticating will not change that. Use a --tenant the key can access, or ask the user for a key scoped to this tenant.",
+		ManagedNext: "This key does not cover that workspace (exit 3). Use a --tenant it can reach, or request access to the workspace through the environment running this CLI — not a different key.",
 	},
 	"AUTH_INTERNAL_ERROR": {
 		Next: "The auth service itself errored (server-side, HTTP 500). Unlike a rejected key, this one IS transient — retry once after a short backoff. If it persists, surface it; it is not your key.",
+	},
+
+	// ----- Local refusals of a key the environment manages (internal/credentials).
+	// They only arise in managed mode, so Next is already the managed text. -----
+	"AUTH_EMPTY_ENV_KEY": {
+		Next: "The environment running this CLI supplied an empty API key, so nothing was sent and no stored key was used instead (exit 2). Retrying will not help, and logging in here changes nothing — do not ask the user for a key. Follow that environment's own instructions to connect this person's account, then retry.",
+	},
+	"KEY_MANAGED_BY_ENV": {
+		Next: "The environment running this CLI supplies the API key, so a key cannot be stored here; nothing was written. Do not ask the user for a key. To check the key it supplies, run 'capigo health'.",
+	},
+	"CONFIG_DISABLED": {
+		Next: "The config file is turned off in this environment, so nothing can be read from or stored in it; nothing was written. Give each command what it needs directly — --tenant <code> for the workspace.",
 	},
 
 	// ----- Local, CLI-detected condition (not a Capigo API error code): the

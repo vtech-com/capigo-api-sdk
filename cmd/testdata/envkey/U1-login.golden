@@ -1,0 +1,7 @@
+{
+  "data": {
+    "api_url": "{{API_URL}}",
+    "profile": "default"
+  },
+  "meta": {}
+}
