@@ -1,0 +1,10 @@
+{
+  "data": [],
+  "meta": {
+    "tenant": "acme",
+    "tenant_source": "env",
+    "limit": 20,
+    "total": 0,
+    "offset": 0
+  }
+}

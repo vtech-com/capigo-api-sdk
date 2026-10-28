@@ -16,6 +16,18 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   with `AUTH_EMPTY_ENV_KEY` (exit 2) instead of silently using the key stored in
   `~/.capigo/config.json`, and the unprefixed `API_KEY` variable no longer overrides it. With
   `CAPIGO_API_KEY` absent, key precedence is unchanged.
+- **Breaking: a managed key is sent only where flags and `CAPIGO_*` variables say.** With
+  `CAPIGO_API_KEY` present or `CAPIGO_NO_CONFIG=1`, API commands no longer read the config file,
+  the base URL is `--api-url`, then `CAPIGO_API_URL`, then the default host, and the tenant is
+  `--tenant`, then `CAPIGO_TENANT`. A stored `api_url` or `default_tenant` and the unprefixed
+  `API_URL`/`TENANT` variables are not applied, so writing either into the environment or the file
+  cannot redirect the key. `CAPIGO_API_URL` set but empty fails locally with `EMPTY_ENV_API_URL`
+  (exit 1); `CAPIGO_TENANT` set but empty means no tenant; `meta.tenant_source` is never `config`.
+  A corrupt config file or a dangling `active_profile` no longer fails these commands. With both
+  variables absent, URL and tenant precedence is unchanged. A host that relied on a stored or
+  unprefixed URL or tenant together with `CAPIGO_API_KEY` must set `CAPIGO_API_URL` and
+  `CAPIGO_TENANT` before upgrading, or tenant-scoped commands exit 5 and requests go to the default
+  host.
 - **`tenants list` stops caching `known_tenants` under a managed key.** With `CAPIGO_API_KEY`
   present or `CAPIGO_NO_CONFIG=1`, it writes nothing to the config file: the codes belong to the
   environment's key, not to the stored profile.

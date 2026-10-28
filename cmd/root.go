@@ -57,7 +57,13 @@ KEY FROM THE ENVIRONMENT
   is neither read nor written, no HOME is needed, and every auth and config
   command that would touch it exits 1 with CONFIG_DISABLED.
 
-  In either case every error object carries key_source: "env" or "none".`,
+  In either case every error object carries key_source: "env" or "none", and
+  API commands do not read the config file. The base URL comes only from
+  --api-url, then CAPIGO_API_URL, then the default host; the tenant only from
+  --tenant, then CAPIGO_TENANT. A stored api_url or default_tenant is not
+  applied, and neither is an unprefixed API_URL or TENANT. CAPIGO_API_URL set
+  but empty exits 1 with EMPTY_ENV_API_URL and sends nothing; CAPIGO_TENANT
+  set but empty means no tenant.`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }

@@ -160,7 +160,7 @@ func boardAddressError(id, code string, tenant *string) string {
 		return msg
 	}
 	if code != "" && tenant == nil {
-		return "--code needs a tenant: a board code is unique within a tenant, not across them; pass --tenant <code> or set a default"
+		return "--code needs a tenant: a board code is unique within a tenant, not across them; " + tenantHint()
 	}
 	return ""
 }

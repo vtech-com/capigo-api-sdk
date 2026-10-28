@@ -62,7 +62,7 @@ func requireOneTaskAddress(id, code string, tenant *string) {
 		failValidation("a task address is required: an id, or --code <code>")
 	}
 	if code != "" && tenant == nil {
-		failValidation("--code needs a tenant: a task code is unique within a tenant, not across them; pass --tenant <code> or set a default")
+		failValidation("--code needs a tenant: a task code is unique within a tenant, not across them; %s", tenantHint())
 	}
 }
 

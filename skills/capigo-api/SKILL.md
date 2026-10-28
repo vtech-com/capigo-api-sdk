@@ -81,6 +81,15 @@ environment owns the key, `auth login` refuses with `KEY_MANAGED_BY_ENV`, and it
 step to follow. Under `CAPIGO_NO_CONFIG=1` the config file is off and `config` commands exit `1`
 with `CONFIG_DISABLED`; pass `--tenant` on each command instead of storing a default.
 
+When the environment supplies the key, it also decides where the key goes: the base URL is
+`--api-url`, then `CAPIGO_API_URL`, then the default host, and the tenant is `--tenant`, then
+`CAPIGO_TENANT`. A stored `api_url` or `default_tenant`, and unprefixed `API_URL` or `TENANT`
+variables, are ignored, and `meta.tenant_source` is never `config`. Never pass `--api-url` on your
+own initiative, and do not try to point the CLI at another server. Under such a key `config get
+api_url` and `config get default_tenant` print stored values that API commands do not apply.
+`EMPTY_ENV_API_URL` (exit `1`) means the environment set an empty URL: nothing was sent, retrying
+will not help — surface it to a human.
+
 ### A key reaches one workspace
 
 A key is bound to the single workspace it was created in; the platform's API keys page shows which.

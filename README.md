@@ -636,6 +636,9 @@ CLI flag (--api-url, --tenant, …)
     > Config file (~/.capigo/config.json)
 ```
 
+This order has exceptions in both directions: a managed environment (below) never reads the config
+file, and outside one the unprefixed `API_URL`/`TENANT` beat their `CAPIGO_*` counterparts.
+
 AI agents can inject credentials via environment variables without writing a config file:
 
 ```bash
@@ -656,7 +659,21 @@ even empty — the environment manages the key, and it is the only key source:
 written, `HOME` need not exist, and `auth login`, `auth logout` and every `config` command exit `1`
 with `CONFIG_DISABLED`. It also counts as a managed environment.
 
-With both variables absent, nothing above applies.
+In a managed environment the request's destination and tenant follow the key — they come only
+from flags and `CAPIGO_*` variables, and API commands do not read the config file at all:
+
+- base URL: `--api-url`, then `CAPIGO_API_URL`, then the default host. A stored `api_url` and an
+  unprefixed `API_URL` are not applied. `CAPIGO_API_URL` set but empty exits `1` with
+  `EMPTY_ENV_API_URL` and sends nothing;
+- tenant: `--tenant`, then `CAPIGO_TENANT`. A stored `default_tenant` and an unprefixed `TENANT`
+  are not applied, `CAPIGO_TENANT` set but empty means no tenant, and `meta.tenant_source` is
+  `flag` or `env`, never `config`.
+
+`config set api_url` and `config set-default-tenant` still write the file while only
+`CAPIGO_API_KEY` is set; the values take effect once the environment stops managing the key.
+
+With both variables absent, nothing above applies — including the config library's unprefixed
+`API_URL` and `TENANT`, which still win over their `CAPIGO_*` counterparts there.
 
 ### Headless hosts (VPS, CI, agent runners)
 
@@ -678,7 +695,9 @@ A host that runs the CLI on behalf of several people, injecting each one's key, 
 `CAPIGO_API_KEY` present on every call — empty when that person has no key — and set
 `CAPIGO_NO_CONFIG=1`. Then no caller can store a key, and none can inherit one a previous caller
 left in `~/.capigo/config.json`: a caller with no key gets `AUTH_EMPTY_ENV_KEY`, not someone else's
-access.
+access. Set `CAPIGO_API_URL` and `CAPIGO_TENANT` there too, or leave them absent: an `API_URL` or
+`TENANT` that reaches the environment — written into an env file the host loads, say — does not
+redirect the key or change its tenant.
 
 ```bash
 export CAPIGO_NO_CONFIG=1

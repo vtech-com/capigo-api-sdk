@@ -60,28 +60,29 @@ func requireUsableMediaType(flagGiven bool, value, flagName string) string {
 }
 
 // buildClient loads config and constructs an api.Client using the active profile.
-// credentials.Resolve picks the key: CAPIGO_API_KEY overrides the profile key,
-// and when the environment manages the key it is the only source. CAPIGO_API_URL
-// and --api-url override the profile URL; the default base URL is
-// https://platform.capigo.app/api/v1.
+// credentials.Resolve picks the key and credentials.BaseURL the URL. When the
+// environment manages the key the config file is not read at all — no key, URL
+// or tenant comes from it — and the returned Config is empty.
 func buildClient() (*api.Client, *config.Config, error) {
-	cfg, err := config.Load()
-	if err != nil {
-		return nil, nil, fmt.Errorf("load config: %w", err)
-	}
-
-	profile, err := config.ActiveProfile(cfg)
-	if err != nil {
-		if len(cfg.Profiles) > 0 {
-			// active_profile names a profile that was never written. That is a
-			// real config fault, and its own message says so.
-			return nil, nil, fmt.Errorf("get active profile: %w", err)
+	cfg := &config.Config{}
+	profile := &config.Profile{}
+	if !credentials.Managed() {
+		var err error
+		if cfg, err = config.Load(); err != nil {
+			return nil, nil, fmt.Errorf("load config: %w", err)
 		}
-		// No profiles at all: auth login has never run here. "profile default
-		// not found" describes the config file's insides; the caller's actual
-		// situation is that there is no key, which the check below reports in
-		// those terms. An env-supplied key still works from a bare machine.
-		profile = &config.Profile{}
+		if profile, err = config.ActiveProfile(cfg); err != nil {
+			if len(cfg.Profiles) > 0 {
+				// active_profile names a profile that was never written. That is a
+				// real config fault, and its own message says so.
+				return nil, nil, fmt.Errorf("get active profile: %w", err)
+			}
+			// No profiles at all: auth login has never run here. "profile default
+			// not found" describes the config file's insides; the caller's actual
+			// situation is that there is no key, which the check below reports in
+			// those terms. An env-supplied key still works from a bare machine.
+			profile = &config.Profile{}
+		}
 	}
 
 	apiKey, _, err := credentials.Resolve(profile.APIKey, viper.GetString("api_key"))
@@ -89,15 +90,9 @@ func buildClient() (*api.Client, *config.Config, error) {
 		return nil, nil, err
 	}
 
-	baseURL := profile.APIURL
-	if u := viper.GetString("api_url"); u != "" {
-		baseURL = u
-	}
-	if apiURL != "" {
-		baseURL = apiURL
-	}
-	if baseURL == "" {
-		baseURL = defaultBaseURL
+	baseURL, err := credentials.BaseURL(apiURL, viper.GetString("api_url"), profile.APIURL, defaultBaseURL)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	client, err := api.NewClient(baseURL, apiKey)
@@ -239,8 +234,17 @@ func failValidation(format string, args ...any) {
 // one ("tasks create"). The sentence is built to fit either, singular or plural.
 func requireTenant(tenant *string, subject string) {
 	if tenant == nil {
-		failValidation("%s: a tenant is required; pass --tenant <code> or set a default", subject)
+		failValidation("%s: a tenant is required; %s", subject, tenantHint())
 	}
+}
+
+// tenantHint is the repair for a missing tenant. Under a managed key a stored
+// default is not applied, so suggesting one would send an agent round a loop.
+func tenantHint() string {
+	if credentials.Managed() {
+		return "pass --tenant <code>; a stored default tenant is not applied while the environment manages the key"
+	}
+	return "pass --tenant <code> or set a default"
 }
 
 // readJSONInput reads raw bytes from a file path or from stdin when path is "-".
@@ -260,10 +264,12 @@ func readJSONInput(path string) ([]byte, error) {
 }
 
 // resolveTenant resolves the tenant from the per-command flag, CAPIGO_TENANT env,
-// or the active profile's default_tenant — in that order of precedence.
-// Returns nil if none is resolved.
+// or the active profile's default_tenant — in that order of precedence; when the
+// environment manages the key, only the flag and CAPIGO_TENANT count (see
+// credentials.Tenant). Returns nil if none is resolved.
 func resolveTenant(tenantFlag string, profile *config.Profile) *string {
-	return api.ResolveTenant(tenantFlag, viper.GetString("tenant"), profile.DefaultTenant)
+	tenant, _ := credentials.Tenant(tenantFlag, viper.GetString("tenant"), profile.DefaultTenant)
+	return tenant
 }
 
 // activeProfileOrEmpty returns the active profile, or an empty profile when none

@@ -180,10 +180,15 @@ func TestManagedNextNeverPointsAtLogin(t *testing.T) {
 		}
 	}
 
-	for _, code := range []string{"AUTH_EMPTY_ENV_KEY", "KEY_MANAGED_BY_ENV", "CONFIG_DISABLED"} {
+	for _, code := range []string{"AUTH_EMPTY_ENV_KEY", "KEY_MANAGED_BY_ENV", "CONFIG_DISABLED", "EMPTY_ENV_API_URL"} {
 		if info, ok := LookupError(code); !ok || info.Next == "" {
 			t.Errorf("%s needs a catalog entry with a next step", code)
 		}
+	}
+
+	// Pointing the CLI elsewhere is the redirect the managed URL rules exist to stop.
+	if info, _ := LookupErrorFor("EMPTY_ENV_API_URL", true); strings.Contains(info.Next, "--api-url") {
+		t.Errorf("EMPTY_ENV_API_URL next names --api-url: %s", info.Next)
 	}
 }
 
