@@ -16,7 +16,7 @@ permissions:
 jobs:
   analyze:
     name: Analyze (Go)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, lima]
 
     steps:
       - name: Checkout

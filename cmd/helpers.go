@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
 	"github.com/vtech-com/capigo-api-sdk/internal/config"
+	"github.com/vtech-com/capigo-api-sdk/internal/credentials"
 	"github.com/vtech-com/capigo-api-sdk/internal/output"
 )
 
@@ -59,54 +60,39 @@ func requireUsableMediaType(flagGiven bool, value, flagName string) string {
 }
 
 // buildClient loads config and constructs an api.Client using the active profile.
-// Env var CAPIGO_API_KEY overrides the profile key; CAPIGO_API_URL and --api-url
-// override the profile URL; the default base URL is https://platform.capigo.app/api/v1.
+// credentials.Resolve picks the key and credentials.BaseURL the URL. When the
+// environment manages the key the config file is not read at all — no key, URL
+// or tenant comes from it — and the returned Config is empty.
 func buildClient() (*api.Client, *config.Config, error) {
-	cfg, err := config.Load()
-	if err != nil {
-		return nil, nil, fmt.Errorf("load config: %w", err)
-	}
-
-	profile, err := config.ActiveProfile(cfg)
-	if err != nil {
-		if len(cfg.Profiles) > 0 {
-			// active_profile names a profile that was never written. That is a
-			// real config fault, and its own message says so.
-			return nil, nil, fmt.Errorf("get active profile: %w", err)
+	cfg := &config.Config{}
+	profile := &config.Profile{}
+	if !credentials.Managed() {
+		var err error
+		if cfg, err = config.Load(); err != nil {
+			return nil, nil, fmt.Errorf("load config: %w", err)
 		}
-		// No profiles at all: auth login has never run here. "profile default
-		// not found" describes the config file's insides; the caller's actual
-		// situation is that there is no key, which the check below reports in
-		// those terms. An env-supplied key still works from a bare machine.
-		profile = &config.Profile{}
-	}
-
-	apiKey := profile.APIKey
-	if k := viper.GetString("api_key"); k != "" {
-		apiKey = k
-	}
-	if apiKey == "" {
-		// Sending "Authorization: Bearer " with nothing after it costs a round
-		// trip to learn what is already known here, and comes back as
-		// AUTH_INVALID_FORMAT — "the header was malformed" — which points at the
-		// wrong repair. Diagnose it locally, as the condition it is.
-		return nil, nil, &api.APIError{
-			Code:           "AUTH_MISSING_HEADER",
-			Message:        "no API key configured — this CLI has not been logged in (nothing in ~/.capigo/config.json, and CAPIGO_API_KEY is unset)",
-			HTTPStatus:     401,
-			LocalDiagnosis: true,
+		if profile, err = config.ActiveProfile(cfg); err != nil {
+			if len(cfg.Profiles) > 0 {
+				// active_profile names a profile that was never written. That is a
+				// real config fault, and its own message says so.
+				return nil, nil, fmt.Errorf("get active profile: %w", err)
+			}
+			// No profiles at all: auth login has never run here. "profile default
+			// not found" describes the config file's insides; the caller's actual
+			// situation is that there is no key, which the check below reports in
+			// those terms. An env-supplied key still works from a bare machine.
+			profile = &config.Profile{}
 		}
 	}
 
-	baseURL := profile.APIURL
-	if u := viper.GetString("api_url"); u != "" {
-		baseURL = u
+	apiKey, _, err := credentials.Resolve(profile.APIKey, viper.GetString("api_key"))
+	if err != nil {
+		return nil, nil, err
 	}
-	if apiURL != "" {
-		baseURL = apiURL
-	}
-	if baseURL == "" {
-		baseURL = defaultBaseURL
+
+	baseURL, err := credentials.BaseURL(apiURL, viper.GetString("api_url"), profile.APIURL, defaultBaseURL)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	client, err := api.NewClient(baseURL, apiKey)
@@ -127,6 +113,10 @@ func buildClient() (*api.Client, *config.Config, error) {
 // error with the catalog interpretation when the code is known. It does not exit.
 func renderCLIError(err error) {
 	detail := output.ErrorDetail{Code: "ERROR", Message: err.Error()}
+	managed := credentials.Managed()
+	if managed {
+		detail.KeySource = string(credentials.ManagedSource())
+	}
 	serverResponded := false
 	var apiErr *api.APIError
 	if errors.As(err, &apiErr) {
@@ -142,7 +132,7 @@ func renderCLIError(err error) {
 	// arg-validation errors never round-tripped, so the brake — "a failed write
 	// is not a missing capability" — would be misleading noise there.
 	if serverResponded || (apiErr != nil && apiErr.LocalDiagnosis) {
-		if info, ok := api.LookupError(detail.Code); ok {
+		if info, ok := api.LookupErrorFor(detail.Code, managed); ok {
 			detail.Meaning = info.Meaning
 			detail.Next = info.Next
 			detail.CapabilityNote = info.CapabilityNote
@@ -185,6 +175,10 @@ func handleErr(err error) error {
 // contradict.
 func failWithData(err error, data any, meta output.Meta) error {
 	detail := output.ErrorDetail{Code: "ERROR", Message: err.Error()}
+	managed := credentials.Managed()
+	if managed {
+		detail.KeySource = string(credentials.ManagedSource())
+	}
 	var apiErr *api.APIError
 	if errors.As(err, &apiErr) {
 		detail.Code = apiErr.Code
@@ -192,9 +186,24 @@ func failWithData(err error, data any, meta output.Meta) error {
 		detail.RequestID = apiErr.RequestID
 		detail.HTTPStatus = apiErr.HTTPStatus
 	}
+	// Outside managed mode this path prints no next step, and still does not.
+	// Inside it, an auth failure mid-sweep must not leave the caller guessing
+	// at a login that would change nothing.
+	if managed {
+		if info, ok := api.LookupErrorFor(detail.Code, true); ok && info.Next != "" {
+			detail.Next = info.Next
+		}
+	}
 	_ = output.WritePartial(os.Stdout, os.Stderr, data, meta, detail)
 	os.Exit(api.ExitCodeFor(err))
 	return nil
+}
+
+// failLocal renders an error the CLI diagnosed itself — a refusal, say — and
+// exits. The error carries LocalDiagnosis, so its catalog next step is shown.
+func failLocal(e *api.APIError) {
+	renderCLIError(e)
+	os.Exit(api.ExitCodeFor(e))
 }
 
 // fail renders a locally-detected error — a bad flag combination, an
@@ -225,8 +234,17 @@ func failValidation(format string, args ...any) {
 // one ("tasks create"). The sentence is built to fit either, singular or plural.
 func requireTenant(tenant *string, subject string) {
 	if tenant == nil {
-		failValidation("%s: a tenant is required; pass --tenant <code> or set a default", subject)
+		failValidation("%s: a tenant is required; %s", subject, tenantHint())
 	}
+}
+
+// tenantHint is the repair for a missing tenant. Under a managed key a stored
+// default is not applied, so suggesting one would send an agent round a loop.
+func tenantHint() string {
+	if credentials.Managed() {
+		return "pass --tenant <code>; a stored default tenant is not applied while the environment manages the key"
+	}
+	return "pass --tenant <code> or set a default"
 }
 
 // readJSONInput reads raw bytes from a file path or from stdin when path is "-".
@@ -246,10 +264,12 @@ func readJSONInput(path string) ([]byte, error) {
 }
 
 // resolveTenant resolves the tenant from the per-command flag, CAPIGO_TENANT env,
-// or the active profile's default_tenant — in that order of precedence.
-// Returns nil if none is resolved.
+// or the active profile's default_tenant — in that order of precedence; when the
+// environment manages the key, only the flag and CAPIGO_TENANT count (see
+// credentials.Tenant). Returns nil if none is resolved.
 func resolveTenant(tenantFlag string, profile *config.Profile) *string {
-	return api.ResolveTenant(tenantFlag, viper.GetString("tenant"), profile.DefaultTenant)
+	tenant, _ := credentials.Tenant(tenantFlag, viper.GetString("tenant"), profile.DefaultTenant)
+	return tenant
 }
 
 // activeProfileOrEmpty returns the active profile, or an empty profile when none

@@ -29,12 +29,25 @@ func withConfig(t *testing.T, contents string) {
 	config.ConfigPath = func() (string, error) { return path, nil }
 	t.Cleanup(func() { config.ConfigPath = orig })
 
-	// The key otherwise leaks in from the developer's own environment.
-	t.Setenv("CAPIGO_API_KEY", "")
+	clearKeyEnv(t)
 	viper.Reset()
 	_ = viper.BindEnv("api_key", "CAPIGO_API_KEY")
 	_ = viper.BindEnv("api_url", "CAPIGO_API_URL")
 	t.Cleanup(viper.Reset)
+}
+
+// clearKeyEnv removes the variables that put the CLI in managed mode, which
+// otherwise leak in from the developer's own environment. Setenv registers the
+// restore; the unset makes "absent" absent, because a present-but-empty
+// CAPIGO_API_KEY means the environment manages the key.
+func clearKeyEnv(t *testing.T) {
+	t.Helper()
+	for _, name := range []string{"CAPIGO_API_KEY", "CAPIGO_NO_CONFIG"} {
+		t.Setenv(name, "")
+		if err := os.Unsetenv(name); err != nil {
+			t.Fatalf("unset %s: %v", name, err)
+		}
+	}
 }
 
 // The first run of a fresh install must name the situation the caller is in —
@@ -101,6 +114,7 @@ func TestBuildClient_MissingNamedProfileKeepsItsOwnError(t *testing.T) {
 // The diagnostic block is what an agent reads. A locally-detected error whose
 // code is a real catalog code must still carry the catalog's Next step.
 func TestRenderCLIError_LocalDiagnosisCarriesCatalogNext(t *testing.T) {
+	clearKeyEnv(t)
 	stdout := captureStdout(t, func() {
 		renderCLIError(&api.APIError{
 			Code:           "AUTH_MISSING_HEADER",

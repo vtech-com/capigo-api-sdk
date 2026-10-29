@@ -42,7 +42,28 @@ GETTING STARTED
   Until a key is configured the CLI does not contact the server at all: it
   fails locally with exit 2 and AUTH_MISSING_HEADER, so nothing you read here
   is an answer from the API. CAPIGO_API_KEY, if set, overrides the stored key
-  and needs no login.`,
+  and needs no login.
+
+  When CAPIGO_API_KEY is set, the environment supplies the key: run
+  capigo health and skip login.
+
+KEY FROM THE ENVIRONMENT
+  CAPIGO_API_KEY being present at all — even empty — means the environment
+  running this CLI manages the key. It is then the only key source: an empty
+  value exits 2 with AUTH_EMPTY_ENV_KEY instead of using the stored key, auth
+  login exits 1 with KEY_MANAGED_BY_ENV, and tenants list caches nothing.
+
+  CAPIGO_NO_CONFIG=1 (exactly 1) takes ~/.capigo/config.json out entirely: it
+  is neither read nor written, no HOME is needed, and every auth and config
+  command that would touch it exits 1 with CONFIG_DISABLED.
+
+  In either case every error object carries key_source: "env" or "none", and
+  API commands do not read the config file. The base URL comes only from
+  --api-url, then CAPIGO_API_URL, then the default host; the tenant only from
+  --tenant, then CAPIGO_TENANT. A stored api_url or default_tenant is not
+  applied, and neither is an unprefixed API_URL or TENANT. CAPIGO_API_URL set
+  but empty exits 1 with EMPTY_ENV_API_URL and sends nothing; CAPIGO_TENANT
+  set but empty means no tenant.`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }

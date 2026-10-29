@@ -1,0 +1,9 @@
+{
+  "error": {
+    "code": "AUTH_INVALID_KEY",
+    "http_status": 401,
+    "message": "Invalid API key",
+    "next": "The API key was rejected — this is auth (exit 2), not a rate limit, so retrying the same key will NOT help. Ask the user to re-authenticate: capigo auth login --key \u003ctheir csk_… key\u003e. If a freshly provided key still returns 401, the cause is server-side, not the key — surface it; do not loop.",
+    "raw": "{\"error\":{\"code\":\"AUTH_INVALID_KEY\",\"message\":\"Invalid API key\"}}"
+  }
+}

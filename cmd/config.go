@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/vtech-com/capigo-api-sdk/internal/config"
+	"github.com/vtech-com/capigo-api-sdk/internal/credentials"
 	"github.com/vtech-com/capigo-api-sdk/internal/output"
 )
 
@@ -22,6 +23,9 @@ var configCmd = &cobra.Command{
 Every command here reads and writes ~/.capigo/config.json (file mode 600)
 directly; none of them calls the API. There is exactly one active profile;
 this CLI takes no --profile flag. Settings apply to that active profile.
+
+Under CAPIGO_NO_CONFIG=1 every command here exits 1 with CONFIG_DISABLED and
+touches nothing.
 
 USAGE
   capigo config <command> [<args>]`,
@@ -46,7 +50,9 @@ FLAGS
       recognised.
 
   <value>
-      The value to store. Positional, required.
+      The value to store. Positional, required. A stored api_url is not
+      applied while CAPIGO_API_KEY is set: there the URL comes only from
+      --api-url, CAPIGO_API_URL or the default host.
 
         capigo config set api_url https://platform.capigo.app/api/v1
         capigo config set default_profile staging
@@ -56,10 +62,24 @@ OUTPUT
 
   Exit 5 for an unrecognised key, or when default_profile names a profile
   that does not exist. Exit 4 when api_url is set before any profile exists —
-  run auth login first.`,
+  run auth login first.
+
+  Exit 1 with CONFIG_DISABLED under CAPIGO_NO_CONFIG=1. api_key is never
+  settable; while CAPIGO_API_KEY is set, asking exits 1 with
+  KEY_MANAGED_BY_ENV.`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		key, value := args[0], args[1]
+
+		// api_key is not a settable key, but under a managed key the refusal
+		// says why it never will be, rather than "unknown key".
+		refusal := credentials.ConfigRefusal()
+		if key == "api_key" {
+			refusal = credentials.StoreKeyRefusal()
+		}
+		if refusal != nil {
+			failLocal(refusal)
+		}
 
 		cfg, err := config.Load()
 		if err != nil {
@@ -121,12 +141,19 @@ OUTPUT
       { "data": { "key": "default_tenant", "value": "acme" }, "meta": {} }
 
   value is "" when the key exists but is unset (e.g. no default_tenant has
-  been stored yet) — never null.
+  been stored yet) — never null. It is the stored value, which API commands
+  do not apply while CAPIGO_API_KEY is set. See capigo help tenancy for
+  what they apply instead.
 
-  Exit 4 if the active profile itself is not in the config file yet.`,
+  Exit 4 if the active profile itself is not in the config file yet. Exit 1
+  with CONFIG_DISABLED under CAPIGO_NO_CONFIG=1.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		key := args[0]
+
+		if refusal := credentials.ConfigRefusal(); refusal != nil {
+			failLocal(refusal)
+		}
 
 		cfg, err := config.Load()
 		if err != nil {
@@ -171,7 +198,8 @@ var configSetDefaultTenantCmd = &cobra.Command{
 PURPOSE
   Store default_tenant as the last fallback in tenant resolution: --tenant,
   then CAPIGO_TENANT, then this value. See capigo help tenancy for the full
-  order.
+  order. While CAPIGO_API_KEY is set the stored value is not applied: pass
+  --tenant or set CAPIGO_TENANT instead.
 
 USAGE
   capigo config set-default-tenant <code>
@@ -188,10 +216,15 @@ OUTPUT
   Nothing on success: exit 0 and silence. Confirm with config get
   default_tenant.
 
-  Exit 4 if the active profile itself is not in the config file yet.`,
+  Exit 4 if the active profile itself is not in the config file yet. Exit 1
+  with CONFIG_DISABLED under CAPIGO_NO_CONFIG=1.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		code := args[0]
+
+		if refusal := credentials.ConfigRefusal(); refusal != nil {
+			failLocal(refusal)
+		}
 
 		cfg, err := config.Load()
 		if err != nil {
@@ -236,9 +269,14 @@ OUTPUT
   Nothing on success: exit 0 and silence. Confirm with config get
   default_tenant, which then reports value: "".
 
-  Exit 4 if the active profile itself is not in the config file yet.`,
+  Exit 4 if the active profile itself is not in the config file yet. Exit 1
+  with CONFIG_DISABLED under CAPIGO_NO_CONFIG=1.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if refusal := credentials.ConfigRefusal(); refusal != nil {
+			failLocal(refusal)
+		}
+
 		cfg, err := config.Load()
 		if err != nil {
 			fail("CONFIG_LOAD_ERROR", err.Error(), 0)

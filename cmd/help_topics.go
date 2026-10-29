@@ -34,6 +34,11 @@ RESOLUTION ORDER
 
   The first one set wins. --tenant is a per-command flag, not a global one.
 
+  When the environment manages the key (CAPIGO_API_KEY present, or
+  CAPIGO_NO_CONFIG=1), only --tenant and CAPIGO_TENANT count: a stored
+  default_tenant is not applied, an empty CAPIGO_TENANT means no tenant, and
+  tenant_source is never "config".
+
   $ capigo config set-default-tenant acme
   $ capigo config unset-default-tenant
 
@@ -169,10 +174,15 @@ of an error message is not.
 
   0   Success.
   1   General or unexpected failure — a malformed invocation, an unknown
-      command, or an error the CLI could not classify.
+      command, or an error the CLI could not classify. Also a refusal to store
+      a key or touch the config file the environment manages:
+      KEY_MANAGED_BY_ENV, CONFIG_DISABLED.
   2   Authentication failed (HTTP 401). The API key is missing, malformed, or
       rejected. A new key is stored with:
           $ capigo auth login --key csk_...
+      Not when the error carries key_source: the environment running the CLI
+      supplies the key, and logging in changes nothing — follow the error's
+      next step. AUTH_EMPTY_ENV_KEY: that environment supplied an empty key.
   3   Permission denied (HTTP 403). The key is valid but not allowed to reach
       that tenant or resource.
   4   Not found (HTTP 404). No such id, or it is outside the resolved tenant.
@@ -202,6 +212,8 @@ WHEN A COMMAND FAILS
       raw              the verbatim server body
       request_id       identifies the call in the API's server logs
       http_status      the response status, when the server responded
+      key_source       where the key came from, "env" or "none". Present only
+                       when the environment manages the key
 
   --verbose prints the full HTTP request and response to stderr, with the
   Authorization header redacted.

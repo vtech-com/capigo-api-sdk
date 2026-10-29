@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "http_status": 400,
+    "message": "unknown key \"api_key\"; supported: api_url, default_profile"
+  }
+}

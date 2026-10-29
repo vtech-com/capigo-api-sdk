@@ -9,6 +9,56 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.32.0] — 2026-10-29
+
+### Changed
+
+- **Breaking: a present `CAPIGO_API_KEY` is the only key source.** When the variable is set — even to an
+  empty value — the environment running the CLI manages the key. An empty value now fails locally
+  with `AUTH_EMPTY_ENV_KEY` (exit 2) instead of silently using the key stored in
+  `~/.capigo/config.json`, and the unprefixed `API_KEY` variable no longer overrides it. With
+  `CAPIGO_API_KEY` absent, key precedence is unchanged.
+- **Breaking: a managed key is sent only where flags and `CAPIGO_*` variables say.** With
+  `CAPIGO_API_KEY` present or `CAPIGO_NO_CONFIG=1`, API commands no longer read the config file,
+  the base URL is `--api-url`, then `CAPIGO_API_URL`, then the default host, and the tenant is
+  `--tenant`, then `CAPIGO_TENANT`. A stored `api_url` or `default_tenant` and the unprefixed
+  `API_URL`/`TENANT` variables are not applied, so writing either into the environment or the file
+  cannot redirect the key. `CAPIGO_API_URL` set but empty fails locally with `EMPTY_ENV_API_URL`
+  (exit 1); `CAPIGO_TENANT` set but empty means no tenant; `meta.tenant_source` is never `config`.
+  A corrupt config file or a dangling `active_profile` no longer fails these commands. With both
+  variables absent, URL and tenant precedence is unchanged. A host that relied on a stored or
+  unprefixed URL or tenant together with `CAPIGO_API_KEY` must set `CAPIGO_API_URL` and
+  `CAPIGO_TENANT` before upgrading, or tenant-scoped commands exit 5 and requests go to the default
+  host.
+- **`tenants list` stops caching `known_tenants` under a managed key.** With `CAPIGO_API_KEY`
+  present or `CAPIGO_NO_CONFIG=1`, it writes nothing to the config file: the codes belong to the
+  environment's key, not to the stored profile.
+
+### Added
+
+- **`CAPIGO_NO_CONFIG=1`.** Takes `~/.capigo/config.json` out entirely: it is neither read nor
+  written, and `HOME` need not exist. `auth login`, `auth logout` and every `config` command exit 1
+  with `CONFIG_DISABLED`.
+- **Refusals of a key the environment manages.** `auth login` and `config set api_key` exit 1 with
+  `KEY_MANAGED_BY_ENV` while `CAPIGO_API_KEY` is present, and write nothing. `auth logout` and the
+  other `config` writes still work, so an operator can remove a key stored before.
+- **`key_source` on errors, and an environment-specific next step.** In a managed environment
+  every error object names where the key came from (`"env"` or `"none"`), and `AUTH_INVALID_KEY`,
+  `AUTH_INVALID_KEY_PREFIX`, `AUTH_INVALID_FORMAT`, `AUTH_MISSING_HEADER`, `E0004` and
+  `AUTH_TENANT_MISMATCH` carry a `next` that points at the environment instead of `auth login` or
+  a request for the user's key. Outside a managed environment the error object is unchanged.
+
+### Fixed
+
+- **API commands no longer fail on a machine that never ran `auth login`.** Commands such as
+  `boards list` exited 1 with `profile "default" not found` when the key came from the environment
+  and no config file existed — including when only `API_KEY` was set. They now run.
+
+- **Subtask items keep their assignee (vtech-com/capigo#1348).** `tasks subtasks create --from-json`
+  and `tasks create --subtasks-json` dropped an item's `assignee` key silently, leaving every
+  subtask unassigned. Both now accept `assignee` as well as `assignee_id`, and refuse any other
+  unknown key (exit 5) instead of dropping it.
+
 ## [0.31.0] — 2026-10-22
 
 ### Added

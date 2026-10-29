@@ -11,7 +11,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
-	"github.com/vtech-com/capigo-api-sdk/internal/config"
 	"github.com/vtech-com/capigo-api-sdk/internal/output"
 )
 
@@ -102,10 +101,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(memberListTenant, profile)
 
@@ -187,10 +183,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(memberGetTenant, profile)
 

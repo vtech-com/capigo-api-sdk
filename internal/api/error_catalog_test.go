@@ -118,3 +118,93 @@ func TestLookupError_Unknown(t *testing.T) {
 		t.Error("unknown code should not be found")
 	}
 }
+
+// managedNextViolation names what a managed-mode next step must never say, or
+// returns "". Under a managed key the caller cannot log in or swap the key, so
+// a step that asks for one sends a person hunting for a secret that changes
+// nothing — and names of the environment's internals do not belong to the CLI.
+func managedNextViolation(next string) string {
+	lower := strings.ToLower(next)
+	for _, banned := range []string{
+		"auth login", "csk_", "--key", "their key", "user's key",
+		"capigo_api_key", "capigo_no_config", "unset",
+		"openclaw", "tấm", "feishu", "lark", "plugin", "vps",
+	} {
+		if strings.Contains(lower, banned) {
+			return banned
+		}
+	}
+	// "do not ask the user for a key" is the instruction; any other asking is the
+	// request the managed text exists to prevent.
+	if strings.Contains(strings.ReplaceAll(lower, "do not ask the user", ""), "ask the user") {
+		return "ask the user"
+	}
+	for _, word := range strings.FieldsFunc(lower, func(r rune) bool {
+		return r < 'a' || r > 'z'
+	}) {
+		if word == "host" {
+			return "host"
+		}
+	}
+	return ""
+}
+
+func TestManagedNextNeverPointsAtLogin(t *testing.T) {
+	for code := range errorCatalog {
+		info, _ := LookupErrorFor(code, true)
+		if v := managedNextViolation(info.Next); v != "" {
+			t.Errorf("%s: managed next contains %q: %s", code, v, info.Next)
+		}
+	}
+
+	// The codes a managed key meets must each carry their own managed step, and
+	// the plain lookup must still return the step it always has.
+	for _, code := range []string{
+		"E0004", "AUTH_INVALID_KEY", "AUTH_INVALID_KEY_PREFIX", "AUTH_MISSING_HEADER",
+		"AUTH_INVALID_FORMAT", "AUTH_TENANT_MISMATCH",
+	} {
+		info, ok := LookupError(code)
+		if !ok || info.ManagedNext == "" {
+			t.Errorf("%s has no ManagedNext", code)
+			continue
+		}
+		if !strings.Contains(info.Next, "auth login") && code != "AUTH_TENANT_MISMATCH" {
+			t.Errorf("%s: plain next lost its login step: %s", code, info.Next)
+		}
+		managed, _ := LookupErrorFor(code, true)
+		if managed.Next != info.ManagedNext {
+			t.Errorf("%s: LookupErrorFor(managed) next = %q, want ManagedNext", code, managed.Next)
+		}
+		if plain, _ := LookupErrorFor(code, false); plain != info {
+			t.Errorf("%s: LookupErrorFor(unmanaged) = %+v, want %+v", code, plain, info)
+		}
+	}
+
+	for _, code := range []string{"AUTH_EMPTY_ENV_KEY", "KEY_MANAGED_BY_ENV", "CONFIG_DISABLED", "EMPTY_ENV_API_URL"} {
+		if info, ok := LookupError(code); !ok || info.Next == "" {
+			t.Errorf("%s needs a catalog entry with a next step", code)
+		}
+	}
+
+	// Pointing the CLI elsewhere is the redirect the managed URL rules exist to stop.
+	if info, _ := LookupErrorFor("EMPTY_ENV_API_URL", true); strings.Contains(info.Next, "--api-url") {
+		t.Errorf("EMPTY_ENV_API_URL next names --api-url: %s", info.Next)
+	}
+}
+
+// The checker itself: the managed texts' own negation passes, a request fails.
+func TestManagedNextViolationChecker(t *testing.T) {
+	if v := managedNextViolation("Logging in here changes nothing — do not ask the user for a key."); v != "" {
+		t.Errorf("negated instruction flagged as %q", v)
+	}
+	for _, bad := range []string{
+		"Ask the user for their key.",
+		"Run capigo auth login --key csk_x.",
+		"Unset CAPIGO_API_KEY and retry.",
+		"Ask the host operator.",
+	} {
+		if managedNextViolation(bad) == "" {
+			t.Errorf("%q passed the check", bad)
+		}
+	}
+}

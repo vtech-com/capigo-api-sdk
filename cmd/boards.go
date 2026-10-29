@@ -10,7 +10,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/vtech-com/capigo-api-sdk/internal/api"
-	"github.com/vtech-com/capigo-api-sdk/internal/config"
 	"github.com/vtech-com/capigo-api-sdk/internal/output"
 )
 
@@ -105,10 +104,7 @@ OUTPUT
 			return handleErr(err)
 		}
 
-		profile, err := config.ActiveProfile(cfg)
-		if err != nil {
-			return handleErr(err)
-		}
+		profile := activeProfileOrEmpty(cfg)
 
 		tenant := resolveTenant(boardListTenant, profile)
 
@@ -164,7 +160,7 @@ func boardAddressError(id, code string, tenant *string) string {
 		return msg
 	}
 	if code != "" && tenant == nil {
-		return "--code needs a tenant: a board code is unique within a tenant, not across them; pass --tenant <code> or set a default"
+		return "--code needs a tenant: a board code is unique within a tenant, not across them; " + tenantHint()
 	}
 	return ""
 }

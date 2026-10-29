@@ -56,6 +56,10 @@ capigo health
 Interpret it by exit code and its stdout `error` object:
 
 - Exit `0`: the API is reachable and the configured key was accepted. Continue.
+- Exit `2` with `key_source` in the error object: the environment running the CLI supplies the
+  key, so the login steps below do not apply. Do not suggest `capigo auth login` and do not ask
+  the user for a key; follow the error's `next`. `AUTH_EMPTY_ENV_KEY` means that environment
+  supplied an empty key for this person.
 - Exit `2`: the key is missing, malformed, or rejected. Run `capigo auth login --help`, tell the
   user to create or retrieve their key while signed in at <https://platform.capigo.app>, and ask
   them to run the supported login command locally. Then retry `capigo health`. Code
@@ -72,7 +76,19 @@ not say whether the configured key is valid.
 Authentication secrets belong to the user. Never ask them to paste an API key into chat, inspect
 credential files or environment variables to recover it, print it, place it in examples, or expose
 it through shell tracing. Guide the user through `capigo auth login --help` and let them enter the
-key locally through the supported flow.
+key locally through the supported flow — unless the error carries `key_source`: then the
+environment owns the key, `auth login` refuses with `KEY_MANAGED_BY_ENV`, and its own `next` is the
+step to follow. Under `CAPIGO_NO_CONFIG=1` the config file is off and `config` commands exit `1`
+with `CONFIG_DISABLED`; pass `--tenant` on each command instead of storing a default.
+
+When the environment supplies the key, it also decides where the key goes: the base URL is
+`--api-url`, then `CAPIGO_API_URL`, then the default host, and the tenant is `--tenant`, then
+`CAPIGO_TENANT`. A stored `api_url` or `default_tenant`, and unprefixed `API_URL` or `TENANT`
+variables, are ignored, and `meta.tenant_source` is never `config`. Never pass `--api-url` on your
+own initiative, and do not try to point the CLI at another server. Under such a key `config get
+api_url` and `config get default_tenant` print stored values that API commands do not apply.
+`EMPTY_ENV_API_URL` (exit `1`) means the environment set an empty URL: nothing was sent, retrying
+will not help — surface it to a human.
 
 ### A key reaches one workspace
 
@@ -94,7 +110,9 @@ That bound is enforced server-side on every request, so it holds regardless of w
 
 Working in several workspaces therefore takes one key each — one profile per key, or
 `CAPIGO_API_KEY` and `CAPIGO_TENANT` set per invocation. There is no `--profile` flag, and no
-command creates a profile: a second one is a hand edit of `~/.capigo/config.json`.
+command creates a profile: a second one is a hand edit of `~/.capigo/config.json`. When errors
+carry `key_source`, the environment supplies the one key: do not set `CAPIGO_API_KEY`, edit the
+config, or ask for another key — follow the error's `next` (exit `3` included).
 
 ## 2. Discover the live command surface
 
