@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.32.0] — 2026-10-29
+
 ### Changed
 
 - **Breaking: a present `CAPIGO_API_KEY` is the only key source.** When the variable is set — even to an

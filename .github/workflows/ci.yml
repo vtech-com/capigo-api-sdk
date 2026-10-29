@@ -12,12 +12,21 @@ permissions:
 jobs:
   test:
     name: test (${{ matrix.os }}, Go ${{ matrix.go }})
-    runs-on: ${{ matrix.os }}
+    # Only the Linux leg runs on the self-hosted Mac mini runner (a Linux VM); macOS and
+    # Windows legs stay on GitHub-hosted runners. `os` keeps the job names unchanged.
+    runs-on: ${{ fromJSON(matrix.runner) }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         go: ["1.26.10"]
+        include:
+          - os: ubuntu-latest
+            runner: '["self-hosted", "lima"]'
+          - os: macos-latest
+            runner: '"macos-latest"'
+          - os: windows-latest
+            runner: '"windows-latest"'
 
     steps:
       - name: Checkout
