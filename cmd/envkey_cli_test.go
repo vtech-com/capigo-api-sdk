@@ -215,7 +215,13 @@ func runCapigo(t *testing.T, env []string, args ...string) cliResult {
 // baseEnv is the home directory plus the fake API's URL, followed by extra
 // KEY=VALUE pairs. An empty home sets no home variable at all.
 func baseEnv(home string, f *fakeAPI, extra ...string) []string {
-	env := []string{"CAPIGO_API_URL=" + f.srv.URL}
+	return homeEnv(home, append([]string{"CAPIGO_API_URL=" + f.srv.URL}, extra...)...)
+}
+
+// homeEnv is baseEnv without CAPIGO_API_URL, for a test that decides whether
+// that variable is present at all.
+func homeEnv(home string, extra ...string) []string {
+	var env []string
 	if home != "" {
 		// os.UserHomeDir reads USERPROFILE on Windows and HOME elsewhere.
 		env = append(env, "HOME="+home, "USERPROFILE="+home)
@@ -230,6 +236,40 @@ func baseEnv(home string, f *fakeAPI, extra ...string) []string {
 		}
 	}
 	return append(env, extra...)
+}
+
+// recordingProxy stands in for HTTPS_PROXY. It records the target of every
+// request and refuses each one, so a CLI that falls back to the default host
+// shows where it was going without ever reaching it.
+type recordingProxy struct {
+	srv     *httptest.Server
+	mu      sync.Mutex
+	targets []string
+}
+
+func newRecordingProxy(t *testing.T) *recordingProxy {
+	t.Helper()
+	p := &recordingProxy{}
+	p.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p.mu.Lock()
+		p.targets = append(p.targets, r.Method+" "+r.Host)
+		p.mu.Unlock()
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	t.Cleanup(p.srv.Close)
+	return p
+}
+
+// env routes every non-loopback HTTPS request through the proxy. Loopback
+// hosts bypass it, so the fake APIs are still reached directly.
+func (p *recordingProxy) env() string {
+	return "HTTPS_PROXY=" + p.srv.URL
+}
+
+func (p *recordingProxy) seen() []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return append([]string(nil), p.targets...)
 }
 
 const storedProfile = `{"version":1,"active_profile":"default","profiles":{"default":{"api_key":"csk_file","api_url":""}}}`
@@ -319,6 +359,19 @@ func assertSentKey(t *testing.T, f *fakeAPI, key string) {
 	for _, r := range reqs {
 		if r.Auth != "Bearer "+key {
 			t.Errorf("%s sent Authorization %q, want %q", r.Path, r.Auth, "Bearer "+key)
+		}
+	}
+}
+
+func assertSentTenant(t *testing.T, f *fakeAPI, tenant string) {
+	t.Helper()
+	reqs := f.requests()
+	if len(reqs) == 0 {
+		t.Fatal("no request reached the server")
+	}
+	for _, r := range reqs {
+		if r.Tenant != tenant {
+			t.Errorf("%s sent X-Tenant-Code %q, want %q", r.Path, r.Tenant, tenant)
 		}
 	}
 }
@@ -630,13 +683,17 @@ func TestUnchangedWithoutEnvManagement(t *testing.T) {
 		t.Fatalf("%s=1 needs %s naming the baseline binary", envkeyUpdateEnv, envkeyBinEnv)
 	}
 
+	// other is a second fake API, for the rows that prove a URL was not used.
+	var other *fakeAPI
 	cases := []struct {
 		name     string
 		golden   string
-		contents string // "" = bare HOME
-		args     []string
-		exit     int
-		after    func(t *testing.T, f *fakeAPI, path string)
+		contents string // "" = bare HOME; serverURLMarker becomes the fake API's URL
+		// env replaces baseEnv when set.
+		env   func(home string, f *fakeAPI) []string
+		args  []string
+		exit  int
+		after func(t *testing.T, f *fakeAPI, path string)
 	}{
 		{
 			name: "U1 login writes file", golden: "U1-login.golden",
@@ -677,17 +734,57 @@ func TestUnchangedWithoutEnvManagement(t *testing.T) {
 			name: "U6 config set api_key", golden: "U6-config-set-api-key.golden", contents: storedProfile,
 			args: []string{"config", "set", "api_key", "csk_y"}, exit: 5,
 		},
+		{
+			name: "U8 stored default tenant applies", golden: "U8-default-tenant.golden",
+			contents: `{"version":1,"active_profile":"default","profiles":{"default":{"api_key":"csk_file","api_url":"","default_tenant":"acme"}}}`,
+			args:     []string{"boards", "list"}, exit: 0,
+			after: func(t *testing.T, f *fakeAPI, _ string) { assertSentTenant(t, f, "acme") },
+		},
+		{
+			name: "U9 stored api_url applies", golden: "U9-stored-api-url.golden",
+			contents: `{"version":1,"active_profile":"default","profiles":{"default":{"api_key":"csk_file","api_url":"` + serverURLMarker + `"}}}`,
+			env:      func(home string, _ *fakeAPI) []string { return homeEnv(home) },
+			args:     []string{"health"}, exit: 0,
+			after: func(t *testing.T, f *fakeAPI, _ string) { assertSentKey(t, f, "csk_file") },
+		},
+		{
+			name: "U10 API_URL and TENANT still win", golden: "U10-unprefixed-env.golden", contents: storedProfile,
+			env: func(home string, f *fakeAPI) []string {
+				return baseEnv(home, other, "API_URL="+f.srv.URL, "TENANT=acme", "CAPIGO_TENANT=demo")
+			},
+			args: []string{"boards", "list"}, exit: 0,
+			after: func(t *testing.T, f *fakeAPI, _ string) {
+				assertSentTenant(t, f, "acme")
+				assertNoRequests(t, other)
+			},
+		},
+		{
+			name: "U11 corrupt config fails", golden: "U11-corrupt-config.golden", contents: "{not json",
+			args: []string{"health"}, exit: 1,
+			after: func(t *testing.T, f *fakeAPI, _ string) { assertNoRequests(t, f) },
+		},
+		{
+			name: "U12 dangling active profile fails", golden: "U12-dangling-profile.golden",
+			contents: `{"version":1,"active_profile":"ghost","profiles":{"default":{"api_key":"csk_file","api_url":""}}}`,
+			args:     []string{"health"}, exit: 1,
+			after: func(t *testing.T, f *fakeAPI, _ string) { assertNoRequests(t, f) },
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFakeAPI(t)
+			other = newFakeAPI(t)
 			home := t.TempDir()
 			path := filepath.Join(home, ".capigo", "config.json")
 			if tc.contents != "" {
-				home, path = homeWithConfig(t, tc.contents)
+				home, path = homeWithConfig(t, strings.ReplaceAll(tc.contents, serverURLMarker, f.srv.URL))
 			}
 
-			r := runCapigo(t, baseEnv(home, f), tc.args...)
+			env := baseEnv(home, f)
+			if tc.env != nil {
+				env = tc.env(home, f)
+			}
+			r := runCapigo(t, env, tc.args...)
 			if r.code != tc.exit {
 				t.Errorf("exit = %d, want %d\nstdout: %s", r.code, tc.exit, r.stdout)
 			}

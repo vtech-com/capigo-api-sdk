@@ -181,6 +181,9 @@ var errorCatalog = map[string]ErrorInfo{
 	"CONFIG_DISABLED": {
 		Next: "The config file is turned off in this environment, so nothing can be read from or stored in it; nothing was written. Give each command what it needs directly — --tenant <code> for the workspace.",
 	},
+	"EMPTY_ENV_API_URL": {
+		Next: "The environment running this CLI set an empty API URL, so nothing was sent (exit 1). Retrying will not help, and no other URL should be tried in its place. Surface it to a human: the environment configured this CLI wrongly.",
+	},
 
 	// ----- Local, CLI-detected condition (not a Capigo API error code): the
 	// storage host rejected the byte fetch for a just-minted signed URL. -----

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/spf13/viper"
+	"github.com/vtech-com/capigo-api-sdk/internal/credentials"
 	"github.com/vtech-com/capigo-api-sdk/internal/output"
 )
 
@@ -24,13 +25,7 @@ func tenantSource(tenant *string, tenantFlag string) string {
 	if tenant == nil {
 		return ""
 	}
-	if tenantFlag != "" {
-		return "flag"
-	}
-	if viper.GetString("tenant") != "" {
-		return "env"
-	}
-	return "config"
+	return credentials.TenantSource(tenantFlag, viper.GetString("tenant"))
 }
 
 // itemMeta is the meta of a single-item response: a get, or a successful write.

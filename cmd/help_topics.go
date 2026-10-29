@@ -34,6 +34,11 @@ RESOLUTION ORDER
 
   The first one set wins. --tenant is a per-command flag, not a global one.
 
+  When the environment manages the key (CAPIGO_API_KEY present, or
+  CAPIGO_NO_CONFIG=1), only --tenant and CAPIGO_TENANT count: a stored
+  default_tenant is not applied, an empty CAPIGO_TENANT means no tenant, and
+  tenant_source is never "config".
+
   $ capigo config set-default-tenant acme
   $ capigo config unset-default-tenant
 

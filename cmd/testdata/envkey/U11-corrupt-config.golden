@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "ERROR",
+    "message": "load config: parse config: invalid character 'n' looking for beginning of object key string"
+  }
+}

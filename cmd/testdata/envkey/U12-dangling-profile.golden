@@ -1,0 +1,6 @@
+{
+  "error": {
+    "code": "ERROR",
+    "message": "get active profile: profile \"ghost\" not found"
+  }
+}

@@ -227,6 +227,20 @@ In either mode every error object carries `key_source` (`env` or `none`) and aut
 `next` step that points at the environment, never at `auth login`. With both variables absent,
 behaviour is unchanged. The logic lives in `internal/credentials` and `internal/config/env.go`.
 
+In either mode the key's destination and tenant come from the same place the key did. API
+commands do not read the config file at all, so no key, URL or tenant comes from it, and viper's
+unprefixed `API_URL`/`TENANT` are never consulted:
+
+```
+base URL:  --api-url  >  CAPIGO_API_URL  >  default host
+           (CAPIGO_API_URL present but empty → EMPTY_ENV_API_URL, exit 1, nothing sent)
+tenant:    --tenant   >  CAPIGO_TENANT   >  none
+           (CAPIGO_TENANT present but empty → none; meta.tenant_source is never "config")
+```
+
+`config set api_url` and `config set-default-tenant` still write under `CAPIGO_API_KEY` alone; the
+stored values are not applied while the environment manages the key.
+
 **Tenant resolution rule (specific):**
 
 ```
@@ -236,6 +250,9 @@ behaviour is unchanged. The logic lives in `internal/credentials` and `internal/
       else config.default_tenant  → use that tenant
         else                       → global mode (no X-Tenant-Code)
 ```
+
+Under an environment-managed key the `config.default_tenant` step is skipped and an empty
+`$CAPIGO_TENANT` counts as unset: `--tenant`, then `$CAPIGO_TENANT`, then no tenant.
 
 **Default behavior when nothing is configured: global mode** (no tenant header sent). The API returns data across all accessible tenants. This is intentional — it lets new users see something useful immediately without configuration.
 
@@ -395,7 +412,7 @@ Production:  https://platform.capigo.app/api/v1
 Local dev:   http://localhost:3999/api/v1
 ```
 
-The CLI uses `https://platform.capigo.app/api/v1` by default. Override with `--api-url` or `CAPIGO_API_URL` env var for staging/local development.
+The CLI uses `https://platform.capigo.app/api/v1` by default. Override with `--api-url` or `CAPIGO_API_URL` env var for staging/local development. A stored `api_url` in the active profile also applies, except under an environment-managed key, where only `--api-url` and `CAPIGO_API_URL` override the default (§3.4).
 
 ### 5.2 Authentication
 

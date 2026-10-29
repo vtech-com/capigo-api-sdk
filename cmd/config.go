@@ -50,7 +50,9 @@ FLAGS
       recognised.
 
   <value>
-      The value to store. Positional, required.
+      The value to store. Positional, required. A stored api_url is not
+      applied while CAPIGO_API_KEY is set: there the URL comes only from
+      --api-url, CAPIGO_API_URL or the default host.
 
         capigo config set api_url https://platform.capigo.app/api/v1
         capigo config set default_profile staging
@@ -139,7 +141,9 @@ OUTPUT
       { "data": { "key": "default_tenant", "value": "acme" }, "meta": {} }
 
   value is "" when the key exists but is unset (e.g. no default_tenant has
-  been stored yet) — never null.
+  been stored yet) — never null. It is the stored value, which API commands
+  do not apply while CAPIGO_API_KEY is set. See capigo help tenancy for
+  what they apply instead.
 
   Exit 4 if the active profile itself is not in the config file yet. Exit 1
   with CONFIG_DISABLED under CAPIGO_NO_CONFIG=1.`,
@@ -194,7 +198,8 @@ var configSetDefaultTenantCmd = &cobra.Command{
 PURPOSE
   Store default_tenant as the last fallback in tenant resolution: --tenant,
   then CAPIGO_TENANT, then this value. See capigo help tenancy for the full
-  order.
+  order. While CAPIGO_API_KEY is set the stored value is not applied: pass
+  --tenant or set CAPIGO_TENANT instead.
 
 USAGE
   capigo config set-default-tenant <code>
