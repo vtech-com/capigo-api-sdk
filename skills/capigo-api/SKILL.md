@@ -39,13 +39,16 @@ from one build with commands sent through another produces false flag and capabi
 If the shell cannot find `capigo`:
 
 1. Inspect the OS, architecture, shell, and available package managers using read-only checks.
-2. Tell the user that the Capigo CLI is not installed and recommend the official installation
-   guide: <https://github.com/vtech-com/capigo-api-sdk#installation>.
-3. Prefer the installation path that fits the detected machine. For example, when Homebrew is
-   present, suggest `brew install --cask vtech-com/tap/capigo`; the guide also covers GitHub
-   Releases and Go-based installation with their platform-specific caveats.
-4. Do not install software or change the machine merely because the binary is missing. Wait
-   for the user's authorization, then verify the result with `capigo version`.
+2. Tell the user that the Capigo CLI is not installed.
+3. If the user asked you to install it, including by sharing this repository and saying "install
+   this", that request is the authorization: follow
+   [`INSTALL.md`](https://github.com/vtech-com/capigo-api-sdk/blob/main/INSTALL.md) and install it
+   for them. If they only mentioned the CLI, recommend the official installation guide
+   (<https://github.com/vtech-com/capigo-api-sdk#installation>), prefer the path that fits the
+   detected machine (for example `brew install --cask vtech-com/tap/capigo` when Homebrew is
+   present), and wait for their authorization before you change the machine.
+4. Verify the result with `capigo version`. If the binary is installed but not on `PATH`, call it
+   by its full path or set `PATH` in the same command: a fresh shell forgets an earlier `export`.
 
 After the version check succeeds, run the read-only authentication and connectivity probe:
 
@@ -75,8 +78,10 @@ not say whether the configured key is valid.
 
 Authentication secrets belong to the user. Never ask them to paste an API key into chat, inspect
 credential files or environment variables to recover it, print it, place it in examples, or expose
-it through shell tracing. Guide the user through `capigo auth login --help` and let them enter the
-key locally through the supported flow — unless the error carries `key_source`: then the
+it through shell tracing. `capigo auth login` takes the key only as `--key <csk_...>`, so the user
+creates the key on the platform's API keys page and runs that command in their own terminal, never
+through you. Guide them through `capigo auth login --help` and let them enter the key locally
+through the supported flow — unless the error carries `key_source`: then the
 environment owns the key, `auth login` refuses with `KEY_MANAGED_BY_ENV`, and its own `next` is the
 step to follow. Under `CAPIGO_NO_CONFIG=1` the config file is off and `config` commands exit `1`
 with `CONFIG_DISABLED`; pass `--tenant` on each command instead of storing a default.

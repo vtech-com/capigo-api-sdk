@@ -37,6 +37,9 @@ Capigo exposes a stable Public API, but integrating it today requires implementi
 
 ## Installation
 
+> **AI agent installing this for a user?** Read [INSTALL.md](INSTALL.md): it covers sandboxes,
+> `PATH`, and how the person creates and enters their API key.
+
 ### Linux (install script) — recommended for servers and VPS hosts
 
 ```bash

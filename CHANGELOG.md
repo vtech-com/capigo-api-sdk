@@ -9,6 +9,22 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **`INSTALL.md`: an install guide written for AI agents.** An agent given the repository link and
+  asked to install now has steps to do it, handle sandboxes and `PATH`, and hand the API key to the
+  person to enter in their own terminal. The README links to it from the Installation section.
+
+### Changed
+
+- **`install.sh` falls back to `~/.local/bin` instead of failing.** When `/usr/local/bin` is not
+  writable and sudo cannot run without a prompt, the script installs to `~/.local/bin`, runs
+  `capigo version`, and prints the full path and the `PATH` line to use. An explicit
+  `CAPIGO_BIN_DIR` is still never overridden.
+- **The `capigo-api` skill installs the CLI when the user asked for it.** Sharing the repository
+  and asking to install counts as the request. Without that request the skill still recommends and
+  waits. It still never asks for an API key in chat.
+
 ### Changed
 
 - **Release builds use GoReleaser 2.19; the Homebrew cask needs Homebrew 5.1.14 or later.** The
