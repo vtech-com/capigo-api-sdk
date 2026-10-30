@@ -9,6 +9,16 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.32.1] — 2026-10-30
+
+### Changed
+
+- **Release builds use GoReleaser 2.19; the Homebrew cask needs Homebrew 5.1.14 or later.** The
+  cask's quarantine-removal hook moves from the deprecated `postflight` stanza to
+  `postflight_steps`, which older Homebrew does not understand. Check `brew --version` before
+  `brew upgrade --cask capigo`; `brew update` brings an old Homebrew current. Linux packages, the
+  install script and the release archives are unchanged.
+
 ## [0.32.0] — 2026-10-29
 
 ### Changed
