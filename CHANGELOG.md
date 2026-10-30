@@ -17,6 +17,11 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- **`capigo auth login` asks for the key with the input hidden.** Run it without `--key` in a
+  terminal and paste the key at the prompt; it stays out of the shell history. `--key-stdin` reads
+  the key from one line of stdin for scripts and agents. `--key` still works, and still lands in the
+  history. Without `--key` and without a terminal, login exits `1` with `INVALID_API_KEY` instead of
+  waiting. `golang.org/x/term` is a new dependency.
 - **`install.sh` falls back to `~/.local/bin` instead of failing.** When `/usr/local/bin` is not
   writable and sudo cannot run without a prompt, the script installs to `~/.local/bin`, runs
   `capigo version`, and prints the full path and the `PATH` line to use. An explicit
