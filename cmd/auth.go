@@ -33,7 +33,10 @@ USAGE
   capigo auth <command> [<args>]`,
 }
 
-var loginKey string
+var (
+	loginKey      string
+	loginKeyStdin bool
+)
 
 var loginCmd = &cobra.Command{
 	Use:   "login",
@@ -46,14 +49,24 @@ PURPOSE
   itself confirm the key is accepted. Run health next to confirm that.
 
 USAGE
+  capigo auth login                    prompts for the key; the input is hidden
+  capigo auth login --key-stdin        reads the key from one line of stdin
   capigo auth login --key <csk_...>
 
+  Prefer the prompt or --key-stdin: a key passed with --key lands in the shell
+  history. In a terminal, "capigo auth login" asks for the key without echoing
+  it. In a script, pipe it:
+
+        printf '%s\n' "$KEY" | capigo auth login --key-stdin
+
 FLAGS
+  --key-stdin
+      Read the API key from the first line of stdin.
   --key <csk_...>
-      API key to store. Required. Must start with csk_; if it does not,
-      login exits 1 without making a request. The value is scrubbed from
-      the process argument list right after startup, so it never shows up
-      in ps.
+      API key to store, on the command line. The key must start with csk_; if
+      it does not, login exits 1 without making a request. The value is
+      scrubbed from the process argument list right after startup, so it never
+      shows up in ps. Not combinable with --key-stdin.
 
         capigo auth login --key csk_live_9f2a1c...
 
@@ -66,8 +79,8 @@ OUTPUT
         "meta": {}
       }
 
-  Exit 1 if --key does not start with csk_, or if ~/.capigo/config.json
-  cannot be read or written.
+  Exit 1 if the key does not start with csk_, if no key was given and stdin is
+  not a terminal, or if ~/.capigo/config.json cannot be read or written.
 
   Exit 1, writing nothing, with KEY_MANAGED_BY_ENV when CAPIGO_API_KEY is
   set (even empty), or with CONFIG_DISABLED under CAPIGO_NO_CONFIG=1.`,
@@ -143,8 +156,8 @@ OUTPUT
 }
 
 func init() {
-	loginCmd.Flags().StringVar(&loginKey, "key", "", "API key (must start with csk_)")
-	_ = loginCmd.MarkFlagRequired("key")
+	loginCmd.Flags().StringVar(&loginKey, "key", "", "API key (must start with csk_); lands in shell history, prefer the prompt")
+	loginCmd.Flags().BoolVar(&loginKeyStdin, "key-stdin", false, "read the API key from the first line of stdin")
 
 	authCmd.AddCommand(loginCmd, whoamiCmd, logoutCmd)
 	rootCmd.AddCommand(authCmd)
@@ -154,13 +167,15 @@ func runLogin(_ *cobra.Command, _ []string) error {
 	if refusal := credentials.StoreKeyRefusal(); refusal != nil {
 		failLocal(refusal)
 	}
+	flagKey := loginKey
+	loginKey = resolveLoginKey(flagKey, loginKeyStdin, os.Stdin, os.Stderr)
 	if !strings.HasPrefix(loginKey, "csk_") {
 		fail("INVALID_API_KEY", "invalid API key: must start with csk_", 0)
 	}
 
 	// Overwrite the flag value in os.Args so the key does not leak via `ps`.
 	for i, arg := range os.Args {
-		if arg == loginKey {
+		if flagKey != "" && arg == flagKey {
 			os.Args[i] = ""
 			break
 		}

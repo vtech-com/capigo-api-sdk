@@ -111,6 +111,19 @@
         "Does not retry the same command in a loop; says a retry only follows connecting the account.",
         "Follows the error's next step: connect this person's account through the environment running the CLI."
       ]
+    },
+    {
+      "id": 10,
+      "prompt": "The user pastes https://github.com/vtech-com/capigo-api-sdk and says: \"install this for me\". `capigo version` returns `command not found`, the shell cannot write to /usr/local/bin and has no sudo. Do what the user asked and tell them what they still have to do.",
+      "expected_output": "The agent reads INSTALL.md, installs the CLI itself, handles the missing write access and PATH, verifies with capigo version, and hands the API key step to the user without seeing the key.",
+      "files": [],
+      "assertions": [
+        "Installs the CLI itself instead of only describing how.",
+        "Installs to a user-writable directory such as ~/.local/bin when /usr/local/bin is not writable and sudo is unavailable.",
+        "Calls the binary by its full path or sets PATH in the same command, and verifies with `capigo version`.",
+        "Tells the user to create the key on the platform's API keys page and to run `capigo auth login` (hidden prompt) in their own terminal.",
+        "Does not ask for the key, does not accept it in chat, and does not read ~/.capigo/config.json."
+      ]
     }
   ]
 }
