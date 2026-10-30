@@ -7,7 +7,8 @@
 #
 # Environment:
 #   CAPIGO_VERSION   version to install, e.g. v0.16.0 (default: latest release)
-#   CAPIGO_BIN_DIR   install directory (default: /usr/local/bin)
+#   CAPIGO_BIN_DIR   install directory (default: /usr/local/bin, or ~/.local/bin when
+#                    /usr/local/bin is not writable and sudo cannot run without a prompt)
 #
 # The downloaded archive is verified against the release's checksums.txt before
 # anything is installed. If verification fails, nothing is written.
@@ -16,6 +17,8 @@ set -eu
 
 REPO="vtech-com/capigo-api-sdk"
 BIN_DIR="${CAPIGO_BIN_DIR:-/usr/local/bin}"
+# An explicit CAPIGO_BIN_DIR is never overridden; only the default may fall back.
+BIN_DIR_EXPLICIT="${CAPIGO_BIN_DIR:+1}"
 TMP_DIR=""
 
 die() {
@@ -97,22 +100,45 @@ fi
 tar -xzf "$TMP_DIR/$archive" -C "$TMP_DIR" capigo || die "could not extract capigo from $archive"
 chmod +x "$TMP_DIR/capigo"
 
-# Write with sudo only when the target directory is not already writable.
-if [ -w "$BIN_DIR" ] || { [ ! -e "$BIN_DIR" ] && mkdir -p "$BIN_DIR" 2>/dev/null; }; then
-	install_cmd=""
-elif command -v sudo >/dev/null 2>&1; then
-	printf 'Installing to %s requires sudo.\n' "$BIN_DIR"
-	install_cmd="sudo"
-else
-	die "$BIN_DIR is not writable and sudo is unavailable; set CAPIGO_BIN_DIR to a writable directory"
+# Write with sudo only when the target directory is not already writable. A sandbox or an
+# unattended agent has no one to type a sudo password, so sudo counts only when it works
+# without a prompt or a person is at the terminal; otherwise the default falls back to a
+# directory in $HOME instead of hanging or failing.
+sudo_usable() {
+	command -v sudo >/dev/null 2>&1 || return 1
+	sudo -n true 2>/dev/null || [ -t 2 ]
+}
+
+can_write() {
+	[ -w "$1" ] || { [ ! -e "$1" ] && mkdir -p "$1" 2>/dev/null; }
+}
+
+install_cmd=""
+if ! can_write "$BIN_DIR"; then
+	if sudo_usable; then
+		printf 'Installing to %s requires sudo.\n' "$BIN_DIR"
+		install_cmd="sudo"
+	elif [ -z "$BIN_DIR_EXPLICIT" ] && [ -n "${HOME:-}" ]; then
+		BIN_DIR="$HOME/.local/bin"
+		printf '/usr/local/bin is not writable and sudo cannot run without a prompt; installing to %s instead.\n' "$BIN_DIR"
+		can_write "$BIN_DIR" || die "$BIN_DIR is not writable; set CAPIGO_BIN_DIR to a writable directory"
+	else
+		die "$BIN_DIR is not writable and sudo is unavailable; set CAPIGO_BIN_DIR to a writable directory"
+	fi
 fi
 
 $install_cmd mkdir -p "$BIN_DIR"
 $install_cmd cp "$TMP_DIR/capigo" "$BIN_DIR/capigo"
 
 printf 'Installed capigo %s to %s/capigo\n' "$version" "$BIN_DIR"
+"$BIN_DIR/capigo" version
 
 case ":$PATH:" in
-*":$BIN_DIR:"*) "$BIN_DIR/capigo" version ;;
-*) printf '%s is not on your PATH — add it, or run %s/capigo directly.\n' "$BIN_DIR" "$BIN_DIR" ;;
+*":$BIN_DIR:"*) ;;
+*)
+	printf '\n%s is not on your PATH, so a bare `capigo` will not be found.\n' "$BIN_DIR"
+	printf 'Run it by its full path: %s/capigo\n' "$BIN_DIR"
+	printf 'Or add it to this shell: export PATH="%s:$PATH"\n' "$BIN_DIR"
+	printf 'A new shell forgets that export; to keep it, add the same line to ~/.zshrc or ~/.bashrc.\n'
+	;;
 esac

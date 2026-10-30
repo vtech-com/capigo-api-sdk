@@ -9,6 +9,29 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.33.0] — 2026-10-30
+
+### Added
+
+- **`INSTALL.md`: an install guide written for AI agents.** An agent given the repository link and
+  asked to install now has steps to do it, handle sandboxes and `PATH`, and hand the API key to the
+  person to enter in their own terminal. The README links to it from the Installation section.
+
+### Changed
+
+- **`capigo auth login` asks for the key with the input hidden.** Run it without `--key` in a
+  terminal and paste the key at the prompt; it stays out of the shell history. `--key-stdin` reads
+  the key from one line of stdin for scripts and agents. `--key` still works, and still lands in the
+  history. Without `--key` and without a terminal, login exits `1` with `INVALID_API_KEY` instead of
+  waiting. `golang.org/x/term` is a new dependency.
+- **`install.sh` falls back to `~/.local/bin` instead of failing.** When `/usr/local/bin` is not
+  writable and sudo cannot run without a prompt, the script installs to `~/.local/bin`, runs
+  `capigo version`, and prints the full path and the `PATH` line to use. An explicit
+  `CAPIGO_BIN_DIR` is still never overridden.
+- **The `capigo-api` skill installs the CLI when the user asked for it.** Sharing the repository
+  and asking to install counts as the request. Without that request the skill still recommends and
+  waits. It still never asks for an API key in chat.
+
 ## [0.32.1] — 2026-10-30
 
 ### Changed
