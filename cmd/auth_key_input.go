@@ -36,9 +36,9 @@ func resolveLoginKey(flagKey string, fromStdin bool, stdin io.Reader, prompt io.
 		}
 		return strings.TrimSpace(line)
 	case stdinIsTerminal():
-		fmt.Fprint(prompt, "Paste your Capigo API key (input is hidden): ")
+		_, _ = fmt.Fprint(prompt, "Paste your Capigo API key (input is hidden): ")
 		line, err := readHiddenLine()
-		fmt.Fprintln(prompt)
+		_, _ = fmt.Fprintln(prompt)
 		if err != nil {
 			fail("INVALID_API_KEY", "could not read the API key from the terminal", 0)
 		}
