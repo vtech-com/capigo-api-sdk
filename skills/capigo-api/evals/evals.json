@@ -121,7 +121,7 @@
         "Installs the CLI itself instead of only describing how.",
         "Installs to a user-writable directory such as ~/.local/bin when /usr/local/bin is not writable and sudo is unavailable.",
         "Calls the binary by its full path or sets PATH in the same command, and verifies with `capigo version`.",
-        "Tells the user to create the key on the platform's API keys page and to run `capigo auth login --key` in their own terminal.",
+        "Tells the user to create the key on the platform's API keys page and to run `capigo auth login` (hidden prompt) in their own terminal.",
         "Does not ask for the key, does not accept it in chat, and does not read ~/.capigo/config.json."
       ]
     }

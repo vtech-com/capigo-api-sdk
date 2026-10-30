@@ -155,8 +155,9 @@ brew install --cask vtech-com/tap/capigo
 ## Quick Start
 
 ```bash
-# 1. Login with your API key (generated at platform.capigo.app)
-capigo auth login --key csk_abc123...
+# 1. Login with your API key (generated at platform.capigo.app). It asks for the key and hides
+#    what you type, so the key stays out of your shell history. For a script: --key-stdin.
+capigo auth login
 
 # 2. Preflight: confirm the API is reachable and the key is accepted
 capigo health
@@ -189,7 +190,7 @@ capigo tasks list | jq '.data[] | select(.status=="To-Do")'
 ## Commands
 
 ```
-capigo auth login        Login with a csk_ API key
+capigo auth login        Login with a csk_ API key (hidden prompt; or --key-stdin, --key)
 capigo auth logout       Remove credentials from config
 capigo auth whoami       Show current user (GET /me — not implemented; always 404s. Use `health`)
 capigo health            Preflight: check API connectivity + key (exit 2 if auth fails)

@@ -78,9 +78,9 @@ not say whether the configured key is valid.
 
 Authentication secrets belong to the user. Never ask them to paste an API key into chat, inspect
 credential files or environment variables to recover it, print it, place it in examples, or expose
-it through shell tracing. `capigo auth login` takes the key only as `--key <csk_...>`, so the user
-creates the key on the platform's API keys page and runs that command in their own terminal, never
-through you. Guide them through `capigo auth login --help` and let them enter the key locally
+it through shell tracing. The user creates the key on the platform's API keys page and runs
+`capigo auth login` in their own terminal: it prompts for the key with the input hidden (`--key-stdin`
+reads it from stdin for scripts). The key never passes through you. Guide them through `capigo auth login --help` and let them enter the key locally
 through the supported flow — unless the error carries `key_source`: then the
 environment owns the key, `auth login` refuses with `KEY_MANAGED_BY_ENV`, and its own `next` is the
 step to follow. Under `CAPIGO_NO_CONFIG=1` the config file is off and `config` commands exit `1`

@@ -49,7 +49,9 @@ You never see the key. Tell the person, in plain words:
 2. Open the API keys page and create a key for the workspace you will use. A key works in one
    workspace only.
 3. Copy the key. It starts with `csk_`.
-4. In **their own terminal**, not in this chat, run: `capigo auth login --key <paste the key>`.
+4. In **their own terminal**, not in this chat, run `capigo auth login` (give them the full path
+   from step 3 if `capigo` is not on their `PATH`). It asks for the key and hides what they type.
+   They paste the key and press Enter.
 
 Do not ask for the key, do not ask them to paste it to you, do not read `~/.capigo/config.json`,
 and do not run `capigo auth login` yourself with a key they gave you in chat.
