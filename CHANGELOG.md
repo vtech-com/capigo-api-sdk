@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.32.1] — 2026-10-30
+
 ### Changed
 
 - **Release builds use GoReleaser 2.19; the Homebrew cask needs Homebrew 5.1.14 or later.** The
