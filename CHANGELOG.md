@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.33.0] — 2026-10-30
+
 ### Added
 
 - **`INSTALL.md`: an install guide written for AI agents.** An agent given the repository link and
