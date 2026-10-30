@@ -30,6 +30,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   and asking to install counts as the request. Without that request the skill still recommends and
   waits. It still never asks for an API key in chat.
 
+## [0.32.1] — 2026-10-30
+
 ### Changed
 
 - **Release builds use GoReleaser 2.19; the Homebrew cask needs Homebrew 5.1.14 or later.** The
