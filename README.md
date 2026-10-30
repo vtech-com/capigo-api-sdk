@@ -131,6 +131,8 @@ Linuxbrew. On Linux, use the install script or the `.deb` above.
 brew install --cask vtech-com/tap/capigo
 ```
 
+The cask needs Homebrew 5.1.14 or later; run `brew update` first if `brew install` rejects it.
+
 To update an existing installation:
 
 ```bash
