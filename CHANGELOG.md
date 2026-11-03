@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.0] — 2026-11-03
+
 ### Added
 
 - **`vat-policies` commands.** `list`, `get`, `create`, `update` (PATCH), `replace` (PUT) and
