@@ -137,6 +137,13 @@ var implementedOps = map[string]string{
 	"DELETE /pcms/property-definitions/{id}":            "property-definitions delete",
 	"POST /pcms/property-definitions/{id}/actions/move": "property-definitions move",
 
+	"GET /pcms/vat-policies":         "vat-policies list",
+	"POST /pcms/vat-policies":        "vat-policies create",
+	"GET /pcms/vat-policies/{id}":    "vat-policies get",
+	"PATCH /pcms/vat-policies/{id}":  "vat-policies update",
+	"PUT /pcms/vat-policies/{id}":    "vat-policies replace",
+	"DELETE /pcms/vat-policies/{id}": "vat-policies delete",
+
 	"GET /pcms/brands":         "brands list",
 	"POST /pcms/brands":        "brands create",
 	"GET /pcms/brands/{id}":    "brands get",
@@ -209,9 +216,11 @@ var implementedOps = map[string]string{
 
 // unimplementedOps is every operation the CLI deliberately does not wrap, each
 // with a reason. Add here — rather than to implementedOps — when an operation is
-// left without a command on purpose. Empty today: the WMS module, held out here
-// while its surface was still moving, is wrapped under `capigo wms`.
-var unimplementedOps = map[string]string{}
+// left without a command on purpose.
+var unimplementedOps = map[string]string{
+	"POST /auth/device/code":  "device flow: login by device is not wrapped yet",
+	"POST /auth/device/token": "device flow: login by device is not wrapped yet",
+}
 
 // openAPIPathOnlySpec is the minimal subset of OpenAPI 3.0 needed to enumerate
 // operations: a path, and the methods hanging off it.

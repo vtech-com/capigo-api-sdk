@@ -9,6 +9,22 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **`vat-policies` commands.** `list`, `get`, `create`, `update` (PATCH), `replace` (PUT) and
+  `delete` manage a tenant's named VAT rates. A policy that a live product or product type uses
+  cannot be deleted (exit 8).
+- **`--vat-policy-id` on `products create|update` and `product-types create|update|replace`.**
+  Clear the policy with `--clear-vat-policy` (`products update`, `product-types update`) or
+  `--no-vat-policy` (`product-types replace`). `product-types replace` keeps the current policy
+  when neither flag is given.
+
+### Changed
+
+- **`api/openapi.json` re-synced from the platform.** The two device-login operations
+  (`POST /auth/device/code`, `POST /auth/device/token`) are not wrapped yet, and the new WMS list
+  filters (`external_ref`, `waybill`) have no flags yet.
+
 ## [0.33.0] — 2026-10-30
 
 ### Added
