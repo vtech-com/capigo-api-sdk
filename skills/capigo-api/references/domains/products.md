@@ -34,6 +34,16 @@ the agent must preserve.
 - A variant carries `status`: `active` or `inactive` — the SKU's lifecycle state. It is distinct
   from the product's own lifecycle state and is not a soft delete; it defaults to `active`.
 
+## VAT policies
+
+A VAT policy is a named rate in percent (`capigo vat-policies list`). A product points at one with
+`--vat-policy-id`; a product with none takes its type's policy (`product-types ... --vat-policy-id`).
+The product's `vat_rate` is read-only and follows from that, so never send it. Resolve the id from
+`vat-policies list`; do not invent one. `--clear-vat-policy` on `products update` and
+`product-types update` removes the policy, and `product-types replace` keeps the current one unless
+`--vat-policy-id` or `--no-vat-policy` is given. A policy a live product or type still uses cannot
+be deleted (exit 8).
+
 ## Properties
 
 `properties` holds a product's named attributes — origin, voltage, material — as a map from key

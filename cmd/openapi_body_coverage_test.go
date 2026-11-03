@@ -316,6 +316,24 @@ func buildWriteCommandMapping() []writeCommandEntry {
 			hasFlag:   func(n string) bool { return propertyDefinitionsMoveCmd.Flags().Lookup(n) != nil },
 		},
 		{
+			humanName: "vat-policies create",
+			path:      "/pcms/vat-policies",
+			method:    "post",
+			hasFlag:   func(n string) bool { return vatPoliciesCreateCmd.Flags().Lookup(n) != nil },
+		},
+		{
+			humanName: "vat-policies update",
+			path:      "/pcms/vat-policies/{id}",
+			method:    "patch",
+			hasFlag:   func(n string) bool { return vatPoliciesUpdateCmd.Flags().Lookup(n) != nil },
+		},
+		{
+			humanName: "vat-policies replace",
+			path:      "/pcms/vat-policies/{id}",
+			method:    "put",
+			hasFlag:   func(n string) bool { return vatPoliciesReplaceCmd.Flags().Lookup(n) != nil },
+		},
+		{
 			humanName: "brands create",
 			path:      "/pcms/brands",
 			method:    "post",

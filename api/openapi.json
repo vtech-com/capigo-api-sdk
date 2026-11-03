@@ -3,7 +3,7 @@
   "info": {
     "title": "Capigo Public API",
     "description": "Public API documentation for Capigo Developer Platform. Integrate your external tools with Capigo tasks, boards, and members. See `apps/platform/docs/api-v1-changelog.md` for version history. A key is pinned to one workspace, lists several workspaces, or reaches every workspace of its owner. A pinned key needs no `X-Tenant-Code`. A key that lists several workspaces, or reaches all of them, names the workspace per call in `X-Tenant-Code`: the workspace must be one the key reaches and its owner still belongs to, or the call is `403` `AUTH_TENANT_MISMATCH`. A key that lists its workspaces must send the header on every route except `GET /health` and `GET /tenants`, or the call is `400` `AUTH_TENANT_REQUIRED`.",
-    "version": "2.1.0",
+    "version": "2.12.0",
     "contact": {
       "name": "Capigo Developer Support"
     }
@@ -28,6 +28,126 @@
       }
     },
     "schemas": {
+      "DeviceCodeRequest": {
+        "type": "object",
+        "required": [
+          "client_id",
+          "client_secret"
+        ],
+        "properties": {
+          "client_id": {
+            "type": "string",
+            "description": "The assistant's registered client id."
+          },
+          "client_secret": {
+            "type": "string",
+            "description": "The assistant's registered secret."
+          }
+        }
+      },
+      "DeviceCodeResponse": {
+        "type": "object",
+        "properties": {
+          "device_code": {
+            "type": "string",
+            "description": "Secret held by the assistant and sent back when polling."
+          },
+          "user_code": {
+            "type": "string",
+            "example": "BCDF-GHJK",
+            "description": "Eight letters in two groups of four, from `BCDFGHJKLMNPQRSTVWXZ`."
+          },
+          "verification_uri": {
+            "type": "string",
+            "format": "uri"
+          },
+          "verification_uri_complete": {
+            "type": "string",
+            "format": "uri",
+            "description": "`verification_uri` with the user code, to send to the person."
+          },
+          "expires_in": {
+            "type": "integer",
+            "example": 600,
+            "description": "Seconds the request lives."
+          },
+          "interval": {
+            "type": "integer",
+            "example": 5,
+            "description": "Minimum seconds between polls."
+          }
+        }
+      },
+      "DeviceTokenRequest": {
+        "type": "object",
+        "required": [
+          "client_id",
+          "client_secret",
+          "device_code"
+        ],
+        "properties": {
+          "client_id": {
+            "type": "string"
+          },
+          "client_secret": {
+            "type": "string"
+          },
+          "device_code": {
+            "type": "string"
+          }
+        }
+      },
+      "DeviceTokenResponse": {
+        "type": "object",
+        "properties": {
+          "api_key": {
+            "type": "string",
+            "description": "The `csk_` key. It is returned once and never shown again."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "90 days after the key was created."
+          },
+          "scope": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "tenant",
+                  "allowlist",
+                  "global"
+                ]
+              },
+              "tenant_codes": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "The workspaces the person chose. Empty for a global key."
+              }
+            }
+          }
+        }
+      },
+      "DeviceFlowError": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "enum": [
+              "invalid_client",
+              "invalid_request",
+              "authorization_pending",
+              "slow_down",
+              "access_denied",
+              "expired_token",
+              "server_error"
+            ]
+          }
+        }
+      },
       "Error": {
         "type": "object",
         "properties": {
@@ -382,6 +502,12 @@
           "description": {
             "type": "string",
             "nullable": true
+          },
+          "vat_policy_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "The VAT policy the type points at; `null` for none. Products of the type with no policy of their own take its rate."
           }
         }
       },
@@ -439,6 +565,29 @@
           },
           "abbreviation": {
             "type": "string"
+          }
+        }
+      },
+      "PublicVatPolicyResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "rate"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "rate": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100,
+            "description": "VAT rate in percent, at most two decimals."
           }
         }
       },
@@ -1041,6 +1190,11 @@
             "type": "string",
             "example": "VND"
           },
+          "vat_rate": {
+            "type": "number",
+            "nullable": true,
+            "description": "The parent product's VAT rate in percent; `null` when the product has none. A 0% policy reads `0`. A rate change moves the parent product's `updated_at`, not the variant's; detect rate changes from the product."
+          },
           "weight": {
             "type": "number",
             "nullable": true
@@ -1372,6 +1526,17 @@
           "currency": {
             "type": "string",
             "example": "VND"
+          },
+          "vat_policy_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "The product's own VAT policy; `null` when it has none, in which case its type's policy applies. With `vat_rate`: a policy id means the rate is its own, no id with a rate means it comes from the type, neither means no rate."
+          },
+          "vat_rate": {
+            "type": "number",
+            "nullable": true,
+            "description": "The product's VAT rate in percent: its own policy's rate, else its product type's, else `null` for no rate. A 0% policy reads `0`, never `null`. Set by the system: a `vat_rate` sent in a request is ignored."
           },
           "aliases": {
             "type": "array",
@@ -2370,6 +2535,7 @@
         "type": "object",
         "required": [
           "id",
+          "external_line_ref",
           "product_variant",
           "qty_expected",
           "qty_received",
@@ -2379,6 +2545,11 @@
           "id": {
             "type": "string",
             "format": "uuid"
+          },
+          "external_line_ref": {
+            "type": "string",
+            "nullable": true,
+            "description": "The order system's id for the line, as it sent it with the request or a lines update; null for a line it did not request, such as one the warehouse added or a member keyed in. A PATCH that names the line by `id` keeps it."
           },
           "product_variant": {
             "$ref": "#/components/schemas/PublicWmsProductVariantReference"
@@ -2551,9 +2722,24 @@
           "lines",
           "status_history",
           "owner",
-          "cancel_locked"
+          "owner_connector",
+          "cancel_locked",
+          "sender"
         ],
         "properties": {
+          "sender": {
+            "type": "object",
+            "nullable": true,
+            "readOnly": true,
+            "additionalProperties": true,
+            "description": "The sender the order system sent with its request, returned exactly as it was stored, or null when none was sent or no order system requested the receipt. It may be an empty object or lack `name`. Read-only: no request writes it here. Always present.",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "The sender's name as the order system sent it."
+              }
+            }
+          },
           "id": {
             "type": "string",
             "format": "uuid"
@@ -2625,9 +2811,23 @@
               }
             }
           },
+          "owner_connector": {
+            "type": "object",
+            "nullable": true,
+            "description": "The Integration Hub connection whose order-system request created the receipt, or null when no external system owns it. Never set together with `owner`. Set once at create; never changes. Always present.",
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              }
+            }
+          },
           "cancel_locked": {
             "type": "boolean",
-            "description": "True when only the owner can cancel the document. Set once at create; never changes."
+            "description": "True when only the owner can cancel the document: the member in `owner`, or, for a receipt an order system requested, that system through the Hub or through the member its connection names. Set once at create; never changes."
           },
           "parent": {
             "type": "object",
@@ -2697,6 +2897,28 @@
           "qty_shipped": {
             "type": "number"
           },
+          "qty_can_send": {
+            "type": "number",
+            "nullable": true,
+            "description": "The quantity warehouse staff reported they can send, always below `qty_ordered`. null when the line carries no shortage report."
+          },
+          "shortage_note": {
+            "type": "string",
+            "nullable": true,
+            "description": "Free-text note of the shortage report. null when none."
+          },
+          "shortage_reported_by": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true,
+            "description": "User id of the member who reported the shortage. null when the line carries no report."
+          },
+          "shortage_reported_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "When the shortage was reported. null when the line carries no report."
+          },
           "unit_cost": {
             "type": "number",
             "nullable": true,
@@ -2719,7 +2941,8 @@
           "total_qty_shipped",
           "created_at",
           "updated_at",
-          "warehouse"
+          "warehouse",
+          "waybill"
         ],
         "properties": {
           "id": {
@@ -2776,6 +2999,15 @@
           },
           "warehouse": {
             "$ref": "#/components/schemas/PublicWmsWarehouseReference"
+          },
+          "waybill": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PublicWmsOutboundShipmentWaybill"
+              }
+            ],
+            "nullable": true,
+            "description": "The shipment's waybill, or null when it has none. Always present."
           }
         }
       },
@@ -2877,9 +3109,17 @@
           "owner",
           "owner_connector",
           "cancel_locked",
-          "waybill"
+          "waybill",
+          "destination"
         ],
         "properties": {
+          "destination": {
+            "type": "object",
+            "nullable": true,
+            "readOnly": true,
+            "additionalProperties": true,
+            "description": "The destination the order system sent with its request, returned exactly as it was stored, or null when none was sent or no order system requested the shipment. Free-form: its keys are whatever the order system sent. Read-only: no request writes it here. Always present."
+          },
           "id": {
             "type": "string",
             "format": "uuid"
@@ -3587,14 +3827,14 @@
           "unit_cost": {
             "type": "number",
             "minimum": 0,
-            "description": "Cost per unit of this line, in the warehouse's currency (the `currency` of GET /wms/warehouses/{code}); the receipt has no currency of its own and nothing is converted. Include any fees you allocate to the line. When the receipt is VERIFIED, the received quantity at this cost enters the variant's weighted-average cost in that warehouse, exactly as a cost entered in the WMS screen does. Posting happens once: no line's cost can be changed after VERIFIED. A planned line (`qty_expected` above 0) needs a cost from PLANNED onwards (0 is valid). An unplanned line (`qty_expected` 0, an extra product the warehouse counted) always enters stock at cost 0, whatever this field holds. To give such a product a cost, add it as a planned line with its cost before the warehouse counts it; once it has been counted as unplanned, PATCH that line by its `id` while the receipt is RECEIVING with `qty_expected` above 0 and a `unit_cost` (its count is kept, its recorded variance is cleared, so the warehouse confirms it again).",
+            "description": "Cost per unit of this line, in the warehouse's currency (the `currency` of GET /wms/warehouses/{code}); the receipt has no currency of its own and nothing is converted. Include any fees you allocate to the line. When the receipt is VERIFIED, the received quantity at this cost enters the variant's weighted-average cost in that warehouse, exactly as a cost entered in the WMS screen does. Posting happens once: no line's cost can be changed after VERIFIED. A planned line (`qty_expected` above 0) may have no cost at any status: it enters stock at the variant's current weighted-average cost in that warehouse, so the average does not change. A cost of 0 is a real cost and lowers the average. An unplanned line (`qty_expected` 0, an extra product the warehouse counted) always enters stock at cost 0, whatever this field holds. To give such a product a cost, add it as a planned line with its cost before the warehouse counts it; once it has been counted as unplanned, PATCH that line by its `id` while the receipt is RECEIVING with `qty_expected` above 0 and a `unit_cost` (its count is kept, its recorded variance is cleared, so the warehouse confirms it again).",
             "nullable": true
           }
         }
       },
       "WmsInboundReceiptLinePatchInput": {
         "type": "object",
-        "description": "Inbound receipt line on PATCH. Supply `product_variant_id` or `sku` (one is required; both must resolve to the same variant). `id` is honored only while the receipt is RECEIVING, and must name a line of this receipt of the same variant; a repeated `id` is rejected (400 DUPLICATE_LINE_ID) and a non-UUID `id` is rejected (400 INVALID_LINE_ID).",
+        "description": "Inbound receipt line on PATCH. Supply `product_variant_id` or `sku` (one is required; both must resolve to the same variant). While the receipt is RECEIVING, `id` updates that line in place and must name a line of this receipt of the same variant. While it is DRAFT or PLANNED the list is replaced, and `id` only keeps the named line's `external_line_ref`: a line without `id` loses it. A repeated `id` is rejected (400 DUPLICATE_LINE_ID) and a non-UUID `id` is rejected (400 INVALID_LINE_ID).",
         "required": [
           "qty_expected"
         ],
@@ -3624,7 +3864,7 @@
           "unit_cost": {
             "type": "number",
             "minimum": 0,
-            "description": "Cost per unit of this line, in the warehouse's currency (the `currency` of GET /wms/warehouses/{code}); the receipt has no currency of its own and nothing is converted. Include any fees you allocate to the line. When the receipt is VERIFIED, the received quantity at this cost enters the variant's weighted-average cost in that warehouse, exactly as a cost entered in the WMS screen does. Posting happens once: no line's cost can be changed after VERIFIED. A planned line (`qty_expected` above 0) needs a cost from PLANNED onwards (0 is valid). An unplanned line (`qty_expected` 0, an extra product the warehouse counted) always enters stock at cost 0, whatever this field holds. To give such a product a cost, add it as a planned line with its cost before the warehouse counts it; once it has been counted as unplanned, PATCH that line by its `id` while the receipt is RECEIVING with `qty_expected` above 0 and a `unit_cost` (its count is kept, its recorded variance is cleared, so the warehouse confirms it again). On a line named by `id` while RECEIVING, omitting `unit_cost` keeps the stored cost. Anywhere else (DRAFT or PLANNED, which replace the whole list, or a line appended without `id`) an omitted or null `unit_cost` leaves the line without cost: allowed on a DRAFT or an unplanned line, refused with 422 `E9649` on a planned line from PLANNED onwards.",
+            "description": "Cost per unit of this line, in the warehouse's currency (the `currency` of GET /wms/warehouses/{code}); the receipt has no currency of its own and nothing is converted. Include any fees you allocate to the line. When the receipt is VERIFIED, the received quantity at this cost enters the variant's weighted-average cost in that warehouse, exactly as a cost entered in the WMS screen does. Posting happens once: no line's cost can be changed after VERIFIED. A planned line (`qty_expected` above 0) may have no cost at any status: it enters stock at the variant's current weighted-average cost in that warehouse, so the average does not change. A cost of 0 is a real cost and lowers the average. An unplanned line (`qty_expected` 0, an extra product the warehouse counted) always enters stock at cost 0, whatever this field holds. To give such a product a cost, add it as a planned line with its cost before the warehouse counts it; once it has been counted as unplanned, PATCH that line by its `id` while the receipt is RECEIVING with `qty_expected` above 0 and a `unit_cost` (its count is kept, its recorded variance is cleared, so the warehouse confirms it again). On a line named by `id` while RECEIVING, omitting `unit_cost` keeps the stored cost. Anywhere else (DRAFT or PLANNED, which replace the whole list, or a line appended without `id`) an omitted or null `unit_cost` leaves the line without cost.",
             "nullable": true
           }
         }
@@ -3737,7 +3977,7 @@
           },
           "rel_type": {
             "type": "string",
-            "description": "Opaque caller reference type.",
+            "description": "Opaque caller reference type. `oms_request` is reserved for documents an order system requests through the Integration Hub: sending it is refused with 400.",
             "nullable": true
           },
           "rel_id": {
@@ -3788,7 +4028,7 @@
           },
           "rel_type": {
             "type": "string",
-            "description": "Opaque caller reference type.",
+            "description": "Opaque caller reference type. `oms_request` is reserved for documents an order system requests through the Integration Hub: sending it is refused with 400.",
             "nullable": true
           },
           "rel_id": {
@@ -4031,6 +4271,21 @@
           }
         }
       },
+      "WmsDecisionReasonCancelActionRequest": {
+        "type": "object",
+        "description": "`cancel` action body. `submit` takes no body.",
+        "required": [
+          "reason"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "description": "Cancellation reason (non-empty after trim, at most 255 characters)."
+          }
+        }
+      },
       "WmsCancelActionRequest": {
         "type": "object",
         "description": "`cancel` action body. `submit` takes no body.",
@@ -4040,8 +4295,8 @@
         "properties": {
           "reason": {
             "type": "string",
-            "minLength": 10,
-            "description": "Cancellation reason (>= 10 characters)."
+            "minLength": 1,
+            "description": "Cancellation reason (non-empty after trim)."
           }
         }
       },
@@ -4427,6 +4682,110 @@
           },
           "401": {
             "description": "Unauthorized — missing or invalid API key"
+          }
+        }
+      }
+    },
+    "/auth/device/code": {
+      "post": {
+        "summary": "Start a sign-in link",
+        "tags": [
+          "Assistant sign-in"
+        ],
+        "description": "An assistant asks for a link a person can approve. It authenticates with the client id and secret it was registered with, not with a `csk_` key, so this is one of only two endpoints that need no bearer token. The response carries a secret `device_code` that the assistant keeps, and a `user_code` carried by `verification_uri_complete`, which the assistant sends to the person in a direct message. A request lives 10 minutes and is used once. Poll `POST /auth/device/token` with the device code. An unknown, wrong or inactive client is `401` `invalid_client`.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceCodeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A link request was started",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceCodeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not a JSON object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceFlowError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The client id or secret is wrong, or the assistant is not registered or not active",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceFlowError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/device/token": {
+      "post": {
+        "summary": "Collect the key once a person has approved",
+        "tags": [
+          "Assistant sign-in"
+        ],
+        "description": "The assistant polls with its `device_code` every `interval` seconds. While the person has not decided the answer is `400` `authorization_pending`; polling faster than `interval` answers `slow_down` and the assistant adds 5 seconds to its interval. When the person has approved, the poll creates an ordinary `csk_` key owned by that person, naming the assistant, valid 90 days, and returns it once. `access_denied` means the person refused, or no longer belongs to a workspace they chose. An unknown, already collected or expired `device_code` is `expired_token`; the assistant then starts a new link. A wrong, unknown or inactive client is `401` `invalid_client`.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DeviceTokenRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The key, shown once",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceTokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not ready or not available: `authorization_pending`, `slow_down`, `access_denied` or `expired_token`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceFlowError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The client id or secret is wrong, or the assistant is not registered or not active",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeviceFlowError"
+                }
+              }
+            }
           }
         }
       }
@@ -9717,6 +10076,12 @@
                     "type": "string",
                     "maxLength": 2000,
                     "nullable": true
+                  },
+                  "vat_policy_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true,
+                    "description": "The VAT policy for the type; `null` or omitted for none. An unknown or deleted id answers `400` with `E9760`."
                   }
                 }
               }
@@ -9950,6 +10315,12 @@
                     "type": "string",
                     "maxLength": 2000,
                     "nullable": true
+                  },
+                  "vat_policy_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true,
+                    "description": "The VAT policy for the type. Omitted leaves it unchanged; `null` clears it. An unknown or deleted id answers `400` with `E9760`."
                   }
                 },
                 "description": "Partial update — only the provided fields are changed; at least one field is required."
@@ -10040,6 +10411,12 @@
                     "type": "string",
                     "maxLength": 2000,
                     "nullable": true
+                  },
+                  "vat_policy_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true,
+                    "description": "The VAT policy for the type. Omit to keep the current policy, `PUT` included (`name` and `description` are still required); send `null` to clear it. An unknown or deleted id answers `400` with `E9760`."
                   }
                 }
               }
@@ -10433,6 +10810,12 @@
                     "format": "uuid",
                     "nullable": true
                   },
+                  "vat_policy_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true,
+                    "description": "The VAT policy for the product; `null` or omitted for none. An unknown or deleted id answers `400` with `E9760`."
+                  },
                   "unit_id": {
                     "type": "string",
                     "format": "uuid"
@@ -10583,7 +10966,7 @@
                           "items": {
                             "type": "string"
                           },
-                          "description": "The new variant's own tag names. A name that matches one of the tenant's tags in another letter case or with other surrounding spaces is that tag; a new name creates the tag. A name that breaks the tag name rule is `400` `E9473` and creates nothing."
+                          "description": "The new variant's own tag names. A name that matches one of the tenant's tags in another letter case or with other surrounding spaces is that tag; a new name creates the tag. A name that breaks the tag name rule is `400` `E9473` and creates nothing. A name the product already carries is not stored as the variant's own; the variant inherits it."
                         }
                       }
                     }
@@ -10743,6 +11126,12 @@
                     "type": "string",
                     "format": "uuid",
                     "nullable": true
+                  },
+                  "vat_policy_id": {
+                    "type": "string",
+                    "format": "uuid",
+                    "nullable": true,
+                    "description": "The VAT policy for the product. Omitted leaves it unchanged; `null` clears it. An unknown or deleted id answers `400` with `E9760`."
                   },
                   "unit_id": {
                     "type": "string",
@@ -11739,7 +12128,7 @@
                       "items": {
                         "type": "string"
                       },
-                      "description": "A new item only: the new variant's own tag names. An item with `variant_id` carrying `tags`, whatever its content, is `400` `E9474` and nothing in the request is applied; change an existing variant's tags one at a time through `/pcms/variants/{id}/tags/{name}`. A name that breaks the tag name rule is `400` `E9473`."
+                      "description": "A new item only: the new variant's own tag names. An item with `variant_id` carrying `tags`, whatever its content, is `400` `E9474` and nothing in the request is applied; change an existing variant's tags one at a time through `/pcms/variants/{id}/tags/{name}`. A name that breaks the tag name rule is `400` `E9473`. A name the product already carries is not stored as the variant's own; the variant inherits it."
                     }
                   }
                 }
@@ -12825,6 +13214,491 @@
         }
       }
     },
+    "/pcms/vat-policies": {
+      "get": {
+        "summary": "List VAT Policies",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "The tenant's live VAT policies in creation order. Every member of the tenant may read. Deleted policies are not listed. The list is not paged.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to scope the request to. Required.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "VAT policies in creation order",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicVatPolicyResponse"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing X-Tenant-Code"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied"
+          }
+        }
+      },
+      "post": {
+        "summary": "Create VAT Policy",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Add a named VAT rate to the tenant. Needs the owner or catalog admin right. Both `name` and `rate` are required.",
+        "parameters": [
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to scope the request to. Required.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "rate"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500,
+                    "example": "Standard goods",
+                    "description": "Trimmed on save. Unique among the tenant's policies, letter case aside."
+                  },
+                  "rate": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100,
+                    "example": 8,
+                    "description": "Percent, at most two decimals; a third decimal is refused, never rounded."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "VAT policy created",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicVatPolicyResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body, or an invalid name (`E9761`) or rate (`E9763`)"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied, or the key's member lacks the catalog structure right (`E0102`) on a write"
+          },
+          "409": {
+            "description": "The name is taken by another policy (`E9762`)"
+          }
+        }
+      }
+    },
+    "/pcms/vat-policies/{id}": {
+      "get": {
+        "summary": "Get VAT Policy by ID",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Fetch one VAT policy by id, tenant-scoped. Returns 404 if it does not exist or belongs to another tenant.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "VAT policy UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to scope the request to. Required.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "VAT policy detail",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicVatPolicyResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied"
+          },
+          "404": {
+            "description": "VAT policy not found, or it belongs to another tenant (`E9760`)"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Partial Update VAT Policy",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Change the name, the rate or both. Fields not supplied are left unchanged; at least one is required.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "VAT policy UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to scope the request to. Required.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500,
+                    "example": "Standard goods",
+                    "description": "Trimmed on save. Unique among the tenant's policies, letter case aside."
+                  },
+                  "rate": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100,
+                    "example": 8,
+                    "description": "Percent, at most two decimals; a third decimal is refused, never rounded."
+                  }
+                },
+                "description": "Partial update; at least one field is required."
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "VAT policy updated",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicVatPolicyResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body, or an invalid name (`E9761`) or rate (`E9763`)"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied, or the key's member lacks the catalog structure right (`E0102`) on a write"
+          },
+          "404": {
+            "description": "VAT policy not found, or it belongs to another tenant (`E9760`)"
+          },
+          "409": {
+            "description": "The name is taken by another policy (`E9762`)"
+          }
+        }
+      },
+      "put": {
+        "summary": "Replace VAT Policy",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Replace the name and the rate. Both are required.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "VAT policy UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to scope the request to. Required.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "rate"
+                ],
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500,
+                    "example": "Standard goods",
+                    "description": "Trimmed on save. Unique among the tenant's policies, letter case aside."
+                  },
+                  "rate": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 100,
+                    "example": 8,
+                    "description": "Percent, at most two decimals; a third decimal is refused, never rounded."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "VAT policy replaced",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicVatPolicyResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid body, or an invalid name (`E9761`) or rate (`E9763`)"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied, or the key's member lacks the catalog structure right (`E0102`) on a write"
+          },
+          "404": {
+            "description": "VAT policy not found, or it belongs to another tenant (`E9760`)"
+          },
+          "409": {
+            "description": "The name is taken by another policy (`E9762`)"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete VAT Policy",
+        "tags": [
+          "PCMS"
+        ],
+        "description": "Soft-delete a VAT policy. It leaves every read and its name is free for a new policy at once. Needs the owner or catalog admin right. A repeated delete answers `404`: the first one succeeded, so a client that lost the response should treat `404` as done. Any request body and query parameter are ignored.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "VAT policy UUID",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": true,
+            "description": "Tenant to scope the request to. Required.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The VAT policy was deleted; `data.id` names it",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      },
+                      "required": [
+                        "id"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing X-Tenant-Code"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied, or the key's member lacks the catalog structure right (`E0102`) on a write"
+          },
+          "404": {
+            "description": "VAT policy not found, or it belongs to another tenant (`E9760`)"
+          },
+          "409": {
+            "description": "A live product or product type uses the policy (`E9764`)"
+          },
+          "500": {
+            "description": "The delete failed; nothing was deleted"
+          }
+        }
+      }
+    },
     "/pcms/property-definitions/{id}/actions/move": {
       "post": {
         "summary": "Move Property Definition",
@@ -13054,6 +13928,11 @@
                           "product_id": {
                             "type": "string",
                             "format": "uuid"
+                          },
+                          "vat_rate": {
+                            "type": "number",
+                            "nullable": true,
+                            "description": "The parent product's VAT rate in percent; `null` when the product has none. A 0% policy reads `0`. A rate change moves the parent product's `updated_at`, not the variant's; detect rate changes from the product."
                           },
                           "status": {
                             "type": "string",
@@ -13467,6 +14346,14 @@
             }
           },
           {
+            "name": "filters[external_ref][$eq]",
+            "in": "query",
+            "description": "Look up inbound receipts by exact `external_ref`. Case and spaces count: nothing is trimmed or folded. `external_ref` is not unique, so the page may hold several inbound receipts, or none. A blank value is ignored. It combines with the other filters, `q` and the pagination, which are unchanged.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "page",
             "in": "query",
             "schema": {
@@ -13764,7 +14651,7 @@
       },
       "patch": {
         "summary": "Update Inbound Receipt",
-        "description": "JSON Merge Patch (RFC 7386) update of an editable inbound receipt. Requires an `If-Match` header carrying the current `updated_at` (concurrency token). Only editable header fields and an optional `lines` list are accepted (a full replacement while DRAFT/PLANNED, a merge by line `id` while RECEIVING; see UpdateInboundReceiptRequest); `status` and other internal fields are rejected (400). Authorization gate: `scope.inbound`; once the receipt is PLANNED or RECEIVING the caller also needs `scope.financial_view` (403 otherwise). From PLANNED onwards every planned line (`qty_expected` above 0) the request writes needs a `unit_cost`; 0 is valid, a missing one is refused with 422 `E9649`. A DRAFT may still be saved without cost. A line that names by `product_variant_id` a variant the receipt already holds is kept even if that variant was deleted, on at most as many lines as the receipt holds it on; any other deleted or unknown variant is refused.",
+        "description": "JSON Merge Patch (RFC 7386) update of an editable inbound receipt. Requires an `If-Match` header carrying the current `updated_at` (concurrency token). Only editable header fields and an optional `lines` list are accepted (a full replacement while DRAFT/PLANNED, a merge by line `id` while RECEIVING; see UpdateInboundReceiptRequest); `status` and other internal fields are rejected (400). Authorization gate: `scope.inbound`; once the receipt is PLANNED or RECEIVING a request that writes a `unit_cost` value also needs `scope.financial_view` (403 otherwise). A line without cost is accepted at every status. A line that names by `product_variant_id` a variant the receipt already holds is kept even if that variant was deleted, on at most as many lines as the receipt holds it on; any other deleted or unknown variant is refused.",
         "tags": [
           "WMS"
         ],
@@ -13864,10 +14751,7 @@
             "description": "Warehouse, document, or variant not found, or a line `id` that does not belong to the receipt"
           },
           "409": {
-            "description": "Stale-version conflict (E0602), the document is not in an editable status or is a warehouse-transfer receipt (E9522), or a RECEIVING update omitted a line that already has a counted quantity (E9639)."
-          },
-          "422": {
-            "description": "A planned line the request writes has no unit cost (E9649). Cost 0 is valid; only a missing cost is refused."
+            "description": "Stale-version conflict (E0602), the document is not in an editable status or is a warehouse-transfer receipt (E9522), a RECEIVING update omitted a line that already has a counted quantity (E9639)."
           },
           "500": {
             "description": "Internal server error"
@@ -14328,7 +15212,7 @@
     "/wms/internal-transfers/{code}/actions/{action}": {
       "post": {
         "summary": "Internal Transfer Lifecycle Action",
-        "description": "Apply a lifecycle action to an internal transfer: `cancel` (body `{\"reason\": string, min 10 chars}`) — DRAFT|MOVING → CANCELLED, under the same rules as the GUI. There is no `submit` action for this document type (no approval workflow; the only other transition, posting to MOVED, is not exposed on the wire) and every other action name returns 404. No `If-Match` header is used — cancel has no optimistic-concurrency input. Authorization gate: `scope.transfer`.",
+        "description": "Apply a lifecycle action to an internal transfer: `cancel` (body `{\"reason\": string, non-empty, at most 255 characters}`) — DRAFT|MOVING → CANCELLED, under the same rules as the GUI. There is no `submit` action for this document type (no approval workflow; the only other transition, posting to MOVED, is not exposed on the wire) and every other action name returns 404. No `If-Match` header is used — cancel has no optimistic-concurrency input. Authorization gate: `scope.transfer`.",
         "tags": [
           "WMS"
         ],
@@ -14375,7 +15259,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/WmsCancelActionRequest"
+                "$ref": "#/components/schemas/WmsDecisionReasonCancelActionRequest"
               }
             }
           }
@@ -14409,7 +15293,7 @@
             }
           },
           "400": {
-            "description": "Missing warehouse context, invalid JSON body, unknown body field, or a reason under 10 characters (E9645)."
+            "description": "Missing warehouse context, invalid JSON body, unknown body field, or an empty or over-long reason (E9645)."
           },
           "401": {
             "description": "Missing or invalid API key"
@@ -14435,7 +15319,7 @@
         "tags": [
           "WMS"
         ],
-        "description": "Returns paginated outbound shipments for a specific warehouse. Requires warehouse_code via query parameter or X-Warehouse-Code header.",
+        "description": "Returns paginated outbound shipments for a specific warehouse, each with its waybill (or null). Requires warehouse_code via query parameter or X-Warehouse-Code header.",
         "parameters": [
           {
             "name": "X-Tenant-Code",
@@ -14491,6 +15375,30 @@
             "name": "filters[status][$in]",
             "in": "query",
             "description": "Filter by multiple statuses (comma-separated)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filters[external_ref][$eq]",
+            "in": "query",
+            "description": "Look up outbound shipments by exact `external_ref`. Case and spaces count: nothing is trimmed or folded. `external_ref` is not unique, so the page may hold several outbound shipments, or none. A blank value is ignored. It combines with the other filters, `q` and the pagination, which are unchanged.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filters[waybill][tracking_number][$eq]",
+            "in": "query",
+            "description": "Filter by exact tracking number on the shipment's waybill. Trimmed and matched ignoring letter case; never a partial match. A blank value is ignored. A number no shipment holds returns an empty page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filters[waybill][carrier_code][$eq]",
+            "in": "query",
+            "description": "Filter by exact carrier code on the shipment's waybill. Trimmed and upper-cased; it must match ^[A-Z][A-Z0-9_]{0,31}$ or the request is a 400. A blank value is ignored. Only the carrier's 300 newest shipments are searched, because the ids travel in one URL. That window is cut before filters[status] and q apply, so for a carrier with more than 300 shipments a status or q combined with it can miss older matches, and meta.total counts only inside the window. To reach an older one, add filters[waybill][tracking_number][$eq], which is not capped when combined with this filter. With both filters, a shipment must hold that tracking number under that carrier.",
             "schema": {
               "type": "string"
             }
@@ -14793,7 +15701,7 @@
       },
       "patch": {
         "summary": "Update Outbound Shipment",
-        "description": "JSON Merge Patch (RFC 7386) update of an editable outbound shipment. Requires an `If-Match` header carrying the current `updated_at` (concurrency token). Only editable header fields and an optional full `lines` replacement are accepted; `status` and other internal fields are rejected (400). On a DRAFT shipment `lines` replaces the whole list. From PLANNED on, a full replacement is refused (409 `E9675`), and so is a change of `external_ref` on a shipment an order system requested; the only accepted `lines` is the current set with one or more `qty_ordered` lowered, each lowered line carrying a `qty_reduction_reason` (missing reason: 400 `E9674`). Authorization gate: `scope.outbound`. The echoed document carries `unit_cost` and `total_value` as null with `unit_cost_denied` / `total_value_denied` false: a write never returns a posted shipment, so it has no cost yet. GET the shipment after it posts for its cost. A line that names by `product_variant_id` a variant the shipment already holds is kept even if that variant was deleted, on at most as many lines as the shipment holds it on; any other deleted or unknown variant is refused.",
+        "description": "JSON Merge Patch (RFC 7386) update of an editable outbound shipment. Requires an `If-Match` header carrying the current `updated_at` (concurrency token). Only editable header fields and an optional full `lines` replacement are accepted; `status` and other internal fields are rejected (400). On a DRAFT shipment `lines` replaces the whole list, except on a shipment an order system requested. From PLANNED on, and on an order system's DRAFT shipment, a full replacement is refused (409 `E9675`), and so is a change of `external_ref` on a shipment an order system requested; the only accepted `lines` is the current set with one or more `qty_ordered` lowered, each lowered line carrying a `qty_reduction_reason` (missing reason: 400 `E9674`). Authorization gate: `scope.outbound`. The echoed document carries `unit_cost` and `total_value` as null with `unit_cost_denied` / `total_value_denied` false: a write never returns a posted shipment, so it has no cost yet. GET the shipment after it posts for its cost. A line that names by `product_variant_id` a variant the shipment already holds is kept even if that variant was deleted, on at most as many lines as the shipment holds it on; any other deleted or unknown variant is refused.",
         "tags": [
           "WMS"
         ],
@@ -14886,7 +15794,7 @@
             "description": "Warehouse, document, or variant not found"
           },
           "409": {
-            "description": "Stale-version conflict (E0602), the document is not in an editable status (E9558), its lines can no longer be replaced (`E9675`: a full replacement from PLANNED on, any line change from AWAITING_EXPORT on, or an `external_ref` change on a shipment an order system requested), or the waybill is refused (E9683, E9684, E9685; see `WmsOutboundShipmentWaybillInput`)."
+            "description": "Stale-version conflict (E0602), the document is not in an editable status (E9558), the shipment is held by an owner or a transfer and the key's member is not its holder (`E9697`), its lines can no longer be replaced (`E9675`: a full replacement from PLANNED on or on an order system's DRAFT shipment, any line change from AWAITING_EXPORT on, or an `external_ref` change on a shipment an order system requested), or the waybill is refused (E9683, E9684, E9685; see `WmsOutboundShipmentWaybillInput`)."
           },
           "500": {
             "description": "Internal server error"
@@ -14914,7 +15822,7 @@
           {
             "name": "q",
             "in": "query",
-            "description": "Search query for code or name (max 200 characters after trimming)",
+            "description": "Search query for code or name, ignoring letter case and Vietnamese accents in the name (max 200 characters after trimming)",
             "schema": {
               "type": "string",
               "maxLength": 200
@@ -15079,7 +15987,7 @@
         "tags": [
           "WMS"
         ],
-        "description": "OH-ATP (ADR-088): a per-(line, warehouse) supply signal for a caller who cannot see stock, e.g. Seli quoting an order. Each line is named by exactly one of variant_id, sku or barcode plus a demand; the answer covers exactly the named warehouses and never carries on-hand, only a 0-100 score and, when short, a promisable quantity. Read-only.",
+        "description": "OH-ATP (ADR-088): a per-(line, warehouse) supply signal for a caller who cannot see stock, e.g. Seli quoting an order. Each line is named by exactly one of variant_id, sku or barcode plus a demand; the answer covers exactly the named warehouses and never carries on-hand, only a 0-100 score and, when short, a promisable quantity. Score and promisable quantity leave out stock promised to planned shipments. Read-only.",
         "parameters": [
           {
             "name": "X-Tenant-Code",
@@ -15806,7 +16714,7 @@
     "/wms/inbound-receipts/{code}/actions/{action}": {
       "post": {
         "summary": "Inbound Receipt Lifecycle Action",
-        "description": "Apply a non-posting lifecycle action to a inbound receipt: `submit` (no body) or `cancel` (body `{\"reason\": string, min 10 chars}`). Other actions — including inventory-posting/execution verbs — return 404. Requires an `If-Match` concurrency token. Authorization gate: `scope.inbound`; `submit` also needs `scope.financial_view` (403 otherwise) and is refused with 422 `E9649` while any planned line (`qty_expected` above 0) has no unit cost. Cost 0 is valid.",
+        "description": "Apply a non-posting lifecycle action to a inbound receipt: `submit` (no body) or `cancel` (body `{\"reason\": string, non-empty}`). A receipt whose cancel is locked cancels only for its owner: the member in `owner`, or, when `owner_connector` is set, the member that order-system connection names; anyone else gets 409 `E9680`. Other actions — including inventory-posting/execution verbs — return 404. Requires an `If-Match` concurrency token. Authorization gate: `scope.inbound`; `submit` needs `scope.inbound` only and is accepted whatever the lines cost, a line with no cost included.",
         "tags": [
           "WMS"
         ],
@@ -15923,10 +16831,7 @@
             "description": "Warehouse, document, or variant not found"
           },
           "409": {
-            "description": "Stale-version conflict (E0602), invalid transition for the current status (E9522), or a `cancel` refused by ownership (E9680): a receipt that belongs to a warehouse transfer cancels only through the transfer, and a receipt locked to its owner (`cancel_locked`) only by its owner."
-          },
-          "422": {
-            "description": "`submit` refused: a planned line has no unit cost (E9649). Cost 0 is valid; only a missing cost is refused."
+            "description": "Stale-version conflict (E0602), invalid transition for the current status (E9522), or a `cancel` refused by ownership (E9680): a receipt that belongs to a warehouse transfer cancels only through the transfer, and a receipt locked to its owner (`cancel_locked`) only by its owner: the member in `owner`, or the member the connection in `owner_connector` names."
           },
           "500": {
             "description": "Internal server error"
@@ -16197,7 +17102,49 @@
             "description": "Warehouse, document, or variant not found"
           },
           "409": {
-            "description": "Stale-version conflict (E0602), invalid transition for the current status (E9558), cancel of an exported shipment (E9671), cancel refused by ownership (E9680: a shipment that belongs to a warehouse transfer cancels only through the transfer, and a shipment locked to its owner (`cancel_locked`) only by its owner: the member in `owner`, or the member the connection in `owner_connector` names), or submit of a shipment with no lines (E9677)."
+            "description": "Stale-version conflict (E0602), invalid transition for the current status (E9558), cancel of an exported shipment (E9671), cancel refused by ownership (E9680: a shipment that belongs to a warehouse transfer cancels only through the transfer, and a shipment locked to its owner (`cancel_locked`) only by its owner: the member in `owner`, or the member the connection in `owner_connector` names), or submit of a shipment with no lines (E9677), or submit of a shipment whose lines free stock cannot cover (E9700: the body also lists `short_lines`; `qty_missing` is null with `qty_missing_denied` true when the caller holds neither the outbound nor the stock-view scope).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "short_lines": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "product_variant_id": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "qty_requested": {
+                                "type": "number"
+                              },
+                              "qty_missing": {
+                                "type": "number",
+                                "nullable": true
+                              },
+                              "qty_missing_denied": {
+                                "type": "boolean"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "500": {
             "description": "Internal server error"
@@ -16358,7 +17305,7 @@
     "/wms/warehouse-transfers/{code}/actions/{action}": {
       "post": {
         "summary": "Warehouse Transfer Lifecycle Action",
-        "description": "Apply a non-posting lifecycle action to a warehouse transfer: `submit` (no body) or `cancel` (body `{\"reason\": string, min 10 chars}`). Other actions — including inventory-posting/execution verbs — return 404. Requires an `If-Match` concurrency token. Authorization gate: `scope.warehouse_transfer`.",
+        "description": "Apply a non-posting lifecycle action to a warehouse transfer: `submit` (no body) or `cancel` (body `{\"reason\": string, non-empty, at most 255 characters}`). Other actions — including inventory-posting/execution verbs — return 404. Requires an `If-Match` concurrency token. Authorization gate: `scope.warehouse_transfer`.",
         "tags": [
           "WMS"
         ],
@@ -16416,7 +17363,7 @@
               "schema": {
                 "oneOf": [
                   {
-                    "$ref": "#/components/schemas/WmsCancelActionRequest"
+                    "$ref": "#/components/schemas/WmsDecisionReasonCancelActionRequest"
                   },
                   {
                     "type": "object",
@@ -16656,7 +17603,7 @@
             "name": "q",
             "in": "query",
             "required": false,
-            "description": "Search query for location code or name (max 200 characters after trimming)",
+            "description": "Search query for location code or name, ignoring letter case and Vietnamese accents in the name (max 200 characters after trimming)",
             "schema": {
               "type": "string",
               "maxLength": 200

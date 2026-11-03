@@ -56,9 +56,16 @@ var aliasMap = map[string]string{
 // the test rather than failing it. Any omission here must be a conscious,
 // reviewed decision — not an accident.
 var intentionallyUnexposed = map[string]map[string]string{
-	// No intentionally unexposed params at this time.
 	// Add entries here if a param is deliberately not surfaced:
 	//   "/some/path": {"param_name": "reason why it is not exposed"},
+	"/wms/inbound-receipts": {
+		"filters[external_ref][$eq]": "WMS filters are out of scope for this sync",
+	},
+	"/wms/outbound-shipments": {
+		"filters[external_ref][$eq]":             "WMS filters are out of scope for this sync",
+		"filters[waybill][carrier_code][$eq]":    "WMS filters are out of scope for this sync",
+		"filters[waybill][tracking_number][$eq]": "WMS filters are out of scope for this sync",
+	},
 }
 
 // commandPathMapping maps each list command — plus the task detail read, whose
