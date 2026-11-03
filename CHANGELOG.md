@@ -9,7 +9,6 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-<<<<<<< HEAD
 ## [0.34.0] — 2026-11-03
 
 ### Added
@@ -28,8 +27,6 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   (`POST /auth/device/code`, `POST /auth/device/token`) are not wrapped yet, and the new WMS list
   filters (`external_ref`, `waybill`) have no flags yet.
 
-=======
->>>>>>> origin/main
 ## [0.33.0] — 2026-10-30
 
 ### Added
