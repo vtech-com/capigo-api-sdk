@@ -294,6 +294,7 @@ type CreateProductRequest struct {
 	SKU           *string                    `json:"sku,omitempty"`
 	Barcode       *string                    `json:"barcode,omitempty"`
 	Price         *float64                   `json:"price,omitempty"`
+	VATPolicyID   *string                    `json:"vat_policy_id,omitempty"`
 	Aliases       []string                   `json:"aliases,omitempty"`
 	Tags          []string                   `json:"tags,omitempty"`
 	Options       []CreateProductOptionItem  `json:"options,omitempty"`
@@ -313,6 +314,8 @@ type UpdateProductRequest struct {
 	Status        *string  `json:"status,omitempty"`
 	Currency      *string  `json:"currency,omitempty"`
 	Aliases       []string `json:"aliases,omitempty"`
+	// VATPolicyID is omitted to keep the policy; set it to JSON null to clear.
+	VATPolicyID json.RawMessage `json:"vat_policy_id,omitempty"`
 }
 
 // UpsertVariantItem is one element of the PUT /pcms/products/{id}/variants array.
@@ -381,6 +384,7 @@ type ReplaceCategoryRequest struct {
 type CreateProductTypeRequest struct {
 	Name        string  `json:"name"`
 	Description *string `json:"description,omitempty"`
+	VATPolicyID *string `json:"vat_policy_id,omitempty"`
 }
 
 // UpdateProductTypeRequest is the body for PATCH /pcms/product-types/{id}.
@@ -396,6 +400,22 @@ type UpdateProductTypeRequest struct {
 type ReplaceProductTypeRequest struct {
 	Name        string  `json:"name"`
 	Description *string `json:"description"` // no omitempty — null must be sent
+	// VATPolicyID is omitted to keep the policy (PUT included); JSON null clears it.
+	VATPolicyID json.RawMessage `json:"vat_policy_id,omitempty"`
+}
+
+// CreateVatPolicyRequest is the body for POST and PUT /pcms/vat-policies.
+// Both fields are required; Rate is a percent with two decimals at most.
+type CreateVatPolicyRequest struct {
+	Name string  `json:"name"`
+	Rate float64 `json:"rate"`
+}
+
+// UpdateVatPolicyRequest is the body for PATCH /pcms/vat-policies/{id}.
+// At least one field must be provided. A pointer keeps a 0% rate sendable.
+type UpdateVatPolicyRequest struct {
+	Name *string  `json:"name,omitempty"`
+	Rate *float64 `json:"rate,omitempty"`
 }
 
 // CreateUnitRequest is the body for POST /pcms/units.

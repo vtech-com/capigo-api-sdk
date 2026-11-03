@@ -123,6 +123,14 @@ Not in the product-properties PR (#123); the owner decided to take them later. P
 - **Inbound line `unit_cost`** is now documented as in the warehouse currency and feeding
   weighted-average cost on VERIFIED. Doc-only; help text not updated.
 
+## Deferred from the VAT-policy spec re-sync (2026-11-03)
+
+`/pcms/vat-policies*` and `vat_policy_id` on products and product types are covered. Not wrapped:
+
+- **Device login.** `POST /auth/device/code` and `POST /auth/device/token`.
+- **New WMS list filters.** `external_ref` on inbound receipts and outbound shipments, and the
+  outbound `waybill` carrier code and tracking number. No flags yet.
+
 ## Board and list delete — withdrawn by the API (2026-10-13)
 
 `DELETE /mission/boards/{id}` and `DELETE /mission/boards/{id}/lists/{listId}` left the published

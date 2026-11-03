@@ -508,6 +508,7 @@ var (
 	productCreateCategoryID    string
 	productCreateProductTypeID string
 	productCreateUnitID        string
+	productCreateVATPolicyID   string
 	productCreateAliases       []string
 	productCreateTags          []string
 	productCreateFromJSON      string
@@ -532,7 +533,7 @@ USAGE
                          [--currency <code>] [--description <text>]
                          [--status <status>]
                          [--brand-id <uuid>] [--category-id <uuid>]
-                         [--product-type-id <uuid>]
+                         [--product-type-id <uuid>] [--vat-policy-id <uuid>]
                          [--aliases <text>]... [--tags <text>]...
   capigo products create --tenant <code> --from-json <path|->
 
@@ -566,6 +567,10 @@ FLAGS
 
   --brand-id <uuid>, --category-id <uuid>, --product-type-id <uuid>
       Optional.
+
+  --vat-policy-id <uuid>
+      The product's own VAT policy; without one the product type's policy
+      applies. Optional. Resolve it with capigo vat-policies list.
 
   --aliases <text>
       Alternative names and product codes. Repeatable: --aliases foo --aliases
@@ -703,6 +708,9 @@ OUTPUT
 			if productCreateUnitID != "" {
 				req.UnitID = &productCreateUnitID
 			}
+			if productCreateVATPolicyID != "" {
+				req.VATPolicyID = &productCreateVATPolicyID
+			}
 			if len(productCreateAliases) > 0 {
 				req.Aliases = productCreateAliases
 			}
@@ -733,18 +741,20 @@ OUTPUT
 // --------------------------------------------------------------------------
 
 var (
-	productUpdateTenant        string
-	productUpdateName          string
-	productUpdateDescription   string
-	productUpdateStatus        string
-	productUpdateCurrency      string
-	productUpdateBrandID       string
-	productUpdateCategoryID    string
-	productUpdateProductTypeID string
-	productUpdateUnitID        string
-	productUpdateAliases       []string
-	productUpdateTags          []string
-	productUpdateFromJSON      string
+	productUpdateTenant         string
+	productUpdateName           string
+	productUpdateDescription    string
+	productUpdateStatus         string
+	productUpdateCurrency       string
+	productUpdateBrandID        string
+	productUpdateCategoryID     string
+	productUpdateProductTypeID  string
+	productUpdateUnitID         string
+	productUpdateVATPolicyID    string
+	productUpdateClearVATPolicy bool
+	productUpdateAliases        []string
+	productUpdateTags           []string
+	productUpdateFromJSON       string
 )
 
 var productsUpdateCmd = &cobra.Command{
@@ -769,6 +779,7 @@ USAGE
                          [--status <status>] [--currency <code>]
                          [--brand-id <uuid>] [--category-id <uuid>]
                          [--product-type-id <uuid>] [--unit-id <uuid>]
+                         [--vat-policy-id <uuid> | --clear-vat-policy]
                          [--aliases <text>]...
   capigo products update <id> --tenant <code> --from-json <path|->
 
@@ -789,6 +800,13 @@ FLAGS
 
   --brand-id <uuid>, --category-id <uuid>, --product-type-id <uuid>,
   --unit-id <uuid>
+
+  --vat-policy-id <uuid>
+      The product's own VAT policy. Mutually exclusive with --clear-vat-policy.
+
+  --clear-vat-policy
+      Set vat_policy_id to null: the product has no policy of its own and its
+      type's policy applies.
 
   --aliases <text>
       Repeatable, and REPLACES the whole array rather than appending to it.
@@ -866,7 +884,7 @@ OUTPUT
 		if productUpdateFromJSON != "" {
 			// Check that no individual field flags were also set.
 			individualFlags := []string{"name", "description", "status", "currency",
-				"brand-id", "category-id", "product-type-id", "unit-id", "aliases"}
+				"brand-id", "category-id", "product-type-id", "unit-id", "aliases", "vat-policy-id", "clear-vat-policy"}
 			for _, f := range individualFlags {
 				if cmd.Flags().Changed(f) {
 					failValidation("--from-json and --%s are mutually exclusive; use one or the other", f)
@@ -911,6 +929,17 @@ OUTPUT
 			}
 			if productUpdateUnitID != "" {
 				req.UnitID = &productUpdateUnitID
+				fieldCount++
+			}
+			if productUpdateClearVATPolicy && productUpdateVATPolicyID != "" {
+				failValidation("--vat-policy-id and --clear-vat-policy are mutually exclusive")
+			}
+			if productUpdateClearVATPolicy {
+				req.VATPolicyID = json.RawMessage("null")
+				fieldCount++
+			} else if productUpdateVATPolicyID != "" {
+				raw, _ := json.Marshal(productUpdateVATPolicyID)
+				req.VATPolicyID = raw
 				fieldCount++
 			}
 			if len(productUpdateAliases) > 0 {
@@ -1166,6 +1195,7 @@ func init() {
 	productsCreateCmd.Flags().StringVar(&productCreateCategoryID, "category-id", "", "category UUID")
 	productsCreateCmd.Flags().StringVar(&productCreateProductTypeID, "product-type-id", "", "product type UUID")
 	productsCreateCmd.Flags().StringVar(&productCreateUnitID, "unit-id", "", "unit UUID (required unless --from-json is used)")
+	productsCreateCmd.Flags().StringVar(&productCreateVATPolicyID, "vat-policy-id", "", "VAT policy UUID (see capigo vat-policies list)")
 	productsCreateCmd.Flags().StringArrayVar(&productCreateAliases, "aliases", nil, "product aliases / alternative search names (repeatable: --aliases foo --aliases bar)")
 	productsCreateCmd.Flags().StringArrayVar(&productCreateTags, "tags", nil, "catalog tag name the product carries from creation (repeatable: --tags Hè --tags \"Sale 50\")")
 	productsCreateCmd.Flags().StringVar(&productCreateFromJSON, "from-json", "", "path to JSON file with full request body (use - for stdin)")
@@ -1180,6 +1210,8 @@ func init() {
 	productsUpdateCmd.Flags().StringVar(&productUpdateCategoryID, "category-id", "", "new category UUID")
 	productsUpdateCmd.Flags().StringVar(&productUpdateProductTypeID, "product-type-id", "", "new product type UUID")
 	productsUpdateCmd.Flags().StringVar(&productUpdateUnitID, "unit-id", "", "new unit UUID")
+	productsUpdateCmd.Flags().StringVar(&productUpdateVATPolicyID, "vat-policy-id", "", "new VAT policy UUID (see capigo vat-policies list)")
+	productsUpdateCmd.Flags().BoolVar(&productUpdateClearVATPolicy, "clear-vat-policy", false, "set vat_policy_id to null (the type's policy then applies)")
 	productsUpdateCmd.Flags().StringArrayVar(&productUpdateAliases, "aliases", nil, "product aliases (repeatable: --aliases foo --aliases bar)")
 	// Kept hidden so a caller still sending --tags learns where tags went.
 	productsUpdateCmd.Flags().StringArrayVar(&productUpdateTags, "tags", nil, "removed: use products tags add|remove")

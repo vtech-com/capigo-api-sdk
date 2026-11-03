@@ -4,7 +4,7 @@ description: >
   Drive the Capigo platform through the installed `capigo` CLI — the entry point for any Capigo
   work an agent does for a tenant. Use this whenever a request maps to Capigo data or
   capabilities — tasks, boards, members, products, variants, brands, categories, product types,
-  product properties and property definitions, units, warehouses, stock locations, inbound
+  product properties and property definitions, VAT policies, units, warehouses, stock locations, inbound
   receipts, outbound shipments, stock transfers, availability, tenants, authentication,
   configuration — even when the user never names the CLI or Capigo itself, and in whatever
   language they ask: "create a task and assign it to someone", "what's on the board this week",
@@ -215,7 +215,8 @@ For an operation that creates, traverses, or changes a relationship, load only t
 domain reference after reading leaf help:
 
 - [`references/domains/products.md`](./references/domains/products.md) for products, variants,
-  product references, product properties (`capigo property-definitions`), and catalog tags
+  product references, product properties (`capigo property-definitions`), VAT policies
+  (`capigo vat-policies`, `--vat-policy-id`), and catalog tags
   (`products tags`, `variants tags`, `capigo tags list`);
 - [`references/domains/tasks.md`](./references/domains/tasks.md) for tasks, assignees, subtasks,
   comments and mentions, and labels (`--label`, `capigo labels list`);

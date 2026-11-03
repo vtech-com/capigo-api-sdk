@@ -131,6 +131,7 @@ var (
 	productTypeCreateTenant      string
 	productTypeCreateName        string
 	productTypeCreateDescription string
+	productTypeCreateVATPolicyID string
 	productTypeCreateFromJSON    string
 )
 
@@ -145,7 +146,7 @@ PURPOSE
 USAGE
   capigo product-types create --tenant <code>
                               (--name <text> [--description <text>]
-                               | --from-json <path|->)
+                               [--vat-policy-id <uuid>] | --from-json <path|->)
 
 FLAGS
   --tenant <code>
@@ -159,9 +160,15 @@ FLAGS
   --description <text>
       Free-text description. Optional, max 2000 characters.
 
+  --vat-policy-id <uuid>
+      VAT policy of the type. Products of the type with no policy of their own
+      take its rate. Optional. Resolve it with capigo vat-policies list; an
+      unknown or deleted id exits 5 (E9760).
+
   --from-json <path|->
       Send the whole request body from a file, or - for stdin. Mutually
-      exclusive with --name and --description: passing both exits 5.
+      exclusive with --name, --description and --vat-policy-id: passing both
+      exits 5.
 
       Body:
 
@@ -203,7 +210,7 @@ OUTPUT
 
 		var body any
 		if productTypeCreateFromJSON != "" {
-			for _, f := range []string{"name", "description"} {
+			for _, f := range []string{"name", "description", "vat-policy-id"} {
 				if cmd.Flags().Changed(f) {
 					failValidation("--from-json and --%s are mutually exclusive", f)
 				}
@@ -220,6 +227,9 @@ OUTPUT
 			req := api.CreateProductTypeRequest{Name: productTypeCreateName}
 			if productTypeCreateDescription != "" {
 				req.Description = &productTypeCreateDescription
+			}
+			if productTypeCreateVATPolicyID != "" {
+				req.VATPolicyID = &productTypeCreateVATPolicyID
 			}
 			body = req
 		}
@@ -249,6 +259,8 @@ var (
 	productTypeUpdateName             string
 	productTypeUpdateDescription      string
 	productTypeUpdateClearDescription bool
+	productTypeUpdateVATPolicyID      string
+	productTypeUpdateClearVATPolicy   bool
 	productTypeUpdateFromJSON         string
 )
 
@@ -269,6 +281,7 @@ USAGE
   capigo product-types update <id> --tenant <code>
                                    ([--name <text>]
                                     [--description <text> | --clear-description]
+                                    [--vat-policy-id <uuid> | --clear-vat-policy]
                                    | --from-json <path|->)
 
 FLAGS
@@ -292,12 +305,21 @@ FLAGS
         capigo product-types update <uuid> --tenant acme --description "Pin roi"
         capigo product-types update <uuid> --tenant acme --clear-description
 
+  --vat-policy-id <uuid>
+      A new VAT policy. Mutually exclusive with --clear-vat-policy. Resolve
+      it with capigo vat-policies list.
+
+  --clear-vat-policy
+      Set vat_policy_id to null: the type has no policy.
+
+        capigo product-types update <uuid> --tenant acme --vat-policy-id <uuid>
+
       At least one field is required; sending none exits 5.
 
   --from-json <path|->
       Send the whole request body from a file, or - for stdin. Mutually
-      exclusive with --name, --description and --clear-description: passing
-      both exits 5.
+      exclusive with --name, --description, --clear-description,
+      --vat-policy-id and --clear-vat-policy: passing both exits 5.
 
 OUTPUT
   The product type as it now stands is at .data:
@@ -332,7 +354,7 @@ OUTPUT
 
 		var body any
 		if productTypeUpdateFromJSON != "" {
-			for _, f := range []string{"name", "description", "clear-description"} {
+			for _, f := range []string{"name", "description", "clear-description", "vat-policy-id", "clear-vat-policy"} {
 				if cmd.Flags().Changed(f) {
 					failValidation("--from-json and --%s are mutually exclusive", f)
 				}
@@ -351,6 +373,14 @@ OUTPUT
 				m["description"] = nil
 			} else if productTypeUpdateDescription != "" {
 				m["description"] = productTypeUpdateDescription
+			}
+			if productTypeUpdateClearVATPolicy && productTypeUpdateVATPolicyID != "" {
+				failValidation("--vat-policy-id and --clear-vat-policy are mutually exclusive")
+			}
+			if productTypeUpdateClearVATPolicy {
+				m["vat_policy_id"] = nil
+			} else if productTypeUpdateVATPolicyID != "" {
+				m["vat_policy_id"] = productTypeUpdateVATPolicyID
 			}
 			if len(m) == 0 {
 				failValidation("at least one field must be provided for update")
@@ -454,6 +484,8 @@ var (
 	productTypeReplaceName          string
 	productTypeReplaceDescription   string
 	productTypeReplaceNoDescription bool
+	productTypeReplaceVATPolicyID   string
+	productTypeReplaceNoVATPolicy   bool
 	productTypeReplaceFromJSON      string
 )
 
@@ -474,6 +506,7 @@ USAGE
   capigo product-types replace <id> --tenant <code>
                                     (--name <text>
                                      (--description <text> | --no-description)
+                                     [--vat-policy-id <uuid> | --no-vat-policy]
                                      | --from-json <path|->)
 
 FLAGS
@@ -498,10 +531,18 @@ FLAGS
         capigo product-types replace <uuid> --tenant acme --name "Pin" \
             --no-description
 
+  --vat-policy-id <uuid>
+      The VAT policy. Optional even on PUT: omit both this and
+      --no-vat-policy to keep the current policy. Mutually exclusive with
+      --no-vat-policy.
+
+  --no-vat-policy
+      Set vat_policy_id to null: the type has no policy.
+
   --from-json <path|->
       Send the whole request body from a file, or - for stdin. Mutually
-      exclusive with --name, --description and --no-description: passing
-      both exits 5.
+      exclusive with --name, --description, --no-description,
+      --vat-policy-id and --no-vat-policy: passing both exits 5.
 
 OUTPUT
   The product type as it now stands is at .data:
@@ -536,7 +577,7 @@ OUTPUT
 
 		var body any
 		if productTypeReplaceFromJSON != "" {
-			for _, f := range []string{"name", "description", "no-description"} {
+			for _, f := range []string{"name", "description", "no-description", "vat-policy-id", "no-vat-policy"} {
 				if cmd.Flags().Changed(f) {
 					failValidation("--from-json and --%s are mutually exclusive", f)
 				}
@@ -560,6 +601,15 @@ OUTPUT
 			req := api.ReplaceProductTypeRequest{Name: productTypeReplaceName}
 			if !productTypeReplaceNoDescription {
 				req.Description = &productTypeReplaceDescription
+			}
+			if productTypeReplaceNoVATPolicy && productTypeReplaceVATPolicyID != "" {
+				failValidation("--vat-policy-id and --no-vat-policy are mutually exclusive")
+			}
+			if productTypeReplaceNoVATPolicy {
+				req.VATPolicyID = json.RawMessage("null")
+			} else if productTypeReplaceVATPolicyID != "" {
+				raw, _ := json.Marshal(productTypeReplaceVATPolicyID)
+				req.VATPolicyID = raw
 			}
 			body = req
 		}
@@ -589,12 +639,15 @@ func init() {
 	productTypesCreateCmd.Flags().StringVar(&productTypeCreateTenant, "tenant", "", "tenant code (required)")
 	productTypesCreateCmd.Flags().StringVar(&productTypeCreateName, "name", "", "product type name (required unless --from-json is used)")
 	productTypesCreateCmd.Flags().StringVar(&productTypeCreateDescription, "description", "", "product type description (max 2000 chars)")
+	productTypesCreateCmd.Flags().StringVar(&productTypeCreateVATPolicyID, "vat-policy-id", "", "VAT policy UUID (see capigo vat-policies list)")
 	productTypesCreateCmd.Flags().StringVar(&productTypeCreateFromJSON, "from-json", "", "path to JSON file with full request body (use - for stdin)")
 
 	productTypesUpdateCmd.Flags().StringVar(&productTypeUpdateTenant, "tenant", "", "tenant code (required)")
 	productTypesUpdateCmd.Flags().StringVar(&productTypeUpdateName, "name", "", "new product type name")
 	productTypesUpdateCmd.Flags().StringVar(&productTypeUpdateDescription, "description", "", "new product type description (max 2000 chars)")
 	productTypesUpdateCmd.Flags().BoolVar(&productTypeUpdateClearDescription, "clear-description", false, "set description to null (remove description)")
+	productTypesUpdateCmd.Flags().StringVar(&productTypeUpdateVATPolicyID, "vat-policy-id", "", "new VAT policy UUID")
+	productTypesUpdateCmd.Flags().BoolVar(&productTypeUpdateClearVATPolicy, "clear-vat-policy", false, "set vat_policy_id to null (remove the policy)")
 	productTypesUpdateCmd.Flags().StringVar(&productTypeUpdateFromJSON, "from-json", "", "path to JSON file with update body (use - for stdin); mutually exclusive with individual field flags")
 
 	productTypesGetCmd.Flags().StringVar(&productTypeGetTenant, "tenant", "", "tenant code (required)")
@@ -603,6 +656,8 @@ func init() {
 	productTypesReplaceCmd.Flags().StringVar(&productTypeReplaceName, "name", "", "product type name (required)")
 	productTypesReplaceCmd.Flags().StringVar(&productTypeReplaceDescription, "description", "", "product type description (mutually exclusive with --no-description)")
 	productTypesReplaceCmd.Flags().BoolVar(&productTypeReplaceNoDescription, "no-description", false, "set description to null (mutually exclusive with --description)")
+	productTypesReplaceCmd.Flags().StringVar(&productTypeReplaceVATPolicyID, "vat-policy-id", "", "VAT policy UUID; omit to keep the current one")
+	productTypesReplaceCmd.Flags().BoolVar(&productTypeReplaceNoVATPolicy, "no-vat-policy", false, "set vat_policy_id to null (mutually exclusive with --vat-policy-id)")
 	productTypesReplaceCmd.Flags().StringVar(&productTypeReplaceFromJSON, "from-json", "", "path to JSON file with full request body (use - for stdin); mutually exclusive with individual field flags")
 
 	productTypesCmd.AddCommand(productTypesListCmd, productTypesGetCmd, productTypesCreateCmd, productTypesUpdateCmd, productTypesReplaceCmd, productTypesDeleteCmd)

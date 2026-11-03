@@ -44,7 +44,7 @@ RESOLUTION ORDER
 
 WHICH COMMANDS REQUIRE A TENANT
   Always      products, variants, brands, categories, product-types, units,
-              property-definitions
+              property-definitions, vat-policies
               — every verb. With no tenant resolved the command exits 5.
   Always      tasks create, tasks subtasks create
   Always      wms — every verb. All but wms warehouses and wms availability
@@ -246,7 +246,7 @@ VARIANTS
   variants get on one exits 4, the same as a variant that never existed.
 
 EVERY OTHER RESOURCE
-  brands, categories, product-types, units, members, tasks and boards do not
+  brands, categories, product-types, units, vat-policies, members, tasks and boards do not
   expose a deletion flag through this CLI. Their responses carry no is_deleted
   field; there is no table output.
 

@@ -306,6 +306,12 @@ capigo property-definitions create --label <text> [--key <key>]      Create a de
 capigo property-definitions update|replace <id> --label <text>       Relabel (PATCH / PUT); reaches every product carrying it
 capigo property-definitions delete <id>                              Delete; products keep the property as ad hoc
 capigo property-definitions move <id> (--after-id <uuid> | --top)   Reorder definitions
+capigo vat-policies list|get <id>                                    List or read the tenant's VAT policies
+capigo vat-policies create --name <text> --rate <percent>            Create a named VAT rate (0-100, two decimals)
+capigo vat-policies update <id> [--name <text>] [--rate <percent>]   Change the name or rate (PATCH)
+capigo vat-policies replace <id> --name <text> --rate <percent>      Replace name and rate (PUT)
+capigo vat-policies delete <id>                                      Delete; refused (exit 8) while a product or type uses it
+# products create|update and product-types create|update|replace take --vat-policy-id <uuid>; clear it with --clear-vat-policy (products update, product-types update) or --no-vat-policy (product-types replace).
 # Products carry `properties` (key -> {label, value, position, definition_id}); set via --from-json. Sending `properties` replaces the whole set; omit it to keep, `{}` clears.
 
 capigo brands list           List reference brands (supports --query)
