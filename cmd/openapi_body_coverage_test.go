@@ -104,6 +104,9 @@ var bodyFieldAliasMap = map[string]string{
 	// PATCH /members/{id}: plural fields are repeatable singular flags, like follower_ids.
 	"positions":   "position",
 	"permissions": "permission",
+	// POST /wms/warehouses/{code}/members and its scopes add/remove: scopes is a
+	// repeatable singular flag, like permissions.
+	"scopes": "scope",
 	// POST /pcms/variants/lookup: arrays are repeatable singular flags.
 	"skus":     "sku",
 	"barcodes": "barcode",
@@ -162,6 +165,39 @@ func buildWriteCommandMapping() []writeCommandEntry {
 			path:      "/members/{id}",
 			method:    "patch",
 			hasFlag:   func(n string) bool { return membersUpdateCmd.Flags().Lookup(n) != nil },
+		},
+		// The atomic tenant permission changes: one field, permissions→--permission.
+		{
+			humanName: "members permissions add",
+			path:      "/members/{id}/permissions/add",
+			method:    "post",
+			hasFlag:   func(n string) bool { return membersPermissionsAddCmd.Flags().Lookup(n) != nil },
+		},
+		{
+			humanName: "members permissions remove",
+			path:      "/members/{id}/permissions/remove",
+			method:    "post",
+			hasFlag:   func(n string) bool { return membersPermissionsRemoveCmd.Flags().Lookup(n) != nil },
+		},
+		// Warehouse memberships: user_id→--user-id, scopes→--scope. Pre-staged from
+		// develop; these paths are not on prod yet.
+		{
+			humanName: "wms warehouses members add",
+			path:      "/wms/warehouses/{code}/members",
+			method:    "post",
+			hasFlag:   func(n string) bool { return wmsWarehouseMembersAddCmd.Flags().Lookup(n) != nil },
+		},
+		{
+			humanName: "wms warehouses members scopes add",
+			path:      "/wms/warehouses/{code}/members/{memberId}/scopes/add",
+			method:    "post",
+			hasFlag:   func(n string) bool { return wmsWarehouseMembersScopesAddCmd.Flags().Lookup(n) != nil },
+		},
+		{
+			humanName: "wms warehouses members scopes remove",
+			path:      "/wms/warehouses/{code}/members/{memberId}/scopes/remove",
+			method:    "post",
+			hasFlag:   func(n string) bool { return wmsWarehouseMembersScopesRemoveCmd.Flags().Lookup(n) != nil },
 		},
 		{
 			humanName: "variants lookup",

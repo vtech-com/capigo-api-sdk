@@ -29,6 +29,16 @@ A new request-body field (e.g. `status` on `PUT /pcms/products/{id}/variants`) c
 therefore slip past both guards. The read side is covered; the write side is not — tracked
 as a follow-up.
 
+## Permissions and warehouse members (2026-11-12)
+
+- The five `/wms/warehouses/{code}/members` operations are **pre-staged** from the monorepo's
+  `develop` handlers. Until a spec refresh from prod declares them, `TestOpenAPIPathCoverage` and
+  the query/body guards fail on purpose: do not release before prod serves them.
+- **API gap:** no read returns a member's tenant permission keys. `PublicMemberResponse`
+  (`GET /members`, `GET /members/{id}`) has no `permissions` field; only the answers to
+  `PATCH /members/{id}` and `POST /members/{id}/permissions/add|remove` carry the set. An agent
+  therefore cannot check what a member holds before granting. Report to the API team.
+
 ## SDK vs. existing API: essentially complete
 
 The CLI wraps every endpoint that currently exists, with one exception:

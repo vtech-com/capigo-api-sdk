@@ -39,6 +39,10 @@ var implementedOps = map[string]string{
 	"GET /members/{id}":   "members get",
 	"PATCH /members/{id}": "members update",
 
+	"GET /permissions":                      "permissions list",
+	"POST /members/{id}/permissions/add":    "members permissions add",
+	"POST /members/{id}/permissions/remove": "members permissions remove",
+
 	"POST /members/invitations":                     "members invite",
 	"GET /members/invitations":                      "members invitations list",
 	"POST /members/invitations/{id}/actions/cancel": "members invitations cancel",
@@ -175,8 +179,18 @@ var implementedOps = map[string]string{
 	// WMS. Every record is addressed by code, inside a warehouse. One command per
 	// operation, except the lifecycle route: its {action} segment is submit or
 	// cancel, and each is its own command — the API answers 404 to any other.
-	"GET /wms/warehouses":           "wms warehouses list",
-	"GET /wms/warehouses/{code}":    "wms warehouses get",
+	"GET /wms/warehouses":        "wms warehouses list",
+	"GET /wms/warehouses/{code}": "wms warehouses get",
+
+	// Written against the platform's develop handlers before they reached
+	// production. Until a spec refresh declares them, the stale-entry check
+	// below fails: that red test is what keeps this from being released early.
+	"GET /wms/warehouses/{code}/members":                           "wms warehouses members list",
+	"POST /wms/warehouses/{code}/members":                          "wms warehouses members add",
+	"POST /wms/warehouses/{code}/members/{memberId}/scopes/add":    "wms warehouses members scopes add",
+	"POST /wms/warehouses/{code}/members/{memberId}/scopes/remove": "wms warehouses members scopes remove",
+	"DELETE /wms/warehouses/{code}/members/{memberId}":             "wms warehouses members remove",
+
 	"GET /wms/locations":            "wms locations list",
 	"GET /wms/locations/{code}":     "wms locations get",
 	"POST /wms/availability-checks": "wms availability check",
@@ -220,6 +234,12 @@ var implementedOps = map[string]string{
 var unimplementedOps = map[string]string{
 	"POST /auth/device/code":  "device flow: login by device is not wrapped yet",
 	"POST /auth/device/token": "device flow: login by device is not wrapped yet",
+
+	"GET /wms/print-jobs":             "not wrapped yet: outside the permissions and warehouse-members sync that refreshed the spec",
+	"GET /wms/print-jobs/{id}":        "not wrapped yet: outside the permissions and warehouse-members sync that refreshed the spec",
+	"POST /wms/print-jobs/{id}/stage": "not wrapped yet: outside the permissions and warehouse-members sync that refreshed the spec",
+	"POST /wms/print-agent/session":   "not wrapped yet: outside the permissions and warehouse-members sync that refreshed the spec",
+	"PUT /wms/print-agent/printer":    "not wrapped yet: outside the permissions and warehouse-members sync that refreshed the spec",
 }
 
 // openAPIPathOnlySpec is the minimal subset of OpenAPI 3.0 needed to enumerate
