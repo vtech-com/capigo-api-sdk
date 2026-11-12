@@ -3,7 +3,7 @@
   "info": {
     "title": "Capigo Public API",
     "description": "Public API documentation for Capigo Developer Platform. Integrate your external tools with Capigo tasks, boards, and members. See `apps/platform/docs/api-v1-changelog.md` for version history. A key is pinned to one workspace, lists several workspaces, or reaches every workspace of its owner. A pinned key needs no `X-Tenant-Code`. A key that lists several workspaces, or reaches all of them, names the workspace per call in `X-Tenant-Code`: the workspace must be one the key reaches and its owner still belongs to, or the call is `403` `AUTH_TENANT_MISMATCH`. A key that lists its workspaces must send the header on every route except `GET /health` and `GET /tenants`, or the call is `400` `AUTH_TENANT_REQUIRED`.",
-    "version": "2.12.0",
+    "version": "2.17.0",
     "contact": {
       "name": "Capigo Developer Support"
     }
@@ -28,6 +28,220 @@
       }
     },
     "schemas": {
+      "PublicWmsPrintJob": {
+        "type": "object",
+        "description": "One document Capigo asks the warehouse's print agent to print: a shipment's shipping label or its outbound shipment worksheet. The id is the agent's idempotency key; a reprint is a new job.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "label",
+              "worksheet"
+            ]
+          },
+          "paper_size": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "A4",
+              "A5",
+              "A6",
+              "100x150",
+              "K80"
+            ],
+            "description": "Worksheet only: the paper size the PDF is rendered in. Null on a label job, which prints at the partner's size."
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "received",
+              "printing",
+              "printed",
+              "failed",
+              "uncertain"
+            ],
+            "description": "`pending` → `received` → `printing` → `printed` or `failed`; `uncertain` from `received` or `printing`; `failed` also from `pending` or `received`: Capigo closes a withdrawn job, and the agent may fail a job it could not print. `printed`, `failed` and `uncertain` are final."
+          },
+          "stage_reason": {
+            "type": "string",
+            "nullable": true,
+            "description": "The reason reported with the move into the current stage. A withdrawn job reads `withdrawn: shipment cancelled`, `withdrawn: packing completion cancelled` (its plan was cancelled with its packing completion; the fresh plan records new jobs) or `withdrawn: label no longer offered`."
+          },
+          "outbound_shipment_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the job was recorded."
+          },
+          "received_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "When the job reached that stage."
+          },
+          "printing_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "When the job reached that stage."
+          },
+          "printed_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "When the job reached that stage."
+          },
+          "failed_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "When the job reached that stage."
+          },
+          "uncertain_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "description": "When the job reached that stage."
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "paper_size",
+          "stage",
+          "stage_reason",
+          "outbound_shipment_id",
+          "created_at",
+          "received_at",
+          "printing_at",
+          "printed_at",
+          "failed_at",
+          "uncertain_at"
+        ]
+      },
+      "PublicWmsPrintJobDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PublicWmsPrintJob"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "document": {
+                "type": "object",
+                "description": "The PDF to print. Use the link before `expires_at`; fetch the job again for a fresh one.",
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "format": "uri",
+                    "description": "A label job: the link the order system's partner gave now. A worksheet job: a signed link to the PDF Capigo rendered in the job's paper size."
+                  },
+                  "expires_at": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "When to stop using the link: the source's own expiry, never more than five minutes away."
+                  }
+                },
+                "required": [
+                  "url",
+                  "expires_at"
+                ]
+              }
+            },
+            "required": [
+              "document"
+            ]
+          }
+        ]
+      },
+      "PublicWmsPrintAgentSession": {
+        "type": "object",
+        "description": "What the print agent needs to join its warehouse's private print topic. Join `topic` as a private channel on the realtime service at `supabase_url`, with `supabase_publishable_key` as the API key and `token` as the access token. The topic carries `{ id, eventType }` for each new job; fetch the job by id. Open a new session before `expires_at`.",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "A short-lived access token for the agent's member account."
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the token expires: at most ten minutes after the call."
+          },
+          "topic": {
+            "type": "string",
+            "description": "`warehouse:<warehouse_id>:print-jobs`.",
+            "example": "warehouse:3f1c2a9e-0000-4000-8000-000000000001:print-jobs"
+          },
+          "warehouse_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "supabase_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "The realtime service's base address."
+          },
+          "supabase_publishable_key": {
+            "type": "string",
+            "description": "The public API key the realtime service expects with the token. It grants nothing on its own."
+          }
+        },
+        "required": [
+          "token",
+          "expires_at",
+          "topic",
+          "warehouse_id",
+          "supabase_url",
+          "supabase_publishable_key"
+        ]
+      },
+      "PublicWmsWarehousePrinter": {
+        "type": "object",
+        "description": "The warehouse's pack-station printer, registered by its print agent.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "warehouse_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "paper_size": {
+            "type": "string",
+            "enum": [
+              "A4",
+              "A5",
+              "A6",
+              "100x150",
+              "K80"
+            ]
+          },
+          "registered_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When this printer was registered."
+          }
+        },
+        "required": [
+          "id",
+          "warehouse_id",
+          "display_name",
+          "paper_size",
+          "registered_at"
+        ]
+      },
       "DeviceCodeRequest": {
         "type": "object",
         "required": [
@@ -446,7 +660,10 @@
         "required": [
           "id",
           "name",
-          "logo_url"
+          "logo_url",
+          "created_at",
+          "updated_at",
+          "is_deleted"
         ],
         "properties": {
           "id": {
@@ -460,6 +677,19 @@
             "type": "string",
             "format": "uri",
             "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last change, including a soft delete. The sync watermark."
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "description": "`true` only in sync mode (`updated_since`), as a tombstone: remove the row from the local copy. Always `false` in the plain list."
           }
         }
       },
@@ -468,7 +698,10 @@
         "required": [
           "id",
           "name",
-          "parent_id"
+          "parent_id",
+          "created_at",
+          "updated_at",
+          "is_deleted"
         ],
         "properties": {
           "id": {
@@ -482,6 +715,19 @@
             "type": "string",
             "format": "uuid",
             "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last change, including a soft delete. The sync watermark."
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "description": "`true` only in sync mode (`updated_since`), as a tombstone: remove the row from the local copy. Always `false` in the plain list."
           }
         }
       },
@@ -489,7 +735,10 @@
         "type": "object",
         "required": [
           "id",
-          "name"
+          "name",
+          "created_at",
+          "updated_at",
+          "is_deleted"
         ],
         "properties": {
           "id": {
@@ -508,6 +757,19 @@
             "format": "uuid",
             "nullable": true,
             "description": "The VAT policy the type points at; `null` for none. Products of the type with no policy of their own take its rate."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last change, including a soft delete. The sync watermark."
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "description": "`true` only in sync mode (`updated_since`), as a tombstone: remove the row from the local copy. Always `false` in the plain list."
           }
         }
       },
@@ -553,7 +815,10 @@
         "required": [
           "id",
           "name",
-          "abbreviation"
+          "abbreviation",
+          "created_at",
+          "updated_at",
+          "is_deleted"
         ],
         "properties": {
           "id": {
@@ -565,6 +830,19 @@
           },
           "abbreviation": {
             "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last change, including a soft delete. The sync watermark."
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "description": "`true` only in sync mode (`updated_since`), as a tombstone: remove the row from the local copy. Always `false` in the plain list."
           }
         }
       },
@@ -588,6 +866,58 @@
             "minimum": 0,
             "maximum": 100,
             "description": "VAT rate in percent, at most two decimals."
+          }
+        }
+      },
+      "PublicPermissionResponse": {
+        "type": "object",
+        "required": [
+          "key",
+          "label",
+          "description",
+          "module",
+          "scope_type",
+          "implies"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "The stored key. Opaque: never parse it.",
+            "example": "catalog_admin"
+          },
+          "label": {
+            "type": "string",
+            "example": "Catalog Admin"
+          },
+          "description": {
+            "type": "string"
+          },
+          "module": {
+            "type": "string",
+            "enum": [
+              "catalog",
+              "po",
+              "wms"
+            ]
+          },
+          "scope_type": {
+            "type": "string",
+            "enum": [
+              "tenant",
+              "warehouse"
+            ],
+            "description": "`tenant` for a key in a tenant member's permission set, `warehouse` for a warehouse scope."
+          },
+          "implies": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Every key this one includes, transitively; `[]` when none.",
+            "example": [
+              "catalog_contributor",
+              "catalog_view"
+            ]
           }
         }
       },
@@ -878,6 +1208,12 @@
             "format": "uuid",
             "nullable": true
           },
+          "position": {
+            "type": "number",
+            "nullable": true,
+            "description": "The task's place in its board list: a lower value sits higher. Null when the task is on no board list, which includes every subtask. Two tasks may share a value, and a JSON number can round two very close values to one, so read the order from `filters[board_list_id][$eq]` with `sort=position` (ties broken by `created_at`) rather than by comparing values.",
+            "example": 2000
+          },
           "due_date": {
             "type": "string",
             "format": "date-time",
@@ -1002,6 +1338,68 @@
           },
           "color": {
             "type": "string"
+          }
+        }
+      },
+      "MetaSyncPage": {
+        "type": "object",
+        "description": "Envelope of a sync-mode page (`updated_since`). There is no `total` and no page number.",
+        "required": [
+          "limit",
+          "has_more",
+          "next_cursor"
+        ],
+        "properties": {
+          "limit": {
+            "type": "integer"
+          },
+          "has_more": {
+            "type": "boolean"
+          },
+          "next_cursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Opaque. Send it back as `cursor` with the same `updated_since` to get the next page. `null` when `has_more` is `false`."
+          }
+        }
+      },
+      "PublicCatalogTagListItem": {
+        "type": "object",
+        "description": "A catalog tag as the tag list returns it. `key` identifies the tag: the name after trimming, collapsing inner spaces and lower-casing. Tags are never updated or deleted, so `updated_at` equals `created_at` and `is_deleted` is always `false`.",
+        "required": [
+          "key",
+          "name",
+          "color",
+          "created_at",
+          "updated_at",
+          "is_deleted"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "example": "hàng tết"
+          },
+          "name": {
+            "type": "string",
+            "example": "Hàng Tết"
+          },
+          "color": {
+            "type": "string",
+            "example": "sky"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "is_deleted": {
+            "type": "boolean",
+            "enum": [
+              false
+            ]
           }
         }
       },
@@ -4647,6 +5045,474 @@
     }
   ],
   "paths": {
+    "/wms/print-agent/session": {
+      "post": {
+        "summary": "Open a Print Agent Session",
+        "description": "Exchanges the warehouse printer account's key for a short-lived token that joins the warehouse's private print topic. The topic admits the token only with `scope.outbound` at that warehouse. The token names the account and no tenant, so only the warehouse's dedicated printer account receives it: register the printer first. Authorization gate: `scope.outbound` and the dedicated printer account.",
+        "tags": [
+          "WMS"
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "required": false,
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The session.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsPrintAgentSession"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing warehouse context"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied, no `scope.outbound` at the warehouse, or E9749: the caller is not the warehouse's dedicated printer account. The token is issued only to the account that registered the warehouse's live printer, when it is not the tenant owner, holds no tenant permission, holds only `scope.outbound` and only at this warehouse, and is an active member of no other tenant."
+          },
+          "404": {
+            "description": "Warehouse not found"
+          }
+        }
+      }
+    },
+    "/wms/print-agent/printer": {
+      "put": {
+        "summary": "Register the Warehouse's Printer",
+        "description": "Records the caller's printer as the warehouse's only printer, with the paper size picked when the agent was installed, replacing any printer registered before. Worksheet jobs are rendered in this paper size. Only an account holding nothing beyond the print app's needs registers; any other is refused and the printer registered before stays. Authorization gate: `scope.outbound` and a dedicated printer account.",
+        "tags": [
+          "WMS"
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "required": false,
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "display_name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100,
+                    "description": "The printer's name as the agent reports it; trimmed."
+                  },
+                  "paper_size": {
+                    "type": "string",
+                    "enum": [
+                      "A4",
+                      "A5",
+                      "A6",
+                      "100x150",
+                      "K80"
+                    ]
+                  }
+                },
+                "required": [
+                  "display_name",
+                  "paper_size"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The registered printer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsWarehousePrinter"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing warehouse context, invalid JSON body, an unknown paper size (E9633) or a name that is empty or longer than 100 characters (E9634)"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied, no `scope.outbound` at the warehouse, or E9749: the caller is the tenant owner, holds a tenant permission, holds another scope or a membership of another warehouse, or is an active member of another tenant. The printer registered before is left as it was."
+          },
+          "404": {
+            "description": "Warehouse not found"
+          }
+        }
+      }
+    },
+    "/wms/print-jobs": {
+      "get": {
+        "summary": "List Open Print Jobs",
+        "description": "The warehouse's print jobs not finished yet: `pending`, `received` and `printing`, oldest first. Not paged. The print agent reads them after each reconnect, to resume or report them. Authorization gate: `scope.outbound`.",
+        "tags": [
+          "WMS"
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "required": false,
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The open jobs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicWmsPrintJob"
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing warehouse context"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied, or no `scope.outbound` at the warehouse"
+          },
+          "404": {
+            "description": "Warehouse not found"
+          }
+        }
+      }
+    },
+    "/wms/print-jobs/{id}": {
+      "get": {
+        "summary": "Get a Print Job to Print",
+        "description": "The job with a link to its PDF, returned as JSON, never a redirect. A label job gets a fresh link from the order system's partner, asked at this moment; a worksheet job gets a link to the PDF Capigo renders on the server in the job's paper size. Fetching does not move the job; report `received` with the stage route. A job whose shipment was cancelled, whose packing completion was cancelled, or (a label job) whose shipment no longer offers a label print, is withdrawn: it moves to `failed` with the reason and the answer is 409 `E9640`, as for a job already in a final stage. Authorization gate: `scope.outbound`.",
+        "tags": [
+          "WMS"
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "required": false,
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Print job id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The job and its document.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsPrintJobDetail"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing warehouse context"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied, or no `scope.outbound` at the warehouse"
+          },
+          "404": {
+            "description": "Warehouse or print job not found, another warehouse's or tenant's job included"
+          },
+          "409": {
+            "description": "Not to print (E9640): the job is withdrawn or in a final stage; `error.job` shows it as it is now. Or the shipment's label is not ready yet (E9688); the job is unchanged.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "code": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        },
+                        "job": {
+                          "$ref": "#/components/schemas/PublicWmsPrintJob"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The document could not be prepared: the partner has no label (E9689), refused the connection's credential (E9690) or is unavailable (E9691); or the worksheet PDF failed (E9649). Retry later."
+          }
+        }
+      }
+    },
+    "/wms/print-jobs/{id}/stage": {
+      "post": {
+        "summary": "Report a Print Job's Stage",
+        "description": "Moves the job to the reported stage, in the order `pending` → `received` → `printing` → `printed` or `failed`, with `uncertain` from `received` or `printing` and `failed` from `pending` or `received` for a job the agent could not print. `pending` cannot be reported. Reporting the stage the job already has keeps its stage and time, so a retried report is safe; a different `reason` replaces the job's reason, except in a final stage. A move outside the order, including any move from a final stage, is 409 `E9630`. `reason` replaces the job's reason; a move without one clears it. Authorization gate: `scope.outbound`.",
+        "tags": [
+          "WMS"
+        ],
+        "parameters": [
+          {
+            "name": "warehouse_code",
+            "in": "query",
+            "required": true,
+            "description": "Warehouse code (also accepted as X-Warehouse-Code header)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Warehouse-Code",
+            "in": "header",
+            "required": false,
+            "description": "Alternative to warehouse_code query parameter",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "Print job id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "stage": {
+                    "type": "string",
+                    "enum": [
+                      "received",
+                      "printing",
+                      "printed",
+                      "failed",
+                      "uncertain"
+                    ]
+                  },
+                  "reason": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 500,
+                    "description": "Why, such as the print queue's reason while printing."
+                  }
+                },
+                "required": [
+                  "stage"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The job after the report.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsPrintJob"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            },
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing warehouse context, invalid JSON body, an unknown stage or an invalid reason"
+          },
+          "401": {
+            "description": "Missing or invalid API key"
+          },
+          "403": {
+            "description": "Tenant access denied, or no `scope.outbound` at the warehouse"
+          },
+          "404": {
+            "description": "Warehouse or print job not found"
+          },
+          "409": {
+            "description": "The job cannot move to this stage from its current one (E9630)"
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "summary": "Health Check",
@@ -4786,6 +5652,63 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/permissions": {
+      "get": {
+        "summary": "List Permissions",
+        "tags": [
+          "Permissions"
+        ],
+        "description": "Every permission key the API accepts, as a static list. `scope_type` `tenant` is a key held in a tenant member's permission set; `warehouse` is a warehouse scope. Every entry carries `implies`, every key it includes, transitively (`[]` when none): `wms_admin` includes every warehouse scope, `po:admin` every other `po:` key, `catalog_admin` includes `catalog_contributor` and `catalog_view`, a purchasing write key (`po:create`, `po:supplier:edit`, `po:payment:delete`, `po:claim:create` and the like) includes the `view` key of its own area, and a warehouse scope follows the scope hierarchy, so a holder of `scope.inbound` needs no separate `scope.view`. Treat `key` as opaque and never parse it. The route takes no query parameters. Any key may call it and every caller gets the same list. Needs no `X-Tenant-Code`. The list is static: the response is cacheable for an hour and carries an `ETag`; send it back in `If-None-Match` to get `304`. Read it instead of hard-coding keys: a key added later appears here.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The catalog",
+            "headers": {
+              "Cache-Control": {
+                "description": "`private, max-age=3600`.",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              "ETag": {
+                "description": "Strong validator of the body.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicPermissionResponse"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "`If-None-Match` matched the current `ETag`; no body."
+          },
+          "401": {
+            "description": "Unauthorized — missing or invalid API key"
           }
         }
       }
@@ -5836,6 +6759,342 @@
         }
       }
     },
+    "/members/{id}/permissions/add": {
+      "post": {
+        "summary": "Add Member Permissions",
+        "tags": [
+          "Members"
+        ],
+        "description": "Add the listed permission keys to a member of the tenant named by `X-Tenant-Code`, and leaves every other key as it is. `{id}` is the member's user id, as in `PATCH /members/{id}`. Only an **active tenant owner** may call it, and never on an owner. The change is one atomic statement in the database, so two callers changing different keys of the same member both land; this is what `PATCH` with `permissions` (replace all) cannot promise. The body is `{\"permissions\": [...]}`: 1 to 200 keys from `GET /permissions`, duplicates ignored. One unknown key rejects the whole request with `400` naming it, and nothing is applied. Adding a key keeps the ones the member already holds. Stored keys are kept sorted. It is idempotent by value and takes no `Idempotency-Key`: adding a key already held answers `200` with the stored state and writes nothing. A change emits one `member:permissions:updated` event with the old and new sets; a no-op emits none. A caller who is not an active owner gets `403` before anything is revealed about the target. An owner target answers `409` (`PERMISSIONS_NOT_APPLICABLE`). A removed member, an unknown id and another tenant's member answer the same `404`. The answer has the shape of `PATCH /members/{id}` and never carries the member's email, mobile or other contact data.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The member's user id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": false,
+            "description": "Code of the tenant the member belongs to. Required unless the API key is pinned to one tenant.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "permissions"
+                ],
+                "properties": {
+                  "permissions": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 200,
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Permission keys to add. Every key must appear in `GET /permissions`."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The member after the change.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "role",
+                        "status",
+                        "display_name",
+                        "member_code",
+                        "job_title",
+                        "department",
+                        "bio",
+                        "permissions",
+                        "positions"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "description": "The member's user id."
+                        },
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "owner",
+                            "member"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "inactive",
+                            "banned"
+                          ]
+                        },
+                        "display_name": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "member_code": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "job_title": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "department": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "bio": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "permissions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "positions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "format": "uuid"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid member id, invalid JSON (`INVALID_JSON_BODY`), an empty or oversized list, an extra field, or an unknown permission key (`VALIDATION_ERROR`; the message names the keys). Nothing is applied."
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "The caller is not an active owner of the tenant (`FORBIDDEN`), or the key cannot reach the tenant."
+          },
+          "404": {
+            "description": "The member is unknown, removed or belongs to another tenant"
+          },
+          "409": {
+            "description": "`PERMISSIONS_NOT_APPLICABLE`: the member is an owner."
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
+    "/members/{id}/permissions/remove": {
+      "post": {
+        "summary": "Remove Member Permissions",
+        "tags": [
+          "Members"
+        ],
+        "description": "Remove the listed permission keys from a member of the tenant named by `X-Tenant-Code`, and leaves every other key as it is. `{id}` is the member's user id, as in `PATCH /members/{id}`. Only an **active tenant owner** may call it, and never on an owner. The change is one atomic statement in the database, so two callers changing different keys of the same member both land; this is what `PATCH` with `permissions` (replace all) cannot promise. The body is `{\"permissions\": [...]}`: 1 to 200 keys from `GET /permissions`, duplicates ignored. One unknown key rejects the whole request with `400` naming it, and nothing is applied. Removing a key the member does not hold is not an error. Stored keys are kept sorted. It is idempotent by value and takes no `Idempotency-Key`: removing a key not held answers `200` with the stored state and writes nothing. A change emits one `member:permissions:updated` event with the old and new sets; a no-op emits none. A caller who is not an active owner gets `403` before anything is revealed about the target. An owner target answers `409` (`PERMISSIONS_NOT_APPLICABLE`). A removed member, an unknown id and another tenant's member answer the same `404`. The answer has the shape of `PATCH /members/{id}` and never carries the member's email, mobile or other contact data.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "The member's user id.",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": false,
+            "description": "Code of the tenant the member belongs to. Required unless the API key is pinned to one tenant.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "permissions"
+                ],
+                "properties": {
+                  "permissions": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 200,
+                    "items": {
+                      "type": "string"
+                    },
+                    "description": "Permission keys to remove. Every key must appear in `GET /permissions`."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The member after the change.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "role",
+                        "status",
+                        "display_name",
+                        "member_code",
+                        "job_title",
+                        "department",
+                        "bio",
+                        "permissions",
+                        "positions"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid",
+                          "description": "The member's user id."
+                        },
+                        "role": {
+                          "type": "string",
+                          "enum": [
+                            "owner",
+                            "member"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "active",
+                            "inactive",
+                            "banned"
+                          ]
+                        },
+                        "display_name": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "member_code": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "job_title": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "department": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "bio": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "permissions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "positions": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "format": "uuid"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid member id, invalid JSON (`INVALID_JSON_BODY`), an empty or oversized list, an extra field, or an unknown permission key (`VALIDATION_ERROR`; the message names the keys). Nothing is applied."
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "403": {
+            "description": "The caller is not an active owner of the tenant (`FORBIDDEN`), or the key cannot reach the tenant."
+          },
+          "404": {
+            "description": "The member is unknown, removed or belongs to another tenant"
+          },
+          "409": {
+            "description": "`PERMISSIONS_NOT_APPLICABLE`: the member is an owner."
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        }
+      }
+    },
     "/mission/labels": {
       "get": {
         "summary": "List Labels",
@@ -6670,7 +7929,7 @@
             "name": "sort",
             "in": "query",
             "required": false,
-            "description": "Order the page, as `column:direction` (the direction defaults to ascending). `created_at`, `updated_at`, `due_date` and `priority` are accepted; `created_at` is the default. When `unassigned` or a date range selects the board task search, only `created_at`, `updated_at`, `due_date` and `status` are accepted and anything else is HTTP 400 `INVALID_SORT_COLUMN`.",
+            "description": "Order the page, as `column:direction` (the direction defaults to ascending). `created_at`, `updated_at`, `due_date`, `priority` and `position` are accepted; `created_at` is the default. `position` returns one board list in the order the board shows it, ties broken by `created_at`: it needs exactly one `filters[board_list_id][$eq]` and the default list, and is HTTP 400 `INVALID_SORT_COLUMN` without that filter or with `include_archived`, `scope=mine`, `archived=true`, `unassigned` or a date range. When `unassigned` or a date range selects the board task search, only `created_at`, `updated_at`, `due_date` and `status` are accepted and anything else is HTTP 400 `INVALID_SORT_COLUMN`.",
             "schema": {
               "type": "string"
             },
@@ -9119,7 +10378,7 @@
         "tags": [
           "PCMS"
         ],
-        "description": "Paginated, name-sorted list of brands for a tenant. Use `?q=` for name-contains search to resolve brand names to UUIDs before creating products.",
+        "description": "Paginated, name-sorted list of brands for a tenant. Use `?q=` for name-contains search to resolve brand names to UUIDs before creating products.\n\n**Sync mode.** Send `updated_since` (ISO 8601 UTC, e.g. `2026-01-01T00:00:00Z`) to read changes instead of the name-sorted list: rows with `updated_at` at or after it, oldest change first by `(updated_at, id)`. Deleted rows are included as tombstones: the item has `is_deleted: true`. Remove that row from your local copy. Items in the plain list always have `is_deleted: false`.\n\n**Refused combinations.** Sync mode cannot be combined with `page` and `q`: sending any of them with `updated_since` returns `400 INVALID_QUERY_PARAMS`, and the message names the parameter. `cursor` requires `updated_since`: without it the answer is `400 INVALID_CURSOR`. `cursor` with `page` is `400 INVALID_QUERY_PARAMS`. A malformed `updated_since` is `400 INVALID_UPDATED_SINCE`; a `cursor` this API did not issue is `400 INVALID_CURSOR`. Sync mode takes only `limit` (default 20, max 100), `updated_since` and `cursor`.\n\n**How to loop.** Request with `updated_since=<watermark>`. While `meta.has_more` is `true`, repeat the request with the same `updated_since` and `cursor=<meta.next_cursor>`. Stop when `meta.has_more` is `false` (`next_cursor` is then `null`). `meta` carries no `total` or `page` in sync mode.\n\n**Watermark.** Store the `X-Server-Time` header of the first page of a run, minus a few minutes of overlap, as the next run's `updated_since`. A write that commits late can carry a timestamp older than a row you already read, so upsert by `id`: re-reading a row is harmless.",
         "parameters": [
           {
             "name": "X-Tenant-Code",
@@ -9133,7 +10392,7 @@
           {
             "name": "q",
             "in": "query",
-            "description": "Name contains filter (case-insensitive, max 200 chars). Empty or absent means no filter.",
+            "description": "Name contains filter (case-insensitive, max 200 chars). Empty or absent means no filter. Plain list only. With `updated_since`: `400 INVALID_QUERY_PARAMS`.",
             "schema": {
               "type": "string",
               "maxLength": 200
@@ -9146,7 +10405,8 @@
               "type": "integer",
               "default": 1,
               "minimum": 1
-            }
+            },
+            "description": "Plain list only. With `updated_since` or `cursor`: `400 INVALID_QUERY_PARAMS`."
           },
           {
             "name": "limit",
@@ -9157,6 +10417,23 @@
               "minimum": 1,
               "maximum": 100
             }
+          },
+          {
+            "name": "updated_since",
+            "in": "query",
+            "description": "Sync mode switch. ISO 8601 UTC datetime with `Z` or an offset, e.g. `2026-01-01T00:00:00Z`. Returns rows with `updated_at` at or after it, soft-deleted rows included as tombstones (`is_deleted: true`). Cannot be combined with `page`, `q` or `parent_id` (`400 INVALID_QUERY_PARAMS`). Malformed: `400 INVALID_UPDATED_SINCE`. Use the `X-Server-Time` of your last run's first page minus a few minutes.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Sync mode only. The `meta.next_cursor` of the previous page; follow it until `meta.has_more` is `false`. Requires `updated_since` (without it: `400 INVALID_CURSOR`); with `page`: `400 INVALID_QUERY_PARAMS`. Opaque: send it back unchanged. A cursor this API did not issue: `400 INVALID_CURSOR`.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -9164,7 +10441,7 @@
             "description": "Paginated list of brands sorted by name ascending",
             "headers": {
               "X-Server-Time": {
-                "description": "ISO 8601 server timestamp.",
+                "description": "ISO 8601 server timestamp. Use it, minus a few minutes, as the next `updated_since`.",
                 "schema": {
                   "type": "string",
                   "format": "date-time"
@@ -9183,7 +10460,14 @@
                       }
                     },
                     "meta": {
-                      "$ref": "#/components/schemas/MetaPagination"
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/MetaPagination"
+                        },
+                        {
+                          "$ref": "#/components/schemas/MetaSyncPage"
+                        }
+                      ]
                     }
                   }
                 }
@@ -9191,7 +10475,52 @@
             }
           },
           "400": {
-            "description": "Missing X-Tenant-Code or invalid query parameters"
+            "description": "Missing X-Tenant-Code or invalid query parameters. Sync-mode errors carry a code naming the cause: `INVALID_QUERY_PARAMS` (a refused combination), `INVALID_CURSOR`, `INVALID_UPDATED_SINCE`, `INVALID_LIMIT`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "sync_with_page": {
+                    "summary": "updated_since with page, q or parent_id",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_QUERY_PARAMS",
+                        "message": "page cannot be combined with updated_since"
+                      }
+                    }
+                  },
+                  "cursor_without_updated_since": {
+                    "summary": "cursor without updated_since",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_CURSOR",
+                        "message": "cursor requires updated_since"
+                      }
+                    }
+                  },
+                  "invalid_cursor": {
+                    "summary": "cursor this API did not issue",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_CURSOR",
+                        "message": "cursor is not valid"
+                      }
+                    }
+                  },
+                  "invalid_updated_since": {
+                    "summary": "malformed updated_since",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_UPDATED_SINCE",
+                        "message": "updated_since must be a valid ISO 8601 UTC datetime (e.g. 2026-01-01T00:00:00Z)"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "401": {
             "description": "Missing or invalid API key"
@@ -9618,7 +10947,7 @@
         "tags": [
           "PCMS"
         ],
-        "description": "Paginated, name-sorted list of categories for a tenant; categories with the same name are ordered by `id`, so each appears once across the pages. Use `?q=` for name-contains search. Use `?parent_id=` to list the direct children of one category, or `?parent_id=null` for the root categories; the list stays flat, with the same item shape. A deeper level is read by repeating the call with a child's id.",
+        "description": "Paginated, name-sorted list of categories for a tenant; categories with the same name are ordered by `id`, so each appears once across the pages. Use `?q=` for name-contains search. Use `?parent_id=` to list the direct children of one category, or `?parent_id=null` for the root categories; the list stays flat, with the same item shape. A deeper level is read by repeating the call with a child's id.\n\n**Sync mode.** Send `updated_since` (ISO 8601 UTC, e.g. `2026-01-01T00:00:00Z`) to read changes instead of the name-sorted list: rows with `updated_at` at or after it, oldest change first by `(updated_at, id)`. Deleted rows are included as tombstones: the item has `is_deleted: true`. Remove that row from your local copy. Items in the plain list always have `is_deleted: false`.\n\n**Refused combinations.** Sync mode cannot be combined with `page`, `q` or `parent_id`: sending any of them with `updated_since` returns `400 INVALID_QUERY_PARAMS`, and the message names the parameter. `cursor` requires `updated_since`: without it the answer is `400 INVALID_CURSOR`. `cursor` with `page` is `400 INVALID_QUERY_PARAMS`. A malformed `updated_since` is `400 INVALID_UPDATED_SINCE`; a `cursor` this API did not issue is `400 INVALID_CURSOR`. Sync mode takes only `limit` (default 20, max 100), `updated_since` and `cursor`.\n\n**How to loop.** Request with `updated_since=<watermark>`. While `meta.has_more` is `true`, repeat the request with the same `updated_since` and `cursor=<meta.next_cursor>`. Stop when `meta.has_more` is `false` (`next_cursor` is then `null`). `meta` carries no `total` or `page` in sync mode.\n\n**Watermark.** Store the `X-Server-Time` header of the first page of a run, minus a few minutes of overlap, as the next run's `updated_since`. A write that commits late can carry a timestamp older than a row you already read, so upsert by `id`: re-reading a row is harmless.",
         "parameters": [
           {
             "name": "X-Tenant-Code",
@@ -9634,12 +10963,13 @@
             "schema": {
               "type": "string",
               "maxLength": 200
-            }
+            },
+            "description": "Plain list only. With `updated_since`: `400 INVALID_QUERY_PARAMS`."
           },
           {
             "name": "parent_id",
             "in": "query",
-            "description": "A category UUID lists its direct children; the word `null` (lowercase) lists the root categories. Supplied once. A parent that does not exist, is deleted or belongs to another tenant gives an empty page, not `404`.",
+            "description": "A category UUID lists its direct children; the word `null` (lowercase) lists the root categories. Supplied once. A parent that does not exist, is deleted or belongs to another tenant gives an empty page, not `404`. Plain list only. With `updated_since`: `400 INVALID_QUERY_PARAMS`.",
             "schema": {
               "type": "string",
               "example": "null"
@@ -9652,7 +10982,8 @@
               "type": "integer",
               "default": 1,
               "minimum": 1
-            }
+            },
+            "description": "Plain list only. With `updated_since` or `cursor`: `400 INVALID_QUERY_PARAMS`."
           },
           {
             "name": "limit",
@@ -9662,6 +10993,23 @@
               "default": 20,
               "minimum": 1,
               "maximum": 100
+            }
+          },
+          {
+            "name": "updated_since",
+            "in": "query",
+            "description": "Sync mode switch. ISO 8601 UTC datetime with `Z` or an offset, e.g. `2026-01-01T00:00:00Z`. Returns rows with `updated_at` at or after it, soft-deleted rows included as tombstones (`is_deleted: true`). Cannot be combined with `page`, `q` or `parent_id` (`400 INVALID_QUERY_PARAMS`). Malformed: `400 INVALID_UPDATED_SINCE`. Use the `X-Server-Time` of your last run's first page minus a few minutes.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Sync mode only. The `meta.next_cursor` of the previous page; follow it until `meta.has_more` is `false`. Requires `updated_since` (without it: `400 INVALID_CURSOR`); with `page`: `400 INVALID_QUERY_PARAMS`. Opaque: send it back unchanged. A cursor this API did not issue: `400 INVALID_CURSOR`.",
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -9688,7 +11036,14 @@
                       }
                     },
                     "meta": {
-                      "$ref": "#/components/schemas/MetaPagination"
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/MetaPagination"
+                        },
+                        {
+                          "$ref": "#/components/schemas/MetaSyncPage"
+                        }
+                      ]
                     }
                   }
                 }
@@ -9696,7 +11051,52 @@
             }
           },
           "400": {
-            "description": "Missing X-Tenant-Code or invalid query parameters, including a `parent_id` that is neither a UUID nor `null`, empty or repeated"
+            "description": "Missing X-Tenant-Code or invalid query parameters, including a `parent_id` that is neither a UUID nor `null`, empty or repeated. Sync-mode errors carry a code naming the cause: `INVALID_QUERY_PARAMS` (a refused combination), `INVALID_CURSOR`, `INVALID_UPDATED_SINCE`, `INVALID_LIMIT`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "sync_with_page": {
+                    "summary": "updated_since with page, q or parent_id",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_QUERY_PARAMS",
+                        "message": "page cannot be combined with updated_since"
+                      }
+                    }
+                  },
+                  "cursor_without_updated_since": {
+                    "summary": "cursor without updated_since",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_CURSOR",
+                        "message": "cursor requires updated_since"
+                      }
+                    }
+                  },
+                  "invalid_cursor": {
+                    "summary": "cursor this API did not issue",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_CURSOR",
+                        "message": "cursor is not valid"
+                      }
+                    }
+                  },
+                  "invalid_updated_since": {
+                    "summary": "malformed updated_since",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_UPDATED_SINCE",
+                        "message": "updated_since must be a valid ISO 8601 UTC datetime (e.g. 2026-01-01T00:00:00Z)"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "401": {
             "description": "Missing or invalid API key"
@@ -10131,7 +11531,7 @@
         "tags": [
           "PCMS"
         ],
-        "description": "Paginated, name-sorted list of product types for a tenant. Use `?q=` for name-contains search.",
+        "description": "Paginated, name-sorted list of product types for a tenant. Use `?q=` for name-contains search.\n\n**Sync mode.** Send `updated_since` (ISO 8601 UTC, e.g. `2026-01-01T00:00:00Z`) to read changes instead of the name-sorted list: rows with `updated_at` at or after it, oldest change first by `(updated_at, id)`. Deleted rows are included as tombstones: the item has `is_deleted: true`. Remove that row from your local copy. Items in the plain list always have `is_deleted: false`.\n\n**Refused combinations.** Sync mode cannot be combined with `page` and `q`: sending any of them with `updated_since` returns `400 INVALID_QUERY_PARAMS`, and the message names the parameter. `cursor` requires `updated_since`: without it the answer is `400 INVALID_CURSOR`. `cursor` with `page` is `400 INVALID_QUERY_PARAMS`. A malformed `updated_since` is `400 INVALID_UPDATED_SINCE`; a `cursor` this API did not issue is `400 INVALID_CURSOR`. Sync mode takes only `limit` (default 20, max 100), `updated_since` and `cursor`.\n\n**How to loop.** Request with `updated_since=<watermark>`. While `meta.has_more` is `true`, repeat the request with the same `updated_since` and `cursor=<meta.next_cursor>`. Stop when `meta.has_more` is `false` (`next_cursor` is then `null`). `meta` carries no `total` or `page` in sync mode.\n\n**Watermark.** Store the `X-Server-Time` header of the first page of a run, minus a few minutes of overlap, as the next run's `updated_since`. A write that commits late can carry a timestamp older than a row you already read, so upsert by `id`: re-reading a row is harmless.",
         "parameters": [
           {
             "name": "X-Tenant-Code",
@@ -10147,7 +11547,8 @@
             "schema": {
               "type": "string",
               "maxLength": 200
-            }
+            },
+            "description": "Plain list only. With `updated_since`: `400 INVALID_QUERY_PARAMS`."
           },
           {
             "name": "page",
@@ -10156,7 +11557,8 @@
               "type": "integer",
               "default": 1,
               "minimum": 1
-            }
+            },
+            "description": "Plain list only. With `updated_since` or `cursor`: `400 INVALID_QUERY_PARAMS`."
           },
           {
             "name": "limit",
@@ -10166,6 +11568,23 @@
               "default": 20,
               "minimum": 1,
               "maximum": 100
+            }
+          },
+          {
+            "name": "updated_since",
+            "in": "query",
+            "description": "Sync mode switch. ISO 8601 UTC datetime with `Z` or an offset, e.g. `2026-01-01T00:00:00Z`. Returns rows with `updated_at` at or after it, soft-deleted rows included as tombstones (`is_deleted: true`). Cannot be combined with `page`, `q` or `parent_id` (`400 INVALID_QUERY_PARAMS`). Malformed: `400 INVALID_UPDATED_SINCE`. Use the `X-Server-Time` of your last run's first page minus a few minutes.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Sync mode only. The `meta.next_cursor` of the previous page; follow it until `meta.has_more` is `false`. Requires `updated_since` (without it: `400 INVALID_CURSOR`); with `page`: `400 INVALID_QUERY_PARAMS`. Opaque: send it back unchanged. A cursor this API did not issue: `400 INVALID_CURSOR`.",
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -10192,7 +11611,14 @@
                       }
                     },
                     "meta": {
-                      "$ref": "#/components/schemas/MetaPagination"
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/MetaPagination"
+                        },
+                        {
+                          "$ref": "#/components/schemas/MetaSyncPage"
+                        }
+                      ]
                     }
                   }
                 }
@@ -10200,7 +11626,52 @@
             }
           },
           "400": {
-            "description": "Missing X-Tenant-Code or invalid query parameters"
+            "description": "Missing X-Tenant-Code or invalid query parameters. Sync-mode errors carry a code naming the cause: `INVALID_QUERY_PARAMS` (a refused combination), `INVALID_CURSOR`, `INVALID_UPDATED_SINCE`, `INVALID_LIMIT`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "sync_with_page": {
+                    "summary": "updated_since with page, q or parent_id",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_QUERY_PARAMS",
+                        "message": "page cannot be combined with updated_since"
+                      }
+                    }
+                  },
+                  "cursor_without_updated_since": {
+                    "summary": "cursor without updated_since",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_CURSOR",
+                        "message": "cursor requires updated_since"
+                      }
+                    }
+                  },
+                  "invalid_cursor": {
+                    "summary": "cursor this API did not issue",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_CURSOR",
+                        "message": "cursor is not valid"
+                      }
+                    }
+                  },
+                  "invalid_updated_since": {
+                    "summary": "malformed updated_since",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_UPDATED_SINCE",
+                        "message": "updated_since must be a valid ISO 8601 UTC datetime (e.g. 2026-01-01T00:00:00Z)"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "401": {
             "description": "Missing or invalid API key"
@@ -10667,7 +12138,7 @@
           {
             "name": "q",
             "in": "query",
-            "description": "Free-text search fragment (2–500 characters). Matches case-insensitive substring (`ILIKE %q%`) against six columns for active (non-deleted) products: product name, product aliases, product tags, variant name, variant SKU, and variant barcode. When a variant matches, the full parent product is returned with all non-orphaned variants. For soft-deleted (tombstone) products, search is limited to product name, aliases, and tags only — variant fields (name, SKU, barcode) are not searchable because variant data for deleted products is not indexed. To retrieve all tombstones, omit `q` and use `updated_since` or a full sync instead. Composes with `ids` (which is independently capped at 50 UUIDs) and `updated_since` as a strict intersection — supplying all three narrows the result. Special characters `%` and `_` inside `q` are treated literally (escaped), not as wildcards. Control characters and Unicode-whitespace-only values are rejected with `INVALID_SEARCH`.",
+            "description": "Free-text search fragment (2–500 characters). Matches case-insensitive, diacritics-insensitive substring (`ILIKE %q%` on folded text) against product name, variant name, product tag keys, variant tag names, variant SKU, and variant barcode for active (non-deleted) products. The fold applies to both the typed term and the stored name and tag text: NFC, lower case, Vietnamese diacritics removed, and spaces, `-` and `_` dropped, so `man hinh` finds `Màn hình`; SKU and barcode are never folded. When a variant matches, the full parent product is returned with all non-orphaned variants. For soft-deleted (tombstone) products, search is limited to the folded product name only – variant fields (name, SKU, barcode) are not searchable because variant data for deleted products is not indexed. To retrieve all tombstones, omit `q` and use `updated_since` or a full sync instead. Composes with `ids` (which is independently capped at 50 UUIDs) and `updated_since` as a strict intersection – supplying all three narrows the result. Special characters `%` and `_` inside `q` are treated literally (escaped), not as wildcards. Control characters and Unicode-whitespace-only values are rejected with `INVALID_SEARCH`.",
             "required": false,
             "schema": {
               "type": "string",
@@ -12180,7 +13651,7 @@
         "tags": [
           "PCMS"
         ],
-        "description": "Retrieve the tenant's catalog tags, including a tag no product carries any more. Task labels are not among them.",
+        "description": "Retrieve the tenant's catalog tags, including a tag no product carries any more. Task labels are not among them.\n\n**Sync mode.** Send `updated_since` (ISO 8601 UTC, e.g. `2026-01-01T00:00:00Z`) to read changes instead of the name-sorted list: tags with `created_at` at or after it, oldest first by `(created_at, key)`. Tags are never deleted, so there are no tombstones: `is_deleted` is always `false`, and `updated_at` equals `created_at`.\n\n**Refused combinations.** Sync mode cannot be combined with `page` and `q`: sending any of them with `updated_since` returns `400 INVALID_QUERY_PARAMS`, and the message names the parameter. `cursor` requires `updated_since`: without it the answer is `400 INVALID_CURSOR`. `cursor` with `page` is `400 INVALID_QUERY_PARAMS`. A malformed `updated_since` is `400 INVALID_UPDATED_SINCE`; a `cursor` this API did not issue is `400 INVALID_CURSOR`. Sync mode takes only `limit` (default 20, max 100), `updated_since` and `cursor`.\n\n**How to loop.** Request with `updated_since=<watermark>`. While `meta.has_more` is `true`, repeat the request with the same `updated_since` and `cursor=<meta.next_cursor>`. Stop when `meta.has_more` is `false` (`next_cursor` is then `null`). `meta` carries no `total` or `page` in sync mode.\n\n**Watermark.** Store the `X-Server-Time` header of the first page of a run, minus a few minutes of overlap, as the next run's `updated_since`. A write that commits late can carry a timestamp older than a row you already read, so upsert by `key`: re-reading a row is harmless.",
         "parameters": [
           {
             "name": "X-Tenant-Code",
@@ -12189,11 +13660,48 @@
             "schema": {
               "type": "string"
             }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Sync mode only: page size.",
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "updated_since",
+            "in": "query",
+            "description": "Sync mode switch. ISO 8601 UTC datetime with `Z` or an offset, e.g. `2026-01-01T00:00:00Z`. Returns tags with `created_at` at or after it (tags are never updated, so `updated_at` equals `created_at`). Cannot be combined with `page`, `q` or `parent_id` (`400 INVALID_QUERY_PARAMS`). Malformed: `400 INVALID_UPDATED_SINCE`. Use the `X-Server-Time` of your last run's first page minus a few minutes.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Sync mode only. The `meta.next_cursor` of the previous page; follow it until `meta.has_more` is `false`. Requires `updated_since` (without it: `400 INVALID_CURSOR`); with `page`: `400 INVALID_QUERY_PARAMS`. Opaque: send it back unchanged. A cursor this API did not issue: `400 INVALID_CURSOR`.",
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
           "200": {
-            "description": "Successful response",
+            "description": "Every tag by name; in sync mode a keyset page with `meta`",
+            "headers": {
+              "X-Server-Time": {
+                "description": "ISO 8601 server timestamp. Use it, minus a few minutes, as the next `updated_since`.",
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -12202,8 +13710,11 @@
                     "data": {
                       "type": "array",
                       "items": {
-                        "$ref": "#/components/schemas/PublicCatalogTag"
+                        "$ref": "#/components/schemas/PublicCatalogTagListItem"
                       }
+                    },
+                    "meta": {
+                      "$ref": "#/components/schemas/MetaSyncPage"
                     }
                   }
                 }
@@ -12211,7 +13722,52 @@
             }
           },
           "400": {
-            "description": "`INVALID_TENANT_SCOPE`: the key reaches more than one tenant and no `X-Tenant-Code` was sent"
+            "description": "`INVALID_TENANT_SCOPE`: the key reaches more than one tenant and no `X-Tenant-Code` was sent. Sync-mode errors carry a code naming the cause: `INVALID_QUERY_PARAMS` (a refused combination), `INVALID_CURSOR`, `INVALID_UPDATED_SINCE`, `INVALID_LIMIT`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "sync_with_page": {
+                    "summary": "updated_since with page, q or parent_id",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_QUERY_PARAMS",
+                        "message": "page cannot be combined with updated_since"
+                      }
+                    }
+                  },
+                  "cursor_without_updated_since": {
+                    "summary": "cursor without updated_since",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_CURSOR",
+                        "message": "cursor requires updated_since"
+                      }
+                    }
+                  },
+                  "invalid_cursor": {
+                    "summary": "cursor this API did not issue",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_CURSOR",
+                        "message": "cursor is not valid"
+                      }
+                    }
+                  },
+                  "invalid_updated_since": {
+                    "summary": "malformed updated_since",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_UPDATED_SINCE",
+                        "message": "updated_since must be a valid ISO 8601 UTC datetime (e.g. 2026-01-01T00:00:00Z)"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "401": {
             "description": "Missing or invalid API key"
@@ -12231,7 +13787,7 @@
         "tags": [
           "PCMS"
         ],
-        "description": "Paginated, name-sorted list of product units for a tenant. Use `?q=` for name-contains search.",
+        "description": "Paginated, name-sorted list of product units for a tenant. Use `?q=` for name-contains search.\n\n**Sync mode.** Send `updated_since` (ISO 8601 UTC, e.g. `2026-01-01T00:00:00Z`) to read changes instead of the name-sorted list: rows with `updated_at` at or after it, oldest change first by `(updated_at, id)`. Deleted rows are included as tombstones: the item has `is_deleted: true`. Remove that row from your local copy. Items in the plain list always have `is_deleted: false`.\n\n**Refused combinations.** Sync mode cannot be combined with `page` and `q`: sending any of them with `updated_since` returns `400 INVALID_QUERY_PARAMS`, and the message names the parameter. `cursor` requires `updated_since`: without it the answer is `400 INVALID_CURSOR`. `cursor` with `page` is `400 INVALID_QUERY_PARAMS`. A malformed `updated_since` is `400 INVALID_UPDATED_SINCE`; a `cursor` this API did not issue is `400 INVALID_CURSOR`. Sync mode takes only `limit` (default 20, max 100), `updated_since` and `cursor`.\n\n**How to loop.** Request with `updated_since=<watermark>`. While `meta.has_more` is `true`, repeat the request with the same `updated_since` and `cursor=<meta.next_cursor>`. Stop when `meta.has_more` is `false` (`next_cursor` is then `null`). `meta` carries no `total` or `page` in sync mode.\n\n**Watermark.** Store the `X-Server-Time` header of the first page of a run, minus a few minutes of overlap, as the next run's `updated_since`. A write that commits late can carry a timestamp older than a row you already read, so upsert by `id`: re-reading a row is harmless.",
         "parameters": [
           {
             "name": "X-Tenant-Code",
@@ -12247,7 +13803,8 @@
             "schema": {
               "type": "string",
               "maxLength": 200
-            }
+            },
+            "description": "Plain list only. With `updated_since`: `400 INVALID_QUERY_PARAMS`."
           },
           {
             "name": "page",
@@ -12256,7 +13813,8 @@
               "type": "integer",
               "default": 1,
               "minimum": 1
-            }
+            },
+            "description": "Plain list only. With `updated_since` or `cursor`: `400 INVALID_QUERY_PARAMS`."
           },
           {
             "name": "limit",
@@ -12266,6 +13824,23 @@
               "default": 20,
               "minimum": 1,
               "maximum": 100
+            }
+          },
+          {
+            "name": "updated_since",
+            "in": "query",
+            "description": "Sync mode switch. ISO 8601 UTC datetime with `Z` or an offset, e.g. `2026-01-01T00:00:00Z`. Returns rows with `updated_at` at or after it, soft-deleted rows included as tombstones (`is_deleted: true`). Cannot be combined with `page`, `q` or `parent_id` (`400 INVALID_QUERY_PARAMS`). Malformed: `400 INVALID_UPDATED_SINCE`. Use the `X-Server-Time` of your last run's first page minus a few minutes.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Sync mode only. The `meta.next_cursor` of the previous page; follow it until `meta.has_more` is `false`. Requires `updated_since` (without it: `400 INVALID_CURSOR`); with `page`: `400 INVALID_QUERY_PARAMS`. Opaque: send it back unchanged. A cursor this API did not issue: `400 INVALID_CURSOR`.",
+            "schema": {
+              "type": "string"
             }
           }
         ],
@@ -12292,7 +13867,14 @@
                       }
                     },
                     "meta": {
-                      "$ref": "#/components/schemas/MetaPagination"
+                      "oneOf": [
+                        {
+                          "$ref": "#/components/schemas/MetaPagination"
+                        },
+                        {
+                          "$ref": "#/components/schemas/MetaSyncPage"
+                        }
+                      ]
                     }
                   }
                 }
@@ -12300,7 +13882,52 @@
             }
           },
           "400": {
-            "description": "Missing X-Tenant-Code or invalid query parameters"
+            "description": "Missing X-Tenant-Code or invalid query parameters. Sync-mode errors carry a code naming the cause: `INVALID_QUERY_PARAMS` (a refused combination), `INVALID_CURSOR`, `INVALID_UPDATED_SINCE`, `INVALID_LIMIT`",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "sync_with_page": {
+                    "summary": "updated_since with page, q or parent_id",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_QUERY_PARAMS",
+                        "message": "page cannot be combined with updated_since"
+                      }
+                    }
+                  },
+                  "cursor_without_updated_since": {
+                    "summary": "cursor without updated_since",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_CURSOR",
+                        "message": "cursor requires updated_since"
+                      }
+                    }
+                  },
+                  "invalid_cursor": {
+                    "summary": "cursor this API did not issue",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_CURSOR",
+                        "message": "cursor is not valid"
+                      }
+                    }
+                  },
+                  "invalid_updated_since": {
+                    "summary": "malformed updated_since",
+                    "value": {
+                      "error": {
+                        "code": "INVALID_UPDATED_SINCE",
+                        "message": "updated_since must be a valid ISO 8601 UTC datetime (e.g. 2026-01-01T00:00:00Z)"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "401": {
             "description": "Missing or invalid API key"
@@ -12361,7 +13988,7 @@
             "description": "Unit created successfully",
             "headers": {
               "X-Server-Time": {
-                "description": "ISO 8601 server timestamp.",
+                "description": "ISO 8601 server timestamp. Use it, minus a few minutes, as the next `updated_since`.",
                 "schema": {
                   "type": "string",
                   "format": "date-time"

@@ -9,6 +9,25 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **`permissions list`.** Every tenant permission key and warehouse scope, with its module,
+  `scope_type` and the keys it `implies`. `--module` and `--scope-type` filter in the CLI; the API
+  answers the whole list.
+- **`members permissions add|remove <user-id>`.** Add or remove tenant permission keys on a member in
+  one atomic call, leaving every other key as it is. `members update --permission` still replaces
+  the whole set. `members get` now shows the member's tenant `permissions`.
+- **`wms warehouses members list|add|remove` and `wms warehouses members scopes add|remove`.** Manage
+  who may work in a warehouse and with which scopes. Every command but `add` takes the warehouse
+  membership id, not the user id.
+- **Bundled skill: `references/domains/permissions.md`.** How an agent tells the tenant and warehouse
+  levels apart, reads `implies`, and picks the right id.
+
+### Changed
+
+- **`api/openapi.json` re-synced from the platform (2.17.0).** The print-agent and print-job
+  operations (`/wms/print-jobs`, `/wms/print-agent`) are not wrapped yet.
+
 ## [0.34.0] — 2026-11-03
 
 ### Added
