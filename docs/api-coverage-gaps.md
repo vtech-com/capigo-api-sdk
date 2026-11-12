@@ -34,10 +34,9 @@ as a follow-up.
 - The five `/wms/warehouses/{code}/members` operations are **pre-staged** from the monorepo's
   `develop` handlers. Until a spec refresh from prod declares them, `TestOpenAPIPathCoverage` and
   the query/body guards fail on purpose: do not release before prod serves them.
-- **API gap:** no read returns a member's tenant permission keys. `PublicMemberResponse`
-  (`GET /members`, `GET /members/{id}`) has no `permissions` field; only the answers to
-  `PATCH /members/{id}` and `POST /members/{id}/permissions/add|remove` carry the set. An agent
-  therefore cannot check what a member holds before granting. Report to the API team.
+- **Pre-staged:** `GET /members/{id}` gains a `permissions` field (the member's tenant keys) on the
+  platform's `develop`. The `members get` help and the bundled skill already describe it; the spec
+  reconciles on the next `make update-spec`.
 
 ## SDK vs. existing API: essentially complete
 

@@ -8,7 +8,7 @@ defines what the agent must not get wrong.
 
 | Level     | What it is                                         | Read with                                        | Change with                                                     | Addressed by                  |
 | --------- | -------------------------------------------------- | ------------------------------------------------ | --------------------------------------------------------------- | ----------------------------- |
-| Tenant    | A key held across the whole tenant: `catalog_*`, `po:*`, `wms_admin` | no read command; see below                       | `capigo members permissions add/remove <user-id>`               | the member's **user id**      |
+| Tenant    | A key held across the whole tenant: `catalog_*`, `po:*`, `wms_admin` | `capigo members get <user-id> --tenant <code>` → `.data.permissions` | `capigo members permissions add/remove <user-id>`               | the member's **user id**      |
 | Warehouse | A `scope.*` held in one warehouse only             | `capigo wms warehouses members list --warehouse <code>` | `capigo wms warehouses members add`, `scopes add/remove`, `remove` | the **warehouse membership id** |
 
 The two levels do not touch each other. Changing a tenant key never changes a warehouse membership,
@@ -55,13 +55,10 @@ What to know without looking it up:
 ## Doing it
 
 1. Resolve the person to a user id with `capigo members list -q <name>`. If several match, ask.
-2. Read what they hold now. For a warehouse, `wms warehouses members list`. For tenant keys there is
-   no read: `members get` and `members list` do not carry permissions. The answer to
-   `members permissions add|remove` is the only place the full set appears. If the user needs to know
-   the current set before deciding, say it cannot be read through the CLI; do not send a write just
-   to look.
-3. Pick keys from `capigo permissions list` and drop any that something known to be held already
-   implies.
+2. Read what they hold now: `capigo members get <user-id> --tenant <code>` for tenant keys
+   (`.data.permissions`), `wms warehouses members list` for a warehouse. `members list` does not
+   carry permissions. Use `implies` to avoid granting what is already covered.
+3. Pick keys from `capigo permissions list` and drop any that something held already implies.
 4. Confirm the tenant, the person, the level (and warehouse), and the keys with the user unless they
    already stated exactly those. Revoking access and granting `wms_admin` always get a confirmation.
 5. Write with the atomic commands. `members permissions add/remove` and

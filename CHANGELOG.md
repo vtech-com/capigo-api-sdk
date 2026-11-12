@@ -16,7 +16,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
   answers the whole list.
 - **`members permissions add|remove <user-id>`.** Add or remove tenant permission keys on a member in
   one atomic call, leaving every other key as it is. `members update --permission` still replaces
-  the whole set.
+  the whole set. `members get` now shows the member's tenant `permissions`.
 - **`wms warehouses members list|add|remove` and `wms warehouses members scopes add|remove`.** Manage
   who may work in a warehouse and with which scopes. Every command but `add` takes the warehouse
   membership id, not the user id.
