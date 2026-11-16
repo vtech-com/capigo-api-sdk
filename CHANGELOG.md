@@ -25,7 +25,7 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- **`api/openapi.json` re-synced from the platform (2.17.0).** The print-agent and print-job
+- **`api/openapi.json` re-synced from the platform (2.19.0).** The print-agent and print-job
   operations (`/wms/print-jobs`, `/wms/print-agent`) are not wrapped yet.
 
 ## [0.34.0] — 2026-11-03

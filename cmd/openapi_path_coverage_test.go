@@ -182,9 +182,7 @@ var implementedOps = map[string]string{
 	"GET /wms/warehouses":        "wms warehouses list",
 	"GET /wms/warehouses/{code}": "wms warehouses get",
 
-	// Written against the platform's develop handlers before they reached
-	// production. Until a spec refresh declares them, the stale-entry check
-	// below fails: that red test is what keeps this from being released early.
+	// Warehouse memberships: every command but add takes the membership id.
 	"GET /wms/warehouses/{code}/members":                           "wms warehouses members list",
 	"POST /wms/warehouses/{code}/members":                          "wms warehouses members add",
 	"POST /wms/warehouses/{code}/members/{memberId}/scopes/add":    "wms warehouses members scopes add",

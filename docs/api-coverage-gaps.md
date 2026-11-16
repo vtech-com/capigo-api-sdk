@@ -29,14 +29,11 @@ A new request-body field (e.g. `status` on `PUT /pcms/products/{id}/variants`) c
 therefore slip past both guards. The read side is covered; the write side is not — tracked
 as a follow-up.
 
-## Permissions and warehouse members (2026-11-12)
+## Permissions and warehouse members (2026-11-16)
 
-- The five `/wms/warehouses/{code}/members` operations are **pre-staged** from the monorepo's
-  `develop` handlers. Until a spec refresh from prod declares them, `TestOpenAPIPathCoverage` and
-  the query/body guards fail on purpose: do not release before prod serves them.
-- **Pre-staged:** `GET /members/{id}` gains a `permissions` field (the member's tenant keys) on the
-  platform's `develop`. The `members get` help and the bundled skill already describe it; the spec
-  reconciles on the next `make update-spec`.
+- `GET /permissions`, the tenant permission add/remove routes, the five
+  `/wms/warehouses/{code}/members` operations and `permissions` on `GET /members/{id}` are on prod
+  (spec 2.19.0) and wrapped. Nothing here is pre-staged any more.
 
 ## SDK vs. existing API: essentially complete
 

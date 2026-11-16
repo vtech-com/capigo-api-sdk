@@ -179,8 +179,7 @@ func buildWriteCommandMapping() []writeCommandEntry {
 			method:    "post",
 			hasFlag:   func(n string) bool { return membersPermissionsRemoveCmd.Flags().Lookup(n) != nil },
 		},
-		// Warehouse memberships: user_id→--user-id, scopes→--scope. Pre-staged from
-		// develop; these paths are not on prod yet.
+		// Warehouse memberships: user_id→--user-id, scopes→--scope.
 		{
 			humanName: "wms warehouses members add",
 			path:      "/wms/warehouses/{code}/members",
