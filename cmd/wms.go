@@ -184,13 +184,14 @@ func fill(text string, pairs ...string) string {
 
 var wmsWarehousesCmd = &cobra.Command{
 	Use:   "warehouses",
-	Short: "List and read warehouses",
+	Short: "List and read warehouses, and manage who works in them",
 	Long: `Warehouses: the places stock is kept, and the scope every other wms command
 acts in.
 
 A warehouse's code is what --warehouse takes everywhere else under wms. Only the
 warehouses this key's member may see are listed: an owner or a WMS admin sees
-all of them, anyone else only those they hold a scope in.
+all of them, anyone else only those they hold a scope in. wms warehouses members
+manages who holds a scope in a warehouse.
 
 USAGE
   capigo wms warehouses <command> --tenant <code> [<args>]`,

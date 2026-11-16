@@ -58,6 +58,22 @@ var aliasMap = map[string]string{
 var intentionallyUnexposed = map[string]map[string]string{
 	// Add entries here if a param is deliberately not surfaced:
 	//   "/some/path": {"param_name": "reason why it is not exposed"},
+	"/pcms/brands": {
+		"updated_since": "PCMS delta sync is out of scope for the permissions sync",
+		"cursor":        "PCMS delta sync is out of scope for the permissions sync",
+	},
+	"/pcms/categories": {
+		"updated_since": "PCMS delta sync is out of scope for the permissions sync",
+		"cursor":        "PCMS delta sync is out of scope for the permissions sync",
+	},
+	"/pcms/product-types": {
+		"updated_since": "PCMS delta sync is out of scope for the permissions sync",
+		"cursor":        "PCMS delta sync is out of scope for the permissions sync",
+	},
+	"/pcms/units": {
+		"updated_since": "PCMS delta sync is out of scope for the permissions sync",
+		"cursor":        "PCMS delta sync is out of scope for the permissions sync",
+	},
 	"/wms/inbound-receipts": {
 		"filters[external_ref][$eq]": "WMS filters are out of scope for this sync",
 	},
@@ -103,6 +119,8 @@ var commandPathMapping = []struct {
 	// and an outbound shipment's carries cost_method.
 	{name: "wmsWarehousesListCmd", cmd: wmsWarehousesListCmd, path: "/wms/warehouses", flags: func(n string) bool { return wmsWarehousesListCmd.Flags().Lookup(n) != nil }},
 	{name: "wmsWarehousesGetCmd", cmd: wmsWarehousesGetCmd, path: "/wms/warehouses/{code}", flags: func(n string) bool { return wmsWarehousesGetCmd.Flags().Lookup(n) != nil }},
+	{name: "wmsWarehouseMembersListCmd", cmd: wmsWarehouseMembersListCmd, path: "/wms/warehouses/{code}/members", flags: func(n string) bool { return wmsWarehouseMembersListCmd.Flags().Lookup(n) != nil }},
+	{name: "permissionsListCmd", cmd: permissionsListCmd, path: "/permissions", flags: func(n string) bool { return permissionsListCmd.Flags().Lookup(n) != nil }},
 	{name: "wmsLocationsListCmd", cmd: wmsLocationsListCmd, path: "/wms/locations", flags: func(n string) bool { return wmsLocationsListCmd.Flags().Lookup(n) != nil }},
 	{name: "wmsLocationsGetCmd", cmd: wmsLocationsGetCmd, path: "/wms/locations/{code}", flags: func(n string) bool { return wmsLocationsGetCmd.Flags().Lookup(n) != nil }},
 	{name: "wmsInbound.list", cmd: wmsInbound.list, path: "/wms/inbound-receipts", flags: func(n string) bool { return wmsInbound.list.Flags().Lookup(n) != nil }},

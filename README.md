@@ -286,6 +286,9 @@ capigo members invite --tenant <code> (--email <a> | --mobile <n>)   Invite a pe
 capigo members invitations list --tenant <code> [--status <s>]       List a tenant's invitations; owner only
 capigo members invitations cancel <id> --tenant <code>               Cancel a pending invitation; owner only
 capigo members update <id> --tenant <code> [--role <r>] ...            Update a member (HRIS sync); owner only
+capigo members permissions add|remove <user-id> --tenant <code> --permission <key>...
+                                       Add or remove tenant permission keys, leaving the rest; owner only
+capigo permissions list [--module <m>] [--scope-type tenant|warehouse]   Every permission key and scope, with what each implies
 capigo join-requests list --tenant <code> [--status <s>]             List a tenant's join requests; owner only
 capigo join-requests approve <id> --tenant <code> --display-name <n> Approve a join request; owner only
 capigo join-requests reject <id> --tenant <code>                     Reject a join request; owner only
@@ -341,6 +344,11 @@ capigo units replace <id>   Full replace a unit (PUT, all fields required)
 
 capigo wms warehouses list                   List the warehouses this key can see (-q, --is-active, --sort)
 capigo wms warehouses get <code>             Get a warehouse with its tree of locations
+capigo wms warehouses members list --warehouse <c>   Who may work in a warehouse, with their scopes
+capigo wms warehouses members add --warehouse <c> --user-id <uuid> [--scope <s>]...
+capigo wms warehouses members scopes add|remove <member-id> --warehouse <c> --scope <s>...
+capigo wms warehouses members remove <member-id> --warehouse <c>
+                                       <member-id> is the membership id members list prints, not a user id
 capigo wms locations list --warehouse <c>    List a warehouse's locations (-q, --is-active, --sort)
 capigo wms locations get <code> --warehouse <c>   Get one location with its parent and children
 capigo wms availability check --warehouse <c>... --line sku=<sku>,demand=<n>...
