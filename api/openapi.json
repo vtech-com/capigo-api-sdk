@@ -3,7 +3,7 @@
   "info": {
     "title": "Capigo Public API",
     "description": "Public API documentation for Capigo Developer Platform. Integrate your external tools with Capigo tasks, boards, and members. See `apps/platform/docs/api-v1-changelog.md` for version history. A key is pinned to one workspace, lists several workspaces, or reaches every workspace of its owner. A pinned key needs no `X-Tenant-Code`. A key that lists several workspaces, or reaches all of them, names the workspace per call in `X-Tenant-Code`: the workspace must be one the key reaches and its owner still belongs to, or the call is `403` `AUTH_TENANT_MISMATCH`. A key that lists its workspaces must send the header on every route except `GET /health` and `GET /tenants`, or the call is `400` `AUTH_TENANT_REQUIRED`.",
-    "version": "2.17.0",
+    "version": "2.19.0",
     "contact": {
       "name": "Capigo Developer Support"
     }
@@ -28,6 +28,69 @@
       }
     },
     "schemas": {
+      "PublicWmsWarehouseMemberResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "user_id",
+          "scopes",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Warehouse membership id; stable across delete and re-add."
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "scopes": {
+            "type": "array",
+            "maxItems": 200,
+            "items": {
+              "type": "string",
+              "enum": [
+                "scope.admin",
+                "scope.view",
+                "scope.inbound",
+                "scope.outbound",
+                "scope.transfer",
+                "scope.warehouse_transfer",
+                "scope.cycle",
+                "scope.adjustment_record",
+                "scope.adjustment_post",
+                "scope.location",
+                "scope.financial_view",
+                "scope.stock_view",
+                "scope.stock_alert_view"
+              ]
+            },
+            "description": "Explicit scopes from GET /permissions. Duplicates are ignored; implied scopes are omitted from stored grants. An empty resulting set becomes scope.view."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "inactive"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          }
+        }
+      },
       "PublicWmsPrintJob": {
         "type": "object",
         "description": "One document Capigo asks the warehouse's print agent to print: a shipment's shipping label or its outbound shipment worksheet. The id is the agent's idempotency key; a reprint is a new job.",
@@ -1008,6 +1071,32 @@
           }
         }
       },
+      "PublicMemberDetailResponse": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/PublicMemberResponse"
+          },
+          {
+            "type": "object",
+            "required": [
+              "permissions"
+            ],
+            "properties": {
+              "permissions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "The member's stored tenant permission keys, sorted; empty when none. Returned by the single-member read only, not by the list. Shaped like `permissions` in the PATCH and permission add/remove answers.",
+                "example": [
+                  "catalog:create",
+                  "task:create"
+                ]
+              }
+            }
+          }
+        ]
+      },
       "PublicBoardResponse": {
         "type": "object",
         "required": [
@@ -1446,7 +1535,7 @@
       },
       "PublicMediaEntry": {
         "type": "object",
-        "description": "A single product/variant image. `url` is a signed, time-limited Supabase Storage URL (valid until `expiresAt`) — re-fetch the parent product/variant to get a fresh link after it expires.",
+        "description": "A single product/variant image. The URL form depends on the endpoint. Answers under `/v1/pcms/products` (list, detail, and the product answers of product writes, including their embedded variants) return a permanent public address that never expires, with `expiresAt: null`; it may be stored. Answers under `/v1/pcms/variants` (list, `{id}`, `sku/{sku}`, `resolve`) return a signed link that expires one hour after the response, with `expiresAt` set.",
         "required": [
           "id",
           "url",
@@ -1464,8 +1553,8 @@
           "url": {
             "type": "string",
             "format": "uri",
-            "description": "Signed storage URL to the image, valid until `expiresAt`.",
-            "example": "https://xxxxx.supabase.co/storage/v1/object/sign/product-media/acme/3fa85f64-5717-4562-b3fc-2c963f66afa6.jpg?token=..."
+            "description": "On `/v1/pcms/products` answers: the permanent public address of the image. The `v` query parameter is the image's content version; it changes when the file is replaced, so caches fetch the new file. An older URL may serve the previous file until caches expire. A replaced image moves the product's `updated_at`, not the variant's: read the product again to pick up the new URL. On `/v1/pcms/variants` answers: a signed link, valid until `expiresAt`; read the variant again for a fresh one.",
+            "example": "https://xxxxx.supabase.co/storage/v1/object/public/product-media/acme/3fa85f64-5717-4562-b3fc-2c963f66afa6.jpg?v=1"
           },
           "position": {
             "type": "integer",
@@ -1483,7 +1572,9 @@
           "expiresAt": {
             "type": "string",
             "format": "date-time",
-            "description": "When `url` stops working. Re-fetch the parent product/variant for a fresh link."
+            "nullable": true,
+            "description": "`null` on `/v1/pcms/products` answers, where `url` does not expire. On `/v1/pcms/variants` answers, the time the signed `url` stops working.",
+            "example": null
           }
         }
       },
@@ -5045,6 +5136,964 @@
     }
   ],
   "paths": {
+    "/wms/warehouses/{code}/members": {
+      "get": {
+        "summary": "List Warehouse Members",
+        "tags": [
+          "WMS"
+        ],
+        "description": "A key acts as its active tenant member. Owner, tenant wms_admin and warehouse scope.admin manage memberships. Invisible warehouses answer 404. Admins read the visible roster; other members read only their own active membership. Uses page and limit pagination.",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "description": "Warehouse code (e.g. WH-001)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Required unless the API key is pinned to one tenant."
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data",
+                    "meta"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PublicWmsWarehouseMemberResponse"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "required": [
+                        "page",
+                        "limit",
+                        "total",
+                        "has_more"
+                      ],
+                      "properties": {
+                        "page": {
+                          "type": "integer"
+                        },
+                        "limit": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        },
+                        "has_more": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR for invalid pagination; TENANT_CODE_REQUIRED for missing tenant.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED: authentication required.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "TENANT_ACCESS_DENIED: inactive or missing caller tenant membership; FORBIDDEN: insufficient warehouse administration permissions.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND: invisible warehouse.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR: failed membership lookup, permission RPC or database write; a database failure is not a duplicate or permission denial.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Add Warehouse Member",
+        "tags": [
+          "WMS"
+        ],
+        "description": "A key acts as its active tenant member. Owner, tenant wms_admin and warehouse scope.admin manage memberships. Invisible warehouses answer 404. Body: {user_id, scopes}. The user must be an active member of this tenant. An existing active assignment answers 409. A deleted assignment is restored with the same membership id and the requested normalized scopes.",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "description": "Warehouse code (e.g. WH-001)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Required unless the API key is pinned to one tenant."
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Membership created or restored.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsWarehouseMemberResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "INVALID_JSON_BODY for malformed JSON; VALIDATION_ERROR for a non-UUID user_id, unknown scopes (named in the message) or extra fields; TENANT_CODE_REQUIRED for missing tenant. No write occurs.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED: authentication required.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "TENANT_ACCESS_DENIED: inactive or missing caller tenant membership; FORBIDDEN: insufficient warehouse administration permissions.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND: invisible warehouse (\"Warehouse not found\"), or a user who is not an active member of this tenant (\"User is not an active member of this tenant\").",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "CONFLICT: an active membership already exists; its id and scopes remain unchanged.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR: failed membership lookup, permission RPC or database write; a database failure is not a duplicate or permission denial.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "user_id",
+                  "scopes"
+                ],
+                "properties": {
+                  "user_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "scopes": {
+                    "type": "array",
+                    "maxItems": 200,
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "scope.admin",
+                        "scope.view",
+                        "scope.inbound",
+                        "scope.outbound",
+                        "scope.transfer",
+                        "scope.warehouse_transfer",
+                        "scope.cycle",
+                        "scope.adjustment_record",
+                        "scope.adjustment_post",
+                        "scope.location",
+                        "scope.financial_view",
+                        "scope.stock_view",
+                        "scope.stock_alert_view"
+                      ]
+                    },
+                    "description": "Explicit scopes from GET /permissions. Duplicates are ignored; implied scopes are omitted from stored grants. An empty resulting set becomes scope.view."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wms/warehouses/{code}/members/{memberId}": {
+      "delete": {
+        "summary": "Remove Warehouse Member",
+        "tags": [
+          "WMS"
+        ],
+        "description": "A key acts as its active tenant member. Owner, tenant wms_admin and warehouse scope.admin manage memberships. Invisible warehouses answer 404. Soft-deletes the membership. Deleting your own membership is forbidden (403). Re-adding restores the same id. An already-removed membership answers 404 without a second audit event.",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "description": "Warehouse code (e.g. WH-001)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Required unless the API key is pinned to one tenant."
+          },
+          {
+            "name": "memberId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Warehouse membership id, not user id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "required": [
+                        "id"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "VALIDATION_ERROR for a non-UUID member id; TENANT_CODE_REQUIRED for missing tenant. No write occurs.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED: authentication required.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "TENANT_ACCESS_DENIED: inactive or missing caller tenant membership; FORBIDDEN: insufficient warehouse administration permissions or self-deletion.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND: invisible warehouse, or a membership id that is not in this warehouse.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR: failed membership lookup, permission RPC or database write; a database failure is not a duplicate or permission denial.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wms/warehouses/{code}/members/{memberId}/scopes/add": {
+      "post": {
+        "summary": "Add Warehouse Member Scopes",
+        "tags": [
+          "WMS"
+        ],
+        "description": "A key acts as its active tenant member. Owner, tenant wms_admin and warehouse scope.admin manage memberships. Invisible warehouses answer 404. Body: {scopes}. Atomically adds scopes to the current stored grants, preserving concurrent unrelated changes. Unknown scopes reject the entire request with 400. Implied scopes are normalized away; a repeat succeeds without a write or event. A real change emits one audit event.",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "description": "Warehouse code (e.g. WH-001)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Required unless the API key is pinned to one tenant."
+          },
+          {
+            "name": "memberId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Warehouse membership id, not user id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsWarehouseMemberResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "INVALID_JSON_BODY for malformed JSON; VALIDATION_ERROR for a non-UUID member id, unknown scopes (named in the message) or extra fields; TENANT_CODE_REQUIRED for missing tenant. No write occurs.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED: authentication required.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "TENANT_ACCESS_DENIED: inactive or missing caller tenant membership; FORBIDDEN: insufficient warehouse administration permissions.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND: invisible warehouse, or a membership id that is not in this warehouse.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR: failed membership lookup, permission RPC or database write; a database failure is not a duplicate or permission denial.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "scopes"
+                ],
+                "properties": {
+                  "scopes": {
+                    "type": "array",
+                    "maxItems": 200,
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "scope.admin",
+                        "scope.view",
+                        "scope.inbound",
+                        "scope.outbound",
+                        "scope.transfer",
+                        "scope.warehouse_transfer",
+                        "scope.cycle",
+                        "scope.adjustment_record",
+                        "scope.adjustment_post",
+                        "scope.location",
+                        "scope.financial_view",
+                        "scope.stock_view",
+                        "scope.stock_alert_view"
+                      ]
+                    },
+                    "description": "Explicit scopes from GET /permissions. Duplicates are ignored; implied scopes are omitted from stored grants. An empty resulting set becomes scope.view."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wms/warehouses/{code}/members/{memberId}/scopes/remove": {
+      "post": {
+        "summary": "Remove Warehouse Member Scopes",
+        "tags": [
+          "WMS"
+        ],
+        "description": "A key acts as its active tenant member. Owner, tenant wms_admin and warehouse scope.admin manage memberships. Invisible warehouses answer 404. Body: {scopes}. Atomically removes scopes from the current stored grants, preserving concurrent unrelated changes. Unknown scopes reject the entire request with 400. Removing the final scope retains scope.view. A repeat succeeds without a write or event. A real change emits one audit event.",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "description": "Warehouse code (e.g. WH-001)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Tenant-Code",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Required unless the API key is pinned to one tenant."
+          },
+          {
+            "name": "memberId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Warehouse membership id, not user id."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "data"
+                  ],
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PublicWmsWarehouseMemberResponse"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "INVALID_JSON_BODY for malformed JSON; VALIDATION_ERROR for a non-UUID member id, unknown scopes (named in the message) or extra fields; TENANT_CODE_REQUIRED for missing tenant. No write occurs.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "UNAUTHORIZED: authentication required.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "TENANT_ACCESS_DENIED: inactive or missing caller tenant membership; FORBIDDEN: insufficient warehouse administration permissions.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "NOT_FOUND: invisible warehouse, or a membership id that is not in this warehouse.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "INTERNAL_ERROR: failed membership lookup, permission RPC or database write; a database failure is not a duplicate or permission denial.",
+            "headers": {
+              "X-Server-Time": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "scopes"
+                ],
+                "properties": {
+                  "scopes": {
+                    "type": "array",
+                    "maxItems": 200,
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "scope.admin",
+                        "scope.view",
+                        "scope.inbound",
+                        "scope.outbound",
+                        "scope.transfer",
+                        "scope.warehouse_transfer",
+                        "scope.cycle",
+                        "scope.adjustment_record",
+                        "scope.adjustment_post",
+                        "scope.location",
+                        "scope.financial_view",
+                        "scope.stock_view",
+                        "scope.stock_alert_view"
+                      ]
+                    },
+                    "description": "Explicit scopes from GET /permissions. Duplicates are ignored; implied scopes are omitted from stored grants. An empty resulting set becomes scope.view."
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/wms/print-agent/session": {
       "post": {
         "summary": "Open a Print Agent Session",
@@ -6481,7 +7530,7 @@
         "tags": [
           "Members"
         ],
-        "description": "Fetch a single tenant member by their user id, scoped to the tenants the caller belongs to. Sensitive PII is excluded. Returns 404 if the member is not in any accessible tenant.",
+        "description": "Fetch a single tenant member by their user id, scoped to the tenants the caller belongs to. The record carries the member's stored tenant `permissions` (sorted keys, `[]` when none) to anyone who may read the member; `GET /members` does not list them. Sensitive PII is excluded. Returns 404 if the member is not in any accessible tenant.",
         "parameters": [
           {
             "name": "id",
@@ -6519,7 +7568,7 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/PublicMemberResponse"
+                      "$ref": "#/components/schemas/PublicMemberDetailResponse"
                     }
                   }
                 }
