@@ -9,6 +9,8 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.0] — 2026-11-16
+
 ### Added
 
 - **`permissions list`.** Every tenant permission key and warehouse scope, with its module,
@@ -27,6 +29,10 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 - **`api/openapi.json` re-synced from the platform (2.19.0).** The print-agent and print-job
   operations (`/wms/print-jobs`, `/wms/print-agent`) are not wrapped yet.
+
+### Security
+
+- **Built with Go 1.26.11.** Fixes GO-2026-6859 in `net/http`, which every API call goes through.
 
 ## [0.34.0] — 2026-11-03
 
