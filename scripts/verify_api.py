@@ -204,6 +204,7 @@ HELP_SAMPLES = [
     ("/mission/boards", ["boards", "list"]),
     ("/members", ["members", "list"]),
     ("/tenants", ["tenants", "list"]),
+    ("/permissions", ["permissions", "list"]),
     # write pages return the same record their `get` returns, so their samples
     # answer to the same field set. A sample that trims one is a sample that
     # teaches a reader the field does not exist.
@@ -472,8 +473,13 @@ def check_wms_samples(c, cli):
     code = warehouse["code"]
     _, detail = c.get(f"/wms/warehouses/{quote(code, safe='')}")
     failures += report(["wms", "warehouses", "get"], first_record(detail))
+    status, members = c.get(f"/wms/warehouses/{quote(code, safe='')}/members")
+    if status == 200:
+        failures += report(["wms", "warehouses", "members", "list"], first_record(members))
+    else:
+        print(f"  {'wms warehouses members list':<34} skipped: endpoint answered {status}")
 
-    scope = f"?warehouse_code={quote(code, safe='')}"
+    scope =f"?warehouse_code={quote(code, safe='')}"
     for path, cmd in WMS_SAMPLES:
         status, body = c.get(path + scope)
         row = first_record(body)

@@ -166,9 +166,13 @@ OUTPUT
         "data": { "id": "4d9a1c07-2b6e-4f83-a5d1-8c07e2f419bb",
                   "display_name": "Tram Nguyen", "email": "tram@acme.vn",
                   "role": "owner", "avatar_url": null,
-                  "title": null, "department": null, "birthday": null },
+                  "title": null, "department": null, "birthday": null,
+                  "permissions": ["catalog_view", "po:view"] },
         "meta": { "tenant": "acme", "tenant_source": "flag" }
       }
+
+  permissions holds the member's tenant permission keys, sorted; [] when none.
+  members list does not carry it.
 
   With --tenant omitted, meta.tenant and meta.tenant_source are both empty.
 

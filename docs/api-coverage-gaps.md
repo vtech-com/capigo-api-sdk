@@ -29,6 +29,12 @@ A new request-body field (e.g. `status` on `PUT /pcms/products/{id}/variants`) c
 therefore slip past both guards. The read side is covered; the write side is not — tracked
 as a follow-up.
 
+## Permissions and warehouse members (2026-11-16)
+
+- `GET /permissions`, the tenant permission add/remove routes, the five
+  `/wms/warehouses/{code}/members` operations and `permissions` on `GET /members/{id}` are on prod
+  (spec 2.19.0) and wrapped. Nothing here is pre-staged any more.
+
 ## SDK vs. existing API: essentially complete
 
 The CLI wraps every endpoint that currently exists, with one exception:
