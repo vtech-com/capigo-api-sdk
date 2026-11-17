@@ -102,7 +102,7 @@ docs/           Additional documentation
 
 ## Making Changes
 
-1. Fork the repo and create a feature branch from `main`:
+1. Fork the repo and create a feature branch from `develop`:
    ```bash
    git checkout -b feat/your-feature-name
    ```
@@ -115,7 +115,7 @@ docs/           Additional documentation
 
 5. Run `make check` — all checks must pass before opening a PR.
 
-6. Open a PR against `main`.
+6. Open a PR against `develop`. Only `release/vX.Y.Z` branches target `main` (see [Release Process](#release-process)).
 
 ### Coding conventions
 
@@ -237,6 +237,15 @@ To wrap a new Capigo API endpoint:
 7. **Write tests** for the new client method and command flags.
 
 8. **Add an example** to `docs/commands/` and optionally `examples/`.
+
+### Where a command group lives
+
+Decide this before writing the command. The tree has two levels on purpose, and the rule below is what decides between them (issue #152):
+
+- **Top level** is for platform groups (`auth`, `config`, `health`, `tenants`, `members`, `join-requests`, `permissions`), Mission (`tasks`, `boards`, `labels`), and catalog (PCMS) resources (`products`, `variants`, `brands`, `categories`, `units`, `product-types`, `property-definitions`, `tags`, `vat-policies`). A resource belongs here when its name is unambiguous on its own: `capigo brands` can only mean one thing.
+- **A module group** (`capigo wms …`) is for a module whose resource names are generic or would collide at the top level, such as `inbound`, `outbound`, `locations`, `availability`, or `transfers`. The module name gives these names their meaning. A future module with the same problem (for example purchasing: `orders`, `suppliers`) gets its own group the same way.
+- **A new resource in an existing domain follows its siblings.** A new catalog resource goes at the top level, as `vat-policies` did; a new WMS resource goes under `wms`.
+- **Do not move an existing group.** The CLI's main consumer is an AI agent working from skills and memory, so a renamed path breaks working callers, and an alias does not fix that. A move needs its own issue that weighs that cost, plus a deprecation period in which the old path still works and its stdout says where the command went.
 
 ---
 
