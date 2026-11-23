@@ -126,7 +126,8 @@ FLAGS
       Only tasks on this board.
 
   --board-list-id <uuid>
-      Only tasks in this board list.
+      Only tasks in this board list. Add --sort position to get them in the
+      order the board shows them.
 
   --due-after <date>
       ISO 8601 date. Only tasks due on or after it.
@@ -209,17 +210,29 @@ FLAGS
       time.
 
   --sort <column:direction>
-      Order the page. The direction defaults to ascending when omitted.
-      created_at, updated_at and due_date are the columns the personal and
-      board searches order by; status is available on the board search only.
+      Order the page. The direction defaults to ascending when omitted, and
+      created_at is the default column. The default list orders by
+      created_at, updated_at, due_date, priority or position; --unassigned and
+      a date range order by created_at, updated_at, due_date or status.
 
         capigo tasks list --tenant acme --sort updated_at:desc
 
-      --updated-after <ts> / --updated-before <ts>
-          Filter on when a task last changed, rather than its creation or due
-          date — the way to find what moved since your last sync.
+      position returns one board list in the order the board shows it, top
+      card first, ties broken by created_at. It needs --board-list-id, and it
+      works on the default list only: with --scope mine, --archived,
+      --include-archived, --unassigned or a date range it exits 5, as it does
+      without --board-list-id.
 
-            capigo tasks list --tenant acme --updated-after 2026-09-01T00:00:00+07:00
+        capigo tasks list --tenant acme --board-list-id <uuid> --sort position
+
+      Read a column's order from the rows as they come back, not by comparing
+      their position values: two cards may share a value.
+
+  --updated-after <ts>, --updated-before <ts>
+      Filter on when a task last changed, rather than its creation or due
+      date — the way to find what moved since your last sync.
+
+        capigo tasks list --tenant acme --updated-after 2026-09-01T00:00:00+07:00
 
   --include-archived
       Also list archived tasks. They are left out by default — here, on the
@@ -262,6 +275,7 @@ OUTPUT
             "code": "TASK-104", "title": "Fix login bug", "description": "...",
             "status": "To-Do", "priority": "High", "assignee": {...},
             "owner": {...}, "board_id": "...", "board_list_id": "...",
+            "position": 1500,
             "responsible_type": "human", "assigned_agent_key": null,
             "due_date": "...", "parent": null, "has_subtasks": false,
             "attachments": [...],
@@ -285,6 +299,10 @@ OUTPUT
 
   Read meta.total rather than counting .data[]: a page never holds more than
   --limit, so a full count needs meta, not arithmetic.
+
+  position is the task's place in its board list (lower sits higher), null for
+  a task on no list and for every subtask. Get a column's order with
+  --board-list-id <uuid> --sort position rather than by comparing values.
 
   With --tenant omitted, meta.tenant and meta.tenant_source are absent: the
   search spanned every tenant this key can reach, and there is no single one
@@ -453,6 +471,7 @@ OUTPUT
           "code": "TASK-104", "title": "Fix login bug", "description": "...",
           "status": "To-Do", "priority": "High", "assignee": {...},
           "owner": {...}, "board_id": "...", "board_list_id": "...",
+          "position": 1500,
           "responsible_type": "human", "assigned_agent_key": null,
           "due_date": "...", "parent": null, "has_subtasks": false,
           "attachments": [...],
@@ -468,6 +487,11 @@ OUTPUT
   data.attachments[] carries metadata only — id, file_name, mime_type,
   size_bytes. It never carries a download URL; tasks attachments download
   fetches one.
+
+  data.position is the task's place in its board list (lower sits higher),
+  null for a task on no list and for every subtask. Two cards may share a
+  value, so read a column's order from tasks list --board-list-id <uuid>
+  --sort position rather than by comparing positions.
 
   meta.tenant and meta.tenant_source are absent when --tenant was omitted:
   the id alone found the task, independent of any one tenant.
@@ -3204,6 +3228,20 @@ func validateTaskListFlags(f taskListFilters) *api.APIError {
 			"--archived cannot be combined with %s: archived tasks are their own list, not a wider one", f.modesGiven())
 	}
 
+	// sort=position orders one board list the way the board shows it, and the
+	// API answers 400 INVALID_SORT_COLUMN outside the default list or without
+	// exactly one board_list_id filter.
+	if sortColumn(f.sort) == "position" {
+		if blocked := f.positionSortBlockingFlag(); blocked != "" {
+			return taskListValidationError(
+				"--sort position orders one board list on the default task list and cannot be combined with %s", blocked)
+		}
+		if f.boardListID == "" {
+			return taskListValidationError(
+				"--sort position needs --board-list-id: it orders one board list in the order the board shows it")
+		}
+	}
+
 	if boardMode {
 		if f.scope == "mine" {
 			return taskListValidationError(
@@ -3214,11 +3252,7 @@ func validateTaskListFlags(f taskListFilters) *api.APIError {
 				"--unassigned and --date-field/--date-from/--date-to are served by the board task search, which cannot apply %s; drop one side", blocked)
 		}
 		if f.sort != "" {
-			column := f.sort
-			if i := strings.Index(f.sort, ":"); i >= 0 {
-				column = f.sort[:i]
-			}
-			if !boardTaskSearchSortColumns[column] {
+			if !boardTaskSearchSortColumns[sortColumn(f.sort)] {
 				return taskListValidationError(
 					"--sort %s is not available with --unassigned or a date range; those may sort by created_at, updated_at, due_date or status", f.sort)
 			}
@@ -3268,6 +3302,33 @@ func (f taskListFilters) boardModeBlockingFlag() string {
 		return "--include-archived"
 	case len(f.labels) > 0:
 		return "--label"
+	}
+	return ""
+}
+
+// sortColumn returns the column of a `column:direction` sort value.
+func sortColumn(sort string) string {
+	if i := strings.Index(sort, ":"); i >= 0 {
+		return sort[:i]
+	}
+	return sort
+}
+
+// positionSortBlockingFlag names the first flag that takes the request off the
+// default task list, where sort=position is the only list it orders, or "" when
+// none is set.
+func (f taskListFilters) positionSortBlockingFlag() string {
+	switch {
+	case f.scope == "mine":
+		return "--scope mine"
+	case f.archived:
+		return "--archived"
+	case f.archive:
+		return "--include-archived"
+	case f.unassigned:
+		return "--unassigned"
+	case f.dateField != "" || f.dateFrom != "" || f.dateTo != "":
+		return "--date-field/--date-from/--date-to"
 	}
 	return ""
 }
