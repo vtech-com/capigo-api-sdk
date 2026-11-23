@@ -206,7 +206,8 @@ capigo tasks list                    List tasks (--query/-q, --status, --priorit
                                       --owner-id, --board-id, --board-list-id, --due-after/--due-before,
                                       --created-after/--created-before, --updated-after/--updated-before,
                                       --parent-task-id, --label <name> (repeatable; tasks with every
-                                      label), --sort <column:direction>, --include-archived,
+                                      label), --sort <column:direction> (position orders one
+                                      --board-list-id as the board shows it), --include-archived,
                                       --page, --limit)
                                       Three modes of its own, mutually exclusive: --scope mine (your own
                                       tasks — the API's AND-only filters cannot ask for owner OR assignee),

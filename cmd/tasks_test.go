@@ -396,6 +396,14 @@ func TestTasksListPathNewFilters(t *testing.T) {
 		t.Errorf("archived and include_archived are different parameters, got %q", got)
 	}
 
+	// --sort position travels with the one board_list_id filter it needs.
+	wantPosition := "/mission/tasks?" + url.Values{
+		"filters[board_list_id][$eq]": {"l1"}, "sort": {"position"},
+	}.Encode()
+	if got := tasksListPath(taskListFilters{boardListID: "l1", sort: "position"}); got != wantPosition {
+		t.Errorf("position sort path = %q, want %q", got, wantPosition)
+	}
+
 	// Unset values leave no trace.
 	if got := tasksListPath(taskListFilters{scope: "", unassigned: false, archived: false, dateField: "", sort: ""}); strings.Contains(got, "?") {
 		t.Errorf("unset flags should send no query string, got %q", got)
@@ -420,6 +428,9 @@ func TestValidateTaskListFlags(t *testing.T) {
 		{"date range with a board sort", taskListFilters{dateField: "due_date", dateTo: "2026-09-30T23:59:59+07:00", sort: "status:asc"}},
 		{"archived alone", taskListFilters{archived: true}},
 		{"updated_at filter outside board mode", taskListFilters{updatedAfter: "2026-09-01T00:00:00Z", sort: "updated_at:desc"}},
+		{"position sort on one board list", taskListFilters{boardListID: "l1", sort: "position"}},
+		{"position sort with a direction and a filter", taskListFilters{boardListID: "l1", status: "Doing", sort: "position:desc"}},
+		{"priority sort on the default list", taskListFilters{sort: "priority:desc"}},
 	}
 	for _, c := range valid {
 		if e := validateTaskListFlags(c.f); e != nil {
@@ -445,6 +456,13 @@ func TestValidateTaskListFlags(t *testing.T) {
 		{"date bound without a field", taskListFilters{dateFrom: "2026-09-01T00:00:00+07:00"}},
 		{"date field without a bound", taskListFilters{dateField: "due_date"}},
 		{"unknown date field", taskListFilters{dateField: "archived_at", dateTo: "2026-09-30T23:59:59+07:00"}},
+		{"position sort without a board list", taskListFilters{sort: "position"}},
+		{"position sort with a direction but no board list", taskListFilters{boardID: "b1", sort: "position:asc"}},
+		{"position sort with scope mine", taskListFilters{boardListID: "l1", scope: "mine", sort: "position"}},
+		{"position sort with archived", taskListFilters{boardListID: "l1", archived: true, sort: "position"}},
+		{"position sort with include archived", taskListFilters{boardListID: "l1", archive: true, sort: "position"}},
+		{"position sort with unassigned", taskListFilters{unassigned: true, sort: "position"}},
+		{"position sort with a date range", taskListFilters{dateField: "due_date", dateTo: "2026-09-30T23:59:59+07:00", sort: "position"}},
 	}
 	for _, c := range invalid {
 		e := validateTaskListFlags(c.f)

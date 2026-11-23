@@ -9,6 +9,21 @@ Versioning follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **`tasks list --board-list-id <uuid> --sort position`.** Returns one board list in the order the
+  board shows it, top card first, ties broken by `created_at` (Capigo API 2.13.0). `--sort position`
+  without `--board-list-id`, or with `--scope mine`, `--archived`, `--include-archived`,
+  `--unassigned` or a date range, now exits 5 before the request instead of answering the API's
+  `400 INVALID_SORT_COLUMN`.
+
+### Changed
+
+- **`tasks list` / `tasks get` help.** `--sort` now lists every column the default list orders by
+  (`created_at`, `updated_at`, `due_date`, `priority`, `position`), and the output examples show the
+  task's `position` field: its place in its board list, `null` for a task on no list and every
+  subtask. The bundled skill gains "Reading a column in board order".
+
 ## [0.35.0] — 2026-11-16
 
 ### Added

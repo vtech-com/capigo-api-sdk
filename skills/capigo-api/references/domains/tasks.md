@@ -272,6 +272,20 @@ written silently as a new label for the whole tenant. There is no label create o
 - Retry freely. The server computes the position from the card it finds, so a second identical call leaves
   the card where the first one put it and no idempotency key is needed.
 
+## Reading a column in board order
+
+- `tasks list --board-list-id <uuid> --sort position` returns one column in the order the board shows
+  it, top card first, ties broken by `created_at`. Without `--sort position` the column comes back by
+  `created_at`, which is not the order a person sees on the board, so never answer "what is first / next
+  in this column" from a list sorted any other way.
+- It needs `--board-list-id` and works on the default list only. Without the list, or with `--scope mine`,
+  `--archived`, `--include-archived`, `--unassigned` or a date range, the CLI exits 5 before the request.
+  Other filters (`--status`, `--label`, ...) still narrow the column.
+- Every task carries `position`: its place in its board list, lower sits higher, `null` for a task on no
+  list and for every subtask. Two cards may share a value, so take the order from the rows as they come
+  back, never by comparing `position` numbers yourself. A column longer than one page still needs
+  `meta.has_more` and `--page`.
+
 ## Finding an archived task
 
 - Archived tasks are left out of every read by default. A task you know exists can therefore be missing
@@ -332,7 +346,9 @@ one question the plain `filters[...]` grammar cannot ask, because its rules are 
 - All three read **one tenant at a time**. With a key that can reach several, pass `--tenant` (or set a
   default); otherwise the API answers 400 `INVALID_TENANT_SCOPE` and the CLI exits 5.
 - `--updated-after`/`--updated-before` and `--sort <column:direction>` are available on the default and
-  personal modes: they ask what changed since your last read, and in what order to page it.
+  personal modes: they ask what changed since your last read, and in what order to page it. The default
+  list sorts by `created_at`, `updated_at`, `due_date`, `priority` or `position`; `position` needs
+  `--board-list-id` and the default list (see "Reading a column in board order").
 
 ## Reading a task's status log
 
